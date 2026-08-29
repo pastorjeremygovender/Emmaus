@@ -269,11 +269,51 @@ async function resolveTodayDevotional(userId: string): Promise<EmmausResponseMet
     getAllProgressForUser(userId),
   ]);
   const published = new Map(series.map((item) => [item.id, item]));
+  const fullSeries = await Promise.all(
+    series.map(async (item) => ({
+      series: item,
+      full: await getSeriesById(item.id),
+    })),
+  );
+  const fullById = new Map(fullSeries.map(({ series: item, full }) => [item.id, full]));
+
+  // Date-allocated devotionals are addressed by the calendar date printed on
+  // their entries, not by the member's progress pointer. This is deliberately
+  // resolved before progress so an unopened Psalms/seasonal series can still
+  // provide the entry assigned to today.
+  const datedSeries = fullSeries.filter(({ full }) =>
+    hasDateAllocatedEntries(full?.entries ?? []),
+  );
+  const datedMatches = datedSeries
+    .map(({ series: item, full }) => ({
+      series: item,
+      entry: resolveDateAllocatedDevotionalEntry(full?.entries ?? []),
+    }))
+    .filter((item): item is typeof item & { entry: NonNullable<typeof item.entry> } =>
+      item.entry !== undefined,
+    );
+
+  let selectedSeries: typeof series[number] | undefined;
+  let selectedEntry:
+    NonNullable<Awaited<ReturnType<typeof getSeriesById>>>["entries"][number] | undefined;
+  let selectedByDate = false;
+
+  if (datedMatches.length > 0) {
+    selectedSeries = datedMatches[0].series;
+    selectedEntry = datedMatches[0].entry;
+    selectedByDate = true;
+  }
+
   const active = progress
-    .filter((item) => published.has(item.seriesId) && item.status !== "paused" && item.status !== "hidden")
+    .filter((item) =>
+      published.has(item.seriesId)
+      && !datedSeries.some(({ series: dated }) => dated.id === item.seriesId)
+      && item.status !== "paused"
+      && item.status !== "hidden",
+    )
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
-  if (active.length > 1) {
+  if (!selectedSeries && active.length > 1) {
     metadata.answer = "You have more than one Daily Devotional in progress. Which one would you like to continue?";
     metadata.nextStep = capabilityNextStep("daily-devotional", "OPEN");
     metadata.recommendations = [capabilityRecommendation("daily-devotional")];
@@ -281,27 +321,40 @@ async function resolveTodayDevotional(userId: string): Promise<EmmausResponseMet
     return metadata;
   }
 
-  const selected = active[0] ?? (series.length === 1 ? {
-    seriesId: series[0].id,
-    currentDay: 1,
-  } as DevotionalProgress : null);
-  if (!selected) {
+  if (!selectedSeries) {
+    const selected = active[0] ?? (
+      series.length === 1 && datedSeries.length === 0
+        ? { seriesId: series[0].id, currentDay: 1 } as DevotionalProgress
+        : null
+    );
+    if (!selected) {
+      if (datedSeries.length > 0) {
+        metadata.answer = "There is no published Daily Devotional entry assigned to today yet. You can browse the available devotionals from Discover.";
+      } else {
+        metadata.answer = "I couldn't find a Daily Devotional available to you yet. You can browse the published series from Discover.";
+      }
+      metadata.nextStep = capabilityNextStep("daily-devotional");
+      return metadata;
+    }
+    selectedSeries = published.get(selected.seriesId) ?? series[0];
+    const full = fullById.get(selectedSeries.id);
+    selectedEntry = resolveCurrentDevotionalEntry(
+      full?.entries ?? [],
+      selected.completedDays ?? [],
+    );
+  }
+
+  if (!selectedSeries || !selectedEntry) {
+    const title = selectedSeries?.title ?? "The published Daily Devotional";
     metadata.answer = "I couldn't find a Daily Devotional available to you yet. You can browse the published series from Discover.";
+    if (selectedSeries) {
+      metadata.answer = `The published Daily Devotional "${title}" does not have a published entry available yet. You can browse other available devotionals from Discover.`;
+    }
     metadata.nextStep = capabilityNextStep("daily-devotional");
     return metadata;
   }
 
-  const selectedSeries = published.get(selected.seriesId) ?? series[0];
-  const full = await getSeriesById(selectedSeries.id);
-  const entry = resolveCurrentDevotionalEntry(
-    full?.entries ?? [],
-    selected.completedDays ?? [],
-  );
-  if (!entry) {
-    metadata.answer = `The published Daily Devotional "${selectedSeries.title}" does not have a published entry available yet. You can browse other available devotionals from Discover.`;
-    metadata.nextStep = capabilityNextStep("daily-devotional");
-    return metadata;
-  }
+  const entry = selectedEntry;
 
   const resource: Recommendation = {
     type: "devotional",
@@ -326,7 +379,9 @@ async function resolveTodayDevotional(userId: string): Promise<EmmausResponseMet
     resourceType: "devotional",
     resourceId: entry.id,
     parentId: selectedSeries.id,
-    reason: "The signed-in user's current published Daily Devotional.",
+    reason: selectedByDate
+      ? "The published Daily Devotional entry allocated to today's date."
+      : "The signed-in user's current published Daily Devotional.",
   }];
   metadata.resourceActions = [
     actionForCapabilityResource("OPEN", "devotional", entry.id, resourcePath, selectedSeries.id),
@@ -345,6 +400,7 @@ async function resolveTodayDevotional(userId: string): Promise<EmmausResponseMet
 export function resolveCurrentDevotionalEntry<T extends {
   status: string;
   dayNumber: number;
+  displayLabel?: string | null;
 }>(
   entries: T[],
   completedDays: number[],
@@ -357,6 +413,106 @@ export function resolveCurrentDevotionalEntry<T extends {
   const completed = new Set(completedDays);
   return published.find((entry) => !completed.has(entry.dayNumber))
     ?? published[published.length - 1];
+}
+
+type CalendarDate = {
+  day: number;
+  month: number;
+  year?: number;
+};
+
+const FULL_MONTHS = [
+  "january", "february", "march", "april", "may", "june",
+  "july", "august", "september", "october", "november", "december",
+];
+const SHORT_MONTHS = FULL_MONTHS.map((month) => month.slice(0, 3));
+const MEMBER_TIME_ZONE = "Africa/Johannesburg";
+
+function parseDevotionalDateLabel(label: string | null | undefined): CalendarDate | null {
+  if (!label?.trim()) return null;
+  const value = label.trim().toLowerCase();
+
+  const dayMonth = value.match(/^(\d{1,2})\s+([a-z]+)(?:\s+(\d{4}))?$/);
+  const monthDay = value.match(/^([a-z]+)\s+(\d{1,2})(?:\s+(\d{4}))?$/);
+  const numeric = value.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/);
+
+  let day: number;
+  let month: number;
+  let year: number | undefined;
+  if (dayMonth) {
+    day = Number(dayMonth[1]);
+    month = [...FULL_MONTHS, ...SHORT_MONTHS].indexOf(dayMonth[2]) % 12 + 1;
+    year = dayMonth[3] ? Number(dayMonth[3]) : undefined;
+  } else if (monthDay) {
+    month = [...FULL_MONTHS, ...SHORT_MONTHS].indexOf(monthDay[1]) % 12 + 1;
+    day = Number(monthDay[2]);
+    year = monthDay[3] ? Number(monthDay[3]) : undefined;
+  } else if (numeric) {
+    day = Number(numeric[1]);
+    month = Number(numeric[2]);
+    year = numeric[3] ? Number(numeric[3]) : undefined;
+  } else {
+    return null;
+  }
+
+  if (!Number.isInteger(day) || !Number.isInteger(month) || month < 1 || month > 12) {
+    return null;
+  }
+  const validationYear = year ?? 2000;
+  const lastDay = new Date(Date.UTC(validationYear, month, 0)).getUTCDate();
+  if (day < 1 || day > lastDay) return null;
+  return { day, month, ...(year !== undefined ? { year } : {}) };
+}
+
+function memberCalendarDate(now: Date, timeZone = MEMBER_TIME_ZONE): CalendarDate {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(now);
+  const get = (type: "year" | "month" | "day") =>
+    Number(parts.find((part) => part.type === type)?.value);
+  return { year: get("year"), month: get("month"), day: get("day") };
+}
+
+function sameCalendarDate(labelDate: CalendarDate, target: CalendarDate): boolean {
+  return labelDate.day === target.day
+    && labelDate.month === target.month
+    && (labelDate.year === undefined || labelDate.year === target.year);
+}
+
+export function hasDateAllocatedEntries<T extends {
+  status: string;
+  displayLabel?: string | null;
+}>(entries: T[]): boolean {
+  return entries.some((entry) =>
+    entry.status === "Published" && parseDevotionalDateLabel(entry.displayLabel) !== null,
+  );
+}
+
+/**
+ * Resolve the published entry assigned to the member's current calendar date.
+ * Date-labelled series intentionally ignore completedDays: a dated devotional
+ * answers "what is assigned today?", not "what is my next unread entry?".
+ */
+export function resolveDateAllocatedDevotionalEntry<T extends {
+  status: string;
+  dayNumber: number;
+  displayLabel?: string | null;
+}>(
+  entries: T[],
+  now = new Date(),
+  timeZone = MEMBER_TIME_ZONE,
+): T | undefined {
+  const target = memberCalendarDate(now, timeZone);
+  return entries
+    .filter((entry) => entry.status === "Published")
+    .sort((a, b) => a.dayNumber - b.dayNumber)
+    .find((entry) => {
+      const labelDate = parseDevotionalDateLabel(entry.displayLabel);
+      return labelDate !== null && sameCalendarDate(labelDate, target);
+    });
 }
 
 async function resolveBibleRead(intent: TypedAskEmmausIntent): Promise<EmmausResponseMetadata> {
