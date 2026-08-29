@@ -20,6 +20,10 @@ the nonce in PostgreSQL before invoking the existing worker. Keep the signing
 key only in server/provider secrets, schedule every five minutes, and reject
 subscription ownership conflicts.
 
+Production secrets added after a deployment do not reach the already-running
+deployment; republish the API before diagnosing a valid scheduler signature as
+missing configuration.
+
 Only recognized browser push-service origins may be persisted. Never relax
 endpoint validation to accept arbitrary HTTPS URLs: the scheduled sender would
 otherwise become an authenticated SSRF sink.
