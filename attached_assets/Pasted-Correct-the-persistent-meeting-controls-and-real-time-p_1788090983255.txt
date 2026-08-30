@@ -1,0 +1,254 @@
+Correct the persistent meeting controls and real-time presentation system.
+
+Do not add Devices or Return to meeting to the persistent bottom control bar.
+
+1. SIMPLIFY THE PERSISTENT MEETING BAR
+
+While a participant is connected, the fixed meeting bar must contain only:
+
+Audio meeting:
+- Mute / Unmute
+- Raise hand / Lower hand
+- Leave
+
+Video meeting:
+- Mute / Unmute
+- Camera on / Camera off
+- Raise hand / Lower hand
+- Leave
+
+Listen-only participant:
+- Join microphone
+- Raise hand / Lower hand
+- Leave
+
+Do not include:
+- Devices
+- Return to meeting
+
+Device selection belongs only in the pre-join device-check screen or an optional meeting settings menu—not in the universal bar.
+
+2. SHOW CONTROLS ON THE DISCUSSION SCREEN
+
+The screenshots confirm that the persistent controls appear on the Group overview but disappear completely when Group Discussion opens.
+
+The controls must remain visible on:
+- Group overview
+- Discussion/chat
+- My Bible and Bible reader
+- Group Notes
+- Today’s Study
+- shared media
+- presented content
+- Ask Emmaus
+- every other route or surface opened during the active meeting
+
+Mount the controls once at the meeting-aware application layout/root level.
+
+Do not mount them only inside:
+- the Group overview component
+- the Live Audio card
+- one route
+- one URL pathname condition
+
+The Discussion URL uses query parameters such as:
+`surface=discussion&discussionId=...`
+
+Do not hide or unmount the controls because the route has `surface=discussion`.
+
+The same LiveKit room connection and participant state must survive navigation between these screens.
+
+3. MOBILE CONTROL LAYOUT
+
+On narrow mobile screens:
+- Keep all controls inside the viewport.
+- Use equal compact touch targets.
+- Show clear icons.
+- Use short labels where they fit.
+- Never create horizontal page overflow.
+- Keep the bar above the app navigation and safe-area inset.
+- Ensure the Discussion message input remains visible above the meeting bar.
+- The meeting bar must not cover the chat input.
+- The Ask Emmaus button must not cover either bar.
+
+4. FIX REAL-TIME SHARED MEDIA PRESENTATION
+
+Current failure:
+- A leader starts presenting shared media.
+- Connected participants do not see it.
+- It appears only after each participant manually refreshes.
+- “Present to group” from Chat also does not present immediately.
+- Every participant must refresh before it appears.
+
+This proves that presentation state may be stored successfully, but active clients are not receiving or applying a real-time presentation event.
+
+Implement one authoritative meeting presentation state.
+
+Suggested state:
+- meetingId
+- presentationId
+- presentationType
+- sourceMessageId when presented from chat
+- media URL or content reference
+- title
+- presenterId
+- status: `active` or `stopped`
+- startedAt
+- version or updatedAt
+
+When the leader taps “Present to group”:
+1. Save/update the authoritative presentation state.
+2. Broadcast a real-time event to the meeting channel.
+3. Every connected participant must receive the event immediately.
+4. Every participant must open/render the same presentation without refreshing.
+5. The leader must also see the presentation state update immediately.
+6. The presentation must work regardless of which Emmaus screen a participant is viewing.
+
+Use the project’s existing real-time infrastructure consistently:
+- Supabase Realtime/database subscription, or
+- the existing meeting WebSocket/data-message channel, or
+- LiveKit reliable data messages
+
+Do not rely on polling or page refresh.
+
+5. PRESENTING FROM CHAT
+
+“Present to group” on a Chat attachment or message must use exactly the same presentation action and state as presenting from the shared-media area.
+
+Do not maintain a separate incomplete chat presentation path.
+
+When selected:
+- Resolve the message attachment/content.
+- Create the active presentation state.
+- Broadcast it to all connected meeting participants.
+- Display it immediately for everyone.
+- Preserve the original chat message.
+- Indicate in Chat that the item is currently being presented.
+
+Support the relevant shared content types already allowed by Emmaus:
+- images
+- documents
+- slides
+- video
+- audio
+- links or supported embeds
+
+If a content type cannot be embedded safely, show a synchronized presentation card with an Open option. Do not silently do nothing.
+
+6. SUBSCRIBE CORRECTLY
+
+On every connected participant client:
+- Subscribe when joining the meeting.
+- Subscribe using the correct meeting ID.
+- Keep the subscription alive across internal route changes.
+- Update the UI when presentation state changes.
+- Remove the subscription only when leaving the meeting or signing out.
+- Prevent duplicate subscriptions.
+- Handle reconnection by fetching the current authoritative state again.
+
+Check specifically for:
+- subscription created only on the Group overview screen
+- cleanup running on every route change
+- wrong meeting/channel identifier
+- leader subscribed but participants not subscribed
+- database update without a real-time broadcast
+- stale React Query/cache state
+- missing cache invalidation
+- event received but ignored because the participant is on Discussion or Bible
+- row-level security preventing participants from receiving updates
+- event handler closing over stale state
+
+7. PRESENTATION BEHAVIOUR
+
+When a leader begins presenting:
+- All currently connected participants see it immediately.
+- No refresh is required.
+- It appears over or within the current meeting surface in a consistent presentation viewer.
+- Participants do not lose their meeting connection.
+- Persistent mic/camera/hand/leave controls remain available.
+- Participants can close/minimize their local viewer if that is allowed, without stopping the group presentation.
+- Only the leader or an authorized presenter can stop the group presentation.
+
+When presentation stops:
+- Broadcast the stopped state immediately.
+- Remove the presentation from all connected screens without refresh.
+
+Late joiners and reconnecting participants:
+- Fetch the current presentation state on join/reconnect.
+- If a presentation is active, display it immediately.
+- Do not require a historical event to still be available.
+
+8. REAL-TIME CHAT/DISCUSSION
+
+While correcting the Discussion route, verify that:
+- new messages appear for all connected participants without refreshing
+- attachments appear without refreshing
+- presentation indicators update without refreshing
+- opening Discussion does not disconnect LiveKit
+- opening Discussion does not remove meeting controls
+
+9. DO NOT CONFUSE TWO TYPES OF STATE
+
+Live participant state:
+- microphone
+- camera
+- raised hand
+- connection
+
+Group presentation state:
+- what the leader is currently presenting
+- whether presentation is active
+- presentation source/content
+
+Both must be real-time, but presentation state must also be persisted so late joiners can recover it.
+
+ACCEPTANCE TESTS
+
+Persistent controls:
+- Join an audio meeting and open Discussion.
+- Mute/unmute and raise/lower hand remain visible and functional.
+- Open My Bible from the same meeting.
+- The same controls remain visible and functional.
+- No Devices or Return to meeting buttons appear.
+- Leave works from every screen.
+
+Video:
+- Join a video meeting.
+- Mute, camera, hand and Leave remain available on Discussion, Bible and presented-media screens.
+
+Shared media:
+- Connect leader and two participants on three devices.
+- Leader presents an image from shared media.
+- Both participants see it immediately without refreshing.
+- Leader stops presenting.
+- It disappears immediately for both participants.
+- Repeat with supported document/video content.
+
+Present from Chat:
+- Leader attaches or selects media in Chat.
+- Tap Present to group.
+- Both participants see it immediately without refreshing.
+- The content shown matches the selected Chat item.
+
+Different screens:
+- Keep participant one on Discussion.
+- Keep participant two in My Bible.
+- Present media from the leader’s Chat.
+- Both participants receive and display it immediately.
+- Their meeting controls remain available.
+
+Late join:
+- Start a presentation.
+- Join from another device afterward.
+- The late participant sees the active presentation immediately.
+
+Reconnection:
+- Temporarily lose connection and reconnect.
+- Current presentation state restores automatically.
+
+Before finishing:
+- Identify why the meeting bar was excluded from Discussion.
+- Identify why presentation updates required refresh.
+- Identify why Present to group from Chat failed.
+- Consolidate duplicate presentation code into one shared action.
+- Report every file changed and every acceptance-test result.
