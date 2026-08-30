@@ -3,13 +3,12 @@ import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   apiGetMessages, apiGetStreamToken, apiSendMessage, apiDeleteMessage, apiGetRoomById,
-  apiGetActiveGroupDiscussion, apiCloseSharedTool, apiGetSessionEventsToken,
-  apiSessionEventsUrl,
+  apiGetActiveGroupDiscussion, apiCloseSharedTool,
 } from '@/lib/rooms-api';
 import { getApiUrl } from '@/lib/api';
 import { apiStartPresentation } from '@/lib/rooms-api-media';
 import { ArrowLeft, Send, Paperclip, X, Mic, Trash2, Loader2 } from 'lucide-react';
-import type { RoomMessage, MediaAttachment } from '@/lib/rooms-types';
+import type { RoomMessage, MediaAttachment, PresentationState } from '@/lib/rooms-types';
 import { isRoomLeaderRole } from '@/lib/rooms-types';
 import { MediaMessageBubble } from '@/components/MediaMessageBubble';
 import { AttachmentPicker } from '@/components/AttachmentPicker';
@@ -24,6 +23,8 @@ interface RoomChatProps {
   /** Embedded Discussion keeps the parent Room and its LiveKit connection mounted. */
   embedded?: boolean;
   onClose?: () => void;
+  activePresentationMessageId?: string | null;
+  onPresentationStarted?: (presentation: PresentationState) => void;
 }
 
 function formatTime(iso: string): string {
@@ -67,7 +68,7 @@ function groupByDate(messages: RoomMessage[]): { date: string; items: RoomMessag
   return groups;
 }
 
-export default function RoomChat({ embedded = false, onClose }: RoomChatProps = {}) {
+export default function RoomChat({ embedded = false, onClose, activePresentationMessageId = null, onPresentationStarted }: RoomChatProps = {}) {
   const { roomId } = useParams<{ roomId: string }>();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -164,101 +165,6 @@ export default function RoomChat({ embedded = false, onClose }: RoomChatProps = 
       });
     return () => { cancelled = true; };
   }, [roomId, user?.id, discussionId, closeDiscussionView]);
-
-  // RoomChat has its own message SSE stream, so it must also observe the
-  // session stream while open. Otherwise a leader's tool_closed event reaches
-  // RoomDetail instances but not participants currently viewing the chat.
-  useEffect(() => {
-    if (!user || !roomId || !sessionId) return;
-    let cancelled = false;
-    let es: EventSource | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let closed = false;
-
-    const closeDiscussion = () => {
-      if (cancelled || closed) return;
-      closed = true;
-      closeDiscussionView();
-    };
-
-    const connect = async () => {
-      try {
-        const token = await apiGetSessionEventsToken(user.id, String(roomId));
-        if (cancelled) return;
-        es = new EventSource(apiSessionEventsUrl(String(roomId), token));
-        es.onmessage = event => {
-          try {
-            const payload = JSON.parse(event.data) as {
-              type?: string;
-              payload?: {
-                tool?: string;
-                sessionId?: string;
-                session?: {
-                  id?: string;
-                  metadata?: { activeTool?: string };
-                } | null;
-                 presentedBy?: string;
-              };
-            };
-             if (payload.type === 'media_presented') {
-               const discussionQuery = discussionId
-                 ? `&discussionId=${encodeURIComponent(discussionId)}`
-                 : '';
-               // Everyone currently on Chat arrived here from the discussion,
-               // not just the person who started the presentation. Preserve
-               // that origin for every Chat viewer so global Stop returns them
-               // to the discussion instead of the meeting screen.
-               const returnQuery = '&return=chat';
-               setLocation(
-                 `/rooms/${String(roomId)}?presentation=1${returnQuery}${discussionQuery}`,
-               );
-               return;
-             }
-            if (payload.type === 'tool_closed' && payload.payload?.tool === 'discussion') {
-              if (
-                !payload.payload.sessionId ||
-                payload.payload.sessionId === sessionId
-              ) {
-                closeDiscussion();
-              }
-              return;
-            }
-            if (payload.type === 'session_state') {
-              const current = payload.payload?.session;
-              if (
-                !current ||
-                current.id !== sessionId ||
-                (current.metadata?.activeTool !== 'discussion' &&
-                  current.metadata?.activeTool !== 'presentation')
-              ) {
-                closeDiscussion();
-              }
-            }
-          } catch {
-            // Ignore malformed events; the next session-state event reconciles.
-          }
-        };
-        es.onerror = () => {
-          es?.close();
-          es = null;
-          if (!cancelled && !closed) {
-            reconnectTimer = setTimeout(connect, 2_000);
-          }
-        };
-      } catch {
-        if (!cancelled && !closed) {
-          reconnectTimer = setTimeout(connect, 2_000);
-        }
-      }
-    };
-
-    void connect();
-    return () => {
-      cancelled = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      es?.close();
-    };
-  }, [roomId, sessionId, user?.id, setLocation, discussionId, closeDiscussionView]);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
@@ -497,7 +403,7 @@ export default function RoomChat({ embedded = false, onClose }: RoomChatProps = 
     }
     setPresentingMessageId(msg.id);
     try {
-      await apiStartPresentation(user.id, String(roomId), {
+      const presentation = await apiStartPresentation(user.id, String(roomId), {
         messageId: msg.id,
         filename: msg.attachment.filename,
         mediaType: msg.attachment.type,
@@ -505,6 +411,7 @@ export default function RoomChat({ embedded = false, onClose }: RoomChatProps = 
         sessionId,
         pageCount: msg.attachment.pageCount ?? null,
       });
+      onPresentationStarted?.(presentation);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Could not start presentation.');
     } finally {
@@ -550,7 +457,7 @@ export default function RoomChat({ embedded = false, onClose }: RoomChatProps = 
   const groups = groupByDate(mergeRoomMessages(messages, []));
 
   return (
-    <div className={`${embedded ? 'fixed inset-0 z-[60]' : 'min-h-[100dvh]'} bg-background flex flex-col`}>
+    <div className={`${embedded ? 'fixed inset-0 z-[60] pb-[calc(7.25rem+env(safe-area-inset-bottom))]' : 'min-h-[100dvh]'} bg-background flex flex-col`}>
       {/* Header */}
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50 shrink-0">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto gap-3">
@@ -640,6 +547,7 @@ export default function RoomChat({ embedded = false, onClose }: RoomChatProps = 
                                 ? () => handlePresent(msg)
                                 : undefined
                             }
+                            isPresenting={activePresentationMessageId === msg.id}
                           />
                           {presentingMessageId === msg.id && (
                             <p className="text-[11px] text-primary mt-1">Starting presentation…</p>

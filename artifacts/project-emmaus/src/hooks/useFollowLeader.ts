@@ -90,10 +90,58 @@ interface UseFollowLeaderResult {
   /** Active media presentation (null when none in progress). */
   activePresentation: PresentationState | null;
   setActivePresentation: (p: PresentationState | null) => void;
+  applyPresentationResponse: (presentation: PresentationState, expectedPresentationId?: string) => void;
+  clearPresentationResponse: (sessionId: string, expectedPresentationId: string) => void;
    /** The server-authoritative tool currently shared with the meeting. */
    activeTool: 'scripture' | 'discussion' | 'poll' | 'ask-emmaus' | 'presentation' | 'study' | null;
    /** Versioned server-authoritative meeting surface; chat is legacy discussion. */
    sharedPanel: SharedPanelState;
+}
+
+export function shouldApplyPresentationEvent(
+  current: { sessionId: string | null; version: number; panel: SharedPanel },
+  incoming: { sessionId?: string | null; sharedPanel?: SharedPanelState },
+  activeSessionId?: string,
+): boolean {
+  if (incoming.sessionId && activeSessionId && incoming.sessionId !== activeSessionId) return false;
+  if (incoming.sharedPanel) {
+    if (incoming.sharedPanel.panel !== 'presentation') return false;
+    if (current.sessionId === (incoming.sessionId ?? activeSessionId ?? null) &&
+      incoming.sharedPanel.version < current.version) return false;
+    return true;
+  }
+  return current.version === 0 || current.panel === 'presentation';
+}
+
+export function isCurrentPresentationIdentity(
+  activeSessionId: string | undefined,
+  activePresentationId: string | undefined,
+  incomingSessionId: string | undefined,
+  incomingPresentationId?: string,
+): boolean {
+  if (!activeSessionId || !incomingSessionId || incomingSessionId !== activeSessionId) return false;
+  return !incomingPresentationId || incomingPresentationId === activePresentationId;
+}
+
+export function canApplyPresentationResponse(
+  activeSessionId: string | undefined,
+  activePresentationId: string | undefined,
+  presentation: PresentationState,
+  expectedPresentationId?: string,
+): boolean {
+  if (!activeSessionId || presentation.sessionId !== activeSessionId) return false;
+  if (!presentation.id || presentation.sharedPanel?.panel !== 'presentation') return false;
+  if (presentation.sharedPanel.data?.presentationId !== presentation.id) return false;
+  return !expectedPresentationId || activePresentationId === expectedPresentationId;
+}
+
+export function shouldReconcileSharedPanelPresentation(
+  panelAccepted: boolean,
+  panel: SharedPanelState | undefined,
+): panel is SharedPanelState & { data: { presentationId: string } } {
+  return panelAccepted &&
+    panel?.panel === 'presentation' &&
+    typeof panel.data?.presentationId === 'string';
 }
 
 export function useFollowLeader({
@@ -149,20 +197,50 @@ export function useFollowLeader({
   const emmausRequestRef = useRef<string | null>(null);
   const closedToolsRef = useRef(new Set<string>());
   const sharedPanelRef = useRef<{ sessionId: string | null; version: number; panel: SharedPanel }>({ sessionId: null, version: 0, panel: 'none' });
+  const activePresentationRef = useRef<PresentationState | null>(null);
 
-  const applySharedPanel = useCallback((candidate: unknown, sessionId?: string | null) => {
+  useEffect(() => {
+    activePresentationRef.current = activePresentation;
+  }, [activePresentation]);
+
+  const clearPresentationResponse = useCallback((sessionId: string, expectedPresentationId: string) => {
+    if (!isCurrentPresentationIdentity(
+      activeSessionRef.current?.id,
+      activePresentationRef.current?.id,
+      sessionId,
+      expectedPresentationId,
+    )) return;
+    activePresentationRef.current = null;
+    setActivePresentation(null);
+  }, []);
+
+  const applySharedPanel = useCallback((candidate: unknown, sessionId?: string | null): boolean => {
     const value = candidate as Partial<SharedPanelState> | null;
     const panels: SharedPanel[] = ['none', 'chat', 'scripture', 'presentation', 'poll', 'ask-emmaus', 'study', 'notes', 'participants'];
     if (!value || typeof value.version !== 'number' || !Number.isInteger(value.version) ||
-      value.version < 0 || typeof value.panel !== 'string' || !panels.includes(value.panel as SharedPanel)) return;
+      value.version < 0 || typeof value.panel !== 'string' || !panels.includes(value.panel as SharedPanel)) return false;
     const id = sessionId ?? activeSessionRef.current?.id ?? null;
     const current = sharedPanelRef.current;
     // A new session starts its own sequence. Within a session, delayed and
     // duplicated SSE messages can never move the visible surface backwards.
-    if (current.sessionId === id && value.version < current.version) return;
+    if (current.sessionId === id && value.version < current.version) return false;
     sharedPanelRef.current = { sessionId: id, version: value.version, panel: value.panel as SharedPanel };
     setSharedPanel({ panel: value.panel as SharedPanel, version: value.version, ...(value.data && typeof value.data === 'object' ? { data: value.data } : {}) });
+    return true;
   }, []);
+
+  const applyPresentationResponse = useCallback((presentation: PresentationState, expectedPresentationId?: string) => {
+    const activeSessionId = activeSessionRef.current?.id;
+    if (!canApplyPresentationResponse(
+      activeSessionId,
+      activePresentationRef.current?.id,
+      presentation,
+      expectedPresentationId,
+    )) return;
+    if (!applySharedPanel(presentation.sharedPanel, presentation.sessionId)) return;
+    activePresentationRef.current = presentation;
+    setActivePresentation(presentation);
+  }, [applySharedPanel]);
 
   useEffect(() => { followLeaderRef.current = followLeader; }, [followLeader]);
   useEffect(() => { onNavigateRef.current = onNavigate; }, [onNavigate]);
@@ -175,16 +253,18 @@ export function useFollowLeader({
     switch (event.type) {
       case 'session_state': {
         const session = event.payload.session as RoomSession | null;
+        const hydratedPanel = (
+          (event.payload as { sharedPanel?: unknown }).sharedPanel ??
+          session?.metadata?.sharedPanel
+        ) as SharedPanelState | undefined;
+        let hydratedPanelAccepted = false;
 
         if (session !== null) {
           // Active session received — always apply it.
           sessionExplicitlyEndedRef.current = false;
           activeSessionRef.current = session;
           setActiveSession(session);
-           applySharedPanel(
-             (event.payload as { sharedPanel?: unknown }).sharedPanel ?? session.metadata?.sharedPanel,
-             session.id,
-           );
+           hydratedPanelAccepted = applySharedPanel(hydratedPanel, session.id);
           if (session.currentMode) {
             setSessionMode(session.currentMode as SessionMode);
           }
@@ -285,11 +365,16 @@ export function useFollowLeader({
           // Only seed the poll if there's still an active session.
           setIncomingPoll(seedPoll);
         }
-        if (seedPresentation && session !== null) {
+        if (seedPresentation && session !== null && hydratedPanelAccepted &&
+          hydratedPanel?.panel === 'presentation' &&
+          hydratedPanel.data?.presentationId === seedPresentation.id) {
           // Seed the active presentation for late-joining members or reconnectors.
           // Only apply when there is still an active session; if the session is
           // null the presentation row has already been cleaned up by session end.
-          setActivePresentation(prev => prev ?? seedPresentation);
+          if (!seedPresentation.sessionId || seedPresentation.sessionId === session.id) {
+            activePresentationRef.current = seedPresentation;
+            setActivePresentation(seedPresentation);
+          }
         }
 
         break;
@@ -354,16 +439,18 @@ export function useFollowLeader({
       }
 
       case 'media_presented': {
-        // Legacy media events carry no panel version. Once the server has
-        // established a versioned panel, they must not resurrect a viewer
-        // after a newer chat/none assignment arrived out of order.
-        if (sharedPanelRef.current.version > 0 && sharedPanelRef.current.panel !== 'presentation') break;
         const p = event.payload as {
+          id?: string;
           messageId: string | null; filename: string; mediaType: string;
           objectPath: string; presentedBy: string; presentedByName: string;
           currentPage: number; pageCount?: number | null; sessionId: string | null;
+          sharedPanel?: SharedPanelState;
         };
-        setActivePresentation({
+        const activeId = activeSessionRef.current?.id;
+        if (!shouldApplyPresentationEvent(sharedPanelRef.current, p, activeId)) break;
+        if (p.sharedPanel && !applySharedPanel(p.sharedPanel, p.sessionId ?? activeId)) break;
+        applyPresentationResponse({
+          id: p.id,
           sessionId: p.sessionId ?? undefined,
           messageId: p.messageId,
           filename: p.filename,
@@ -373,6 +460,7 @@ export function useFollowLeader({
           presentedByName: p.presentedByName,
           currentPage: p.currentPage,
           pageCount: p.pageCount ?? undefined,
+          sharedPanel: p.sharedPanel,
         });
         setActiveTool('presentation');
         break;
@@ -382,27 +470,51 @@ export function useFollowLeader({
         const payload = event.payload as { sessionId?: string; sharedPanel?: unknown };
         const activeId = activeSessionRef.current?.id;
         if (payload.sessionId && activeId && payload.sessionId !== activeId) break;
-        applySharedPanel(payload.sharedPanel, payload.sessionId ?? activeId);
+        const panelAccepted = applySharedPanel(payload.sharedPanel, payload.sessionId ?? activeId);
         const panel = payload.sharedPanel as SharedPanelState | undefined;
-        if (panel?.panel === 'presentation' && typeof panel.data?.presentationId === 'string') {
-          setActivePresentation(prev => prev ? {
-            ...prev,
-            id: panel.data!.presentationId as string,
-            sessionId: payload.sessionId ?? prev.sessionId,
-          } : prev);
+        if (shouldReconcileSharedPanelPresentation(panelAccepted, panel)) {
+          const currentPresentation = activePresentationRef.current;
+          if (currentPresentation) {
+            const nextPresentation: PresentationState = {
+              ...currentPresentation,
+              id: panel.data.presentationId,
+              sessionId: payload.sessionId ?? currentPresentation.sessionId,
+              sharedPanel: panel,
+            };
+            activePresentationRef.current = nextPresentation;
+            setActivePresentation(nextPresentation);
+          }
         }
         break;
       }
 
       case 'presentation_page': {
-        const { currentPage } = event.payload as { currentPage: number };
-        setActivePresentation(prev =>
-          prev ? { ...prev, currentPage } : prev
-        );
+        const p = event.payload as {
+          id?: string;
+          sessionId?: string;
+          currentPage?: number;
+          sharedPanel?: SharedPanelState;
+        };
+        const activeId = activeSessionRef.current?.id;
+        if (p.sessionId && activeId && p.sessionId !== activeId) break;
+        if (!p.sharedPanel || !applySharedPanel(p.sharedPanel, p.sessionId ?? activeId)) break;
+        if (!Number.isSafeInteger(p.currentPage) || Number(p.currentPage) < 1) break;
+        if (!p.id || !isCurrentPresentationIdentity(activeId, activePresentationRef.current?.id, p.sessionId, p.id)) break;
+        const currentPresentation = activePresentationRef.current;
+        if (!currentPresentation) break;
+        const nextPresentation: PresentationState = { ...currentPresentation, currentPage: Number(p.currentPage), sharedPanel: p.sharedPanel };
+        activePresentationRef.current = nextPresentation;
+        setActivePresentation(nextPresentation);
         break;
       }
 
       case 'presentation_stopped': {
+        const payload = event.payload as { sessionId?: string; presentationId?: string; sharedPanel?: SharedPanelState };
+        const activeId = activeSessionRef.current?.id;
+        if (payload.sessionId && activeId && payload.sessionId !== activeId) break;
+        if (!payload.sharedPanel || !applySharedPanel(payload.sharedPanel, payload.sessionId ?? activeId)) break;
+        if (!payload.presentationId || !isCurrentPresentationIdentity(activeId, activePresentationRef.current?.id, payload.sessionId, payload.presentationId)) break;
+        activePresentationRef.current = null;
         setActivePresentation(null);
         setActiveTool(prev => prev === 'presentation' ? null : prev);
         break;
@@ -716,6 +828,8 @@ export function useFollowLeader({
     pollRevealUpdate,
     activePresentation,
     setActivePresentation,
+    applyPresentationResponse,
+    clearPresentationResponse,
     activeTool,
     sharedPanel,
   };

@@ -18,6 +18,7 @@ interface MediaMessageBubbleProps {
   /** Whether the current user can present (authorized leader or member-present enabled for own content). */
   canPresent?: boolean;
   onPresent?: () => void;
+  isPresenting?: boolean;
   /** Show a real download action, used for visible prepared meeting media. */
   allowDownload?: boolean;
 }
@@ -52,7 +53,13 @@ function DownloadAction({ url, filename, isMe }: { url: string; filename: string
   );
 }
 
-function ImageBubble({ attachment, isMe, canPresent, onPresent, allowDownload }: MediaMessageBubbleProps) {
+function PresentationAction({ isPresenting, onPresent }: { isPresenting?: boolean; onPresent?: () => void }) {
+  if (isPresenting) return <p className="flex items-center gap-1.5 text-[12px] font-semibold text-primary"><Presentation size={12} />Presenting now</p>;
+  if (!onPresent) return null;
+  return <button onClick={onPresent} className="flex items-center gap-1.5 text-[12px] font-medium text-primary hover:underline"><Presentation size={12} /> Present to Group</button>;
+}
+
+function ImageBubble({ attachment, isMe, canPresent, onPresent, allowDownload, isPresenting }: MediaMessageBubbleProps) {
   const url = getMediaUrl(attachment.objectPath);
   const [open, setOpen] = useState(false);
 
@@ -84,14 +91,7 @@ function ImageBubble({ attachment, isMe, canPresent, onPresent, allowDownload }:
         </p>
       )}
       {allowDownload && <DownloadAction url={url} filename={attachment.filename} isMe={isMe} />}
-      {canPresent && onPresent && (
-        <button
-          onClick={onPresent}
-          className="flex items-center gap-1.5 text-[12px] font-medium text-primary hover:underline"
-        >
-          <Presentation size={12} /> Present to Group
-        </button>
-      )}
+      {(isPresenting || canPresent) && <PresentationAction isPresenting={isPresenting} onPresent={canPresent ? onPresent : undefined} />}
 
       {/* Lightbox */}
       {open && (
@@ -135,7 +135,7 @@ function ImageBubble({ attachment, isMe, canPresent, onPresent, allowDownload }:
 
 // ─── Voice note ───────────────────────────────────────────────────────────────
 
-function VoiceBubble({ attachment, isMe, canPresent, onPresent, allowDownload }: MediaMessageBubbleProps) {
+function VoiceBubble({ attachment, isMe, canPresent, onPresent, allowDownload, isPresenting }: MediaMessageBubbleProps) {
   const url = getMediaUrl(attachment.objectPath);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -199,18 +199,14 @@ function VoiceBubble({ attachment, isMe, canPresent, onPresent, allowDownload }:
         </div>
       </div>
       {allowDownload && <DownloadAction url={url} filename={attachment.filename} isMe={isMe} />}
-      {canPresent && onPresent && (
-        <button onClick={onPresent} className="flex items-center gap-1.5 text-[12px] font-medium text-primary hover:underline mt-1">
-          <Presentation size={12} /> Present to Group
-        </button>
-      )}
+      {(isPresenting || canPresent) && <PresentationAction isPresenting={isPresenting} onPresent={canPresent ? onPresent : undefined} />}
     </div>
   );
 }
 
 // ─── Video ────────────────────────────────────────────────────────────────────
 
-function VideoBubble({ attachment, isMe, canPresent, onPresent, allowDownload }: MediaMessageBubbleProps) {
+function VideoBubble({ attachment, isMe, canPresent, onPresent, allowDownload, isPresenting }: MediaMessageBubbleProps) {
   const url = getMediaUrl(attachment.objectPath);
   return (
     <div className="space-y-1.5">
@@ -227,18 +223,14 @@ function VideoBubble({ attachment, isMe, canPresent, onPresent, allowDownload }:
           {attachment.caption}
         </p>
       )}
-      {canPresent && onPresent && (
-        <button onClick={onPresent} className="flex items-center gap-1.5 text-[12px] font-medium text-primary hover:underline">
-          <Presentation size={12} /> Present to Group
-        </button>
-      )}
+      {(isPresenting || canPresent) && <PresentationAction isPresenting={isPresenting} onPresent={canPresent ? onPresent : undefined} />}
     </div>
   );
 }
 
 // ─── PDF / Document ───────────────────────────────────────────────────────────
 
-function DocumentBubble({ attachment, isMe, canPresent, onPresent, allowDownload }: MediaMessageBubbleProps) {
+function DocumentBubble({ attachment, isMe, canPresent, onPresent, allowDownload, isPresenting }: MediaMessageBubbleProps) {
   const url = attachment.type === 'link'
     ? (attachment.url ?? '#')
     : getMediaUrl(attachment.objectPath);
@@ -292,11 +284,7 @@ function DocumentBubble({ attachment, isMe, canPresent, onPresent, allowDownload
           {attachment.caption}
         </p>
       )}
-      {canPresent && onPresent && (
-        <button onClick={onPresent} className="flex items-center gap-1.5 text-[12px] font-medium text-primary hover:underline">
-          <Presentation size={12} /> Present to Group
-        </button>
-      )}
+      {(isPresenting || canPresent) && <PresentationAction isPresenting={isPresenting} onPresent={canPresent ? onPresent : undefined} />}
     </div>
   );
 }
@@ -309,6 +297,7 @@ export function MediaMessageBubble({
   canPresent,
   onPresent,
   allowDownload,
+  isPresenting,
 }: MediaMessageBubbleProps) {
   if (attachment.removed) {
     return (
@@ -323,15 +312,15 @@ export function MediaMessageBubble({
 
   switch (attachment.type) {
     case 'image':
-      return <ImageBubble attachment={attachment} isMe={isMe} canPresent={canPresent} onPresent={onPresent} allowDownload={allowDownload} />;
+      return <ImageBubble attachment={attachment} isMe={isMe} canPresent={canPresent} onPresent={onPresent} allowDownload={allowDownload} isPresenting={isPresenting} />;
     case 'voice':
-      return <VoiceBubble attachment={attachment} isMe={isMe} canPresent={canPresent} onPresent={onPresent} allowDownload={allowDownload} />;
+      return <VoiceBubble attachment={attachment} isMe={isMe} canPresent={canPresent} onPresent={onPresent} allowDownload={allowDownload} isPresenting={isPresenting} />;
     case 'video':
-      return <VideoBubble attachment={attachment} isMe={isMe} canPresent={canPresent} onPresent={onPresent} allowDownload={allowDownload} />;
+      return <VideoBubble attachment={attachment} isMe={isMe} canPresent={canPresent} onPresent={onPresent} allowDownload={allowDownload} isPresenting={isPresenting} />;
     case 'pdf':
     case 'document':
     case 'link':
     default:
-      return <DocumentBubble attachment={attachment} isMe={isMe} canPresent={canPresent} onPresent={onPresent} allowDownload={allowDownload} />;
+      return <DocumentBubble attachment={attachment} isMe={isMe} canPresent={canPresent} onPresent={onPresent} allowDownload={allowDownload} isPresenting={isPresenting} />;
   }
 }

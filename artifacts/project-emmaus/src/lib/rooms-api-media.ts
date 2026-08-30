@@ -5,7 +5,7 @@
 
 import { roomsFetch } from '@/lib/rooms-api';
 import { getApiUrl } from '@/lib/api';
-import type { MediaAttachment, PresentationState, RoomMediaItem } from '@/lib/rooms-types';
+import type { MediaAttachment, PresentationState, RoomMediaItem, SharedPanelState } from '@/lib/rooms-types';
 
 // ─── Upload ───────────────────────────────────────────────────────────────────
 
@@ -135,11 +135,13 @@ export async function apiGetActivePresentation(
   userId: string,
   roomId: string,
 ): Promise<PresentationState | null> {
-  const data = await roomsFetch<{ presentation: PresentationState | null }>(
+  const data = await roomsFetch<{ presentation: PresentationState | null; sessionId: string | null; sharedPanel: SharedPanelState }>(
     `/api/rooms/${roomId}/session/presentation`,
     userId,
   );
-  return data.presentation;
+  return data.presentation && data.sessionId
+    ? { ...data.presentation, sessionId: data.sessionId, sharedPanel: data.sharedPanel }
+    : data.presentation;
 }
 
 export async function apiStartPresentation(
@@ -154,12 +156,12 @@ export async function apiStartPresentation(
     pageCount?: number | null;
   },
 ): Promise<PresentationState> {
-  const data = await roomsFetch<{ presentation: PresentationState }>(
+  const data = await roomsFetch<{ presentation: PresentationState; sessionId: string; sharedPanel: SharedPanelState }>(
     `/api/rooms/${roomId}/session/presentation`,
     userId,
     { method: 'POST', body: JSON.stringify(params) },
   );
-  return data.presentation;
+  return { ...data.presentation, sessionId: data.sessionId, sharedPanel: data.sharedPanel };
 }
 
 export async function apiChangePresentationPage(
@@ -168,12 +170,13 @@ export async function apiChangePresentationPage(
   sessionId: string,
   presentationId: string,
   page: number,
-): Promise<void> {
-  await roomsFetch(
+): Promise<PresentationState> {
+  const data = await roomsFetch<{ presentation: PresentationState; sessionId: string; sharedPanel: SharedPanelState }>(
     `/api/rooms/${roomId}/session/presentation/page`,
     userId,
     { method: 'PATCH', body: JSON.stringify({ sessionId, presentationId, page }) },
   );
+  return { ...data.presentation, sessionId: data.sessionId, sharedPanel: data.sharedPanel };
 }
 
 export async function apiStopPresentation(
@@ -181,8 +184,8 @@ export async function apiStopPresentation(
   roomId: string,
   sessionId: string,
   presentationId: string,
-): Promise<void> {
-  await roomsFetch(
+): Promise<{ sessionId: string }> {
+  return roomsFetch<{ sessionId: string }>(
     `/api/rooms/${roomId}/session/presentation`,
     userId,
     { method: 'DELETE', body: JSON.stringify({ sessionId, presentationId }) },

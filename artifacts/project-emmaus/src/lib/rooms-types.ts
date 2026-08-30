@@ -225,6 +225,8 @@ export interface PresentationState {
   currentPage: number;
   /** Total page count — PDF only. Undefined when unknown. */
   pageCount?: number;
+  /** Versioned meeting surface committed with this presentation response. */
+  sharedPanel?: SharedPanelState;
 }
 
 export interface RoomMediaItem {

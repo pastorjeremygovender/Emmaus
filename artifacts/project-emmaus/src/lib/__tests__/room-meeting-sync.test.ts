@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { canApplyPresentationResponse, isCurrentPresentationIdentity, shouldApplyPresentationEvent, shouldReconcileSharedPanelPresentation } from '../../hooks/useFollowLeader';
 
 const roomDetailSource = readFileSync(
   resolve(process.cwd(), 'src/pages/rooms/RoomDetail.tsx'),
@@ -51,6 +52,63 @@ const appSource = readFileSync(
   'utf8',
 );
 describe('active meeting synchronization contract', () => {
+  it('accepts a newer presentation when a follower is currently on Chat', () => {
+    expect(shouldApplyPresentationEvent(
+      { sessionId: 'session-1', version: 4, panel: 'chat' },
+      {
+        sessionId: 'session-1',
+        sharedPanel: { panel: 'presentation', version: 5, data: { presentationId: 'presentation-1' } },
+      },
+      'session-1',
+    )).toBe(true);
+    expect(shouldApplyPresentationEvent(
+      { sessionId: 'session-1', version: 6, panel: 'chat' },
+      {
+        sessionId: 'session-1',
+        sharedPanel: { panel: 'presentation', version: 5, data: { presentationId: 'presentation-1' } },
+      },
+      'session-1',
+    )).toBe(false);
+  });
+
+  it('rejects delayed hydration, page, and stop identities after a session or presentation changes', () => {
+    expect(isCurrentPresentationIdentity('session-b', 'presentation-b', 'session-a')).toBe(false);
+    expect(isCurrentPresentationIdentity('session-b', 'presentation-b', 'session-b', 'presentation-a')).toBe(false);
+    expect(isCurrentPresentationIdentity('session-b', 'presentation-b', 'session-b', 'presentation-b')).toBe(true);
+  });
+
+  it('admits a new REST or SSE presentation when no local presentation exists', () => {
+    expect(canApplyPresentationResponse('session-1', undefined, {
+      id: 'presentation-1',
+      sessionId: 'session-1',
+      messageId: 'message-1',
+      filename: 'slides.pdf',
+      mediaType: 'document',
+      objectPath: 'rooms/slides.pdf',
+      presentedBy: 'leader-1',
+      presentedByName: 'Leader',
+      currentPage: 1,
+      sharedPanel: {
+        panel: 'presentation',
+        version: 3,
+        data: { presentationId: 'presentation-1', currentPage: 1 },
+      },
+    })).toBe(true);
+  });
+
+  it('does not reconcile presentation identity from a rejected older shared panel', () => {
+    const stalePanel = {
+      panel: 'presentation' as const,
+      version: 4,
+      data: { presentationId: 'presentation-a' },
+    };
+    expect(shouldReconcileSharedPanelPresentation(false, stalePanel)).toBe(false);
+    expect(shouldReconcileSharedPanelPresentation(true, {
+      ...stalePanel,
+      version: 6,
+      data: { presentationId: 'presentation-b' },
+    })).toBe(true);
+  });
   it('does not record attendance when the room page merely observes an active session', () => {
     expect(roomDetailSource).not.toContain('Attendance auto-record');
     expect(roomDetailSource).toContain('const handleJoinMeeting = async () =>');
@@ -157,9 +215,9 @@ describe('active meeting synchronization contract', () => {
   });
 
   it('keeps Discussion close authoritative on the chat route, including reconnect hydration', () => {
-    expect(roomChatSource).toContain('apiGetSessionEventsToken');
-    expect(roomChatSource).toContain("payload.type === 'tool_closed'");
-    expect(roomChatSource).toContain("payload.payload?.tool === 'discussion'");
+    expect(roomChatSource).not.toContain('apiGetSessionEventsToken');
+    expect(roomDetailSource).toContain("lastEvent.type === 'tool_closed'");
+    expect(roomDetailSource).toContain("closedTool === 'discussion'");
     expect(roomChatSource).toContain("metadata?.activeTool !== 'discussion'");
     expect(followLeaderSource).toContain('closedToolsRef');
     expect(followLeaderSource).toContain('eventSessionId !== currentSessionId');
@@ -180,13 +238,14 @@ describe('active meeting synchronization contract', () => {
   });
 
   it('prioritises chat-originated presentations and returns to the discussion', () => {
-    expect(roomChatSource).toContain("payload.type === 'media_presented'");
-    expect(roomChatSource).toContain("presentation=1${returnQuery}${discussionQuery}");
-    expect(roomChatSource).toContain("const returnQuery = '&return=chat'");
+    expect(roomChatSource).toContain('const presentation = await apiStartPresentation');
+    expect(roomChatSource).toContain('onPresentationStarted?.(presentation)');
+    expect(roomDetailSource).toContain('onPresentationStarted={presentation => applyPresentationResponse(presentation)}');
+    expect(roomDetailSource).toContain('activePresentationMessageId={activePresentation?.messageId ?? null}');
     expect(roomChatSource).not.toContain('isPresenter');
     expect(roomDetailSource).toContain("presentationQuery.get('return') === 'chat'");
     expect(roomDetailSource).toContain('scrollIntoView');
-    expect(roomDetailSource).toContain('onStop={() => {');
+    expect(roomDetailSource).toContain('onStop={(sessionId, presentationId) => {');
     expect(roomDetailSource).toContain('onClose={() =>');
     expect(roomDetailSource).toContain('?surface=discussion');
   });
@@ -195,8 +254,10 @@ describe('active meeting synchronization contract', () => {
     expect(roomDetailSource).toContain('<RoomChat');
     expect(roomDetailSource).toContain('embedded');
     expect(roomDetailSource).toContain("presentationQuery.get('surface') === 'discussion'");
-    expect(roomChatSource).toContain("'fixed inset-0 z-[60]'");
+    expect(roomChatSource).toContain("'fixed inset-0 z-[60] pb-[calc(7.25rem+env(safe-area-inset-bottom))]'");
     expect(roomChatSource).toContain('Embedded Discussion keeps the parent Room and its LiveKit connection mounted.');
+    expect(roomChatSource).not.toContain('apiGetSessionEventsToken');
+    expect(roomChatSource).not.toContain('apiSessionEventsUrl');
     expect(appSource).toContain('function LegacyRoomChatRedirect');
     expect(appSource).toContain('?surface=discussion');
     expect(appSource).not.toContain('component={RoomChat}');
@@ -213,15 +274,27 @@ describe('active meeting synchronization contract', () => {
     expect(followLeaderSource).toContain('const applySharedPanel');
     expect(followLeaderSource).toContain('value.version < current.version');
     expect(followLeaderSource).toContain("case 'shared_panel'");
+    expect(followLeaderSource).toContain('setActivePresentation(seedPresentation)');
+    expect(followLeaderSource).not.toContain('prev => prev ?? seedPresentation');
+    expect(followLeaderSource).toContain('p.sessionId !== activeId');
+    expect(followLeaderSource).toContain('p.sharedPanel');
+    expect(followLeaderSource).toContain('isCurrentPresentationIdentity(');
+    expect(followLeaderSource).toContain('incomingSessionId !== activeSessionId');
+    expect(followLeaderSource).toContain('incomingPresentationId === activePresentationId');
+    expect(roomDetailSource).toContain('clearPresentationResponse(sessionId, presentationId)');
+    expect(roomDetailSource).toContain('applyPresentationResponse(presentation, activePresentation.id)');
     expect(roomDetailSource).toContain("sharedPanel.panel === 'chat'");
   });
 
-  it('keeps device publication and hand controls in the persistent call dock', () => {
+  it('keeps prejoin devices separate from the compact persistent call dock', () => {
     expect(videoRoomSource).toContain('function PrejoinCheck');
     expect(videoRoomSource).toContain('navigator.mediaDevices.getUserMedia');
     expect(meetingMediaSource).toContain('function Dock');
     expect(meetingMediaSource).toContain('setMicrophoneEnabled');
-    expect(meetingMediaSource).toContain('function DeviceSheet');
+    expect(meetingMediaSource).not.toContain('function DeviceSheet');
+    expect(meetingMediaSource).not.toContain('aria-label="Devices"');
+    expect(meetingMediaSource).not.toContain('aria-label="Return to meeting"');
+    expect(meetingMediaSource).toContain("mode === 'video' ? 'grid-cols-4' : 'grid-cols-3'");
     expect(meetingMediaSource).toContain("audio={intent.microphone");
     expect(meetingMediaSource).toContain('video={identity.mode === \'video\'');
   });
@@ -229,7 +302,7 @@ describe('active meeting synchronization contract', () => {
   it('lets only the authoritative presentation panel render media', () => {
     expect(roomDetailSource).toContain("sharedPanel.panel !== 'presentation'");
     expect(roomDetailSource).toContain("sharedPanel.panel === 'presentation' && activePresentation");
-    expect(followLeaderSource).toContain("sharedPanelRef.current.panel !== 'presentation'");
+    expect(followLeaderSource).toContain('shouldApplyPresentationEvent(sharedPanelRef.current, p, activeId)');
   });
 
   it('clears raised hands across reconnects and participant departures in both layouts', () => {

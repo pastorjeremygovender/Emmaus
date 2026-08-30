@@ -164,6 +164,13 @@ export interface MediaPresentation {
   startedAt: string;
 }
 
+/** The committed presentation surface returned by presentation mutations. */
+export interface PresentationState {
+  sessionId: string;
+  presentation: MediaPresentation;
+  sharedPanel: SharedPanelState;
+}
+
 export class StalePresentationSessionError extends Error {
   constructor() {
     super("STALE_PRESENTATION_SESSION");
@@ -1194,7 +1201,7 @@ export async function startPresentationForActiveSession(
   presentedBy: string,
   presentedByName: string,
   pageCount?: number | null,
-): Promise<{ presentation: MediaPresentation; sharedPanel: SharedPanelState }> {
+): Promise<PresentationState> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -1284,7 +1291,7 @@ export async function startPresentationForActiveSession(
       [JSON.stringify(metadata), previousPanel.panel === "poll", session.id],
     );
     await client.query("COMMIT");
-    return { presentation, sharedPanel };
+    return { sessionId: session.id, presentation, sharedPanel };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
     throw err;
@@ -1293,20 +1300,41 @@ export async function startPresentationForActiveSession(
   }
 }
 
-export async function getActivePresentation(roomId: string): Promise<MediaPresentation | null> {
+/**
+ * Return a presentation only when it belongs to the specified active session.
+ * Omitting sessionId retains the legacy API, while still never exposing an
+ * orphaned presentation left behind by an ended meeting.
+ */
+export async function getActivePresentation(
+  roomId: string,
+  sessionId?: string,
+): Promise<MediaPresentation | null> {
   const res = await pool.query(
-    `SELECT * FROM room_media_presentations WHERE room_id = $1 ORDER BY started_at DESC LIMIT 1`,
-    [roomId]
+    `SELECT p.*
+       FROM room_media_presentations p
+       JOIN room_sessions s
+         ON s.id = p.session_id
+        AND s.room_id = p.room_id::text
+      WHERE p.room_id = $1
+        AND s.status = 'active'
+        AND ($2::uuid IS NULL OR s.id = $2::uuid)
+      ORDER BY p.started_at DESC
+      LIMIT 1`,
+    [roomId, sessionId ?? null],
   );
   return res.rows.length > 0 ? rowToPresentation(res.rows[0] as Record<string, unknown>) : null;
 }
+
+export type PresentationPageUpdateResult =
+  | { status: "updated"; state: PresentationState }
+  | { status: "stale" | "stale_session" };
 
 export async function updatePresentationPage(
   roomId: string,
   expectedSessionId: string,
   presentationId: string,
   page: number,
-): Promise<"updated" | "stale" | "stale_session"> {
+): Promise<PresentationPageUpdateResult> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -1318,21 +1346,21 @@ export async function updatePresentationPage(
     );
     if (!sessionResult.rows[0]) {
       await client.query("ROLLBACK");
-      return "stale_session";
+      return { status: "stale_session" };
     }
     if (String(sessionResult.rows[0].id) !== expectedSessionId) {
       await client.query("ROLLBACK");
-      return "stale_session";
+      return { status: "stale_session" };
     }
     const presentation = await client.query(
-      `SELECT id FROM room_media_presentations
-        WHERE id = $1 AND room_id = $2
+      `SELECT * FROM room_media_presentations
+        WHERE id = $1 AND room_id = $2 AND session_id = $3
         FOR UPDATE`,
-      [presentationId, roomId],
+      [presentationId, roomId, expectedSessionId],
     );
     if (!presentation.rows[0]) {
       await client.query("ROLLBACK");
-      return "stale";
+      return { status: "stale" };
     }
     const session = rowToSession(sessionResult.rows[0] as Record<string, unknown>);
     const panel = sharedPanelFromSession(session);
@@ -1341,7 +1369,7 @@ export async function updatePresentationPage(
       panel.data?.presentationId !== presentationId
     ) {
       await client.query("ROLLBACK");
-      return "stale";
+      return { status: "stale" };
     }
     await client.query(
       `UPDATE room_media_presentations SET current_page = $1
@@ -1360,7 +1388,17 @@ export async function updatePresentationPage(
       [JSON.stringify(nextPanel), session.id],
     );
     await client.query("COMMIT");
-    return "updated";
+    return {
+      status: "updated",
+      state: {
+        sessionId: session.id,
+        presentation: {
+          ...rowToPresentation(presentation.rows[0] as Record<string, unknown>),
+          currentPage: page,
+        },
+        sharedPanel: nextPanel,
+      },
+    };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
     throw err;
@@ -1378,7 +1416,10 @@ export async function stopPresentationAndClearPanel(
   roomId: string,
   expectedSessionId: string,
   presentationId: string,
-): Promise<"stopped" | "stale" | "stale_session"> {
+): Promise<
+  | { status: "stopped"; sessionId: string; presentationId: string; sharedPanel: SharedPanelState }
+  | { status: "stale" | "stale_session" }
+> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -1392,7 +1433,7 @@ export async function stopPresentationAndClearPanel(
     );
     if (!session.rows[0] || String(session.rows[0].id) !== expectedSessionId) {
       await client.query("ROLLBACK");
-      return "stale_session";
+      return { status: "stale_session" };
     }
     const lockedSession = rowToSession(session.rows[0] as Record<string, unknown>);
     const panel = sharedPanelFromSession(lockedSession);
@@ -1401,16 +1442,16 @@ export async function stopPresentationAndClearPanel(
       panel.data?.presentationId !== presentationId
     ) {
       await client.query("ROLLBACK");
-      return "stale";
+      return { status: "stale" };
     }
     const presentation = await client.query(
       `SELECT id FROM room_media_presentations
-       WHERE id = $1 AND room_id = $2 FOR UPDATE`,
-      [presentationId, roomId],
+        WHERE id = $1 AND room_id = $2 AND session_id = $3 FOR UPDATE`,
+      [presentationId, roomId, expectedSessionId],
     );
     if (!presentation.rows[0]) {
       await client.query("ROLLBACK");
-      return "stale";
+      return { status: "stale" };
     }
     await client.query(
       `DELETE FROM room_media_presentations WHERE id = $1 AND room_id = $2`,
@@ -1425,7 +1466,12 @@ export async function stopPresentationAndClearPanel(
       [JSON.stringify(nextPanel), expectedSessionId],
     );
     await client.query("COMMIT");
-    return "stopped";
+    return {
+      status: "stopped",
+      sessionId: lockedSession.id,
+      presentationId,
+      sharedPanel: nextPanel,
+    };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
     throw err;

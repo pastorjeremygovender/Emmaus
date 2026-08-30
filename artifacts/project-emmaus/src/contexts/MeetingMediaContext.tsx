@@ -1,8 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'wouter';
 import { LiveKitRoom, RoomAudioRenderer, useConnectionState, useLocalParticipant } from '@livekit/components-react';
 import { ConnectionState, ParticipantEvent } from 'livekit-client';
-import { Hand, Mic, MicOff, PhoneOff, Settings, Video, VideoOff } from 'lucide-react';
+import { Hand, Mic, MicOff, PhoneOff, Video, VideoOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { VideoSessionStatus } from '@/lib/rooms-types';
 import { apiEndVideo, apiGetVideoStatus, apiGetVideoToken, apiStartVideo } from '@/lib/rooms-api';
@@ -25,7 +24,7 @@ export const useMeetingMedia = () => {
 
 const emptyIntent: DeviceIntent = { microphone: true, camera: false, listenOnly: false };
 
-function Dock({ leave, mode, intent, setIntent, setError, openDevices, onReturn }: { leave: () => void; mode: MeetingMode; intent: DeviceIntent; setIntent: (intent: DeviceIntent) => void; setError: (v: string) => void; openDevices: () => void; onReturn: () => void }) {
+function Dock({ leave, mode, intent, setIntent, setError }: { leave: () => void; mode: MeetingMode; intent: DeviceIntent; setIntent: (intent: DeviceIntent) => void; setError: (v: string) => void }) {
   const { localParticipant } = useLocalParticipant();
   const connection = useConnectionState();
   const [, force] = useState(0);
@@ -58,7 +57,7 @@ function Dock({ leave, mode, intent, setIntent, setError, openDevices, onReturn 
       }
       setError('');
     } catch {
-      setError(`${kind === 'mic' ? 'Microphone' : 'Camera'} access failed. Open Devices and allow it in your browser settings.`);
+      setError(`${kind === 'mic' ? 'Microphone' : 'Camera'} access failed. Allow it in your browser settings and try again.`);
     } finally { setBusy(false); }
   };
   const toggleHand = async () => {
@@ -69,39 +68,13 @@ function Dock({ leave, mode, intent, setIntent, setError, openDevices, onReturn 
     } catch { setError('Your hand signal was not sent. Please try again after reconnecting.'); }
   };
   const connected = connection === ConnectionState.Connected;
-  return <div data-meeting-dock="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card/95 p-2 pb-[calc(.5rem+env(safe-area-inset-bottom))] backdrop-blur">
-    <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-center gap-2" role="toolbar" aria-label="Meeting controls">
-      {intent.listenOnly ? <Button className="min-h-11" variant="outline" disabled={busy || !connected} onClick={() => void action('mic')} aria-label="Join microphone"><Mic size={16} className="mr-1" />Join microphone</Button> :
-        <Button className="min-h-11" variant="outline" disabled={busy || !connected} onClick={() => void action('mic')} aria-label={localParticipant.isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}>{localParticipant.isMicrophoneEnabled ? <Mic size={16} className="mr-1" /> : <MicOff size={16} className="mr-1" />}{localParticipant.isMicrophoneEnabled ? 'Mute' : 'Unmute'}</Button>}
-      {mode === 'video' && <Button className="min-h-11" variant="outline" disabled={busy || !connected} onClick={() => void action('camera')} aria-label={localParticipant.isCameraEnabled ? 'Turn camera off' : 'Turn camera on'}>{localParticipant.isCameraEnabled ? <Video size={16} className="mr-1" /> : <VideoOff size={16} className="mr-1" />}{localParticipant.isCameraEnabled ? 'Camera off' : 'Camera on'}</Button>}
-      <Button className="min-h-11" variant="outline" onClick={() => void toggleHand()} aria-label={raised ? 'Lower hand' : 'Raise hand'}><Hand size={16} className="mr-1" />{raised ? 'Lower hand' : 'Raise hand'}</Button>
-      <Button className="min-h-11" variant="outline" onClick={openDevices} aria-label="Devices"><Settings size={16} className="mr-1" />Devices</Button>
-      <Button className="min-h-11" variant="outline" onClick={onReturn} aria-label="Return to meeting">Return to meeting</Button>
-      <Button className="min-h-11" variant="destructive" onClick={leave} aria-label="Leave meeting"><PhoneOff size={16} className="mr-1" />Leave</Button>
-    </div>
-  </div>;
-}
-
-function DeviceSheet({ mode, close, setError }: { mode: MeetingMode; close: () => void; setError: (v: string) => void }) {
-  const { localParticipant } = useLocalParticipant();
-  const [working, setWorking] = useState(false);
-  const enable = async (kind: 'microphone' | 'camera') => {
-    setWorking(true);
-    try {
-      if (kind === 'microphone') await localParticipant.setMicrophoneEnabled(true);
-      else await localParticipant.setCameraEnabled(true);
-      close();
-    } catch { setError(`${kind === 'microphone' ? 'Microphone' : 'Camera'} permission was denied. Allow it in browser settings and try again.`); }
-    finally { setWorking(false); }
-  };
-  return <div className="fixed inset-0 z-[60] flex items-end bg-black/40 p-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:items-center sm:justify-center">
-    <div className="w-full max-w-lg rounded-2xl bg-card p-4 shadow-xl">
-      <h2 className="font-semibold">Devices</h2><p className="mt-1 text-sm text-muted-foreground">Choose a device to enable. Your browser will ask only for that device.</p>
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-        <Button className="min-h-11" disabled={working} onClick={() => void enable('microphone')}><Mic size={16} className="mr-1" />Join microphone</Button>
-        {mode === 'video' && <Button className="min-h-11" disabled={working} variant="outline" onClick={() => void enable('camera')}><Video size={16} className="mr-1" />Turn camera on</Button>}
-        <Button className="min-h-11" variant="outline" onClick={close}>Close</Button>
-      </div>
+  return <div data-meeting-dock="true" className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[70] border-t border-border bg-card/95 p-2 backdrop-blur">
+    <div className={`mx-auto grid w-full max-w-lg gap-2 ${mode === 'video' ? 'grid-cols-4' : 'grid-cols-3'}`} role="toolbar" aria-label="Meeting controls">
+      {intent.listenOnly ? <Button className="min-h-11 min-w-0 px-2 text-xs sm:text-sm" variant="outline" disabled={busy || !connected} onClick={() => void action('mic')} aria-label="Join microphone"><Mic size={16} className="mr-1 shrink-0" /><span className="truncate">Join mic</span></Button> :
+        <Button className="min-h-11 min-w-0 px-2 text-xs sm:text-sm" variant="outline" disabled={busy || !connected} onClick={() => void action('mic')} aria-label={localParticipant.isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}>{localParticipant.isMicrophoneEnabled ? <Mic size={16} className="mr-1 shrink-0" /> : <MicOff size={16} className="mr-1 shrink-0" />}<span className="truncate">{localParticipant.isMicrophoneEnabled ? 'Mute' : 'Unmute'}</span></Button>}
+      {mode === 'video' && <Button className="min-h-11 min-w-0 px-2 text-xs sm:text-sm" variant="outline" disabled={busy || !connected} onClick={() => void action('camera')} aria-label={localParticipant.isCameraEnabled ? 'Turn camera off' : 'Turn camera on'}>{localParticipant.isCameraEnabled ? <Video size={16} className="mr-1 shrink-0" /> : <VideoOff size={16} className="mr-1 shrink-0" />}<span className="truncate">{localParticipant.isCameraEnabled ? 'Camera off' : 'Camera on'}</span></Button>}
+      <Button className="min-h-11 min-w-0 px-2 text-xs sm:text-sm" variant="outline" onClick={() => void toggleHand()} aria-label={raised ? 'Lower hand' : 'Raise hand'}><Hand size={16} className="mr-1 shrink-0" /><span className="truncate">{raised ? 'Lower hand' : 'Raise hand'}</span></Button>
+      <Button className="min-h-11 min-w-0 px-2 text-xs sm:text-sm" variant="destructive" onClick={leave} aria-label="Leave meeting"><PhoneOff size={16} className="mr-1 shrink-0" /><span className="truncate">Leave</span></Button>
     </div>
   </div>;
 }
@@ -115,7 +88,6 @@ export function MeetingMediaProvider({ children }: { children: React.ReactNode }
   const [url, setUrl] = useState<string | null>(null);
   const [prejoin, setPrejoin] = useState(false);
   const [intent, setIntent] = useState<DeviceIntent>(emptyIntent);
-  const [, navigate] = useLocation();
   const connected = Boolean(token && url);
   const configure = useCallback((next: MeetingIdentity) => {
     setIdentity(current => current?.roomId === next.roomId ? { ...current, ...next } : next);
@@ -151,7 +123,7 @@ export function MeetingMediaProvider({ children }: { children: React.ReactNode }
   const value = useMemo(() => ({ identity, status, loading, error, connected, prejoin, intent, configure, start, openJoin: () => setPrejoin(true), join, closePrejoin: () => setPrejoin(false), leave, end }), [identity, status, loading, error, connected, prejoin, intent, configure]);
   const shell = <MeetingMediaContext.Provider value={value}>{children}</MeetingMediaContext.Provider>;
   if (!connected || !token || !url || !identity) return shell;
-  return <LiveKitRoom serverUrl={url} token={token} connect audio={intent.microphone && !intent.listenOnly ? { deviceId: intent.microphoneId } : false} video={identity.mode === 'video' && intent.camera && !intent.listenOnly ? { deviceId: intent.cameraId } : false} onError={() => setError('Connection or device access failed. Check browser permissions and open Devices.')}>
-    <MeetingMediaContext.Provider value={value}>{children}<RoomAudioRenderer /><Dock leave={leave} mode={identity.mode} intent={intent} setIntent={setIntent} setError={setError} openDevices={() => setPrejoin(true)} onReturn={() => navigate(`/rooms/${identity.roomId}`)} />{prejoin && <DeviceSheet mode={identity.mode} close={() => setPrejoin(false)} setError={setError} />}</MeetingMediaContext.Provider>
+  return <LiveKitRoom serverUrl={url} token={token} connect audio={intent.microphone && !intent.listenOnly ? { deviceId: intent.microphoneId } : false} video={identity.mode === 'video' && intent.camera && !intent.listenOnly ? { deviceId: intent.cameraId } : false} onError={() => setError('Connection or device access failed. Check your browser permissions and try again.')}>
+    <MeetingMediaContext.Provider value={value}>{children}<RoomAudioRenderer /><Dock leave={leave} mode={identity.mode} intent={intent} setIntent={setIntent} setError={setError} /></MeetingMediaContext.Provider>
   </LiveKitRoom>;
 }

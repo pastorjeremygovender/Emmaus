@@ -219,6 +219,8 @@ export default function RoomDetail() {
     pollRevealUpdate,
     activePresentation,
     setActivePresentation,
+    applyPresentationResponse,
+    clearPresentationResponse,
     activeTool,
     sharedPanel = { panel: 'none', version: 0 },
     lastEvent,
@@ -289,7 +291,7 @@ export default function RoomDetail() {
   useEffect(() => {
     if (!activeSession?.id || !user?.id) return;
     apiGetActivePresentation(user.id, String(roomId))
-      .then(pres => { if (pres) setActivePresentation(pres); })
+      .then(pres => { if (pres) applyPresentationResponse(pres); })
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSession?.id]);
@@ -1356,6 +1358,8 @@ export default function RoomDetail() {
         <RoomChat
           embedded
           onClose={() => setLocation(`/rooms/${String(roomId)}`)}
+          activePresentationMessageId={activePresentation?.messageId ?? null}
+          onPresentationStarted={presentation => applyPresentationResponse(presentation)}
         />
       )}
 
@@ -1963,8 +1967,8 @@ export default function RoomDetail() {
                   isLeader={isAuthorizedLeader}
                   userId={user.id}
                   roomId={String(roomId)}
-                  onStop={() => {
-                    setActivePresentation(null);
+                  onStop={(sessionId, presentationId) => {
+                    clearPresentationResponse(sessionId, presentationId);
                     if (presentationReturnToChat) {
                       const discussion = presentationDiscussionId
                         ? `?discussionId=${encodeURIComponent(presentationDiscussionId)}`
@@ -1972,6 +1976,7 @@ export default function RoomDetail() {
                       setLocation(`/rooms/${String(roomId)}?surface=discussion${discussion ? `&${discussion.slice(1)}` : ''}`);
                     }
                   }}
+                  onPresentationChange={presentation => applyPresentationResponse(presentation, activePresentation.id)}
                   onClose={() => {
                     setActivePresentation(null);
                     if (presentationReturnToChat) {

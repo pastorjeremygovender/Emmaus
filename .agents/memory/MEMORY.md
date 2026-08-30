@@ -81,3 +81,4 @@
 - [Daily Reminders delivery](daily-reminders-delivery.md) — Web Push uses per-device ownership, timezone-instant completion suppression, and an at-most-once scheduled worker.
 - [Appearance preferences](appearance-preferences.md) — dark mode and text size are account-backed with local retry; scale typography utilities, never the entire layout root.
 - [Persistent meeting media](persistent-meeting-media.md) — LiveKit belongs above routes; media permissions follow explicit mode and device intent.
+- [Meeting presentation authority](meeting-presentation-authority.md) — presentation mutations and hydration are session-scoped; REST and SSE responses must pass the same stale-state checks.

@@ -2281,15 +2281,17 @@ router.post("/:roomId/session/tool-close", async (req, res) => {
   try {
     const session = await getActiveSession(String(roomId));
     if (tool === "presentation") {
-      const presentation = await getActivePresentation(String(roomId));
+      const presentation = session
+        ? await getActivePresentation(String(roomId), session.id)
+        : null;
       if (!presentation) {
         res.status(409).json({ code: "STALE_PRESENTATION", error: "The presentation is no longer active." });
         return;
       }
       const stopped = await stopPresentationAndClearPanel(String(roomId), sessionId, presentation.id);
-      if (stopped !== "stopped" || !session || session.id !== sessionId) {
+      if (stopped.status !== "stopped" || !session || session.id !== sessionId) {
         res.status(409).json({
-          code: stopped === "stale" ? "STALE_PRESENTATION" : "STALE_SESSION",
+          code: stopped.status === "stale" ? "STALE_PRESENTATION" : "STALE_SESSION",
           error: "The presentation changed before it was stopped.",
         });
         return;
@@ -2672,7 +2674,7 @@ router.get("/:roomId/session/events", async (req, res) => {
         getHighlights(roomId, activeSessionOnConnect.id),
         getSharedNotes(roomId, activeSessionOnConnect.id),
         getActivePoll(roomId, activeSessionOnConnect.id),
-        getActivePresentation(roomId),
+        getActivePresentation(roomId, activeSessionOnConnect.id),
       ]);
     }
     const initEvent: SessionEvent = {
@@ -3483,8 +3485,17 @@ router.get("/:roomId/session/presentation", async (req, res) => {
   try {
     const role = await getMemberRole(String(roomId), userId);
     if (!role) { res.status(403).json({ error: "Not a member." }); return; }
-    const presentation = await getActivePresentation(String(roomId));
-    res.json({ presentation });
+    const session = await getActiveSession(String(roomId));
+    const presentation = session
+      ? await getActivePresentation(String(roomId), session.id)
+      : null;
+    // This makes a REST hydration equivalent to the session-event SSE
+    // hydration: clients receive both the media and the durable panel version.
+    res.json({
+      sessionId: session?.id ?? null,
+      presentation,
+      sharedPanel: getSharedPanelState(session),
+    });
   } catch {
     res.status(500).json({ error: "Failed to load presentation." });
   }
@@ -3585,7 +3596,7 @@ router.post("/:roomId/session/presentation", async (req, res) => {
     );
     const presenterName = String(nameRows[0]?.preferred_name ?? "").trim() || "Member";
 
-    const { presentation } = await startPresentationForActiveSession(
+    const state = await startPresentationForActiveSession(
       String(roomId),
       activeSession.id,
       messageId ?? null,
@@ -3600,22 +3611,21 @@ router.post("/:roomId/session/presentation", async (req, res) => {
     broadcastRoomEvent(String(roomId), {
       type: "media_presented",
       payload: {
-        messageId: presentation.messageId,
-        filename: presentation.filename,
-        mediaType: presentation.mediaType,
-        objectPath: presentation.objectPath,
-        presentedBy: presentation.presentedBy,
-        presentedByName: presentation.presentedByName,
-        currentPage: presentation.currentPage,
-        pageCount: presentation.pageCount,
-        sessionId: presentation.sessionId,
+        ...state.presentation,
+        sessionId: state.sessionId,
+        sharedPanel: state.sharedPanel,
       },
       sentBy: userId,
       at: new Date().toISOString(),
     });
-    await broadcastSharedPanelState(String(roomId), userId);
+    broadcastRoomEvent(String(roomId), {
+      type: "shared_panel",
+      payload: { sessionId: state.sessionId, sharedPanel: state.sharedPanel },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    });
 
-    res.json({ presentation });
+    res.json({ presentation: state.presentation, sessionId: state.sessionId, sharedPanel: state.sharedPanel });
   } catch (err) {
     if (err instanceof StalePresentationSessionError) {
       res.status(409).json({
@@ -3644,7 +3654,7 @@ router.patch("/:roomId/session/presentation/page", async (req, res) => {
     presentationId?: string;
     sessionId?: string;
   };
-  if (typeof page !== "number" || page < 1) {
+  if (typeof page !== "number" || !Number.isSafeInteger(page) || page < 1) {
     res.status(400).json({ error: "page must be a positive integer." });
     return;
   }
@@ -3670,28 +3680,32 @@ router.patch("/:roomId/session/presentation/page", async (req, res) => {
       return;
     }
     const result = await updatePresentationPage(String(roomId), expectedSession.id, intended.id, page);
-    if (result === "stale_session") {
+    if (result.status !== "updated") {
       res.status(409).json({
-        code: "STALE_PRESENTATION_SESSION",
-        error: "The meeting changed before this page update was applied.",
-      });
-      return;
-    }
-    if (result === "stale") {
-      res.status(409).json({
-        code: "STALE_PRESENTATION",
-        error: "The presentation changed before this page update was applied.",
+        code: result.status === "stale" ? "STALE_PRESENTATION" : "STALE_PRESENTATION_SESSION",
+        error: result.status === "stale"
+          ? "The presentation changed before this page update was applied."
+          : "The meeting changed before this page update was applied.",
       });
       return;
     }
     broadcastRoomEvent(String(roomId), {
       type: "presentation_page",
-      payload: { presentationId: intended.id, currentPage: page },
+      payload: {
+        ...result.state.presentation,
+        sessionId: result.state.sessionId,
+        sharedPanel: result.state.sharedPanel,
+      },
       sentBy: userId,
       at: new Date().toISOString(),
     });
-    await broadcastSharedPanelState(String(roomId), userId);
-    res.json({ ok: true });
+    broadcastRoomEvent(String(roomId), {
+      type: "shared_panel",
+      payload: { sessionId: result.state.sessionId, sharedPanel: result.state.sharedPanel },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    });
+    res.json({ ok: true, presentation: result.state.presentation, sessionId: result.state.sessionId, sharedPanel: result.state.sharedPanel });
   } catch {
     res.status(500).json({ error: "Failed to update page." });
   }
@@ -3716,28 +3730,32 @@ router.delete("/:roomId/session/presentation", async (req, res) => {
       return;
     }
     const stopped = await stopPresentationAndClearPanel(String(roomId), sessionId, presentationId);
-    if (stopped === "stale_session") {
+    if (stopped.status !== "stopped") {
       res.status(409).json({
-        code: "STALE_PRESENTATION_SESSION",
-        error: "The meeting changed before the presentation was stopped.",
-      });
-      return;
-    }
-    if (stopped === "stale") {
-      res.status(409).json({
-        code: "STALE_PRESENTATION",
-        error: "The presentation changed before it was stopped.",
+        code: stopped.status === "stale" ? "STALE_PRESENTATION" : "STALE_PRESENTATION_SESSION",
+        error: stopped.status === "stale"
+          ? "The presentation changed before it was stopped."
+          : "The meeting changed before the presentation was stopped.",
       });
       return;
     }
     broadcastRoomEvent(String(roomId), {
       type: "presentation_stopped",
-      payload: {},
+      payload: {
+        presentationId: stopped.presentationId,
+        sessionId: stopped.sessionId,
+        sharedPanel: stopped.sharedPanel,
+      },
       sentBy: userId,
       at: new Date().toISOString(),
     });
-    await broadcastSharedPanelState(String(roomId), userId);
-    res.json({ ok: true });
+    broadcastRoomEvent(String(roomId), {
+      type: "shared_panel",
+      payload: { sessionId: stopped.sessionId, sharedPanel: stopped.sharedPanel },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    });
+    res.json({ ok: true, sessionId: stopped.sessionId, sharedPanel: stopped.sharedPanel });
   } catch {
     res.status(500).json({ error: "Failed to stop presentation." });
   }

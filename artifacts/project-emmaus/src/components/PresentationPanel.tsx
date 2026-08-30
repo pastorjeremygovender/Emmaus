@@ -19,7 +19,8 @@ interface PresentationPanelProps {
   isLeader: boolean;
   userId: string;
   roomId: string;
-  onStop?: () => void;
+  onStop?: (sessionId: string, presentationId: string) => void;
+  onPresentationChange?: (presentation: PresentationState) => void;
   /** Close this viewer locally without stopping the group presentation. */
   onClose?: () => void;
 }
@@ -30,6 +31,7 @@ export function PresentationPanel({
   userId,
   roomId,
   onStop,
+  onPresentationChange,
   onClose,
 }: PresentationPanelProps) {
   const [busy, setBusy] = useState(false);
@@ -55,7 +57,8 @@ export function PresentationPanel({
     if (!ids) return;
     setBusy(true);
     try {
-      await apiChangePresentationPage(userId, roomId, ids.sessionId, ids.presentationId, presentation.currentPage - 1);
+      const next = await apiChangePresentationPage(userId, roomId, ids.sessionId, ids.presentationId, presentation.currentPage - 1);
+      onPresentationChange?.(next);
       setActionError('');
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'The presentation changed before the page was updated.');
@@ -72,7 +75,8 @@ export function PresentationPanel({
     if (!ids) return;
     setBusy(true);
     try {
-      await apiChangePresentationPage(userId, roomId, ids.sessionId, ids.presentationId, presentation.currentPage + 1);
+      const next = await apiChangePresentationPage(userId, roomId, ids.sessionId, ids.presentationId, presentation.currentPage + 1);
+      onPresentationChange?.(next);
       setActionError('');
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'The presentation changed before the page was updated.');
@@ -87,8 +91,8 @@ export function PresentationPanel({
     if (!ids) return;
     setBusy(true);
     try {
-      await apiStopPresentation(userId, roomId, ids.sessionId, ids.presentationId);
-      onStop?.();
+      const result = await apiStopPresentation(userId, roomId, ids.sessionId, ids.presentationId);
+      onStop?.(result.sessionId, ids.presentationId);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'The meeting ended before the presentation could be stopped.');
     } finally {

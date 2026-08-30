@@ -861,6 +861,37 @@ describe("two-device active Group Meeting flow", () => {
     ).presentation;
     assert.equal(surviving.id, replacementPresentation.id);
     assert.equal(surviving.currentPage, 1);
+    const lateHydration = json<{
+      sessionId: string | null;
+      presentation: { id: string; sessionId: string | null };
+      sharedPanel: { panel: string; version: number; data?: { presentationId?: string } };
+    }>(presentationResponse);
+    assert.equal(lateHydration.sessionId, sessionId);
+    assert.equal(lateHydration.presentation.sessionId, sessionId);
+    assert.equal(lateHydration.sharedPanel.panel, "presentation");
+    assert.ok(lateHydration.sharedPanel.version > 0);
+    assert.equal(lateHydration.sharedPanel.data?.presentationId, replacementPresentation.id);
+
+    const paged = await request({
+      method: "PATCH",
+      path: `/api/rooms/${roomId}/session/presentation/page`,
+      headers: leaderHeaders,
+      body: { sessionId, presentationId: replacementPresentation.id, page: 2 },
+    });
+    assert.equal(paged.status, 200, paged.body);
+    const pagedState = json<{
+      sessionId: string;
+      presentation: { id: string; currentPage: number; filename: string; mediaType: string; objectPath: string };
+      sharedPanel: { version: number; data?: { presentationId?: string; currentPage?: number } };
+    }>(paged);
+    assert.equal(pagedState.sessionId, sessionId);
+    assert.equal(pagedState.presentation.id, replacementPresentation.id);
+    assert.equal(pagedState.presentation.currentPage, 2);
+    assert.equal(pagedState.presentation.filename, "replacement-session.pdf");
+    assert.equal(pagedState.presentation.mediaType, "pdf");
+    assert.equal(pagedState.presentation.objectPath, "");
+    assert.equal(pagedState.sharedPanel.data?.presentationId, replacementPresentation.id);
+    assert.equal(pagedState.sharedPanel.data?.currentPage, 2);
     const sessionResponse = await request({
       path: `/api/rooms/${roomId}/session`,
       headers: leaderHeaders,
@@ -870,7 +901,7 @@ describe("two-device active Group Meeting flow", () => {
     }>(sessionResponse).sharedPanel;
     assert.equal(panel.panel, "presentation");
     assert.equal(panel.data?.presentationId, surviving.id);
-    assert.equal(panel.data?.currentPage, 1);
+    assert.equal(panel.data?.currentPage, 2);
 
     const delayedCommands = await Promise.all([
       request({
@@ -918,6 +949,6 @@ describe("two-device active Group Meeting flow", () => {
     assert.notEqual(unchanged.session.currentStep, "stale-step");
     assert.equal(unchanged.sharedPanel.panel, "presentation");
     assert.equal(unchanged.sharedPanel.data?.presentationId, surviving.id);
-    assert.equal(unchanged.sharedPanel.data?.currentPage, 1);
+    assert.equal(unchanged.sharedPanel.data?.currentPage, 2);
   });
 });
