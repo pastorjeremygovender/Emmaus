@@ -11,6 +11,7 @@ import { VoiceSessionProvider } from '@/contexts/VoiceSessionContext';
 import { GlobalVoiceIndicator } from '@/components/emmaus/GlobalVoiceIndicator';
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { AppearanceProvider } from '@/contexts/AppearanceContext';
+import { MeetingMediaProvider } from '@/contexts/MeetingMediaContext';
 import OpeningGate from '@/components/OpeningGate';
 import { installAppHistoryTracking } from '@/lib/return-context';
 
@@ -204,12 +205,14 @@ function App() {
               <TooltipProvider>
                 <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
                   <VoiceSessionProvider>
-                    <ScrollToTop />
-                    <OpeningGate>
-                      <Router />
-                    </OpeningGate>
-                    <FloatingEmmausButton />
-                    <GlobalVoiceIndicator />
+                    <MeetingMediaProvider>
+                      <ScrollToTop />
+                      <OpeningGate>
+                        <Router />
+                      </OpeningGate>
+                      <FloatingEmmausButton />
+                      <GlobalVoiceIndicator />
+                    </MeetingMediaProvider>
                   </VoiceSessionProvider>
                 </WouterRouter>
                 <Toaster />

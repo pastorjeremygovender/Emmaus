@@ -18,6 +18,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useBible } from '@/contexts/BibleContext';
 import { useRooms } from '@/contexts/RoomsContext';
+import { useMeetingMedia } from '@/contexts/MeetingMediaContext';
 import {
   setPendingContext,
   setReturnDestination,
@@ -168,7 +169,8 @@ export function FloatingEmmausButton() {
   const { journeys, progress, getStep } = useJourney();
   const { lastRead, translationId } = useBible();
   const { getMyRooms } = useRooms();
-  if (!user || isHidden(location)) return null;
+  const meeting = useMeetingMedia();
+  if (!user || isHidden(location) || meeting.connected || meeting.prejoin || document.body.dataset.meetingUi === 'present') return null;
 
   function handlePress() {
     // 1. Persist the return destination in sessionStorage so both AskEmmausHome

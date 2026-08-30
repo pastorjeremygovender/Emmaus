@@ -18,7 +18,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
 import { dismissBadge, computeUpdatedBadge } from '@/lib/badge-api';
 import { motion } from 'framer-motion';
-import { CheckCircle2, ChevronRight, Compass, X } from 'lucide-react';
+import { CheckCircle2, Compass, X } from 'lucide-react';
 import { useEnrollment } from '@/lib/enrollment';
 import { isCompletedToday } from '@/lib/daily-lock';
 import { getStepLabel, resolveStepPrefix, getDevotionalLabel } from '@/lib/step-label';
@@ -207,7 +207,7 @@ function CompactCard({
           )}
         </div>
         {onAction && !done && !trailing && (
-          <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" aria-hidden="true" />
+          <X size={15} className="shrink-0 text-muted-foreground/40" aria-hidden="true" />
         )}
         {trailing && (
           <div className="shrink-0 -mr-0.5" onClick={(e) => e.stopPropagation()}>

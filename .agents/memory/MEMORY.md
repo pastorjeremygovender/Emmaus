@@ -80,3 +80,4 @@
 - [Dated devotional resolution](ask-emmaus-dated-devotionals.md) — Ask Emmaus resolves date-labelled devotionals by Johannesburg date, never progress; Daily Rhythm remains server-gated.
 - [Daily Reminders delivery](daily-reminders-delivery.md) — Web Push uses per-device ownership, timezone-instant completion suppression, and an at-most-once scheduled worker.
 - [Appearance preferences](appearance-preferences.md) — dark mode and text size are account-backed with local retry; scale typography utilities, never the entire layout root.
+- [Persistent meeting media](persistent-meeting-media.md) — LiveKit belongs above routes; media permissions follow explicit mode and device intent.

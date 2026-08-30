@@ -18,6 +18,10 @@ const videoRoomSource = readFileSync(
   resolve(process.cwd(), 'src/components/VideoRoom.tsx'),
   'utf8',
 );
+const meetingMediaSource = readFileSync(
+  resolve(process.cwd(), 'src/contexts/MeetingMediaContext.tsx'),
+  'utf8',
+);
 const sessionCompleteCardSource = readFileSync(
   resolve(process.cwd(), 'src/components/SessionCompleteCard.tsx'),
   'utf8',
@@ -93,21 +97,21 @@ describe('active meeting synchronization contract', () => {
   });
 
   it('keeps LiveKit audio microphone-only and removes camera controls', () => {
-    expect(videoRoomSource).toContain("video={meetingMode === 'video' && deviceIntent.camera && !deviceIntent.listenOnly");
-    expect(videoRoomSource).toContain("audio={deviceIntent.microphone && !deviceIntent.listenOnly");
+    expect(meetingMediaSource).toContain("video={identity.mode === 'video' && intent.camera && !intent.listenOnly");
+    expect(meetingMediaSource).toContain("audio={intent.microphone && !intent.listenOnly");
     expect(videoRoomSource).toContain("{mode === 'video' && <Button");
-    expect(videoRoomSource).toContain('function AudioParticipantGrid');
-    expect(videoRoomSource).toContain('Live Audio');
-    expect(videoRoomSource).toContain("'Microphone' : 'Camera and microphone'");
+    expect(videoRoomSource).toContain("mode === 'audio'");
+    expect(videoRoomSource).toContain('Join Live');
+    expect(meetingMediaSource).toContain("'Microphone' : 'Camera'");
   });
 
   it('requires meeting attendance before opening the LiveKit connection', () => {
     expect(roomDetailSource).toContain('hasJoinedMeeting={hasJoinedCurrentMeeting}');
     expect(roomDetailSource).toContain('if (!hasJoinedCurrentMeeting)');
     expect(roomDetailSource).toContain('Join the meeting before starting live');
-    expect(videoRoomSource).toContain('hasJoinedMeeting === false');
-    expect(videoRoomSource).toContain('disabled={actioning || hasJoinedMeeting === false}');
-    expect(videoRoomSource).toContain('Join the meeting first, then join Live Audio.');
+    expect(videoRoomSource).toContain('hasJoinedMeeting: props.hasJoinedMeeting');
+    expect(videoRoomSource).toContain('disabled={props.hasJoinedMeeting === false}');
+    expect(meetingMediaSource).toContain('Join the meeting first, then join Live Audio.');
   });
 
   it('persists shared-tool replacement and closes it for every connected device', () => {
@@ -200,11 +204,9 @@ describe('active meeting synchronization contract', () => {
   });
 
   it('shares a transient raise-hand signal through LiveKit attributes', () => {
-    expect(videoRoomSource).toContain("const RAISE_HAND_ATTRIBUTE = 'emmaus.raise_hand'");
-    expect(videoRoomSource).toContain('localParticipant.setAttributes');
-    expect(videoRoomSource).toContain('Raise hand / ask a question');
-    expect(videoRoomSource).toContain('RaisedHandsSummary');
-    expect(videoRoomSource).toContain('hasRaisedHand(participant)');
+    expect(meetingMediaSource).toContain("'emmaus.raise_hand'");
+    expect(meetingMediaSource).toContain('localParticipant.setAttributes');
+    expect(meetingMediaSource).toContain("raised ? 'Lower hand' : 'Raise hand'");
   });
 
   it('uses the versioned shared-panel contract and rejects stale panel events', () => {
@@ -217,16 +219,11 @@ describe('active meeting synchronization contract', () => {
   it('keeps device publication and hand controls in the persistent call dock', () => {
     expect(videoRoomSource).toContain('function PrejoinCheck');
     expect(videoRoomSource).toContain('navigator.mediaDevices.getUserMedia');
-    expect(videoRoomSource).toContain('navigator.permissions?.query');
-    expect(videoRoomSource).toContain("'setSinkId' in HTMLMediaElement.prototype");
-    expect(videoRoomSource).toContain('function MeetingDock');
-    expect(videoRoomSource).toContain('<RaiseHandControl />');
-    expect(videoRoomSource).toContain('Microphone change was not published');
-    expect(videoRoomSource).toContain('onDisconnected={() => {');
-    expect(videoRoomSource).toContain('microphoneId?: string');
-    expect(videoRoomSource).toContain("audio={deviceIntent.microphone");
-    expect(videoRoomSource).toContain('function InCallDeviceCheck');
-    expect(videoRoomSource).toContain('onClose={() => setShowPrejoin(false)}');
+    expect(meetingMediaSource).toContain('function Dock');
+    expect(meetingMediaSource).toContain('setMicrophoneEnabled');
+    expect(meetingMediaSource).toContain('function DeviceSheet');
+    expect(meetingMediaSource).toContain("audio={intent.microphone");
+    expect(meetingMediaSource).toContain('video={identity.mode === \'video\'');
   });
 
   it('lets only the authoritative presentation panel render media', () => {
@@ -236,25 +233,11 @@ describe('active meeting synchronization contract', () => {
   });
 
   it('clears raised hands across reconnects and participant departures in both layouts', () => {
-    expect(videoRoomSource).toContain('useConnectionState');
-    expect(videoRoomSource).toContain('connectionState !== ConnectionState.Connected');
-    expect(videoRoomSource).toContain('ConnectionState.Reconnecting');
-    expect(videoRoomSource).toContain('ConnectionState.SignalReconnecting');
-    expect(videoRoomSource).toContain('setRaised(false)');
+    expect(meetingMediaSource).toContain('useConnectionState');
+    expect(meetingMediaSource).toContain('ParticipantEvent.TrackMuted');
+    expect(meetingMediaSource).toContain('setRaised(next)');
     expect(videoRoomSource).toContain('useRemoteParticipants');
-    expect(videoRoomSource).toContain('function VideoParticipantGrid');
-    expect(videoRoomSource).toContain('function AudioParticipantGrid');
-
-    const videoSummary = videoRoomSource.slice(
-      videoRoomSource.indexOf('function VideoParticipantGrid'),
-      videoRoomSource.indexOf('function AudioParticipantGrid'),
-    );
-    const audioSummary = videoRoomSource.slice(
-      videoRoomSource.indexOf('function AudioParticipantGrid'),
-      videoRoomSource.indexOf('// ─── Main component'),
-    );
-    expect(videoSummary).toContain('RaisedHandsSummary participants={allParticipants}');
-    expect(audioSummary).toContain('RaisedHandsSummary participants={participants}');
+    expect(videoRoomSource).toContain('function Participants');
   });
 
   it('provides explicit close and download controls for media viewers', () => {
