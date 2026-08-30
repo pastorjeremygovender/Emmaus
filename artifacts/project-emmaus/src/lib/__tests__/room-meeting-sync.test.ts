@@ -159,7 +159,9 @@ describe('active meeting synchronization contract', () => {
     expect(meetingMediaSource).toContain("audio={intent.microphone && !intent.listenOnly");
     expect(videoRoomSource).toContain("{mode === 'video' && <Button");
     expect(videoRoomSource).toContain("mode === 'audio'");
-    expect(videoRoomSource).toContain('Join Live');
+    expect(videoRoomSource).not.toContain('Join Live');
+    expect(roomDetailSource).toContain('Join Meeting');
+    expect(roomDetailSource).toContain('meetingMedia.joinMeeting({ attendanceConfirmed: true })');
     expect(meetingMediaSource).toContain("'Microphone' : 'Camera'");
   });
 
@@ -168,8 +170,8 @@ describe('active meeting synchronization contract', () => {
     expect(roomDetailSource).toContain('if (!hasJoinedCurrentMeeting)');
     expect(roomDetailSource).toContain('Join the meeting before starting live');
     expect(videoRoomSource).toContain('hasJoinedMeeting: props.hasJoinedMeeting');
-    expect(videoRoomSource).toContain('disabled={props.hasJoinedMeeting === false}');
-    expect(meetingMediaSource).toContain('Join the meeting first, then join Live Audio.');
+    expect(videoRoomSource).not.toContain('Join Live');
+    expect(meetingMediaSource).toContain('attendanceConfirmed');
   });
 
   it('persists shared-tool replacement and closes it for every connected device', () => {
@@ -320,5 +322,15 @@ describe('active meeting synchronization contract', () => {
     expect(mediaBubbleSource).toContain('download={filename}');
     expect(presentationSource).toContain('aria-label="Close presentation viewer"');
     expect(presentationSource).toContain('onClose?: () => void');
+  });
+
+  it('keeps presented PDFs in the mounted Emmaus meeting and makes the Room card the only join entry', () => {
+    expect(presentationSource).toContain('View PDF in Emmaus');
+    expect(presentationSource).toContain('<InAppPdfViewer');
+    expect(presentationSource).not.toContain('target="_blank"');
+    expect(videoRoomSource).not.toContain('Join Live Audio');
+    expect(videoRoomSource).not.toContain('Join Live Video');
+    expect(videoRoomSource).not.toContain('Join gathering');
+    expect(roomDetailSource).toContain('meetingMedia.joinMeeting({ attendanceConfirmed: true })');
   });
 });

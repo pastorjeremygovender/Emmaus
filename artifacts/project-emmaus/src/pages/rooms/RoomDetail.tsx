@@ -38,6 +38,7 @@ import {
   apiStartVideo, apiEndVideo, apiGetVideoStatus,
 } from '@/lib/rooms-api';
 import { VideoRoom } from '@/components/VideoRoom';
+import { useMeetingMedia } from '@/contexts/MeetingMediaContext';
 import { PresentationPanel } from '@/components/PresentationPanel';
 import {
   apiAddPreparedRoomMedia,
@@ -109,6 +110,7 @@ export default function RoomDetail() {
   const { loadRoomDetail, leaveRoom, deleteRoom, removeMember } = useRooms();
   const { getJourney, getStepsForJourney, journeys, progress: myProgress } = useJourney();
   const [, setLocation] = useLocation();
+  const meetingMedia = useMeetingMedia();
   const presentationQuery = new URLSearchParams(window.location.search);
   const presentationReturnToChat = presentationQuery.get('return') === 'chat';
   const presentationDiscussionId = presentationQuery.get('discussionId');
@@ -921,7 +923,7 @@ export default function RoomDetail() {
     const rid = String(roomId);
     const sid = activeSession.id;
     try {
-      const attendance = await apiRecordAttendanceJoin(user.id, rid, sid);
+      const attendance = currentAttendance ?? await apiRecordAttendanceJoin(user.id, rid, sid);
       if (import.meta.env.DEV) {
         console.debug('[room-meeting] explicit join saved', {
           userId: user.id,
@@ -938,6 +940,9 @@ export default function RoomDetail() {
         { ...attendance, preferredName: user.preferredName || 'Member' },
       ]);
       await refreshAttendance(sid);
+      if (videoActive) {
+        await meetingMedia.joinMeeting({ attendanceConfirmed: true });
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Could not join this meeting.');
     } finally {
@@ -951,6 +956,7 @@ export default function RoomDetail() {
     const rid = String(roomId);
     const sid = activeSession.id;
     try {
+      meetingMedia.leave();
       await apiRecordAttendanceLeave(user.id, rid, sid);
       setAttendanceData(prev => prev.map(attendee =>
         attendee.userId === user.id
@@ -1828,22 +1834,44 @@ export default function RoomDetail() {
                 </div>
               </div>
 
-              {!hasJoinedCurrentMeeting ? (
+              {!hasJoinedCurrentMeeting || (videoActive && !meetingMedia.connected) ? (
                 <div className="rounded-xl bg-white/70 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 p-3">
                   <div className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold text-emerald-900 dark:text-emerald-100">You haven&apos;t joined yet</p>
-                      <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80 mt-0.5">Join to appear as In meeting.</p>
+                      <p className="text-[13px] font-semibold text-emerald-900 dark:text-emerald-100">
+                        {meetingMedia.joinState === 'failed' ? 'Could not connect' : 'Join this meeting'}
+                      </p>
+                      <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80 mt-0.5">
+                        {meetingMedia.joinState === 'requesting_permission'
+                          ? 'Allow microphone access in your browser.'
+                          : meetingMedia.joinState === 'connecting'
+                            ? 'Connecting you to the live meeting…'
+                            : videoActive
+                              ? `${liveMeetingMode === 'audio' ? 'Microphone on' : 'Microphone on, camera off'} by default.`
+                              : 'Join to appear as In meeting.'}
+                      </p>
                     </div>
                     <button
                       onClick={handleJoinMeeting}
-                      disabled={joiningMeeting}
+                      disabled={joiningMeeting || meetingMedia.joinState === 'requesting_permission' || meetingMedia.joinState === 'connecting'}
                       className="shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-[12px] font-bold disabled:opacity-60"
                     >
-                      {joiningMeeting && <Loader2 size={13} className="animate-spin" />}
-                      Join Meeting
+                      {(joiningMeeting || meetingMedia.joinState === 'requesting_permission' || meetingMedia.joinState === 'connecting') && <Loader2 size={13} className="animate-spin" />}
+                      {meetingMedia.joinState === 'connecting' ? 'Joining…' : meetingMedia.joinState === 'failed' ? 'Retry' : 'Join Meeting'}
                     </button>
                   </div>
+                  {meetingMedia.joinState === 'failed' && videoActive && (
+                    <div className="mt-3 space-y-2 border-t border-emerald-200 pt-3 dark:border-emerald-800/50">
+                      <p role="alert" className="text-[11px] text-emerald-800 dark:text-emerald-200">{meetingMedia.error}</p>
+                      <button
+                        type="button"
+                        onClick={() => void meetingMedia.joinMeeting({ listenOnly: true, attendanceConfirmed: hasJoinedCurrentMeeting })}
+                        className="min-h-10 rounded-lg border border-emerald-300 px-3 text-[12px] font-semibold text-emerald-800 dark:border-emerald-700 dark:text-emerald-200"
+                      >
+                        Join listen-only
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-3">

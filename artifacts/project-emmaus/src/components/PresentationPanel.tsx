@@ -13,6 +13,7 @@ import {
 import type { PresentationState } from '@/lib/rooms-types';
 import { getMediaUrl } from '@/lib/rooms-api-media';
 import { apiChangePresentationPage, apiStopPresentation } from '@/lib/rooms-api-media';
+import { InAppPdfViewer } from '@/components/InAppPdfViewer';
 
 interface PresentationPanelProps {
   presentation: PresentationState;
@@ -37,6 +38,7 @@ export function PresentationPanel({
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
   const [imageOpen, setImageOpen] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
   const presentationId = presentation.id;
   const sessionId = presentation.sessionId;
 
@@ -150,23 +152,32 @@ export function PresentationPanel({
           </button>
         )}
 
-        {(presentation.mediaType === 'pdf' || presentation.mediaType === 'document') && mediaUrl && (
+        {presentation.mediaType === 'pdf' && mediaUrl && (
           <div className="space-y-3">
             <div className="w-full min-h-48 rounded-xl border border-border bg-muted flex flex-col items-center justify-center gap-3 p-6 text-center">
               <FileText size={36} className="text-primary" />
               <p className="text-[14px] font-semibold text-foreground break-words">{presentation.filename}</p>
-              <a
-                href={`${mediaUrl}#page=${presentation.currentPage}`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => setPdfOpen(true)}
                 className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-[13px] font-semibold text-primary-foreground"
               >
-                <ExternalLink size={15} /> Open PDF
-              </a>
+                <FileText size={15} /> View PDF in Emmaus
+              </button>
             </div>
             <p className="text-center text-[13px] text-muted-foreground">
               Page {presentation.currentPage}{presentation.pageCount ? ` of ${presentation.pageCount}` : ''}
             </p>
+          </div>
+        )}
+
+        {presentation.mediaType === 'document' && mediaUrl && (
+          <div className="w-full min-h-48 rounded-xl border border-border bg-muted flex flex-col items-center justify-center gap-3 p-6 text-center">
+            <FileText size={36} className="text-primary" />
+            <p className="text-[14px] font-semibold text-foreground break-words">{presentation.filename}</p>
+            <a href={mediaUrl} download={presentation.filename} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-primary px-4 py-2.5 text-[13px] font-semibold text-primary">
+              Download document
+            </a>
           </div>
         )}
 
@@ -226,6 +237,18 @@ export function PresentationPanel({
             onClick={event => event.stopPropagation()}
           />
         </div>
+      )}
+
+      {pdfOpen && mediaUrl && presentation.mediaType === 'pdf' && (
+        <InAppPdfViewer
+          url={mediaUrl}
+          filename={presentation.filename}
+          presenterPage={presentation.currentPage}
+          isLeader={isLeader}
+          onLeaderPrevious={() => void handlePrevPage()}
+          onLeaderNext={() => void handleNextPage()}
+          onClose={() => setPdfOpen(false)}
+        />
       )}
 
       {/* Controls */}

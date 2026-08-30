@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { LiveKitRoom, RoomAudioRenderer, useConnectionState, useLocalParticipant, useRemoteParticipants } from '@livekit/components-react';
 import { ConnectionState, ParticipantEvent } from 'livekit-client';
 import { Hand, Mic, MicOff, PhoneOff, Video, VideoOff } from 'lucide-react';
@@ -8,12 +8,15 @@ import { apiEndVideo, apiGetVideoStatus, apiGetVideoToken, apiStartVideo } from 
 
 export type MeetingMode = 'audio' | 'video';
 export type DeviceIntent = { microphone: boolean; camera: boolean; listenOnly: boolean; microphoneId?: string; cameraId?: string };
+export type MeetingJoinState = 'not_joined' | 'requesting_permission' | 'connecting' | 'joined' | 'reconnecting' | 'failed' | 'left';
 type MeetingIdentity = { roomId: string; userId: string; displayName: string; mode: MeetingMode; hasJoinedMeeting?: boolean };
 type MeetingMedia = {
   identity: MeetingIdentity | null; status: VideoSessionStatus | null; loading: boolean; error: string;
-  connected: boolean; prejoin: boolean; intent: DeviceIntent;
+  connected: boolean; prejoin: boolean; intent: DeviceIntent; joinState: MeetingJoinState;
   configure: (identity: MeetingIdentity) => void; start: () => Promise<void>; openJoin: () => void;
-  join: (intent: DeviceIntent) => Promise<void>; closePrejoin: () => void; leave: () => void; end: () => Promise<void>;
+  join: (intent: DeviceIntent, attendanceConfirmed?: boolean) => Promise<void>;
+  joinMeeting: (options?: { listenOnly?: boolean; attendanceConfirmed?: boolean }) => Promise<void>;
+  closePrejoin: () => void; leave: () => void; end: () => Promise<void>;
 };
 const MeetingMediaContext = createContext<MeetingMedia | null>(null);
 export const useMeetingMedia = () => {
@@ -23,6 +26,17 @@ export const useMeetingMedia = () => {
 };
 
 const emptyIntent: DeviceIntent = { microphone: true, camera: false, listenOnly: false };
+const DEVICE_INTENT_KEY = 'emmaus.meeting-device-intent';
+
+function loadSavedIntent(): DeviceIntent {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DEVICE_INTENT_KEY) || '{}') as Partial<DeviceIntent>;
+    if (saved.listenOnly) return { microphone: false, camera: false, listenOnly: true };
+    return { microphone: saved.microphone !== false, camera: saved.camera === true, listenOnly: false };
+  } catch {
+    return emptyIntent;
+  }
+}
 
 function Dock({ leave, mode, intent, setIntent, setError }: { leave: () => void; mode: MeetingMode; intent: DeviceIntent; setIntent: (intent: DeviceIntent) => void; setError: (v: string) => void }) {
   const { localParticipant } = useLocalParticipant();
@@ -34,16 +48,24 @@ function Dock({ leave, mode, intent, setIntent, setError }: { leave: () => void;
   const participants = [localParticipant, ...remoteParticipants];
   useEffect(() => {
     const update = () => force(v => v + 1);
-    const events = [
-      ParticipantEvent.TrackMuted,
-      ParticipantEvent.TrackUnmuted,
-      ParticipantEvent.LocalTrackPublished,
-      ParticipantEvent.LocalTrackUnpublished,
-      ParticipantEvent.AttributesChanged,
-      ParticipantEvent.ParticipantNameChanged,
-    ];
-    participants.forEach(participant => events.forEach(event => participant.on(event, update)));
-    return () => participants.forEach(participant => events.forEach(event => participant.off(event, update)));
+    participants.forEach(participant => {
+      participant.on(ParticipantEvent.TrackMuted, update);
+      participant.on(ParticipantEvent.TrackUnmuted, update);
+      participant.on(ParticipantEvent.AttributesChanged, update);
+      participant.on(ParticipantEvent.ParticipantNameChanged, update);
+    });
+    localParticipant.on(ParticipantEvent.LocalTrackPublished, update);
+    localParticipant.on(ParticipantEvent.LocalTrackUnpublished, update);
+    return () => {
+      participants.forEach(participant => {
+        participant.off(ParticipantEvent.TrackMuted, update);
+        participant.off(ParticipantEvent.TrackUnmuted, update);
+        participant.off(ParticipantEvent.AttributesChanged, update);
+        participant.off(ParticipantEvent.ParticipantNameChanged, update);
+      });
+      localParticipant.off(ParticipantEvent.LocalTrackPublished, update);
+      localParticipant.off(ParticipantEvent.LocalTrackUnpublished, update);
+    };
   }, [localParticipant, remoteParticipants]);
   const action = async (kind: 'mic' | 'camera') => {
     setBusy(true);
@@ -129,8 +151,10 @@ export function MeetingMediaProvider({ children }: { children: React.ReactNode }
   const [token, setToken] = useState<string | null>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [prejoin, setPrejoin] = useState(false);
-  const [intent, setIntent] = useState<DeviceIntent>(emptyIntent);
-  const connected = Boolean(token && url);
+  const [intent, setIntent] = useState<DeviceIntent>(loadSavedIntent);
+  const [joinState, setJoinState] = useState<MeetingJoinState>('not_joined');
+  const joiningRef = useRef(false);
+  const connected = joinState === 'joined';
   const configure = useCallback((next: MeetingIdentity) => {
     setIdentity(current => current?.roomId === next.roomId ? { ...current, ...next } : next);
   }, []);
@@ -149,23 +173,52 @@ export function MeetingMediaProvider({ children }: { children: React.ReactNode }
     try { const i = requireIdentity(); setError(''); await apiStartVideo(i.userId, i.roomId, i.mode); await refresh(i); setPrejoin(true); }
     catch (e) { setError(e instanceof Error ? e.message : "We couldn't start the gathering. Please try again."); }
   };
-  const join = async (next: DeviceIntent) => {
+  const join = async (next: DeviceIntent, attendanceConfirmed = false) => {
+    if (joiningRef.current || joinState === 'connecting' || joinState === 'requesting_permission') return;
+    joiningRef.current = true;
+    setJoinState(next.listenOnly ? 'connecting' : 'requesting_permission');
     try {
-      const i = requireIdentity(); setError('');
+      const i = identity;
+      if (!i) throw new Error('Open the Room before joining a gathering.');
+      if (i.hasJoinedMeeting === false && !attendanceConfirmed) throw new Error('Join the meeting before joining live audio or video.');
+      setError('');
+      setJoinState('connecting');
       const result = await apiGetVideoToken(i.userId, i.roomId);
-      setIntent(next); setToken(result.token); setUrl(result.livekitUrl); setPrejoin(false);
-    } catch (e) { setError(e instanceof Error ? e.message : "We couldn't connect. Please try again."); }
+      setIntent(next);
+      localStorage.setItem(DEVICE_INTENT_KEY, JSON.stringify(next));
+      setToken(result.token); setUrl(result.livekitUrl); setPrejoin(false);
+    } catch (e) {
+      setJoinState('failed');
+      setError(e instanceof Error ? e.message : "We couldn't connect. Please try again.");
+    } finally {
+      joiningRef.current = false;
+    }
   };
-  const leave = () => { setToken(null); setUrl(null); setPrejoin(false); };
+  const joinMeeting = async (options: { listenOnly?: boolean; attendanceConfirmed?: boolean } = {}) => {
+    const next = options.listenOnly
+      ? { microphone: false, camera: false, listenOnly: true }
+      : { ...loadSavedIntent(), camera: identity?.mode === 'video' ? loadSavedIntent().camera : false };
+    await join(next, options.attendanceConfirmed);
+  };
+  const leave = () => { setToken(null); setUrl(null); setPrejoin(false); setJoinState('left'); };
   const end = async () => {
     try { const i = requireIdentity(); leave(); await apiEndVideo(i.userId, i.roomId); await refresh(i); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to end the gathering.'); }
   };
-  useEffect(() => { document.body.dataset.meetingUi = connected || prejoin ? 'present' : ''; return () => { delete document.body.dataset.meetingUi; }; }, [connected, prejoin]);
-  const value = useMemo(() => ({ identity, status, loading, error, connected, prejoin, intent, configure, start, openJoin: () => setPrejoin(true), join, closePrejoin: () => setPrejoin(false), leave, end }), [identity, status, loading, error, connected, prejoin, intent, configure]);
+  useEffect(() => { document.body.dataset.meetingUi = token || prejoin ? 'present' : ''; return () => { delete document.body.dataset.meetingUi; }; }, [token, prejoin]);
+  const value = useMemo(() => ({ identity, status, loading, error, connected, prejoin, intent, joinState, configure, start, openJoin: () => setPrejoin(true), join, joinMeeting, closePrejoin: () => setPrejoin(false), leave, end }), [identity, status, loading, error, connected, prejoin, intent, joinState, configure]);
   const shell = <MeetingMediaContext.Provider value={value}>{children}</MeetingMediaContext.Provider>;
-  if (!connected || !token || !url || !identity) return shell;
-  return <LiveKitRoom serverUrl={url} token={token} connect audio={intent.microphone && !intent.listenOnly ? { deviceId: intent.microphoneId } : false} video={identity.mode === 'video' && intent.camera && !intent.listenOnly ? { deviceId: intent.cameraId } : false} onError={() => setError('Connection or device access failed. Check your browser permissions and try again.')}>
-    <MeetingMediaContext.Provider value={value}>{children}<RoomAudioRenderer /><Dock leave={leave} mode={identity.mode} intent={intent} setIntent={setIntent} setError={setError} /></MeetingMediaContext.Provider>
+  if (!token || !url || !identity) return shell;
+  return <LiveKitRoom
+    serverUrl={url}
+    token={token}
+    connect
+    audio={intent.microphone && !intent.listenOnly ? { deviceId: intent.microphoneId } : false}
+    video={identity.mode === 'video' && intent.camera && !intent.listenOnly ? { deviceId: intent.cameraId } : false}
+    onConnected={() => { setJoinState('joined'); setError(''); }}
+    onDisconnected={() => { setToken(null); setUrl(null); setJoinState('left'); }}
+    onError={() => { setToken(null); setUrl(null); setJoinState('failed'); setError('Microphone access or the meeting connection failed. Join listen-only, or restore microphone permission in your browser settings and retry.'); }}
+  >
+    <MeetingMediaContext.Provider value={value}>{children}<RoomAudioRenderer />{connected && <Dock leave={leave} mode={identity.mode} intent={intent} setIntent={setIntent} setError={setError} />}</MeetingMediaContext.Provider>
   </LiveKitRoom>;
 }

@@ -48,6 +48,15 @@ vi.mock('@/contexts/AuthContext', () => ({
     },
   }),
 }));
+vi.mock('@/contexts/MeetingMediaContext', () => ({
+  useMeetingMedia: () => ({
+    connected: false,
+    joinState: 'not_joined',
+    error: '',
+    joinMeeting: vi.fn(),
+    leave: vi.fn(),
+  }),
+}));
 
 vi.mock('@/contexts/RoomsContext', () => ({
   useRooms: () => ({

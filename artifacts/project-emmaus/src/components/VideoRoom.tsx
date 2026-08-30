@@ -36,7 +36,7 @@ export function PrejoinCheck({ mode, onJoin, onCancel }: { mode: MeetingMode; on
     </div>
     {!listenOnly && <Button className="min-h-11 w-full" variant="outline" disabled={checking} onClick={() => void check()}>{checking ? <Loader2 className="mr-1 animate-spin" size={16} /> : null}Check selected devices</Button>}
     {message && <p role="status" className="text-sm text-muted-foreground">{message}</p>}
-    <div className="flex flex-col gap-2 sm:flex-row"><Button className="min-h-11" variant="outline" onClick={onCancel}>Cancel</Button><Button className="min-h-11 sm:ml-auto" onClick={() => onJoin(intent())}>Join gathering</Button></div>
+    <div className="flex flex-col gap-2 sm:flex-row"><Button className="min-h-11" variant="outline" onClick={onCancel}>Cancel</Button><Button className="min-h-11 sm:ml-auto" onClick={() => onJoin(intent())}>Use these settings</Button></div>
   </div>;
 }
 
@@ -54,9 +54,6 @@ export function VideoRoom(props: VideoRoomProps) {
   const mode = props.meetingMode ?? 'video';
   useEffect(() => media.configure({ roomId: props.roomId, userId: props.userId, displayName: props.displayName, mode, hasJoinedMeeting: props.hasJoinedMeeting }), [media.configure, props.roomId, props.userId, props.displayName, props.hasJoinedMeeting, mode]);
   if (!props.videoEligible) return null;
-  if (media.loading && !media.status) return <div className="rounded-2xl border p-5 text-sm text-muted-foreground">Checking gathering status…</div>;
-  if (media.prejoin && !media.connected) return <PrejoinCheck mode={mode} onJoin={media.join} onCancel={media.closePrejoin} />;
   if (media.connected) return <div className="rounded-2xl border border-primary/30 bg-card p-4 pb-24 space-y-3"><div className="flex items-center gap-2"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" /><b>Live {mode === 'audio' ? 'Audio' : 'Video'}</b><Users size={15} /></div><Participants mode={mode} /></div>;
-  if (!media.status?.configured || !media.status?.videoEnabled) return null;
-  return <div className="rounded-2xl border border-emerald-300 bg-emerald-50 p-5 dark:bg-emerald-950/30"><p className="font-semibold">{media.status.videoActive ? `Live ${mode === 'audio' ? 'Audio' : 'Video'} is active` : 'Ready to gather'}</p><p className="mt-1 text-sm text-muted-foreground">{props.leaderName || 'Your leader'} {media.status.videoActive ? 'has started a live session.' : 'can start a live session.'}</p><div className="mt-4 flex flex-col gap-2 sm:flex-row">{media.status.videoActive ? <Button className="min-h-11" onClick={media.openJoin} disabled={props.hasJoinedMeeting === false}>Join Live {mode === 'audio' ? 'Audio' : 'Video'}</Button> : media.status.canHost && !props.hideStart ? <Button className="min-h-11" onClick={() => void media.start()} disabled={props.hasJoinedMeeting === false}>Start Live {mode === 'audio' ? 'Audio' : 'Video'}</Button> : null}</div>{media.error && <p role="alert" className="mt-3 flex gap-2 text-sm text-destructive"><AlertCircle size={16} />{media.error}</p>}</div>;
+  return null;
 }

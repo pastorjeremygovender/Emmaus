@@ -40,7 +40,7 @@ describe('meeting device check', () => {
 
     render(<PrejoinCheck mode="audio" onJoin={onJoin} onCancel={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /listen only/i }));
-    fireEvent.click(screen.getByRole('button', { name: /join gathering/i }));
+    fireEvent.click(screen.getByRole('button', { name: /use these settings/i }));
 
     expect(onJoin).toHaveBeenCalledWith({
       listenOnly: true,

@@ -15,6 +15,28 @@ describe('PresentationPanel active identifiers', () => {
     changePage.mockClear();
     stopPresentation.mockClear();
   });
+  it('offers an in-app viewer for a presented PDF instead of an external navigation link', () => {
+    render(<PresentationPanel
+      presentation={{
+        id: 'presentation-9',
+        sessionId: 'session-7',
+        messageId: 'message-4',
+        filename: 'slides.pdf',
+        mediaType: 'pdf',
+        objectPath: '/objects/slides',
+        presentedBy: 'leader',
+        presentedByName: 'Leader',
+        currentPage: 1,
+        pageCount: 4,
+      }}
+      isLeader={false}
+      userId="user"
+      roomId="room"
+    />);
+    expect(screen.getByRole('button', { name: /view pdf in emmaus/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /open pdf/i })).not.toBeInTheDocument();
+  });
+
   it('sends active session and presentation IDs from the rendered presentation', async () => {
     render(<PresentationPanel
       presentation={{
