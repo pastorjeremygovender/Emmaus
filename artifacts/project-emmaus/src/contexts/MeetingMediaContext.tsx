@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { LiveKitRoom, RoomAudioRenderer, useConnectionState, useLocalParticipant } from '@livekit/components-react';
+import { LiveKitRoom, RoomAudioRenderer, useConnectionState, useLocalParticipant, useRemoteParticipants } from '@livekit/components-react';
 import { ConnectionState, ParticipantEvent } from 'livekit-client';
 import { Hand, Mic, MicOff, PhoneOff, Video, VideoOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -26,23 +26,25 @@ const emptyIntent: DeviceIntent = { microphone: true, camera: false, listenOnly:
 
 function Dock({ leave, mode, intent, setIntent, setError }: { leave: () => void; mode: MeetingMode; intent: DeviceIntent; setIntent: (intent: DeviceIntent) => void; setError: (v: string) => void }) {
   const { localParticipant } = useLocalParticipant();
+  const remoteParticipants = useRemoteParticipants();
   const connection = useConnectionState();
   const [, force] = useState(0);
   const [busy, setBusy] = useState(false);
   const [raised, setRaised] = useState(false);
+  const participants = [localParticipant, ...remoteParticipants];
   useEffect(() => {
     const update = () => force(v => v + 1);
-    localParticipant.on(ParticipantEvent.TrackMuted, update);
-    localParticipant.on(ParticipantEvent.TrackUnmuted, update);
-    localParticipant.on(ParticipantEvent.LocalTrackPublished, update);
-    localParticipant.on(ParticipantEvent.LocalTrackUnpublished, update);
-    return () => {
-      localParticipant.off(ParticipantEvent.TrackMuted, update);
-      localParticipant.off(ParticipantEvent.TrackUnmuted, update);
-      localParticipant.off(ParticipantEvent.LocalTrackPublished, update);
-      localParticipant.off(ParticipantEvent.LocalTrackUnpublished, update);
-    };
-  }, [localParticipant]);
+    const events = [
+      ParticipantEvent.TrackMuted,
+      ParticipantEvent.TrackUnmuted,
+      ParticipantEvent.LocalTrackPublished,
+      ParticipantEvent.LocalTrackUnpublished,
+      ParticipantEvent.AttributesChanged,
+      ParticipantEvent.ParticipantNameChanged,
+    ];
+    participants.forEach(participant => events.forEach(event => participant.on(event, update)));
+    return () => participants.forEach(participant => events.forEach(event => participant.off(event, update)));
+  }, [localParticipant, remoteParticipants]);
   const action = async (kind: 'mic' | 'camera') => {
     setBusy(true);
     try {
@@ -68,15 +70,55 @@ function Dock({ leave, mode, intent, setIntent, setError }: { leave: () => void;
     } catch { setError('Your hand signal was not sent. Please try again after reconnecting.'); }
   };
   const connected = connection === ConnectionState.Connected;
-  return <div data-meeting-dock="true" className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[70] border-t border-border bg-card/95 p-2 backdrop-blur">
-    <div className={`mx-auto grid w-full max-w-lg gap-2 ${mode === 'video' ? 'grid-cols-4' : 'grid-cols-3'}`} role="toolbar" aria-label="Meeting controls">
-      {intent.listenOnly ? <Button className="min-h-11 min-w-0 px-2 text-xs sm:text-sm" variant="outline" disabled={busy || !connected} onClick={() => void action('mic')} aria-label="Join microphone"><Mic size={16} className="mr-1 shrink-0" /><span className="truncate">Join mic</span></Button> :
-        <Button className="min-h-11 min-w-0 px-2 text-xs sm:text-sm" variant="outline" disabled={busy || !connected} onClick={() => void action('mic')} aria-label={localParticipant.isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}>{localParticipant.isMicrophoneEnabled ? <Mic size={16} className="mr-1 shrink-0" /> : <MicOff size={16} className="mr-1 shrink-0" />}<span className="truncate">{localParticipant.isMicrophoneEnabled ? 'Mute' : 'Unmute'}</span></Button>}
-      {mode === 'video' && <Button className="min-h-11 min-w-0 px-2 text-xs sm:text-sm" variant="outline" disabled={busy || !connected} onClick={() => void action('camera')} aria-label={localParticipant.isCameraEnabled ? 'Turn camera off' : 'Turn camera on'}>{localParticipant.isCameraEnabled ? <Video size={16} className="mr-1 shrink-0" /> : <VideoOff size={16} className="mr-1 shrink-0" />}<span className="truncate">{localParticipant.isCameraEnabled ? 'Camera off' : 'Camera on'}</span></Button>}
-      <Button className="min-h-11 min-w-0 px-2 text-xs sm:text-sm" variant="outline" onClick={() => void toggleHand()} aria-label={raised ? 'Lower hand' : 'Raise hand'}><Hand size={16} className="mr-1 shrink-0" /><span className="truncate">{raised ? 'Lower hand' : 'Raise hand'}</span></Button>
-      <Button className="min-h-11 min-w-0 px-2 text-xs sm:text-sm" variant="destructive" onClick={leave} aria-label="Leave meeting"><PhoneOff size={16} className="mr-1 shrink-0" /><span className="truncate">Leave</span></Button>
+  return <>
+    <RaisedHandsIndicator localRaised={raised} participants={participants} />
+    <div data-meeting-dock="true" className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[70] border-t border-border bg-card/95 p-2 backdrop-blur">
+      <div className={`mx-auto grid w-full max-w-lg gap-2 ${mode === 'video' ? 'grid-cols-4' : 'grid-cols-3'}`} role="toolbar" aria-label="Meeting controls">
+        {intent.listenOnly ? <Button className="min-h-11 min-w-0 px-2 text-xs sm:text-sm" variant="outline" disabled={busy || !connected} onClick={() => void action('mic')} aria-label="Join microphone"><Mic size={16} className="mr-1 shrink-0" /><span className="truncate">Join mic</span></Button> :
+          <Button className="min-h-11 min-w-0 px-2 text-xs sm:text-sm" variant="outline" disabled={busy || !connected} onClick={() => void action('mic')} aria-label={localParticipant.isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}>{localParticipant.isMicrophoneEnabled ? <Mic size={16} className="mr-1 shrink-0" /> : <MicOff size={16} className="mr-1 shrink-0" />}<span className="truncate">{localParticipant.isMicrophoneEnabled ? 'Mute' : 'Unmute'}</span></Button>}
+        {mode === 'video' && <Button className="min-h-11 min-w-0 px-2 text-xs sm:text-sm" variant="outline" disabled={busy || !connected} onClick={() => void action('camera')} aria-label={localParticipant.isCameraEnabled ? 'Turn camera off' : 'Turn camera on'}>{localParticipant.isCameraEnabled ? <Video size={16} className="mr-1 shrink-0" /> : <VideoOff size={16} className="mr-1 shrink-0" />}<span className="truncate">{localParticipant.isCameraEnabled ? 'Camera off' : 'Camera on'}</span></Button>}
+        <Button className="min-h-11 min-w-0 px-2 text-xs sm:text-sm" variant="outline" onClick={() => void toggleHand()} aria-label={raised ? 'Lower hand' : 'Raise hand'}><Hand size={16} className="mr-1 shrink-0" /><span className="truncate">{raised ? 'Lower hand' : 'Raise hand'}</span></Button>
+        <Button className="min-h-11 min-w-0 px-2 text-xs sm:text-sm" variant="destructive" onClick={leave} aria-label="Leave meeting"><PhoneOff size={16} className="mr-1 shrink-0" /><span className="truncate">Leave</span></Button>
+      </div>
     </div>
-  </div>;
+  </>;
+}
+
+function RaisedHandsIndicator({
+  localRaised,
+  participants,
+}: {
+  localRaised: boolean;
+  participants: Array<{ identity: string; name?: string; attributes: Record<string, string> }>;
+}) {
+  const raised = participants
+    .filter(participant => participant.attributes['emmaus.raise_hand'] === 'true')
+    .map(participant => ({
+      identity: participant.identity,
+      name: participant.name?.trim() || 'Member',
+    }));
+
+  if (localRaised && !raised.some(participant => participant.identity === participants[0]?.identity)) {
+    raised.unshift({ identity: participants[0]?.identity ?? 'local', name: 'You' });
+  }
+  if (raised.length === 0) return null;
+
+  return (
+    <div
+      className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom)+4.5rem)] z-[70] px-3 pointer-events-none"
+      role="status"
+      aria-live="polite"
+      aria-label={`${raised.length} ${raised.length === 1 ? 'person has' : 'people have'} raised a hand`}
+    >
+      <div className="mx-auto flex max-w-lg items-center gap-2 rounded-xl border border-amber-300/70 bg-amber-50/95 px-3 py-2 text-[12px] font-semibold text-amber-900 shadow-lg backdrop-blur dark:border-amber-700/60 dark:bg-amber-950/95 dark:text-amber-100">
+        <Hand size={16} className="shrink-0 text-amber-600 dark:text-amber-300" />
+        <span className="shrink-0">{raised.length === 1 ? 'Hand raised' : 'Hands raised'}</span>
+        <span className="min-w-0 truncate font-medium text-amber-800/80 dark:text-amber-200/80">
+          {raised.map(participant => participant.name).join(', ')}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 export function MeetingMediaProvider({ children }: { children: React.ReactNode }) {

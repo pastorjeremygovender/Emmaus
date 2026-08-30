@@ -206,13 +206,15 @@ export function SharedScripturePanel({
           <BookOpen size={18} className="text-primary shrink-0" />
           <h2 className="font-semibold text-[16px] text-foreground">{displayLabel}</h2>
         </div>
-        <button
-          onClick={onClose}
-          className="p-2 text-muted-foreground hover:text-foreground min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl"
-          aria-label="Close scripture"
-        >
-          <X size={20} />
-        </button>
+        {isLeader && (
+          <button
+            onClick={onClose}
+            className="p-2 text-muted-foreground hover:text-foreground min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl"
+            aria-label="Close scripture"
+          >
+            <X size={20} />
+          </button>
+        )}
       </header>
 
       {/* Focus verse notice bar */}

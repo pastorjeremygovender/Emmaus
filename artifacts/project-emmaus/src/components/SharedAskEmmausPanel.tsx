@@ -181,7 +181,7 @@ export function SharedAskEmmausPanel({
       {/* Backdrop */}
       <div
         className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={isLeader ? onClose : undefined}
       />
 
       {/* Panel */}
@@ -206,13 +206,15 @@ export function SharedAskEmmausPanel({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Close"
-          >
-            <X size={20} />
-          </button>
+          {isLeader && (
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Close"
+            >
+              <X size={20} />
+            </button>
+          )}
         </div>
 
         {/* Scrollable content area */}

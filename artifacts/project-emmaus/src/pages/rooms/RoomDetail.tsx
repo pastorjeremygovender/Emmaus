@@ -1263,13 +1263,13 @@ export default function RoomDetail() {
 
       {/* End Meeting confirmation */}
       {confirmEndMeeting && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4" onClick={() => setConfirmEndMeeting(false)}>
-          <div className="bg-card rounded-2xl shadow-xl p-6 w-full max-w-sm space-y-4 mb-4" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/50 px-4 py-[max(1rem,env(safe-area-inset-top))]" onClick={() => setConfirmEndMeeting(false)}>
+          <div className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-2xl bg-card p-5 shadow-xl sm:p-6" onClick={e => e.stopPropagation()}>
             <h2 className="text-[18px] font-bold text-foreground">End this meeting?</h2>
             <p className="text-[14px] text-muted-foreground leading-relaxed">
               Attendance, notes, and prayer requests will all be saved. Members will see a Meeting Complete summary.
             </p>
-            <div className="flex gap-2">
+            <div className="mt-4 grid grid-cols-1 gap-2 min-[360px]:grid-cols-2">
               <button
                 onClick={() => setConfirmEndMeeting(false)}
                 className="flex-1 py-3.5 rounded-2xl border border-border text-[15px] font-medium text-foreground hover:bg-muted/50 transition-colors"
@@ -1289,7 +1289,7 @@ export default function RoomDetail() {
         </div>
       )}
 
-      {showSharedAskEmmaus && activeSession && (
+      {showSharedAskEmmaus && activeSession && (isAuthorizedLeader || hasJoinedCurrentMeeting) && (
         <SharedAskEmmausPanel
           roomId={String(roomId)}
           userId={user.id}
@@ -1303,7 +1303,7 @@ export default function RoomDetail() {
         />
       )}
 
-      {activePoll && (
+      {activePoll && (isAuthorizedLeader || hasJoinedCurrentMeeting) && (
         <PollCard
           roomId={String(roomId)}
           userId={user.id}
@@ -1319,7 +1319,7 @@ export default function RoomDetail() {
         />
       )}
 
-      {showSharedScripture && activeScripture && (
+      {showSharedScripture && activeScripture && (isAuthorizedLeader || hasJoinedCurrentMeeting) && (
         <SharedScripturePanel
           roomId={String(roomId)}
           userId={user.id}
@@ -1337,7 +1337,7 @@ export default function RoomDetail() {
         />
       )}
 
-      {showSharedNotes && activeSession && (
+      {showSharedNotes && activeSession && (isAuthorizedLeader || hasJoinedCurrentMeeting) && (
         <SharedNotesPanel
           roomId={String(roomId)}
           userId={user.id}
@@ -1960,7 +1960,7 @@ export default function RoomDetail() {
             </div>
 
             {/* Active presentation has priority over the live meeting card. */}
-            {sharedPanel.panel === 'presentation' && activePresentation && (
+            {sharedPanel.panel === 'presentation' && activePresentation && (isAuthorizedLeader || hasJoinedCurrentMeeting) && (
               <div id="room-active-presentation" className="scroll-mt-16 mb-4">
                 <PresentationPanel
                   presentation={activePresentation}

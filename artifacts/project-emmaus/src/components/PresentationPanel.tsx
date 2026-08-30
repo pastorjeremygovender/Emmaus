@@ -36,6 +36,7 @@ export function PresentationPanel({
 }: PresentationPanelProps) {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [imageOpen, setImageOpen] = useState(false);
   const presentationId = presentation.id;
   const sessionId = presentation.sessionId;
 
@@ -120,34 +121,48 @@ export function PresentationPanel({
         <p className="text-[11px] text-primary/70 shrink-0">
           by {presentation.presentedByName}
         </p>
-         <button
-           type="button"
-           onClick={onClose}
-           className="w-9 h-9 rounded-lg flex items-center justify-center text-primary/70 hover:bg-primary/10 hover:text-primary"
-           aria-label="Close presentation viewer"
-         >
-           <X size={17} />
-         </button>
+        {isLeader && onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-primary/70 hover:bg-primary/10 hover:text-primary"
+            aria-label="Close presentation viewer"
+          >
+            <X size={17} />
+          </button>
+        )}
       </div>
 
       {/* Content area */}
       <div className="p-4">
         {presentation.mediaType === 'image' && mediaUrl && (
-          <img
-            src={mediaUrl}
-            alt={presentation.filename}
-            className="w-full rounded-xl object-contain max-h-[320px] bg-muted"
-          />
+          <button
+            type="button"
+            onClick={() => setImageOpen(true)}
+            className="block w-full rounded-xl bg-muted overflow-hidden cursor-zoom-in"
+            aria-label={`Open ${presentation.filename}`}
+          >
+            <img
+              src={mediaUrl}
+              alt={presentation.filename}
+              className="w-full rounded-xl object-contain max-h-[min(52dvh,420px)]"
+            />
+          </button>
         )}
 
         {(presentation.mediaType === 'pdf' || presentation.mediaType === 'document') && mediaUrl && (
           <div className="space-y-3">
-            <div className="w-full rounded-xl border border-border bg-muted flex items-center justify-center" style={{ height: 280 }}>
-              <iframe
-                src={`${mediaUrl}#page=${presentation.currentPage}`}
-                title={presentation.filename}
-                className="w-full h-full rounded-xl"
-              />
+            <div className="w-full min-h-48 rounded-xl border border-border bg-muted flex flex-col items-center justify-center gap-3 p-6 text-center">
+              <FileText size={36} className="text-primary" />
+              <p className="text-[14px] font-semibold text-foreground break-words">{presentation.filename}</p>
+              <a
+                href={`${mediaUrl}#page=${presentation.currentPage}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-[13px] font-semibold text-primary-foreground"
+              >
+                <ExternalLink size={15} /> Open PDF
+              </a>
             </div>
             <p className="text-center text-[13px] text-muted-foreground">
               Page {presentation.currentPage}{presentation.pageCount ? ` of ${presentation.pageCount}` : ''}
@@ -187,6 +202,31 @@ export function PresentationPanel({
           </button>
         )}
       </div>
+
+      {imageOpen && mediaUrl && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 p-3 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Viewing ${presentation.filename}`}
+          onClick={() => setImageOpen(false)}
+        >
+          <button
+            type="button"
+            onClick={() => setImageOpen(false)}
+            className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white"
+            aria-label="Close image"
+          >
+            <X size={22} />
+          </button>
+          <img
+            src={mediaUrl}
+            alt={presentation.filename}
+            className="max-h-full max-w-full object-contain"
+            onClick={event => event.stopPropagation()}
+          />
+        </div>
+      )}
 
       {/* Controls */}
       {actionError && <p role="alert" className="px-4 pb-2 text-[12px] text-destructive">{actionError}</p>}

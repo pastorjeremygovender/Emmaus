@@ -157,7 +157,7 @@ export function PollCard({
       {/* Backdrop */}
       <div
         className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={isLeader ? onClose : undefined}
       />
 
       {/* Bottom sheet */}
@@ -188,13 +188,15 @@ export function PollCard({
                 </p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-xl text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Close poll"
-            >
-              <X size={20} />
-            </button>
+            {isLeader && (
+              <button
+                onClick={onClose}
+                className="p-2 rounded-xl text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Close poll"
+              >
+                <X size={20} />
+              </button>
+            )}
           </div>
 
           {/* Question */}
@@ -222,12 +224,14 @@ export function PollCard({
                 <p className="text-[12px] text-muted-foreground text-center">
                   {revealTotal} {revealTotal === 1 ? 'response' : 'responses'}
                 </p>
-                <button
-                  onClick={onClose}
-                  className="w-full py-3 rounded-2xl border border-border text-muted-foreground text-[14px] font-medium hover:text-foreground transition-colors"
-                >
-                  Close
-                </button>
+                {isLeader && (
+                  <button
+                    onClick={onClose}
+                    className="w-full py-3 rounded-2xl border border-border text-muted-foreground text-[14px] font-medium hover:text-foreground transition-colors"
+                  >
+                    Close
+                  </button>
+                )}
               </div>
             ) : isLeader ? (
               /* ── Leader view: live counts + Reveal button ─────────────────── */

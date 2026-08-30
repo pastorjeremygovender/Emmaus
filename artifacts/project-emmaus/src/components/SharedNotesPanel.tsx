@@ -165,13 +165,15 @@ export function SharedNotesPanel({
             </span>
           )}
         </div>
-        <button
-          onClick={onClose}
-          className="p-2 text-muted-foreground hover:text-foreground min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl"
-          aria-label="Close notes"
-        >
-          <X size={20} />
-        </button>
+        {isLeader && (
+          <button
+            onClick={onClose}
+            className="p-2 text-muted-foreground hover:text-foreground min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl"
+            aria-label="Close notes"
+          >
+            <X size={20} />
+          </button>
+        )}
       </header>
 
       {/* Notes list */}
