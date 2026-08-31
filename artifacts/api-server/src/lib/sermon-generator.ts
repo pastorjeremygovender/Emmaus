@@ -17,8 +17,19 @@ import { randomUUID } from "node:crypto";
 import { getVideoMetadata } from "./youtube-client.js";
 import { listCaptionTracks, downloadCaptionTrack } from "./youtube-client.js";
 import { getValidAccessToken } from "./oauth-store.js";
-import { createCompanion, deleteCompanion, getCompanionBySermonId } from "./sermon-companion-store.js";
-import { createSermon, deleteSermon as deleteCanonicalSermon, updateSermon as updateCanonicalSermon } from "./canonical-sermon-store.js";
+import {
+  createCompanion,
+  getCompanionBySermonId,
+  replaceCompanionForSermon,
+  verifyCompanionPersistence,
+  EXPECTED_GENERATED_COMPANION_DAYS,
+} from "./sermon-companion-store.js";
+import {
+  createSermon,
+  deleteSermonFully,
+  getSermonByYoutubeVideoId,
+  updateSermon as updateCanonicalSermon,
+} from "./canonical-sermon-store.js";
 import { logger } from "./logger.js";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -1044,6 +1055,52 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     throw new GenerationError("INVALID_YOUTUBE_URL", "Please enter a valid YouTube video link.");
   }
 
+  // A retried request after a successful commit must return the durable result
+  // instead of creating a second sermon and companion for the same video.
+  const existingSermon = await getSermonByYoutubeVideoId(videoId);
+  if (existingSermon) {
+    const existingCompanion = await getCompanionBySermonId(existingSermon.id);
+    if (existingCompanion) {
+      const verifiedCompanion = await verifyCompanionPersistence(existingCompanion.id);
+      return {
+        sermon: {
+          id: existingSermon.id,
+          title: existingSermon.title,
+          speaker: existingSermon.speaker,
+          sermonDate: existingSermon.sermonDate,
+          series: existingSermon.series,
+          scriptureReference: existingSermon.scriptureReference,
+          youtubeUrl: existingSermon.youtubeUrl,
+          summary: existingSermon.summary,
+          topics: existingSermon.themes,
+          keywords: existingSermon.keywords,
+          transcript: existingSermon.fullTranscript || existingSermon.transcript,
+          sermonTranscript: existingSermon.transcript,
+          sermonStartTime: existingSermon.sermonStartTime,
+          sermonEndTime: existingSermon.sermonEndTime,
+          detectionConfidence: existingSermon.detectionConfidence,
+          detectionMethod: existingSermon.detectionMethod,
+          transcriptStatus: existingSermon.transcriptStatus,
+          aiIndexStatus: "none",
+          companionJourneyId: verifiedCompanion.id,
+          mainTheme: existingSermon.mainTheme,
+          status: "draft",
+          pastorEdited: false,
+          updatedAt: existingSermon.updatedAt,
+        },
+        companion: {
+          id: verifiedCompanion.id,
+          title: verifiedCompanion.title,
+          entries: verifiedCompanion.entries ?? [],
+        },
+      };
+    }
+    throw new GenerationError(
+      "GENERATION_FAILED",
+      "A sermon draft already exists for this YouTube video but its Companion is incomplete. Open the existing draft instead of retrying.",
+    );
+  }
+
   // 1. Fetch metadata
   let metaList;
   try {
@@ -1286,13 +1343,11 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     sermonLinksGenerated: companionDraft.days.filter(d => d.sermonLink).length,
   }, "sermon-generator: companion draft parsed");
 
-  // Validate companion — must have at least 1 entry with substantive reflection.
-  // No longer enforces exactly 5 days: the model generates as many days as the
-  // sermon content genuinely supports.
+  // Validate companion — the first successful save must contain all five days.
   const emptyEntries = companionDraft.days.filter(
     d => !d.reflection || d.reflection.trim().length < 30,
   );
-  if (companionDraft.days.length < 1 || companionDraft.days.length > 5 || emptyEntries.length > 0) {
+  if (companionDraft.days.length !== EXPECTED_GENERATED_COMPANION_DAYS || emptyEntries.length > 0) {
     logger.error({
       entryCount: companionDraft.days.length,
       emptyEntryCount: emptyEntries.length,
@@ -1375,19 +1430,21 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
   logger.info({ sermonId }, "sermon-generator: canonical sermon created, saving companion");
 
   // Create companion linked to the canonical sermon UUID
-  let savedCompanion: Awaited<ReturnType<typeof createCompanion>>;
+  let savedCompanion: Awaited<ReturnType<typeof createCompanion>> | null = null;
   try {
     savedCompanion = await createCompanion({
       sermonId,           // sermon_id text column
       sermonUuid: sermonId, // sermon_uuid FK to sermons.id
       title: companionDraft.companionTitle,
-      numberOfDays: companionDraft.days.length,
+      numberOfDays: EXPECTED_GENERATED_COMPANION_DAYS,
       entries: companionDraft.days,
+      expectedDays: EXPECTED_GENERATED_COMPANION_DAYS,
     });
+    savedCompanion = await verifyCompanionPersistence(savedCompanion.id);
   } catch (companionErr) {
     logger.error({ err: companionErr, sermonId }, "sermon-generator: companion creation failed — rolling back canonical sermon");
     try {
-      await deleteCanonicalSermon(sermonId);
+      await deleteSermonFully(sermonId);
       logger.info({ sermonId }, "sermon-generator: canonical sermon rolled back");
     } catch (delErr) {
       logger.error({ err: delErr, sermonId }, "sermon-generator: canonical sermon rollback also failed");
@@ -1510,6 +1567,20 @@ export async function generateSermonContentFromTranscript(
     sermonStartSecs:    detectionStartSecs ?? 0,
     sermonEndSecs:      detectionEndSecs ?? undefined,
   });
+  const emptyEntries = companionDraft.days.filter(
+    d => !d.reflection || d.reflection.trim().length < 30,
+  );
+  if (companionDraft.days.length !== EXPECTED_GENERATED_COMPANION_DAYS || emptyEntries.length > 0) {
+    logger.error({
+      sermonId,
+      entryCount: companionDraft.days.length,
+      emptyEntryCount: emptyEntries.length,
+    }, "sermon-generator: audio-first companion is incomplete — refusing to replace durable content");
+    throw new GenerationError(
+      "GENERATION_FAILED",
+      "Emmaus couldn't generate all five Companion entries. Your existing Companion was not changed.",
+    );
+  }
 
   // 5. Update existing sermon record with generated content. Keep the
   // processing stage non-terminal until the companion is persisted below:
@@ -1532,20 +1603,15 @@ export async function generateSermonContentFromTranscript(
     processingError:     "",
   });
 
-  // 6. Replace any existing companion with freshly generated one
-  const existingCompanion = await getCompanionBySermonId(sermonId);
-  if (existingCompanion) {
-    await deleteCompanion(existingCompanion.id);
-    logger.info({ sermonId, oldId: existingCompanion.id }, "sermon-generator: replaced existing companion");
-  }
-
-  await createCompanion({
+  // 6. Replace any existing companion transactionally. The old companion stays
+  // intact if inserting or verifying the new parent/children fails.
+  const savedCompanion = await replaceCompanionForSermon({
     sermonId,
-    sermonUuid:  sermonId,
     title:       companionDraft.companionTitle,
-    numberOfDays: companionDraft.days.length,
     entries:     companionDraft.days,
+    expectedDays: EXPECTED_GENERATED_COMPANION_DAYS,
   });
+  const verifiedCompanion = await verifyCompanionPersistence(savedCompanion.id);
 
   // Only expose the terminal stage after both the sermon fields and its
   // companion (including all entries) are durable.
@@ -1554,5 +1620,5 @@ export async function generateSermonContentFromTranscript(
     processingError: "",
   });
 
-  logger.info({ sermonId, days: companionDraft.days.length }, "sermon-generator: audio-first pipeline complete");
+  logger.info({ sermonId, companionId: verifiedCompanion.id, days: verifiedCompanion.entries?.length ?? 0 }, "sermon-generator: audio-first pipeline complete");
 }

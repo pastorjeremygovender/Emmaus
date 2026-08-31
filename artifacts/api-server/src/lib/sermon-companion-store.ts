@@ -214,6 +214,14 @@ export async function replaceCompanionForSermon(data: {
   try {
     await client.query("BEGIN");
 
+    // Serialize retries for the same canonical sermon. Without this row lock,
+    // two overlapping retries could both observe the same old companion and
+    // leave two newly generated companions behind.
+    await client.query(
+      `SELECT id FROM sermons WHERE id = $1 FOR UPDATE`,
+      [data.sermonId],
+    );
+
     const oldRes = await client.query<{ id: string }>(
       `SELECT id::text
          FROM sermon_companion

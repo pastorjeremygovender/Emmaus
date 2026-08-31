@@ -36,6 +36,7 @@
 - [journey-context-role-bug](journey-context-role-bug.md) — refreshJourneys/addStep/deleteStep must check 'admin' OR 'superAdmin'; missing superAdmin causes all Drafts to vanish for superAdmin users.
 - [Unified Sermons Module](unified-sermons-module.md) — canonical sermons DB table; 8-phase build; Ask Emmaus priority-1; Preached Here canonical-first; SermonHome member page.
 - [Canonical sermon store contract](canonical-sermon-store-contract.md) — transcript vs fullTranscript split; publishedAt in PATCH; atomic deleteSermonFully; skipServerPersist; detection metadata columns.
+- [Sermon Companion persistence](sermon-companion-persistence.md) — generated companions require verified days 1–5; replacements insert/verify before deleting the prior companion transactionally.
 - [ffmpeg production PATH fix](ffmpeg-production-path.md) — `which ffmpeg` fails in production; glob fallback `ls /nix/store/*-replit-runtime-path*/bin/ffmpeg` resolves it instantly.
 - [Pastoral Care Module](pastoral-care-module.md) — Checkpoint 1 schema (6 tables), permission model, personKey URL format, unified people list, frontend wiring, checkpoint boundaries.
 - [Discipleship Profile architecture](discipleship-profile.md) — Checkpoint 3 complete: 9-section profile; 6 new store functions + routes; PersonPage.tsx is thin orchestrator; pastoral_milestones table live.
