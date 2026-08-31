@@ -34,6 +34,7 @@ import React, {
 } from 'react';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBible } from '@/contexts/BibleContext';
 import { goBackOrFallback } from '@/lib/return-context';
 import {
   type FlatContext,
@@ -61,7 +62,7 @@ import { resolveIntent, type VoiceIntent } from '@/lib/voice-intent';
 import { sendVoiceConversation, type AnyVoiceToolCall, type VoiceDoneInfo } from '@/lib/voice-conversation-client';
 import {
   resolveVoiceTranslation,
-  buildSubstitutionNotice,
+  buildUnavailableTranslationNotice,
 } from '@/lib/voice-bible';
 import { remoteBibleProvider } from '@/lib/bible-provider';
 import { validateVoiceReadAction, isSafeVoiceRoute } from '@/lib/voice-action-validation';
@@ -171,6 +172,10 @@ export function useVoiceSession(): VoiceSessionContextType {
 
 export function VoiceSessionProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  // BibleProvider is above this provider in App.tsx. Using its reconciled
+  // value avoids a race where Voice reads stale localStorage before the cloud
+  // preference has finished loading.
+  const { translationId: accountTranslationId } = useBible();
   const [location, providerNavigate] = useLocation();
   // providerNavigate is always available (provider-level), used as fallback when
   // VoiceMode is not mounted (user speaking via GlobalVoiceIndicator).
@@ -200,11 +205,13 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   // ── Ref-copies of dynamic state (for use inside stable processAudioBlob) ──
   // React guarantees state setters are stable; the VALUES need refs.
   const userRef        = useRef(user);
+  const accountTranslationRef = useRef(accountTranslationId);
   const convIdRef      = useRef<string | null>(null);
   const historyRef     = useRef<HistoryItem[]>([]);
   const initContextRef = useRef<FlatContext | null>(null);
 
   useEffect(() => { userRef.current        = user; },        [user]);
+  useEffect(() => { accountTranslationRef.current = accountTranslationId; }, [accountTranslationId]);
   useEffect(() => { convIdRef.current      = convId; },      [convId]);
   useEffect(() => { historyRef.current     = history; },     [history]);
   useEffect(() => { initContextRef.current = initContext; }, [initContext]);
@@ -1314,7 +1321,20 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
         if (!resolvedRef) return false;
 
-        const translation = resolveVoiceTranslation(resolvedRef.translationId ?? null, user?.id ?? null);
+        const translation = resolveVoiceTranslation(
+          resolvedRef.translationId ?? null,
+          user?.id ?? null,
+          accountTranslationRef.current,
+        );
+        if (!translation.availableForTts) {
+          const notice = buildUnavailableTranslationNotice(
+            translation.resolvedId,
+            translation.resolvedName,
+          );
+          setErrorMsg(notice);
+          await playTTS(notice, false);
+          return false;
+        }
         let chapterData: Awaited<ReturnType<typeof remoteBibleProvider.getChapter>> = null;
         try {
           chapterData = await remoteBibleProvider.getChapter(resolvedRef.bookId, resolvedRef.chapter, translation.resolvedId);
@@ -1350,11 +1370,6 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
         const displayBook        = resolvedRef.bookName;
         const displayTranslation = translation.resolvedId.toUpperCase();
-
-        if (translation.substituted) {
-          const wasExplicit = Boolean(resolvedRef.translationId);
-          sections.push({ label: 'Translation note', text: buildSubstitutionNotice(translation.requestedId, translation.resolvedName, wasExplicit) });
-        }
 
         if (resolvedRef.verse) {
           const start = Math.max(1, resolvedRef.verse - 1);

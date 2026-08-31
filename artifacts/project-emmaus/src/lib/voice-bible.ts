@@ -15,9 +15,9 @@
  *   from the copyright holder (Zondervan, ABS, NavPress respectively).
  *
  *   Until TTS licences are confirmed with each publisher, licensed translations
- *   are EXCLUDED from Voice reading.  If a user's preferred or explicitly
- *   requested translation falls in this category, Voice explains and falls
- *   back to the Berean Standard Bible.
+ *   are EXCLUDED from Voice reading. If a user's preferred or explicitly
+ *   requested translation falls in this category, Voice explains that it is
+ *   unavailable rather than silently switching to BSB.
  *
  * This policy must be revisited if/when TTS licences are obtained.
  */
@@ -27,7 +27,7 @@ import { accountStorageKey } from '@/lib/account-storage';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface VoiceTranslationResult {
-  /** The translation ID that will be used for TTS. Always TTS-safe. */
+  /** The translation selected by the user/request. Never silently substituted. */
   resolvedId: string;
   /** Human-readable name of the resolved translation. */
   resolvedName: string;
@@ -44,6 +44,8 @@ export interface VoiceTranslationResult {
    * Null only when no preference is stored and no explicit request was made.
    */
   requestedId: string | null;
+  /** False when policy does not allow this translation to be read aloud. */
+  availableForTts: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -58,9 +60,9 @@ export const TTS_SAFE_TRANSLATIONS: Record<string, string> = {
   kjv: 'King James Version',
 };
 
-/** The default TTS fallback when the user's preferred translation is unavailable. */
-export const DEFAULT_TTS_TRANSLATION_ID   = 'bsb';
-export const DEFAULT_TTS_TRANSLATION_NAME = 'Berean Standard Bible';
+/** New accounts use NIV for both the visual reader and Voice context. */
+export const DEFAULT_TTS_TRANSLATION_ID   = 'niv';
+export const DEFAULT_TTS_TRANSLATION_NAME = 'New International Version';
 
 /** localStorage key used by BibleContext for the translation preference. */
 const TRANSLATION_LS_KEY = 'emmaus_bible_translation';
@@ -82,7 +84,7 @@ export const SPOKEN_TRANSLATION_MAP: Record<string, string> = {
   kjv: 'kjv',
   'king james': 'kjv',
   'king james version': 'kjv',
-  // Licensed (will trigger a substitution notice)
+  // Licensed (remain selected but are unavailable for TTS)
   niv: 'niv',
   'new international': 'niv',
   'new international version': 'niv',
@@ -101,7 +103,10 @@ export function getUserBibleTranslation(subject: string | null): string {
   if (!subject) return DEFAULT_TTS_TRANSLATION_ID;
   try {
     const raw = localStorage.getItem(accountStorageKey(TRANSLATION_LS_KEY, subject));
-    return raw ? (JSON.parse(raw) as string) : DEFAULT_TTS_TRANSLATION_ID;
+    const value = raw ? JSON.parse(raw) as string : DEFAULT_TTS_TRANSLATION_ID;
+    return typeof value === 'string' && (
+      Boolean(TTS_SAFE_TRANSLATIONS[value]) || ['niv', 'gnt', 'msg'].includes(value)
+    ) ? value : DEFAULT_TTS_TRANSLATION_ID;
   } catch {
     return DEFAULT_TTS_TRANSLATION_ID;
   }
@@ -113,37 +118,39 @@ export function getUserBibleTranslation(subject: string | null): string {
  * Resolution order (per spec):
  *   1. Explicitly requested in the voice command (explicitId)
  *   2. User's stored preference (localStorage)
- *   3. Default — BSB
+ *   3. Default — NIV
  *
- * If the resolved translation is not TTS-safe, falls back to BSB and sets
- * `substituted: true` so the caller can explain before reading.
+ * If the resolved translation is not TTS-safe, it remains selected and is
+ * marked unavailable. The caller must not feed that text into TTS.
  */
 export function resolveVoiceTranslation(
   explicitId: string | null,
   subject: string | null,
+  preferenceOverride?: string | null,
 ): VoiceTranslationResult {
-  const userPrefId = getUserBibleTranslation(subject);
+  const userPrefId = preferenceOverride ?? getUserBibleTranslation(subject);
   // What was asked for (explicit > user pref > default)
   const requestedId = explicitId ?? userPrefId ?? DEFAULT_TTS_TRANSLATION_ID;
 
-  if (TTS_SAFE_TRANSLATIONS[requestedId]) {
-    return {
-      resolvedId:    requestedId,
-      resolvedName:  TTS_SAFE_TRANSLATIONS[requestedId],
-      userPrefId,
-      substituted:   false,
-      requestedId:   explicitId,
-    };
-  }
-
-  // Not TTS-safe → substitute with BSB
   return {
-    resolvedId:    DEFAULT_TTS_TRANSLATION_ID,
-    resolvedName:  DEFAULT_TTS_TRANSLATION_NAME,
+    resolvedId: requestedId,
+    resolvedName: TTS_SAFE_TRANSLATIONS[requestedId] ?? (
+      requestedId === 'niv' ? 'New International Version' :
+      requestedId === 'gnt' ? 'Good News Translation' :
+      requestedId === 'msg' ? 'The Message' : requestedId.toUpperCase()
+    ),
     userPrefId,
-    substituted:   true,
+    substituted: false,
     requestedId,
+    availableForTts: Boolean(TTS_SAFE_TRANSLATIONS[requestedId]),
   };
+}
+
+export function buildUnavailableTranslationNotice(
+  requestedId: string,
+  requestedName: string,
+): string {
+  return `${requestedName} is selected, but I can't read that translation aloud until audio permission is available. I have not switched translations.`;
 }
 
 /**

@@ -86,6 +86,8 @@ export type PersonalPrayer = {
 };
 
 export type UserBibleData = {
+  /** Explicit account preference. Missing means legacy data with no choice saved yet. */
+  translationId?: string;
   history: ReadingHistoryEntry[];        // ordered newest-first, max 20
   completed: string[];
   journeyProgress: Record<string, BibleJourneyProgress>;
@@ -111,6 +113,8 @@ const EMPTY_DATA: UserBibleData = {
   prayers: [],
 };
 
+const VALID_TRANSLATION_IDS = new Set(["bsb", "asv", "kjv", "niv", "gnt", "msg"]);
+
 // ─── DB-backed store ───────────────────────────────────────────────────────────
 
 /**
@@ -125,7 +129,12 @@ export async function getBibleData(userId: string): Promise<UserBibleData | null
     [userId]
   );
   if (res.rows.length === 0) return null;  // no cloud record yet
-  return { ...EMPTY_DATA, ...(res.rows[0].data as Partial<UserBibleData>) };
+  const stored = res.rows[0].data as Partial<UserBibleData>;
+  const data = { ...EMPTY_DATA, ...stored };
+  if (data.translationId && !VALID_TRANSLATION_IDS.has(data.translationId)) {
+    delete data.translationId;
+  }
+  return data;
 }
 
 /**

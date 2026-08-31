@@ -543,6 +543,7 @@ router.patch("/bible/data", async (req: Request, res: Response) => {
 
   // Only allow known fields to prevent injection of arbitrary data
   const allowed: (keyof UserBibleData)[] = [
+    "translationId",
     "history",
     "completed",
     "journeyProgress",
@@ -557,6 +558,11 @@ router.patch("/bible/data", async (req: Request, res: Response) => {
   const sanitized: Partial<UserBibleData> = {};
   for (const key of allowed) {
     if (key in patch) {
+      if (key === "translationId" &&
+        (typeof patch.translationId !== "string" || !isValidTranslation(patch.translationId))) {
+        res.status(400).json({ error: "Invalid Bible translation." });
+        return;
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (sanitized as any)[key] = (patch as any)[key];
     }

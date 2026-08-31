@@ -103,7 +103,6 @@ export default function ChapterReader() {
   const scrollSaveKey = `emmaus_scroll_${resolvedBookId}_${chapterNum}`;
   const scrollBeforeTranslation = useRef<number | null>(null);
   const dropdownWrapperRef = useRef<HTMLDivElement>(null);
-  const prevTranslationRef = useRef<string>(translationId);
 
   // ── Swipe navigation ──────────────────────────────────────────────────────
   const swipeTouchStartX = useRef<number | null>(null);
@@ -173,18 +172,10 @@ export default function ChapterReader() {
     return () => document.removeEventListener('pointerdown', handleOutside);
   }, [translationDropdownOpen]);
 
-  // Track last known-good translation
+  // Keep the selected translation visible on failure. In particular, an NIV
+  // outage must never silently turn into BSB.
   useEffect(() => {
-    if (chapterData && !loading && !error) prevTranslationRef.current = translationId;
-  }, [chapterData, loading, error, translationId]);
-
-  // Revert on translation load failure
-  useEffect(() => {
-    if (error && prevTranslationRef.current && prevTranslationRef.current !== translationId) {
-      setTranslation(prevTranslationRef.current);
-      setTranslationError('This translation could not be loaded just now.');
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    setTranslationError(error);
   }, [error]);
 
   // Fetch book intro + chapter overview when book/chapter changes (non-critical)
@@ -275,7 +266,14 @@ export default function ChapterReader() {
     ? `${book.shortName} ${nextChapterNum}`
     : nextBook ? `${nextBook.shortName} 1` : '';
 
-  const currentTranslation = translations.find(t => t.id === translationId) ?? translations[0];
+  const currentTranslation: TranslationMeta = translations.find(t => t.id === translationId) ?? {
+    id: translationId,
+    name: translationId === 'niv' ? 'New International Version' : translationId.toUpperCase(),
+    abbreviation: translationId.toUpperCase(),
+    language: 'en',
+    copyright: '',
+    provider: ['niv', 'gnt', 'msg'].includes(translationId) ? 'api.bible' : 'local',
+  };
   const bookmarked = isBookmarked(book.id, chapterNum);
 
   // Navigate chapters — save scroll so it can be restored on back
@@ -286,7 +284,6 @@ export default function ChapterReader() {
 
   function handleSetTranslation(id: string) {
     if (id === translationId) { setTranslationDropdownOpen(false); return; }
-    prevTranslationRef.current = translationId;
     scrollBeforeTranslation.current = window.scrollY;
     setTranslationError(null);
     setTranslation(id);

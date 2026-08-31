@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
     email: string;
     preferredName: string;
   } | null,
-  loadBibleData: vi.fn(),
+  loadBibleDataWithStatus: vi.fn(),
   patchBibleData: vi.fn(),
   listPublishedJourneys: vi.fn(),
   listJourneys: vi.fn(),
@@ -30,7 +30,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 }));
 
 vi.mock('@/lib/bible-api', () => ({
-  loadBibleData: mocks.loadBibleData,
+  loadBibleDataWithStatus: mocks.loadBibleDataWithStatus,
   patchBibleData: mocks.patchBibleData,
 }));
 
@@ -43,6 +43,7 @@ vi.mock('@/lib/journeys-api', () => ({
 }));
 
 const emptyBibleData = {
+  translationId: undefined,
   history: [],
   completed: [],
   journeyProgress: {},
@@ -58,6 +59,7 @@ function BibleProbe() {
   const bible = useBible();
   return (
     <>
+      <output data-testid="bible-translation">{bible.translationId}</output>
       <output data-testid="bible-notes">
         {bible.notes.map(note => note.text).join(',')}
       </output>
@@ -84,6 +86,7 @@ beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
   mocks.getDailyRhythmState.mockResolvedValue(null);
+  mocks.loadBibleDataWithStatus.mockResolvedValue({ data: emptyBibleData, status: 'found' });
   mocks.currentUser = {
     id: 'subject-a',
     role: 'user',
@@ -107,9 +110,12 @@ describe('provider state ownership during account switches', () => {
     localStorage.setItem('emmaus_bible_notes', JSON.stringify([
       { ...accountANote, id: 'legacy', text: 'Unowned legacy note' },
     ]));
-    mocks.loadBibleData.mockImplementation((subject: string) => {
+    mocks.loadBibleDataWithStatus.mockImplementation((subject: string) => {
       if (subject === 'subject-a') {
-        return Promise.resolve({ ...emptyBibleData, notes: [accountANote] });
+        return Promise.resolve({
+          data: { ...emptyBibleData, notes: [accountANote] },
+          status: 'found',
+        });
       }
       return new Promise(() => {});
     });
@@ -141,6 +147,92 @@ describe('provider state ownership during account switches', () => {
     expect(mocks.patchBibleData).not.toHaveBeenCalledWith(
       'subject-b',
       expect.objectContaining({ notes: expect.any(Array) }),
+    );
+  });
+
+  it('uses NIV for a new account and records the default only after a confirmed missing cloud record', async () => {
+    mocks.currentUser = {
+      id: 'subject-new',
+      role: 'user',
+      email: 'new@example.test',
+      preferredName: 'New',
+    };
+    mocks.loadBibleDataWithStatus.mockResolvedValue({ data: null, status: 'missing' });
+
+    render(
+      <BibleProvider>
+        <BibleProbe />
+      </BibleProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('bible-translation')).toHaveTextContent('niv');
+    });
+    expect(mocks.patchBibleData).toHaveBeenCalledWith(
+      'subject-new',
+      expect.objectContaining({ translationId: 'niv' }),
+    );
+  });
+
+  it('lets a confirmed cloud preference win over a stale account-scoped local cache', async () => {
+    mocks.currentUser = {
+      id: 'subject-cloud',
+      role: 'user',
+      email: 'cloud@example.test',
+      preferredName: 'Cloud',
+    };
+    localStorage.setItem(
+      accountStorageKey('emmaus_bible_translation', 'subject-cloud'),
+      JSON.stringify('bsb'),
+    );
+    mocks.loadBibleDataWithStatus.mockResolvedValue({
+      data: { ...emptyBibleData, translationId: 'niv' },
+      status: 'found',
+    });
+
+    render(
+      <BibleProvider>
+        <BibleProbe />
+      </BibleProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('bible-translation')).toHaveTextContent('niv');
+    });
+    expect(mocks.patchBibleData).not.toHaveBeenCalledWith(
+      'subject-cloud',
+      expect.objectContaining({ translationId: 'bsb' }),
+    );
+  });
+
+  it('treats a legacy account-scoped BSB value as explicit when the cloud record has no preference', async () => {
+    mocks.currentUser = {
+      id: 'subject-legacy',
+      role: 'user',
+      email: 'legacy@example.test',
+      preferredName: 'Legacy',
+    };
+    localStorage.setItem(
+      accountStorageKey('emmaus_bible_translation', 'subject-legacy'),
+      JSON.stringify('bsb'),
+    );
+    mocks.loadBibleDataWithStatus.mockResolvedValue({
+      data: emptyBibleData,
+      status: 'found',
+    });
+
+    render(
+      <BibleProvider>
+        <BibleProbe />
+      </BibleProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('bible-translation')).toHaveTextContent('bsb');
+    });
+    expect(mocks.patchBibleData).toHaveBeenCalledWith(
+      'subject-legacy',
+      expect.objectContaining({ translationId: 'bsb' }),
     );
   });
 

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
-import { loadBibleData, patchBibleData } from '../lib/bible-api';
+import { loadBibleDataWithStatus, patchBibleData } from '../lib/bible-api';
 import { accountStorageKey } from '../lib/account-storage';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -47,6 +47,12 @@ const LS = {
 } as const;
 
 const HISTORY_MAX = 20;
+export const DEFAULT_BIBLE_TRANSLATION = 'niv';
+const VALID_TRANSLATION_IDS = new Set(['bsb', 'asv', 'kjv', 'niv', 'gnt', 'msg']);
+
+function normalizeTranslation(value: unknown): string | null {
+  return typeof value === 'string' && VALID_TRANSLATION_IDS.has(value) ? value : null;
+}
 
 function load<T>(key: string, fallback: T, subject: string): T {
   try {
@@ -54,6 +60,16 @@ function load<T>(key: string, fallback: T, subject: string): T {
     return s ? JSON.parse(s) : fallback;
   }
   catch { return fallback; }
+}
+
+function loadStoredTranslation(subject: string): string | undefined {
+  try {
+    const raw = localStorage.getItem(accountStorageKey(LS.translation, subject));
+    if (raw === null) return undefined;
+    return normalizeTranslation(JSON.parse(raw)) ?? undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function save(key: string, value: unknown, subject: string) {
@@ -150,7 +166,7 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const userIdRef = useRef<string | null>(null);
 
-  const [translationId, setTranslationIdState] = useState<string>('bsb');
+   const [translationId, setTranslationIdState] = useState<string>(DEFAULT_BIBLE_TRANSLATION);
   const [readingHistory, setReadingHistory] = useState<ReadingHistoryEntry[]>([]);
   const [completedChapters, setCompletedChapters] = useState<Set<string>>(new Set());
   const [journeyProgress, setJourneyProgress] = useState<Record<string, BibleJourneyProgress>>({});
@@ -194,7 +210,7 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
 
     // Blank all personal state before the next account's request starts.
     setLoadedSubject(null);
-    setTranslationIdState('bsb');
+    setTranslationIdState(DEFAULT_BIBLE_TRANSLATION);
     setReadingHistory([]);
     setCompletedChapters(new Set());
     setJourneyProgress({});
@@ -212,8 +228,10 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
     }
     const accountSubject = subject;
 
-    // Translation is a preference cache, but it is still account-owned.
-    setTranslationIdState(load(LS.translation, 'bsb', accountSubject));
+    // Translation is an account-owned cache until the cloud record resolves.
+    // A present BSB value is intentional; only an absent value gets NIV.
+    const cachedTranslation = loadStoredTranslation(accountSubject);
+    setTranslationIdState(cachedTranslation ?? DEFAULT_BIBLE_TRANSLATION);
 
     async function loadData() {
       const cached = {
@@ -227,13 +245,18 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
         reflections: load<ChapterReflection[]>(LS.reflections, [], accountSubject),
         prayers: load<PersonalPrayer[]>(LS.prayers, [], accountSubject),
       };
-      const cloud = await loadBibleData(accountSubject).catch(error => {
+      const cloudResult = await loadBibleDataWithStatus(accountSubject).catch(error => {
         console.error('[BibleContext] Cloud load failed:', error);
-        return null;
+        return { data: null, status: 'unavailable' as const };
       });
+      const cloud = cloudResult.data;
       if (cancelled || userIdRef.current !== accountSubject) return;
 
       const owned = cloud ?? cached;
+      const cloudTranslation = normalizeTranslation(cloud?.translationId);
+      const selectedTranslation =
+        cloudTranslation ?? cachedTranslation ?? DEFAULT_BIBLE_TRANSLATION;
+      setTranslationIdState(selectedTranslation);
       const history = owned.history ?? [];
       const completed = owned.completed ?? [];
       const journeyProg = owned.journeyProgress ?? {};
@@ -254,6 +277,20 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
         save(LS.notes, nts, accountSubject);
         save(LS.reflections, refls, accountSubject);
         save(LS.prayers, prays, accountSubject);
+        save(LS.translation, selectedTranslation, accountSubject);
+        // Legacy cloud records may have no preference field. Preserve an
+        // account-scoped explicit choice, otherwise persist the new NIV default.
+        if (!cloudTranslation) {
+          void patchBibleData(accountSubject, { translationId: selectedTranslation });
+        }
+      } else if (cloudResult.status === 'missing') {
+        // First authenticated load: migrate owned offline data atomically.
+        // This is deliberately skipped when the GET was unavailable.
+        save(LS.translation, selectedTranslation, accountSubject);
+        void patchBibleData(accountSubject, {
+          ...cached,
+          translationId: selectedTranslation,
+        });
       }
 
       setReadingHistory(history);
@@ -277,9 +314,14 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
   // ─── Reading history ────────────────────────────────────────────────────────
 
   const setTranslation = useCallback((id: string) => {
-    setTranslationIdState(id);
+    const next = normalizeTranslation(id);
+    if (!next) return;
+    setTranslationIdState(next);
     const subject = userIdRef.current;
-    if (subject) save(LS.translation, id, subject);
+    if (subject) {
+      save(LS.translation, next, subject);
+      void patchBibleData(subject, { translationId: next });
+    }
   }, []);
 
   const markChapterOpened = useCallback((entry: Omit<ReadingHistoryEntry, 'openedAt'>) => {
@@ -464,7 +506,7 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <BibleContext.Provider value={{
-      translationId: ownsVisibleState ? translationId : 'bsb', setTranslation,
+       translationId: ownsVisibleState ? translationId : DEFAULT_BIBLE_TRANSLATION, setTranslation,
       readingHistory: visibleHistory, lastRead, markChapterOpened,
       completedChapters: visibleCompleted, markChapterComplete,
       isChapterComplete: ownsVisibleState ? isChapterComplete : () => false,
