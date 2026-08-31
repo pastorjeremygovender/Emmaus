@@ -386,6 +386,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
     ): Promise<api.CompleteStepResponse> => {
       if (!user?.id) throw new Error('Not signed in');
       const subject = user.id;
+      const previousProgress = progress[journeyId];
 
       const isDailyRhythm = journeys.find(j => j.id === journeyId)?.journeyType === 'daily-rhythm'
         || journeys.find(j => j.id === journeyId)?.journeyType === 'core';
@@ -426,6 +427,9 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         const completion = await api.completeStep(journeyId, day, reflectionText);
         if (activeSubjectRef.current !== subject) return completion;
         const prog = completion.progress;
+        if (!prog || prog.journeyId !== journeyId) {
+          throw new Error('The server returned an invalid completion');
+        }
         setProgress(p => ({ ...p, [journeyId]: prog }));
         if (isDailyRhythm) {
           if (activeSubjectRef.current === subject) {
@@ -441,6 +445,17 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         return completion;
       } catch (err) {
         console.error('[Emmaus] completeStep server sync failed:', err);
+        if (activeSubjectRef.current === subject) {
+          // The progress update above is optimistic for regular walks. Do not
+          // let a failed progress/reflection write make the UI look complete;
+          // restore the pre-submit snapshot so the member can retry.
+          setProgress(p => {
+            const next = { ...p };
+            if (previousProgress) next[journeyId] = previousProgress;
+            else delete next[journeyId];
+            return next;
+          });
+        }
         throw err;
       }
     },

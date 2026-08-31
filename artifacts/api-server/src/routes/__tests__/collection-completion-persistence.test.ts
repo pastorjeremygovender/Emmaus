@@ -153,6 +153,15 @@ async function getAllProgress(userId: string): Promise<Record<string, FrontendPr
   return (JSON.parse(res.body) as { progress: Record<string, FrontendProgress> }).progress;
 }
 
+async function getJourneyReflections(userId: string, journeyId: string): Promise<Record<string, string>> {
+  const res = await request({
+    path: `/api/journeys/${encodeURIComponent(journeyId)}/progress/reflections`,
+    userId,
+  });
+  assert.equal(res.status, 200, `GET reflections failed (${res.status}): ${res.body}`);
+  return (JSON.parse(res.body) as { reflections: Record<string, string> }).reflections;
+}
+
 async function fetchNextSteps(userId: string): Promise<NextStepsResponse> {
   const res = await request({ path: "/api/next-steps", userId });
   assert.equal(res.status, 200, `GET /api/next-steps failed (${res.status}): ${res.body}`);
@@ -521,5 +530,38 @@ describe("C — Repeated GET /journeys/progress reloads return stable completedD
         `${label}: completedDays.length (${p.completedDays.length}) < ${STEPS_PER_WALK}`,
       );
     }
+  });
+});
+
+// ─── D. Completion reflections are durable and retry-safe ──────────────────────
+describe("D — Completion saves persist the reflection with idempotent retries", () => {
+  it("writes the reflection and updates it without creating a second completion record", async () => {
+    const first = await request({
+      method: "POST",
+      path: `/api/journeys/${walkId1}/progress/complete-step`,
+      userId: MEMBER_USER_ID,
+      body: { day: 1, reflectionText: "First durable reflection" },
+    });
+    assert.equal(first.status, 200, `First completion retry failed: ${first.body}`);
+
+    const second = await request({
+      method: "POST",
+      path: `/api/journeys/${walkId1}/progress/complete-step`,
+      userId: MEMBER_USER_ID,
+      body: { day: 1, reflectionText: "Updated durable reflection" },
+    });
+    assert.equal(second.status, 200, `Second completion retry failed: ${second.body}`);
+
+    const reflections = await getJourneyReflections(MEMBER_USER_ID, walkId1);
+    assert.deepEqual(
+      reflections[`${walkId1}-1`],
+      "Updated durable reflection",
+      "A retry should update the stable reflection identity rather than lose it",
+    );
+    assert.equal(
+      Object.keys(reflections).filter(key => key === `${walkId1}-1`).length,
+      1,
+      "Repeated completion should expose one reflection for the stable journey/day identity",
+    );
   });
 });

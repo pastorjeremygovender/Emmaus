@@ -1254,11 +1254,17 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   const [completeSaveStatus, setCompleteSaveStatus] = useState<SaveStatus>('idle');
 
   const autosaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const stepSaveQueues = useRef<Record<number, Promise<Step>>>({});
+  const stepEditVersions = useRef<Record<number, number>>({});
   const hasUnsaved = stepsWithBlocks.some(s => s.isDirty);
 
   // Keep a ref to stepsWithBlocks so autosave callbacks always read the latest state.
   const stepsRef = useRef<StepWithBlocks[]>([]);
   useEffect(() => { stepsRef.current = stepsWithBlocks; }, [stepsWithBlocks]);
+  const completeNextJourneyIdRef = useRef(completeNextJourneyId);
+  const completeMessageRef = useRef(completeMessage);
+  completeNextJourneyIdRef.current = completeNextJourneyId;
+  completeMessageRef.current = completeMessage;
 
   // Sync introContent whenever the journey record is (re-)loaded from the server.
   useEffect(() => {
@@ -1296,7 +1302,8 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
       }
       return { ...step, ...canonicalFromBlocks, blocks, isDirty: false };
     });
-    setStepsWithBlocks(initialised);
+     stepsRef.current = initialised;
+     setStepsWithBlocks(initialised);
   }, [rawSteps.length]);
 
   useEffect(() => {
@@ -1311,46 +1318,92 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
 
   // ─── Autosave ─────────────────────────────────────────────────────────────
 
-  const saveStep = useCallback(async (day: number) => {
-    const stepData = stepsRef.current.find(s => s.day === day);
-    if (!stepData) return;
-    setSaveStatus(s => ({ ...s, [day]: 'saving' }));
-    try {
-      // Canonical fields are edited directly in StepFieldEditor.
-      // Regenerate blocks from canonical so the right-panel preview stays in sync.
-      const blocks = stepToBlocks(stepData) as unknown as Array<Record<string, unknown>>;
-      await updateStep({
-        ...stepData,
-        blocks,
-      } as Step & { blocks: typeof blocks });
-      setStepsWithBlocks(ss => ss.map(s => s.day === day ? { ...s, isDirty: false } : s));
-      setSaveStatus(s => ({ ...s, [day]: 'saved' }));
-      setTimeout(() => setSaveStatus(s => ({ ...s, [day]: 'idle' })), 2500);
-    } catch {
-      setSaveStatus(s => ({ ...s, [day]: 'error' }));
+  const saveStep = useCallback((day: number): Promise<Step> => {
+    // An explicit save cancels a pending debounce. If an autosave is already
+    // running, it remains in the queue and the latest edit is saved after it.
+    if (autosaveTimers.current[day]) {
+      clearTimeout(autosaveTimers.current[day]);
+      delete autosaveTimers.current[day];
     }
-  }, [updateStep]);
+
+    const previous = stepSaveQueues.current[day];
+    const task = (previous ?? Promise.resolve()).catch(() => undefined).then(async () => {
+      setSaveStatus(s => ({ ...s, [day]: 'saving' }));
+
+      // Keep going when typing happens while the request is in flight. This
+      // makes the returned promise mean "the latest snapshot is durable", not
+      // merely "an older snapshot finished".
+      while (true) {
+        const stepData = stepsRef.current.find(s => s.day === day);
+        if (!stepData) throw new Error(`Step ${day} is not loaded`);
+        const editVersion = stepEditVersions.current[day] ?? 0;
+        const blocks = stepToBlocks(stepData) as unknown as Array<Record<string, unknown>>;
+        const updated = await updateStep({
+          ...stepData,
+          blocks,
+        } as Step & { blocks: typeof blocks });
+
+        if (!updated || updated.journeyId !== journeyId || updated.day !== day) {
+          throw new Error('The server returned an invalid saved step');
+        }
+
+        if ((stepEditVersions.current[day] ?? 0) !== editVersion) {
+          continue;
+        }
+
+        setStepsWithBlocks(current => {
+          const next = current.map(s => s.day === day
+            ? { ...s, ...updated, blocks: stepToBlocks({ ...s, ...updated }), isDirty: false }
+            : s);
+          stepsRef.current = next;
+          return next;
+        });
+        setSaveStatus(s => ({ ...s, [day]: 'saved' }));
+        setTimeout(() => setSaveStatus(s => ({ ...s, [day]: 'idle' })), 2500);
+        return updated;
+      }
+    }).catch(err => {
+      setSaveStatus(s => ({ ...s, [day]: 'error' }));
+      throw err;
+    });
+
+    stepSaveQueues.current[day] = task;
+    task.then(
+      () => { if (stepSaveQueues.current[day] === task) delete stepSaveQueues.current[day]; },
+      () => { if (stepSaveQueues.current[day] === task) delete stepSaveQueues.current[day]; },
+    );
+    return task;
+  }, [journeyId, updateStep]);
 
   const scheduleSave = useCallback((day: number) => {
     if (autosaveTimers.current[day]) clearTimeout(autosaveTimers.current[day]);
-    autosaveTimers.current[day] = setTimeout(() => saveStep(day), 1500);
+    autosaveTimers.current[day] = setTimeout(() => {
+      delete autosaveTimers.current[day];
+      void saveStep(day).catch(() => undefined);
+    }, 1500);
   }, [saveStep]);
 
   // ─── Block / step changes ─────────────────────────────────────────────────
 
   const handleBlocksChange = useCallback((day: number, blocks: Block[]) => {
-    setStepsWithBlocks(ss => ss.map(s => s.day === day ? { ...s, blocks, isDirty: true } : s));
+    stepEditVersions.current[day] = (stepEditVersions.current[day] ?? 0) + 1;
+    const next = stepsRef.current.map(s => s.day === day ? { ...s, blocks, isDirty: true } : s);
+    stepsRef.current = next;
+    setStepsWithBlocks(next);
     scheduleSave(day);
   }, [scheduleSave]);
 
   const handleStepMetaChange = useCallback((day: number, changes: Partial<Step>) => {
-    setStepsWithBlocks(ss => ss.map(s => {
+    stepEditVersions.current[day] = (stepEditVersions.current[day] ?? 0) + 1;
+    const next = stepsRef.current.map(s => {
       if (s.day !== day) return s;
       const updated = { ...s, ...changes, isDirty: true } as StepWithBlocks;
       // Keep blocks in sync with canonical fields so the right-panel preview stays live.
       updated.blocks = stepToBlocks(updated);
       return updated;
-    }));
+    });
+    stepsRef.current = next;
+    setStepsWithBlocks(next);
     scheduleSave(day);
   }, [scheduleSave]);
 
@@ -1399,7 +1452,11 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
       closingText: '',
     });
     const blocks: Block[] = [createBlock('paragraph')];
-    setStepsWithBlocks(ss => [...ss, { ...newStep, blocks, isDirty: false }]);
+    setStepsWithBlocks(ss => {
+      const next = [...ss, { ...newStep, blocks, isDirty: false }];
+      stepsRef.current = next;
+      return next;
+    });
     setSelectedView(sectionDay);
     setTimeout(() => titleInputRef.current?.focus(), 100);
   }, [journey, journeyId, addStep]);
@@ -1489,27 +1546,38 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   // Step fields are also kept in sync by the background autosave, but the
   // explicit Save Draft ensures both sides flush together.
   const handleSaveComplete = useCallback(async () => {
-    if (!journey) return;
+    if (!journey) return false;
     setCompleteSaveStatus('saving');
     try {
       // Resolve the actual completion step's day dynamically — do not hardcode 6.
       // (A hardcoded 6 only works for 5-day walks; longer walks have a higher day.)
       const completionStepDay = stepsRef.current.find(s => s.isCompletionStep)?.day ?? 6;
-      await Promise.all([
+      const [savedStep, savedJourney] = await Promise.all([
         saveStep(completionStepDay),
         updateJourney({
           ...journey,
-          nextJourneyId: completeNextJourneyId || undefined,
-          completionMessage: completeMessage || undefined,
+          nextJourneyId: completeNextJourneyIdRef.current || undefined,
+          completionMessage: completeMessageRef.current || undefined,
         } as Journey),
       ]);
+      if (
+        !savedStep ||
+        savedStep.journeyId !== journeyId ||
+        savedStep.day !== completionStepDay ||
+        !savedJourney ||
+        savedJourney.id !== journeyId
+      ) {
+        throw new Error('The server did not confirm the complete section save');
+      }
       setCompleteSaveStatus('saved');
       setTimeout(() => setCompleteSaveStatus('idle'), 2500);
+      return true;
     } catch {
       setCompleteSaveStatus('error');
       setTimeout(() => setCompleteSaveStatus('idle'), 3000);
+      return false;
     }
-  }, [journey, completeNextJourneyId, completeMessage, saveStep, updateJourney]);
+  }, [journey, journeyId, saveStep, updateJourney]);
 
   const handleSaveDraftJourney = useCallback(async () => {
     if (!journey) return;
@@ -1534,6 +1602,16 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
     setJourneySuccessMsg('');
     setJourneyErrorMsg('');
     try {
+      // Publishing navigates away from the editor. Flush all dirty step
+      // snapshots first so a pending completion autosave cannot be discarded.
+      const dirtySteps = stepsRef.current
+        .filter(s => s.isDirty && !s.isCompletionStep)
+        .map(s => saveStep(s.day));
+      await Promise.all(dirtySteps);
+      if (stepsRef.current.some(s => s.isCompletionStep)) {
+        const completionSaved = await handleSaveComplete();
+        if (!completionSaved) throw new Error('Walk Complete could not be saved');
+      }
       await updateJourney({ ...journey, ...journeyForm, status: 'Published', notifyMembers } as unknown as Journey);
       setJourneySaving(null);
       toast.success('Walk published successfully.');
@@ -1543,7 +1621,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
       setTimeout(() => setJourneyErrorMsg(''), 4000);
       setJourneySaving(null);
     }
-  }, [journey, journeyForm, updateJourney, onBack, notifyMembers]);
+  }, [journey, journeyForm, saveStep, handleSaveComplete, updateJourney, onBack, notifyMembers]);
 
   const handleUnpublishJourney = useCallback(async () => {
     if (!journey) return;

@@ -1572,22 +1572,56 @@ export async function completeStep(
   const displayOrigin = authoritativeDisplayOrigin(journey);
   const existing = await getProgress(userId, journeyId);
 
-  let prog: FrontendProgress;
-  if (existing) {
-    if (isDailyRhythm && day !== existing.currentDay) {
+  if (!existing) {
+    await startJourney(userId, journeyId);
+    return completeStep(userId, journeyId, day, reflectionText);
+  }
+
+  // Progress and reflection are one completion operation. Lock the progress
+  // row so repeated taps/retries serialize, and keep both writes (plus the
+  // Daily Rhythm ledger update) in the same transaction. A reflection failure
+  // must not leave the member looking complete without their reflection.
+  return db.transaction(async (tx) => {
+    // Drizzle's regular select does not acquire a row lock. Take it explicitly
+    // before reading the progress snapshot so two rapid retries cannot derive
+    // different completedDays arrays from the same row.
+    await tx.execute(sql`
+      SELECT id
+        FROM user_journey_progress
+       WHERE user_id = ${userId}
+         AND journey_id = ${journeyId}
+       ORDER BY updated_at DESC
+       LIMIT 1
+       FOR UPDATE
+    `);
+    const lockedRows = await tx
+      .select()
+      .from(userJourneyProgressTable)
+      .where(and(
+        eq(userJourneyProgressTable.userId, userId),
+        eq(userJourneyProgressTable.journeyId, journeyId),
+      ))
+      .orderBy(desc(userJourneyProgressTable.updatedAt))
+      .limit(1);
+    const lockedProgress = lockedRows[0];
+    if (!lockedProgress) {
+      throw new Error("Progress record disappeared; please try again");
+    }
+
+    if (isDailyRhythm && day !== lockedProgress.currentDay) {
       throw new Error("That Daily Rhythm step is locked");
     }
-    const completedDays = [...new Set([...existing.completedDays, day])];
+    const completedDays = [...new Set([...(lockedProgress.completedDays ?? []), day])];
     const newCurrentDay = isDailyRhythm
-      ? existing.currentDay
-      : Math.max(existing.currentDay, day + 1);
-    const rows = await db
+      ? lockedProgress.currentDay
+      : Math.max(lockedProgress.currentDay, day + 1);
+    const rows = await tx
       .update(userJourneyProgressTable)
       .set({
         completedDays,
         currentDay: newCurrentDay,
         lastCompletedAt: now,
-        ...(isDailyRhythm ? { dailyRhythmUnlockAt: existing.dailyRhythmUnlockAt ? new Date(existing.dailyRhythmUnlockAt) : now } : {}),
+        ...(isDailyRhythm ? { dailyRhythmUnlockAt: lockedProgress.dailyRhythmUnlockAt ? new Date(lockedProgress.dailyRhythmUnlockAt) : now } : {}),
         // Completing/reviewing a step is meaningful engagement. It restores a
         // previously hidden or completed item to the active Today's Steps list.
         status: "active",
@@ -1595,55 +1629,51 @@ export async function completeStep(
         ...(displayOrigin ? { displayOrigin } : {}),
         updatedAt: now,
       })
-      .where(and(
-        eq(userJourneyProgressTable.userId, userId),
-        eq(userJourneyProgressTable.journeyId, journeyId)
-      ))
+      .where(eq(userJourneyProgressTable.id, lockedProgress.id))
       .returning();
-    prog = toFrontendProgress(rows[0]);
-  } else {
-    await startJourney(userId, journeyId);
-    return completeStep(userId, journeyId, day, reflectionText);
-  }
+    const prog = rows[0] ? toFrontendProgress(rows[0]) : null;
+    if (!prog) throw new Error("Completion was not committed; please try again");
 
-  if (reflectionText?.trim()) {
-    const existingRef = await db
-      .select()
-      .from(stepReflectionsTable)
-      .where(and(
-        eq(stepReflectionsTable.userId, userId),
-        eq(stepReflectionsTable.journeyId, journeyId),
-        eq(stepReflectionsTable.day, day),
-      ));
-    if (existingRef[0]) {
-      await db.update(stepReflectionsTable)
-        .set({ reflection: reflectionText, updatedAt: now })
-        .where(eq(stepReflectionsTable.id, existingRef[0].id));
-    } else {
-      await db.insert(stepReflectionsTable).values({
-        userId, journeyId, day,
-        reflection: reflectionText,
-        createdAt: now, updatedAt: now,
-      });
+    if (reflectionText?.trim()) {
+      const existingRef = await tx
+        .select()
+        .from(stepReflectionsTable)
+        .where(and(
+          eq(stepReflectionsTable.userId, userId),
+          eq(stepReflectionsTable.journeyId, journeyId),
+          eq(stepReflectionsTable.day, day),
+        ));
+      if (existingRef[0]) {
+        await tx.update(stepReflectionsTable)
+          .set({ reflection: reflectionText, updatedAt: now })
+          .where(eq(stepReflectionsTable.id, existingRef[0].id));
+      } else {
+        await tx.insert(stepReflectionsTable).values({
+          userId, journeyId, day,
+          reflection: reflectionText,
+          createdAt: now, updatedAt: now,
+        });
+      }
     }
-  }
 
-  if (isDailyRhythm) {
-    const timezone = validTimezone(prog.dailyRhythmTimezone);
-    const localDate = calendarDateInTimezone(now, timezone);
-    await pool.query(
-      `UPDATE daily_rhythm_opening_ledger
-          SET completed_today = true,
-              state = 'COMPLETED',
-              destination = '/walk',
-              reason = 'daily_rhythm_completed',
-              updated_at = $1
-        WHERE user_id = $2 AND journey_id = $3 AND local_date = $4`,
-      [now, userId, journeyId, localDate],
-    );
-  }
+    if (isDailyRhythm) {
+      const timezone = validTimezone(prog.dailyRhythmTimezone);
+      const localDate = calendarDateInTimezone(now, timezone);
+      await tx.execute(sql`
+        UPDATE daily_rhythm_opening_ledger
+           SET completed_today = true,
+               state = 'COMPLETED',
+               destination = '/walk',
+               reason = 'daily_rhythm_completed',
+               updated_at = ${now}
+         WHERE user_id = ${userId}
+           AND journey_id = ${journeyId}
+           AND local_date = ${localDate}
+      `);
+    }
 
-  return prog;
+    return prog;
+  });
 }
 
 export async function getReflections(userId: string): Promise<Record<string, string>> {

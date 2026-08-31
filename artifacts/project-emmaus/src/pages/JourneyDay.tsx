@@ -112,6 +112,8 @@ export default function JourneyDay() {
 
   const [reflection, setReflection] = useState('');
   const [isCompleting, setIsCompleting] = useState(false);
+  const [isSavingCompletion, setIsSavingCompletion] = useState(false);
+  const [completionError, setCompletionError] = useState('');
   const [showSharePrompt, setShowSharePrompt] = useState(false);
   const [sharedRoomId, setSharedRoomId] = useState<string | null>(null);
   const [sharingDone, setSharingDone] = useState(false);
@@ -249,24 +251,38 @@ export default function JourneyDay() {
 
   const reflectionKey = `${journeyId}-${day}`;
 
-  const handleComplete = () => {
-    // Daily Rhythm: complete and navigate directly to Walk (no intermediate screen)
-    if (isDailyRhythmJourney) {
-      completeStep(journey.id, day, '');
-      setLocation('/walk');
-      return;
-    }
-    completeStep(journey.id, day, reflection);
-    if (reflection.trim() && activeRoomsForJourney.length > 0) {
-      // Show reflection-sharing prompt first; the useEffect above navigates to
-      // Walk Complete (final step) or shows the lesson card (non-final) after.
-      setShowSharePrompt(true);
-      setIsCompleting(true);
-    } else if (isFinalStep) {
-      // Final step, no reflection to share — go straight to Walk Complete.
-      setLocation(walkCompleteUrl);
-    } else {
-      setIsCompleting(true);
+  const handleComplete = async () => {
+    if (isSavingCompletion) return;
+    setCompletionError('');
+    setIsSavingCompletion(true);
+    try {
+      // Do not show the completion result or leave the page until the server
+      // has committed both progress and the optional reflection.
+      await completeStep(journey.id, day, isDailyRhythmJourney ? '' : reflection);
+
+      // Daily Rhythm: complete and navigate directly to Walk (no intermediate
+      // screen), but only after the durable completion response arrives.
+      if (isDailyRhythmJourney) {
+        setLocation('/walk');
+        return;
+      }
+
+      if (reflection.trim() && activeRoomsForJourney.length > 0) {
+        // Show reflection-sharing prompt first; the useEffect above navigates to
+        // Walk Complete (final step) or shows the lesson card after.
+        setShowSharePrompt(true);
+        setIsCompleting(true);
+      } else if (isFinalStep) {
+        // Final step, no reflection to share — go straight to Walk Complete.
+        setLocation(walkCompleteUrl);
+      } else {
+        setIsCompleting(true);
+      }
+    } catch (error) {
+      console.error('[Emmaus] completion could not be saved:', error);
+      setCompletionError('Your progress could not be saved. Please try again.');
+    } finally {
+      setIsSavingCompletion(false);
     }
   };
 
@@ -431,6 +447,15 @@ export default function JourneyDay() {
         </div>
       </header>
 
+      {completionError && (
+        <div
+          role="alert"
+          className="mx-4 mt-4 max-w-[640px] md:mx-auto rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+        >
+          {completionError}
+        </div>
+      )}
+
       {isDailyRhythmJourney ? (
 
         /* ── Daily Rhythm — rendered from shared source of truth ─────────── */
@@ -471,9 +496,10 @@ export default function JourneyDay() {
                 size="lg"
                 className="w-full h-14 text-[17px] rounded-2xl"
                 onClick={handleComplete}
+                disabled={isSavingCompletion}
                 data-testid="button-complete-today"
               >
-                Continue
+                {isSavingCompletion ? 'Saving…' : 'Continue'}
               </Button>
             )
           }
@@ -675,9 +701,10 @@ export default function JourneyDay() {
                 size="lg"
                 className="w-full h-14 text-[17px] rounded-2xl"
                 onClick={handleComplete}
+                disabled={isSavingCompletion}
                 data-testid="button-complete-today"
               >
-                Finished
+                {isSavingCompletion ? 'Saving…' : 'Finished'}
               </Button>
             )}
           </div>
