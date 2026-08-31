@@ -68,6 +68,42 @@ export interface CompanionProgress {
   lastOpenedAt?: string | null;
 }
 
+export const EXPECTED_GENERATED_COMPANION_DAYS = 5;
+
+type CompanionEntryInput = Omit<
+  CompanionEntry,
+  'id' | 'companionId' | 'createdAt' | 'updatedAt' | 'status'
+> & { status?: string };
+
+function assertExpectedCompanionDays(
+  entries: CompanionEntryInput[] | CompanionEntry[],
+  expectedDays: number,
+): void {
+  const dayNumbers = entries.map(entry => entry.dayNumber).sort((a, b) => a - b);
+  const expected = Array.from({ length: expectedDays }, (_, index) => index + 1);
+  if (
+    entries.length !== expectedDays ||
+    dayNumbers.some((day, index) => day !== expected[index])
+  ) {
+    throw new Error(`Companion persistence requires exactly ${expectedDays} entries numbered 1-${expectedDays}.`);
+  }
+}
+
+export async function verifyCompanionPersistence(
+  companionId: string,
+  expectedDays = EXPECTED_GENERATED_COMPANION_DAYS,
+): Promise<Companion & { entries: CompanionEntry[] }> {
+  const companion = await getCompanionById(companionId);
+  if (!companion) {
+    throw new Error("Companion header was not found after persistence.");
+  }
+  if (companion.numberOfDays !== expectedDays) {
+    throw new Error(`Companion saved with ${companion.numberOfDays} days; expected ${expectedDays}.`);
+  }
+  assertExpectedCompanionDays(companion.entries ?? [], expectedDays);
+  return companion;
+}
+
 // ─── Companion CRUD ───────────────────────────────────────────────────────────
 
 export async function createCompanion(data: {
@@ -76,8 +112,17 @@ export async function createCompanion(data: {
   sermonUuid?: string;
   title: string;
   numberOfDays?: number;
-  entries: Array<Omit<CompanionEntry, 'id' | 'companionId' | 'createdAt' | 'updatedAt' | 'status'> & { status?: string }>;
+  entries: CompanionEntryInput[];
+  /** When supplied, the transaction validates the complete generated shape. */
+  expectedDays?: number;
 }): Promise<Companion & { entries: CompanionEntry[] }> {
+  const numberOfDays = data.numberOfDays ?? 5;
+  if (data.expectedDays !== undefined) {
+    if (numberOfDays !== data.expectedDays) {
+      throw new Error(`Companion persistence requires numberOfDays=${data.expectedDays}.`);
+    }
+    assertExpectedCompanionDays(data.entries, data.expectedDays);
+  }
   const id = randomUUID();
   const now = new Date().toISOString();
   const entryRows: CompanionEntry[] = [];
@@ -92,7 +137,7 @@ export async function createCompanion(data: {
     await client.query(
       `INSERT INTO sermon_companion (id, sermon_id, sermon_uuid, title, number_of_days, status, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, 'Draft', NOW(), NOW())`,
-      [id, data.sermonId, data.sermonUuid ?? null, data.title, data.numberOfDays ?? 5]
+      [id, data.sermonId, data.sermonUuid ?? null, data.title, numberOfDays]
     );
 
     for (const entry of data.entries) {
@@ -136,7 +181,118 @@ export async function createCompanion(data: {
     sermonId: data.sermonId,
     title: data.title,
     description: '',
-    numberOfDays: data.numberOfDays ?? 5,
+    numberOfDays,
+    status: 'Draft',
+    isCurrentWeek: false,
+    publishedAt: null,
+    createdAt: now,
+    updatedAt: now,
+    entries: entryRows,
+  };
+}
+
+/**
+ * Atomically replace the generated companion for a sermon.
+ *
+ * The new parent and all children are inserted and verified before the old
+ * companion is removed. Any failure rolls back the whole transaction, leaving
+ * the previous authored companion untouched.
+ */
+export async function replaceCompanionForSermon(data: {
+  sermonId: string;
+  title: string;
+  entries: CompanionEntryInput[];
+  expectedDays?: number;
+}): Promise<Companion & { entries: CompanionEntry[] }> {
+  const expectedDays = data.expectedDays ?? EXPECTED_GENERATED_COMPANION_DAYS;
+  assertExpectedCompanionDays(data.entries, expectedDays);
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  const entryRows: CompanionEntry[] = [];
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const oldRes = await client.query<{ id: string }>(
+      `SELECT id::text
+         FROM sermon_companion
+        WHERE sermon_uuid = $1::uuid OR sermon_id = $1
+        ORDER BY created_at DESC
+        LIMIT 1
+        FOR UPDATE`,
+      [data.sermonId],
+    );
+    const oldId = oldRes.rows[0]?.id ?? null;
+
+    await client.query(
+      `INSERT INTO sermon_companion (id, sermon_id, sermon_uuid, title, number_of_days, status, created_at, updated_at)
+       VALUES ($1, $2, $3::uuid, $4, $5, 'Draft', NOW(), NOW())`,
+      [id, data.sermonId, data.sermonId, data.title, expectedDays],
+    );
+
+    for (const entry of data.entries) {
+      const entryId = randomUUID();
+      await client.query(
+        `INSERT INTO sermon_companion_entry
+           (id, companion_id, day_number, title, scripture_reference, greeting, reflection, prayer, next_step, closing, sermon_link, status, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Draft',NOW(),NOW())`,
+        [entryId, id, entry.dayNumber, entry.title, entry.scriptureReference ?? '',
+         entry.greeting ?? '', entry.reflection ?? '', entry.prayer ?? '',
+         entry.nextStep ?? '', entry.closing ?? '', entry.sermonLink ?? ''],
+      );
+      entryRows.push({
+        id: entryId,
+        companionId: id,
+        dayNumber: entry.dayNumber,
+        title: entry.title,
+        scriptureReference: entry.scriptureReference ?? '',
+        greeting: entry.greeting ?? '',
+        reflection: entry.reflection ?? '',
+        prayer: entry.prayer ?? '',
+        nextStep: entry.nextStep ?? '',
+        closing: entry.closing ?? '',
+        sermonLink: entry.sermonLink ?? '',
+        status: 'Draft',
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    const persisted = await client.query<{ number_of_days: number; count: string }>(
+      `SELECT sc.number_of_days, COUNT(sce.id)::text AS count
+         FROM sermon_companion sc
+         LEFT JOIN sermon_companion_entry sce ON sce.companion_id = sc.id
+        WHERE sc.id = $1
+        GROUP BY sc.id`,
+      [id],
+    );
+    const row = persisted.rows[0];
+    if (!row || Number(row.number_of_days) !== expectedDays || Number(row.count) !== expectedDays) {
+      throw new Error(`Companion persistence verification failed for ${expectedDays} entries.`);
+    }
+
+    if (oldId && oldId !== id) {
+      await client.query("DELETE FROM sermon_companion_progress WHERE companion_id = $1", [oldId]);
+      await client.query("DELETE FROM sermon_companion_entry WHERE companion_id = $1", [oldId]);
+      await client.query("DELETE FROM sermon_companion WHERE id = $1", [oldId]);
+    }
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  return {
+    id,
+    sermonId: data.sermonId,
+    sermonUuid: data.sermonId,
+    title: data.title,
+    description: '',
+    numberOfDays: expectedDays,
     status: 'Draft',
     isCurrentWeek: false,
     publishedAt: null,
@@ -158,6 +314,7 @@ export async function deleteCompanion(companionId: string): Promise<void> {
   const sermonId = linked.rows[0]?.sermon_id ?? null;
   // Entries reference companion via foreign key — delete them first to avoid
   // constraint violations on DBs without ON DELETE CASCADE configured.
+  await pool.query(`DELETE FROM sermon_companion_progress WHERE companion_id = $1`, [companionId]);
   await pool.query(`DELETE FROM sermon_companion_entry WHERE companion_id = $1`, [companionId]);
   await pool.query(`DELETE FROM sermon_companion WHERE id = $1`, [companionId]);
   if (sermonId) await syncKnowledgeIndexForSermon(sermonId);

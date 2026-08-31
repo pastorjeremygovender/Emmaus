@@ -195,6 +195,17 @@ export async function getSermonByLegacyId(legacyId: string): Promise<CanonicalSe
   return result.rows[0] ? rowToSermon(result.rows[0]) : null;
 }
 
+export async function getSermonByYoutubeVideoId(youtubeVideoId: string): Promise<CanonicalSermon | null> {
+  const result = await pool.query(
+    `SELECT * FROM sermons
+     WHERE youtube_video_id = $1
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [youtubeVideoId],
+  );
+  return result.rows[0] ? rowToSermon(result.rows[0]) : null;
+}
+
 /**
  * Returns all published canonical sermons, ordered by most recent first.
  * Includes companion linkage so member clients can route to SermonHome correctly.
