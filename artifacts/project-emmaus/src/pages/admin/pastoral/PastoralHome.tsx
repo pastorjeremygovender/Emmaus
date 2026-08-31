@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import * as api from '@/lib/pastoral-api';
+import { isPastoralRegisterPerson } from '@/lib/pastoral-visibility';
 
 interface Props {
   onOpenPeople: () => void;
@@ -41,7 +42,7 @@ export default function PastoralHome({ onOpenPeople, onOpenAttendance, onOpenPer
       setSignals([...significant, ...followUp, ...attention]
         .sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime())
         .slice(0, 6));
-      setPeople(allPeople);
+      setPeople(allPeople.filter(isPastoralRegisterPerson));
     } catch {
       setError('The pastoral briefing could not be loaded. Your register and attendance remain available.');
     } finally {
