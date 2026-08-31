@@ -104,16 +104,19 @@ export function clearLocalProgressCache(subject: string): void {
 }
 
 /**
- * Allow an admin to replay the first-opening-of-the-day launch without changing
- * progress. The marker is browser-local and account-scoped, so clear every
- * marker in this browser to support testing after switching from an admin
- * account to a member account.
+ * Clear obsolete browser launch state for older builds. The current opening
+ * decision is server-authoritative, so this does not and cannot change whether
+ * today's opening is due.
  */
 export function clearDailyOpenMarkers(): void {
   const keysToRemove: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key?.endsWith(':emmaus_last_opened_v2')) keysToRemove.push(key);
+    if (
+      key?.endsWith(':emmaus_last_opened_v2') ||
+      key?.endsWith(':emmaus_last_opened_v3') ||
+      key?.endsWith(':emmaus_opening_resolved_v1')
+    ) keysToRemove.push(key);
   }
   keysToRemove.forEach(key => localStorage.removeItem(key));
 

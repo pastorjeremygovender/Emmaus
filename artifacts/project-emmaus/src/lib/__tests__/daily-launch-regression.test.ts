@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { accountStorageKey } from '@/lib/account-storage';
 import { resolveDailyOpenRoute } from '@/lib/entry-route';
 
 describe('Daily Rhythm launch contract', () => {
@@ -17,7 +16,7 @@ describe('Daily Rhythm launch contract', () => {
   const journeys = [{ id: 'daily-rhythm-id', journeyType: 'daily-rhythm' }];
   const steps = [{ day: 1 }, { day: 2 }, { day: 3 }, { day: 4 }];
 
-  it('opens the member current step on the first opening of a new day', () => {
+  it('does not make a Daily Rhythm decision from client progress or browser date', () => {
     const route = resolveDailyOpenRoute(
       'member-a',
       journeys,
@@ -25,61 +24,34 @@ describe('Daily Rhythm launch contract', () => {
       () => steps,
     );
 
-    expect(route).toBe('/daily-rhythm/day/3');
-    expect(localStorage.getItem(accountStorageKey('emmaus_last_opened_v3', 'member-a')))
-      .toBe('2026-08-23');
+    expect(route).toBeNull();
+    expect(localStorage.length).toBe(0);
   });
 
-  it('falls back to Today’s Steps on later same-day openings', () => {
-    const key = accountStorageKey('emmaus_last_opened_v3', 'member-a');
-    localStorage.setItem(key, '2026-08-23');
-
+  it('does not let a stale marker change the server-owned result', () => {
+    localStorage.setItem('emmaus_account:member-a:emmaus_last_opened_v3', '2026-08-23');
     expect(resolveDailyOpenRoute('member-a', journeys, {}, () => steps)).toBeNull();
-    expect(localStorage.getItem(key)).toBe('2026-08-23');
+    expect(localStorage.getItem('emmaus_account:member-a:emmaus_last_opened_v3')).toBe('2026-08-23');
   });
 
-  it('opens again on the first entry of the following day', () => {
-    const key = accountStorageKey('emmaus_last_opened_v3', 'member-a');
-    localStorage.setItem(key, '2026-08-23');
+  it('does not create a marker after a compatibility call', () => {
+    resolveDailyOpenRoute('member-a', journeys, {}, () => steps);
     vi.setSystemTime(new Date('2026-08-24T07:00:00'));
-
-    expect(resolveDailyOpenRoute(
-      'member-a',
-      journeys,
-      { 'daily-rhythm-id': { currentDay: 4, completedDays: [1, 2, 3] } },
-      () => steps,
-    )).toBe('/daily-rhythm/day/4');
-    expect(localStorage.getItem(key)).toBe('2026-08-24');
+    expect(localStorage.length).toBe(0);
   });
 
-  it('does not consume the daily opening when auth data is incomplete', () => {
-    const key = accountStorageKey('emmaus_last_opened_v2', 'member-a');
-
+  it('defers missing content and progress handling to the server', () => {
     expect(resolveDailyOpenRoute('member-a', [], {}, () => steps)).toBeNull();
-    expect(localStorage.getItem(key)).toBeNull();
-
     expect(resolveDailyOpenRoute('member-a', journeys, {}, () => [])).toBeNull();
-    expect(localStorage.getItem(key)).toBeNull();
-
-    expect(resolveDailyOpenRoute(
-      'member-a',
-      journeys,
-      { 'daily-rhythm-id': { currentDay: 2 } },
-      () => steps,
-    )).toBe('/daily-rhythm/day/2');
+    expect(localStorage.length).toBe(0);
   });
 
-  it('keeps the opening marker isolated per member', () => {
+  it('does not use another member’s marker', () => {
     localStorage.setItem(
-      accountStorageKey('emmaus_last_opened_v3', 'member-a'),
+      'emmaus_account:member-a:emmaus_last_opened_v3',
       '2026-08-23',
     );
 
-    expect(resolveDailyOpenRoute(
-      'member-b',
-      journeys,
-      { 'daily-rhythm-id': { currentDay: 2 } },
-      () => steps,
-    )).toBe('/daily-rhythm/day/2');
+    expect(resolveDailyOpenRoute('member-b', journeys, {}, () => steps)).toBeNull();
   });
 });

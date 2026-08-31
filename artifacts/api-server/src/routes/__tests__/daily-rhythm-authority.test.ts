@@ -76,11 +76,12 @@ type StartupResponse = {
     dailyRhythmTimezone?: string;
   };
 };
-async function startup(key: string, launch = `test-launch-${key}`) {
+async function startup(key: string, launch = `test-launch-${key}`, timezone?: string) {
   return json<StartupResponse>(
     await request("/api/journeys/daily-rhythm/startup", {
       ...(await auth(key)),
       "X-Emmaus-Startup-Session": launch,
+      ...(timezone ? { "X-Emmaus-Timezone": timezone } : {}),
     }),
   );
 }
@@ -91,7 +92,8 @@ async function ageProgress(key: string) {
   const id = await testUserIdFor(key);
   await pool.query(
     `UPDATE user_journey_progress
-     SET daily_rhythm_unlock_at = $1, last_daily_open_date = NULL
+     SET daily_rhythm_unlock_at = $1, last_daily_open_date = '2000-01-01',
+         daily_rhythm_startup_date = '2000-01-01'
      WHERE user_id = $2 AND journey_id = $3`,
     [yesterday(), id, journeyId],
   );
@@ -199,18 +201,19 @@ describe("Daily Rhythm authority — 25 persisted-state cases", () => {
     for (const path of ["/api/journeys/progress", `/api/journeys/${journeyId}/steps`]) await request(path, await auth(key));
     assert.equal((await startup(key)).currentDay, 1);
   });
-  it("TEST 10 — an incomplete step remains current on a later day", async () => {
+  it("TEST 10 — an incomplete step advances on a later local day", async () => {
     const key = `dr-10-${nonce}`; await reset(key); await startup(key); await ageProgress(key);
-    assert.equal((await startup(key)).currentDay, 1);
+    assert.equal((await startup(key)).currentDay, 2);
   });
-  it("TEST 11 — completed steps advance only on a later calendar date", async () => {
+  it("TEST 11 — completed steps also advance only on a later calendar date", async () => {
     const key = `dr-11-${nonce}`; await reset(key); await startup(key); await complete(key, 1); await ageProgress(key);
     assert.equal((await startup(key)).currentDay, 2);
   });
   it("TEST 12 — Johannesburg date boundary uses the stored authoritative timezone", async () => {
     const key = `dr-12-${nonce}`; await reset(key); await startup(key); await complete(key, 1);
     const id = await testUserIdFor(key);
-    await pool.query("UPDATE user_journey_progress SET daily_rhythm_timezone='Africa/Johannesburg', daily_rhythm_unlock_at=$1, last_daily_open_date=NULL WHERE user_id=$2 AND journey_id=$3", [new Date(Date.now() - 25 * 60 * 60 * 1000), id, journeyId]);
+    await pool.query("UPDATE user_journey_progress SET daily_rhythm_timezone='Africa/Johannesburg', daily_rhythm_unlock_at=$1, last_daily_open_date='2000-01-01', daily_rhythm_startup_date='2000-01-01' WHERE user_id=$2 AND journey_id=$3", [new Date(Date.now() - 25 * 60 * 60 * 1000), id, journeyId]);
+    await pool.query("UPDATE daily_rhythm_opening_ledger SET local_date='2000-01-01' WHERE user_id=$1 AND journey_id=$2", [id, journeyId]);
     assert.equal((await startup(key)).currentDay, 2);
     const row = await pool.query("SELECT daily_rhythm_timezone FROM user_journey_progress WHERE user_id=$1 AND journey_id=$2", [id, journeyId]);
     assert.equal(row.rows[0].daily_rhythm_timezone, "Africa/Johannesburg");
@@ -271,9 +274,9 @@ describe("Daily Rhythm authority — 25 persisted-state cases", () => {
   it("TEST 24 — direct future requests remain locked after a later date", async () => {
     const key = `dr-24-${nonce}`; await reset(key); await startup(key); await ageProgress(key);
     const r = json<{ steps: Array<{ day: number }> }>(await request(`/api/journeys/${journeyId}/steps`, await auth(key)));
-    assert.ok(r.steps.every(s => s.day <= 1)); assert.equal((await complete(key, 3)).status, 409);
+     assert.ok(r.steps.every(s => s.day <= 2)); assert.equal((await complete(key, 3)).status, 409);
   });
-  it("TEST 25 — opening decisions are user-specific and completion-gated", async () => {
+  it("TEST 25 — opening decisions are user-specific and date-gated", async () => {
     const a = `dr-25a-${nonce}`, b = `dr-25b-${nonce}`; await reset(a); await reset(b);
     const firstA = await startup(a), secondA = await startup(a, "test-launch-2"), firstB = await startup(b);
     assert.equal(firstA.firstOpen, true); assert.equal(secondA.firstOpen, false);
@@ -339,6 +342,45 @@ describe("Daily Rhythm authority — 25 persisted-state cases", () => {
     assert.equal(ledger.rows[0].local_date, expectedLocalDate);
     assert.equal(ledger.rows[0].local_timezone, timezone);
   });
+
+  it("TEST 29 — an invalid saved timezone is repaired from the client timezone hint", async () => {
+    const key = `dr-29-${nonce}`; await reset(key);
+    const id = await testUserIdFor(key);
+    await pool.query("UPDATE user_profiles SET timezone=$1 WHERE auth_subject=$2", ["not/a-timezone", id]);
+
+    const timezone = "Europe/London";
+    const result = await startup(key, `timezone-repair-${key}`, timezone);
+    assert.equal(result.localTimezone, timezone);
+
+    const profile = await pool.query("SELECT timezone FROM user_profiles WHERE auth_subject=$1", [id]);
+    assert.equal(profile.rows[0].timezone, timezone);
+    assert.equal((await startup(key, `timezone-repair-2-${key}`)).localTimezone, timezone);
+  });
+
+  it("TEST 30 — legacy next-day rows are repaired without bulk-skipping", async () => {
+    const key = `dr-30-${nonce}`; await reset(key);
+    await startup(key, `legacy-repair-${key}`);
+    const id = await testUserIdFor(key);
+    await pool.query(
+      `UPDATE user_journey_progress
+          SET current_day=7, completed_days='[1]'::jsonb,
+              daily_rhythm_unlock_at=NULL, last_daily_open_date=NULL,
+              daily_rhythm_startup_session=NULL, daily_rhythm_startup_date=NULL,
+              last_completed_at=now() - interval '36 hours'
+        WHERE user_id=$1 AND journey_id=$2`,
+      [id, journeyId],
+    );
+    await pool.query(
+      `UPDATE daily_rhythm_opening_ledger
+          SET local_date='2000-01-01', updated_at=now()
+        WHERE user_id=$1 AND journey_id=$2`,
+      [id, journeyId],
+    );
+
+    const result = await startup(key, `legacy-repair-next-${key}`);
+    assert.equal(result.currentDay, 1);
+    assert.equal(result.assignedDay, 1);
+  });
 });
 
 describe("Daily Rhythm production-like startup lifecycle", () => {
@@ -383,10 +425,10 @@ describe("Daily Rhythm production-like startup lifecycle", () => {
     const rs = await Promise.all([startup(a, `launch-g-a-${a}`), startup(b, `launch-g-b-${b}`)]);
     assert.ok(rs.every(r => r.destination === "/daily-rhythm/day/1" && r.firstOpen));
   });
-  it("TEST H — an incomplete step remains the automatic destination next day", async () => {
+  it("TEST H — an incomplete step becomes the next automatic destination next day", async () => {
     const key = `dr-h-${nonce}`; await reset(key); await startup(key, `launch-h-1-${key}`); await ageProgress(key);
     const r = await startup(key, `launch-h-2-${key}`);
-    assert.equal(r.destination, "/daily-rhythm/day/1");
+    assert.equal(r.destination, "/daily-rhythm/day/2");
   });
   it("TEST I — a completed step unlocks exactly one automatic destination next day", async () => {
     const key = `dr-i-${nonce}`; await reset(key); await startup(key, `launch-i-1-${key}`); await complete(key, 1); await ageProgress(key);

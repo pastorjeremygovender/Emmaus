@@ -7,12 +7,10 @@
  *
  * Rules:
  *
- *   FIRST OPEN OF THE DAY (full cold/warm start, new browser session):
- *     If the member has an active Daily Rhythm step → open it directly.
- *     The member can then navigate anywhere they like.
- *     Call `resolveDailyOpenRoute(progress, getStepsForJourney)` from the
- *     full splash flow in Welcome.tsx.  It returns a route string or null.
- *     It also updates localStorage to record today as opened.
+ *   FIRST OPEN OF THE DAY:
+ *     The server opening endpoint resolves this from the authenticated account
+ *     and its timezone-aware opening ledger. Client-only date markers are not
+ *     authoritative and must never decide whether an opening is due.
  *
  *   SUBSEQUENT OPENS SAME DAY (visiting "/" while splash already shown):
  *     Always → Today's Walk (/walk).
@@ -39,18 +37,6 @@
  *   – Ask Emmaus              : in-memory (conversations are ephemeral by design).
  */
 
-import { accountStorageKey } from '@/lib/account-storage';
-import { localDateKey } from '@/lib/daily-lock';
-
-/**
- * localStorage key that stores the ISO date (YYYY-MM-DD) of the last
- * successful Daily Rhythm auto-open.
- *
- * Key is versioned (_v3) so a stale value from an earlier buggy build
- * (which wrote the date even when navigation failed) is never consulted.
- */
-const LAST_OPENED_KEY = 'emmaus_last_opened_v3';
-
 // ─── Types (minimal duck-typed to avoid circular imports) ─────────────────────
 
 type JourneyLike  = { id: string; journeyType: string };
@@ -60,11 +46,9 @@ type StepLike     = { day: number };
 // ─── resolveDailyOpenRoute ────────────────────────────────────────────────────
 
 /**
- * For the FIRST open of a new day: returns the Daily Rhythm step route the
- * member should be taken to, or null if /walk should be used instead.
- *
- * Also records today's date in localStorage so subsequent calls (same day)
- * return null immediately.
+ * Deprecated compatibility shim. Daily Rhythm launch decisions are now made
+ * by GET /api/journeys/daily-rhythm/startup. Keeping this function as a
+ * no-op prevents older callers from reviving the former localStorage contract.
  *
  * @param journeys           - Published journeys list from JourneyContext
  * @param progress           - Journey progress map (keyed by journey DB id)
@@ -76,64 +60,11 @@ export function resolveDailyOpenRoute(
   progress: Record<string, ProgressLike>,
   getStepsForJourney: (id: string) => StepLike[],
 ): string | null {
-  // Local date as YYYY-MM-DD (respects the member's timezone)
-  const today = localDateKey();
-  const subjectKey = accountStorageKey(LAST_OPENED_KEY, subject);
-  const lastOpened = localStorage.getItem(subjectKey);
-
-  // If this is NOT the first open today, defer to the standard entry route.
-  // NOTE: we only write the key on success, so a failed navigation never
-  // consumes the daily slot.
-  if (lastOpened === today) {
-    console.debug('[DailyOpen] already opened today →', today);
-    return null;
-  }
-
-  // Find the Daily Rhythm journey by type — the same way Walk.tsx does it.
-  // Never use a hardcoded slug: progress is keyed by the journey's DB id.
-  const drJourney = journeys.find(
-    j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core',
-  );
-  if (!drJourney) {
-    console.debug('[DailyOpen] no DR journey found in', journeys.map(j => `${j.id}:${j.journeyType}`));
-    return null;
-  }
-  console.debug('[DailyOpen] DR journey found:', drJourney.id);
-
-  // First open today — try to resume the member's Daily Rhythm step.
-  const drProgress = progress[drJourney.id];
-  // Daily Rhythm is the member's universal daily practice. A reset, a
-  // recovered account, or an older account without a progress row must still
-  // be able to enter Day 1 on the first open; the caller starts the journey
-  // idempotently before navigating.
-  const currentDay = drProgress?.currentDay ?? 1;
-  if (!drProgress) {
-    console.debug('[DailyOpen] no progress for DR journey — starting at Day 1');
-  }
-  console.debug('[DailyOpen] currentDay:', currentDay);
-  if (currentDay < 1) return null;
-
-  // Only navigate if the target day is a real published step (not beyond the end).
-  const steps = getStepsForJourney(drJourney.id);
-  if (steps.length === 0) {
-    console.debug('[DailyOpen] no published steps for DR journey');
-    return null;
-  }
-
-  const dayNumbers = steps.map(s => s.day);
-  const maxDay     = Math.max(...dayNumbers);
-  console.debug('[DailyOpen] steps:', dayNumbers.length, 'maxDay:', maxDay);
-  if (currentDay > maxDay) {
-    console.debug('[DailyOpen] currentDay > maxDay — journey complete');
-    return null; // journey fully complete — go to walk
-  }
-
-  // Mark today ONLY on a successful navigation so a failed attempt
-  // (missing data, journey complete, etc.) never blocks the next open.
-  localStorage.setItem(subjectKey, today);
-  console.debug('[DailyOpen] navigating to /daily-rhythm/day/' + currentDay);
-
-  return `/daily-rhythm/day/${currentDay}`;
+  void subject;
+  void journeys;
+  void progress;
+  void getStepsForJourney;
+  return null;
 }
 
 

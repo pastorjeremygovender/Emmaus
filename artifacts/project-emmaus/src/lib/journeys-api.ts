@@ -262,10 +262,19 @@ export async function getDailyRhythmStartup(options?: { signal?: AbortSignal }):
     path: '/api/journeys/daily-rhythm/startup',
   });
   const requestStartedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  let clientTimezone = 'Africa/Johannesburg';
+  try {
+    clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || clientTimezone;
+  } catch {
+    // The server validates this hint and uses the saved account timezone first.
+  }
   const res = await fetch(getApiUrl('/api/journeys/daily-rhythm/startup'), {
     credentials: 'include',
     cache: 'no-store',
-    headers: { 'X-Emmaus-Startup-Session': startupSession },
+    headers: {
+      'X-Emmaus-Startup-Session': startupSession,
+      'X-Emmaus-Timezone': clientTimezone,
+    },
     signal: options?.signal,
   });
   const body = await res.json().catch(() => null) as Partial<DailyRhythmStartup> & { error?: string };

@@ -247,6 +247,17 @@ function validTimezone(value: unknown): string {
   }
 }
 
+function validTimezoneOrNull(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const candidate = value.trim();
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone: candidate }).format();
+    return candidate;
+  } catch {
+    return null;
+  }
+}
+
 function frontendProgressFromRaw(row: Record<string, unknown>): FrontendProgress {
   return toFrontendProgress({
     journeyId: String(row.journey_id ?? row.journeyId),
@@ -1242,7 +1253,11 @@ export async function getDailyRhythmState(userId: string): Promise<DailyRhythmSt
  * Atomically resolves the member's Daily Rhythm position and records whether
  * this is their first Emmaus opening for the server calendar date.
  */
-export async function getDailyRhythmStartup(userId: string, startupSessionId = ""): Promise<DailyRhythmStartup> {
+export async function getDailyRhythmStartup(
+  userId: string,
+  startupSessionId = "",
+  clientTimezone = "",
+): Promise<DailyRhythmStartup> {
   if (!isDailyRhythmOpeningReady()) {
     throw new Error("DAILY_RHYTHM_OPENING_LEDGER_UNAVAILABLE");
   }
@@ -1275,8 +1290,19 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
        LIMIT 1`,
       [userId],
     );
-    const timezone = validTimezone(profileResult.rows[0]?.timezone);
     const now = new Date();
+    const savedTimezone = validTimezoneOrNull(profileResult.rows[0]?.timezone);
+    const timezone = savedTimezone ?? validTimezone(clientTimezone);
+    if (!savedTimezone && profileResult.rows[0]) {
+      // Keep the fallback durable so later launches and reminders use the same
+      // account-local calendar even if this was a legacy/invalid profile row.
+      await client.query(
+        `UPDATE user_profiles
+            SET timezone = $1, updated_at = $2
+          WHERE auth_subject = $3 OR email = $3`,
+        [timezone, now, userId],
+      );
+    }
     const today = calendarDateInTimezone(now, timezone);
     const requestedSession = startupSessionId.trim().slice(0, 160) || randomUUID();
     mark("profile_timezone", profileStartedAt);
@@ -1310,22 +1336,33 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
     // Repair rows written by the former client/server contract, where
     // current_day meant "next day" and completion immediately advanced it.
     // The durable contract keeps the completed step current until the next
-    // server calendar day.
-    if (!row.daily_rhythm_unlock_at) {
-      const legacyCompleted = Array.isArray(row.completed_days)
-        ? row.completed_days.map(Number).filter(Number.isFinite)
-        : [];
-      const repairedCurrentDay = legacyCompleted.length > 0
-        ? Math.max(1, Math.max(...legacyCompleted))
-        : 1;
+    // server calendar day. Never jump more than one content day while doing
+    // this repair: an old row with current_day=8 and completed_days=[1] is
+    // brought back to Day 1, not silently advanced to Day 8.
+    const legacyCompleted = Array.isArray(row.completed_days)
+      ? row.completed_days.map((day: unknown) => Number(day)).filter((day: number) => Number.isFinite(day) && day >= 1)
+      : [];
+    const maxCompletedDay = legacyCompleted.length > 0 ? Math.max(...legacyCompleted) : 0;
+    const rawCurrentDay = Number(row.current_day || 1);
+    const hasOpeningHistory = Boolean(row.last_daily_open_date || row.daily_rhythm_startup_date);
+    const positionLooksLegacy = maxCompletedDay > 0 && rawCurrentDay > maxCompletedDay;
+    const positionNeedsRepair = positionLooksLegacy && !hasOpeningHistory;
+    const repairedCurrentDay = positionNeedsRepair
+      ? maxCompletedDay
+      : Math.max(1, rawCurrentDay);
+    const missingUnlockMarker = !row.daily_rhythm_unlock_at;
+    if (positionNeedsRepair || missingUnlockMarker) {
       await client.query(
         `UPDATE user_journey_progress
          SET current_day = $1,
-             daily_rhythm_unlock_at = COALESCE(last_completed_at, started_at),
-             daily_rhythm_timezone = COALESCE(NULLIF(daily_rhythm_timezone, ''), 'Africa/Johannesburg'),
+              daily_rhythm_unlock_at = CASE
+                WHEN $5::boolean THEN COALESCE(last_completed_at, started_at, $2::timestamptz)
+                ELSE daily_rhythm_unlock_at
+              END,
+              daily_rhythm_timezone = $3,
              updated_at = $2
-         WHERE id = $3`,
-        [repairedCurrentDay, now, row.id],
+          WHERE id = $4`,
+        [repairedCurrentDay, now, timezone, row.id, missingUnlockMarker],
       );
       row = (await client.query(
         `SELECT * FROM user_journey_progress WHERE id = $1`,
@@ -1343,15 +1380,26 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
       row.daily_rhythm_timezone = storedTimezone;
     }
     mark("progress_lookup_or_create", progressStartedAt);
-    const unlockDate = row.daily_rhythm_unlock_at
-      ? calendarDateInTimezone(new Date(row.daily_rhythm_unlock_at), storedTimezone)
-      : today;
-    const completedDays = Array.isArray(row.completed_days) ? row.completed_days.map(Number) : [];
     const currentDay = Number(row.current_day || 1);
+    const previousLastDailyOpenDate = row.last_daily_open_date ?? null;
 
-    // Only one advancement can happen per server calendar date. The row lock
-    // makes simultaneous tabs/devices serialize on this check.
-    if (completedDays.includes(currentDay) && today > unlockDate) {
+    // Resolve today's ledger before changing the position. The unique
+    // user/date ledger row is the durable acknowledgement that prevents
+    // duplicate tabs or devices from advancing twice on the same local date.
+    const ledgerStartedAt = performance.now();
+    const existingLedger = await client.query(
+      `SELECT * FROM daily_rhythm_opening_ledger
+        WHERE user_id = $1 AND local_date = $2
+        FOR UPDATE`,
+      [userId, today],
+    );
+    let ledger = existingLedger.rows[0];
+    const hasOpenedToday = Boolean(ledger);
+
+    // Opening acknowledgement, not Finished, advances the sequence. A
+    // missed local date still advances only one content day on the next
+    // actual opening; it never catches up multiple days at once.
+    if (!hasOpenedToday && previousLastDailyOpenDate && today > previousLastDailyOpenDate) {
       const next = await client.query(
         `SELECT day FROM journey_steps
          WHERE journey_id = $1 AND status = 'Published'
@@ -1386,14 +1434,6 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
     if (!stepResult.rows[0]) throw new Error("DAILY_RHYTHM_CONTENT_UNAVAILABLE");
     mark("target_step_lookup", targetStepStartedAt);
 
-    const ledgerStartedAt = performance.now();
-    const existingLedger = await client.query(
-      `SELECT * FROM daily_rhythm_opening_ledger
-        WHERE user_id = $1 AND local_date = $2
-        FOR UPDATE`,
-      [userId, today],
-    );
-    let ledger = existingLedger.rows[0];
     const sameLaunch = Boolean(ledger?.launch_session_id) &&
       ledger.launch_session_id === requestedSession;
     let firstOpen = false;
@@ -1427,7 +1467,6 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
     const completedToday = Boolean(ledger.completed_today);
     const state = completedToday ? "COMPLETED" : "OPENING_REQUIRED";
     const destination = completedToday ? "/walk" : String(ledger.destination);
-    const previousLastDailyOpenDate = row.last_daily_open_date ?? null;
     if (firstOpen || row.last_daily_open_date !== today) {
       await client.query(
         `UPDATE user_journey_progress

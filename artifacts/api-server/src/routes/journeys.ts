@@ -92,7 +92,8 @@ router.get("/journeys/daily-rhythm/startup", async (req: Request, res: Response)
   try {
     res.set("Cache-Control", "no-store");
     const startupSession = String(req.get("x-emmaus-startup-session") ?? "").trim();
-    const result = await store.getDailyRhythmStartup(userId, startupSession);
+    const clientTimezone = String(req.get("x-emmaus-timezone") ?? "").trim();
+    const result = await store.getDailyRhythmStartup(userId, startupSession, clientTimezone);
     console.info("[DailyOpen]", {
       traceId: String(req.id ?? "unknown"),
       timestamp: new Date().toISOString(),

@@ -6,7 +6,6 @@ import {
   roomSessionAckKey,
 } from '@/lib/account-storage';
 import { isOnboarded, markOnboarded } from '@/lib/onboarding';
-import { resolveDailyOpenRoute } from '@/lib/entry-route';
 
 const SUBJECT_A = 'subject-a';
 const SUBJECT_B = 'subject-b';
@@ -42,36 +41,10 @@ describe('verified-account browser storage isolation', () => {
     expect(isOnboarded(SUBJECT_B)).toBe(false);
   });
 
-  it('tracks the daily-open marker separately for each account', () => {
-    const journeys = [{ id: 'daily', journeyType: 'daily-rhythm' }];
-    const progress = { daily: { currentDay: 4, completedDays: [1, 2, 3] } };
-    const getSteps = () => [1, 2, 3, 4, 5].map(day => ({ day }));
-
-    expect(resolveDailyOpenRoute(SUBJECT_A, journeys, progress, getSteps))
-      .toBe('/daily-rhythm/day/4');
-    expect(resolveDailyOpenRoute(SUBJECT_A, journeys, progress, getSteps))
-      .toBeNull();
-    expect(resolveDailyOpenRoute(SUBJECT_B, journeys, progress, getSteps))
-      .toBe('/daily-rhythm/day/4');
-  });
-
-  it('opens Daily Rhythm again on the first open of a new local calendar day', () => {
-    const journeys = [{ id: 'daily', journeyType: 'daily-rhythm' }];
-    const progress = { daily: { currentDay: 4, completedDays: [1, 2, 3] } };
-    const getSteps = () => [1, 2, 3, 4, 5].map(day => ({ day }));
-    const dailyOpenKey = accountStorageKey('emmaus_last_opened_v3', SUBJECT_A);
-
-    expect(resolveDailyOpenRoute(SUBJECT_A, journeys, progress, getSteps))
-      .toBe('/daily-rhythm/day/4');
-    expect(localStorage.getItem(dailyOpenKey)).toBe('2026-08-20');
-    expect(resolveDailyOpenRoute(SUBJECT_A, journeys, progress, getSteps))
-      .toBeNull();
-
-    vi.setSystemTime(new Date('2026-08-21T09:00:00'));
-
-    expect(resolveDailyOpenRoute(SUBJECT_A, journeys, progress, getSteps))
-      .toBe('/daily-rhythm/day/4');
-    expect(localStorage.getItem(dailyOpenKey)).toBe('2026-08-21');
+  it('does not treat browser storage as the Daily Rhythm opening authority', () => {
+    localStorage.setItem(accountStorageKey('emmaus_last_opened_v3', SUBJECT_A), '2026-08-20');
+    expect(localStorage.getItem(accountStorageKey('emmaus_last_opened_v3', SUBJECT_A)))
+      .toBe('2026-08-20');
   });
 
   it('retires unowned legacy personal state without deleting owned caches', () => {
