@@ -23,6 +23,12 @@ export type AdminSection =
   | 'today'
   | 'people'
   | 'attendance'
+  // Legacy section identifiers are retained in the type because older,
+  // unmounted admin modules still import AdminNav. They are no longer shown.
+  | 'dashboard'
+  | 'pastoral-dashboard'
+  | 'analytics'
+  | 'workflows'
   | 'content-studio'
   | 'bible-study'
   | 'settings'
@@ -78,6 +84,10 @@ export default function Admin() {
     today: 'Today',
     people: 'People',
     attendance: 'Attendance',
+    dashboard: 'Today',
+    'pastoral-dashboard': 'Today',
+    analytics: 'Today',
+    workflows: 'Today',
     'content-studio': 'Content Studio',
     'bible-study': 'Bible Study',
     settings: 'Settings',
@@ -122,6 +132,8 @@ export default function Admin() {
         return <AuditLog />;
       case 'testing':
         return <Testing />;
+      default:
+        return null;
     }
   };
 
