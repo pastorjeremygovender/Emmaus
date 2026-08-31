@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import * as api from '@/lib/pastoral-api';
 import { useAuth } from '@/contexts/AuthContext';
+import { isPastoralSessionVisible } from '@/lib/pastoral-visibility';
 
 interface Props {
   onOpenRegister: (session: api.MeetingSession) => void;
@@ -101,6 +102,8 @@ export default function Sessions({ onOpenRegister }: Props) {
   const totalAttendees = (s: api.MeetingSession) =>
     (s.presentCount ?? 0) + (s.visitorCount ?? 0) + (s.apologyCount ?? 0) + (s.absentCount ?? 0);
 
+  const visibleSessions = sessions.filter(isPastoralSessionVisible);
+
   return (
     <div className="p-5 max-w-3xl space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -170,7 +173,7 @@ export default function Sessions({ onOpenRegister }: Props) {
         <div className="flex items-center justify-center py-16"><Loader2 size={18} className="animate-spin text-gray-400" /></div>
       ) : error ? (
         <p className="flex items-center gap-2 text-[13px] text-red-600 py-8"><AlertCircle size={14} />{error}</p>
-      ) : sessions.length === 0 ? (
+      ) : visibleSessions.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <CalendarDays size={28} className="mx-auto mb-3 opacity-30" />
           <p className="text-[14px]">No sessions yet.</p>
@@ -178,7 +181,7 @@ export default function Sessions({ onOpenRegister }: Props) {
         </div>
       ) : (
         <div className="space-y-2">
-          {sessions.map(s => (
+          {visibleSessions.map(s => (
             <div key={s.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
               <div className="flex items-center gap-3 px-4 py-3">
                 {/* Left: date block */}
