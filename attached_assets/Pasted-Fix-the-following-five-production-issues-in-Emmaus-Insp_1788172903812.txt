@@ -1,0 +1,171 @@
+Fix the following five production issues in Emmaus. Inspect the existing implementation first and preserve all working behaviour. Do not redesign unrelated screens or reintroduce Daily Rhythm locking.
+
+1. ANDROID APP BLOCKED AS UNSAFE
+
+Google Play Protect displays:
+
+“Unsafe app blocked. This app was built for an older version of Android and doesn’t include the latest privacy protections.”
+
+This is an Android package/configuration issue, not a web-page error.
+
+Fix the Android wrapper/build configuration:
+
+- Update compileSdk and targetSdk to Android 16 / API level 36.
+- Use a compatible current Android Gradle Plugin, Gradle version, Java version and Capacitor/Android wrapper dependencies.
+- Keep minSdk at the lowest currently supported safe level unless migration requires changing it.
+- Review all Android permissions after changing targetSdk.
+- Preserve required camera, microphone, notifications and meeting functionality.
+- Do not request camera permission for an audio-only meeting.
+- Ensure Android 13+ notification permission is requested contextually.
+- Use exported attributes correctly for components containing intent filters.
+- Generate a properly signed release build, not an old development APK.
+- Increment versionCode and versionName.
+- Test installation on current Android without the “built for an older version” Play Protect warning.
+- Confirm app links, PWA/web navigation, authentication, camera, microphone, audio meetings, video meetings and notifications still work.
+
+Do not merely suppress or bypass Play Protect.
+
+2. BIBLE TRANSLATION MUST DEFAULT TO NIV
+
+The user-facing Bible changed from NIV to BSB without the user choosing it. This must not happen.
+
+Required behaviour:
+
+- NIV must be the default Bible translation for every user.
+- Preserve an existing user’s explicitly saved translation preference.
+- If the user has no saved preference, use NIV.
+- Never silently change a user from NIV to BSB.
+- Never use BSB merely because NIV is temporarily slow or unavailable.
+- BSB may remain available only as an explicitly selected translation.
+- Store the selected translation against the user profile/account so it works across devices.
+- Do not allow stale local storage, missing profile values, deployment defaults or fallback logic to overwrite a saved NIV preference.
+- Migrate users who were unintentionally changed to BSB back to NIV, except users who explicitly selected BSB themselves.
+- Preserve the existing licensed/authorised NIV source and integration. Do not substitute unlicensed NIV text.
+
+Add tests for:
+- New user gets NIV.
+- Existing NIV user remains on NIV.
+- Explicit BSB user remains on BSB.
+- Temporary NIV request failure shows a retry/error state and does not silently display BSB.
+
+3. DAILY RHYTHM: DAILY OPEN STATE AND DAY ADVANCEMENT
+
+The following behaviour is already correct and must remain:
+
+- Daily Rhythm automatically opens on the user’s first app opening of each new local calendar day.
+- It is not a lock on the rest of Emmaus.
+- The user may navigate away without tapping Finished.
+- The reminder system exists and otherwise works.
+
+Current bug:
+
+Because users can leave without tapping Finished, the previous day remains the active/open day forever. The next morning Emmaus reloads the same Daily Rhythm day, and the notification system suppresses the reminder because it thinks Daily Rhythm is already open.
+
+Replace the old completion-dependent day advancement with date-based state.
+
+Use separate concepts:
+
+- assignedDay: the Daily Rhythm content day assigned to the user
+- openedDate: the user’s local calendar date on which that assigned day was first opened
+- completedAt: optional; only records that the user tapped Finished
+- lastDailyRhythmActivityAt: optional activity timestamp
+
+Required behaviour:
+
+- The first time Daily Rhythm opens on a local calendar day, immediately and idempotently record that today’s assigned day was opened.
+- Opening it counts as today’s Daily Rhythm having been acknowledged for progression purposes.
+- Tapping Finished may record completion, but it must no longer be required for the next day to become available.
+- When the next local calendar day begins, yesterday’s opened state must not suppress today’s reminder or today’s automatic opening.
+- On the user’s first app launch on the new day, assign/open the next Daily Rhythm day exactly once.
+- If the app is not opened before the configured reminder time, send the reminder for the new day.
+- If today’s Daily Rhythm was already opened today, suppress duplicate reminders for today only.
+- Reopening the app repeatedly on the same day must not advance multiple days.
+- Refreshing, signing out/in, changing screens or using another device must not advance multiple days.
+- Use the user’s saved timezone. If none exists, safely derive and save the device timezone. Do not calculate the daily boundary using UTC alone.
+- Protect the advancement with a database transaction, unique constraint or atomic upsert so concurrent devices cannot create duplicate daily records.
+- Do not mark the spiritual content “completed” merely because it opened. Keep “opened/acknowledged” and “Finished” distinct in reporting, while using opened/acknowledged for next-day progression.
+
+Migration:
+
+- Repair users stuck in a permanently open previous day.
+- Do not skip several Daily Rhythm content days merely because several calendar days passed.
+- Advance at most one content day when the user next returns.
+- Preserve genuine completion history.
+
+Test:
+- First opening Monday opens Day 1 and records Monday.
+- Leaving without Finished does not lock the app.
+- A reminder can trigger Tuesday if the app has not been opened Tuesday.
+- First Tuesday launch opens Day 2.
+- Multiple Tuesday launches still show Day 2.
+- Wednesday opens Day 3.
+- Finishing remains recorded but is not required for progression.
+- Test around midnight and across South African timezone boundaries.
+
+4. SERMON COMPANION DISAPPEARS AFTER FIRST CREATION
+
+Current behaviour:
+
+The first Sermon Companion generation appears successful in Content Studio, but after leaving and reopening the editor the five-day devotional is missing. Generating it a second time makes it persist.
+
+Find and fix the actual first-save persistence failure.
+
+Requirements:
+
+- The first successful generation must save all five devotional days permanently.
+- Await the database write before showing success or allowing navigation.
+- Do not treat optimistic client state as proof of persistence.
+- Save the parent companion and all five child days atomically where possible.
+- If part of the transaction fails, display an error and do not report success.
+- Ensure the generated parent ID is available before inserting child days.
+- Invalidate/refetch the correct Content Studio queries after saving.
+- Reopening the editor must load the saved result from the database, not stale client state.
+- Make retry idempotent so retrying cannot create duplicate companions or days.
+- Add server-side validation confirming exactly the expected generated days were saved.
+- Log actionable errors without exposing private content or credentials.
+
+5. WALK COMPLETION CONTENT DISAPPEARS AFTER FIRST SAVE
+
+The same first-save problem occurs with Walk Complete content: it appears correct, but after navigating away and returning it is gone. Creating it again makes it persist.
+
+Fix it using the same persistence principles:
+
+- The first save must persist permanently.
+- Await and verify the server/database response before showing success.
+- Do not rely solely on local editor state.
+- Use the correct Walk ID after initial Walk creation.
+- Upsert completion content using a stable unique key such as walk_id.
+- Prevent duplicates on retries.
+- Invalidate/refetch the relevant Walk and Content Studio caches.
+- Reopening the Walk editor must load the completion content from the database.
+- Preserve all existing saved Walk completion content.
+- Do not overwrite unrelated Walk fields.
+- Report a clear failure if persistence does not complete.
+
+INVESTIGATION REQUIREMENT FOR ISSUES 4 AND 5
+
+Because both fail on first save but work on the second attempt, specifically inspect for:
+
+- child content being saved before the new parent ID exists
+- a temporary/client-generated ID used on first save
+- missing await on mutations
+- transaction ordering problems
+- stale query cache
+- create-versus-update branching errors
+- race conditions caused by navigation
+- database constraints or row-level security rejecting the first insert
+- generation succeeding while persistence silently fails
+
+Do not solve this with delayed timers, forced page refreshes or automatically running generation twice.
+
+VERIFICATION
+
+Before finishing:
+
+- Run relevant type checks, tests and production build.
+- Test all five fixes against the real persistence layer.
+- Test from a clean account and an existing account.
+- Navigate away and return after every first save.
+- Refresh the browser and sign out/in to prove data persisted.
+- Verify no duplicate Sermon Companion days, Walk completions or Daily Rhythm records were created.
+- Report the root cause found for each issue, files changed, database migrations applied and exact tests passed.
