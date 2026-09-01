@@ -6,8 +6,10 @@ import {
   consumeOpeningDestination,
   rememberOpeningDestination,
 } from '@/lib/opening-destination';
-import { accountStorageKey } from '@/lib/account-storage';
-import { localDateKey } from '@/lib/daily-lock';
+import {
+  hasPresentedDailyRhythmDay,
+  rememberPresentedDailyRhythmDay,
+} from '@/lib/daily-rhythm-presentation';
 import { isColdMemberLaunchPath } from '@/lib/tab-paths';
 import { resetStartupRouting } from '@/lib/startup-routing';
 import { bypassesDailyRhythmOpening, routePathname } from '@/lib/route-access';
@@ -35,24 +37,6 @@ function isPublicPath(pathname: string): boolean {
 
 function isDailyRhythmTarget(pathname: string, assignedDay: number | null): boolean {
   return assignedDay !== null && pathname === `/daily-rhythm/day/${assignedDay}`;
-}
-
-const OPENING_CACHE_KEY = 'emmaus_opening_resolved_v1';
-
-function hasResolvedOpeningToday(subject: string): boolean {
-  try {
-    return localStorage.getItem(accountStorageKey(OPENING_CACHE_KEY, subject)) === localDateKey();
-  } catch {
-    return false;
-  }
-}
-
-function rememberResolvedOpening(subject: string): void {
-  try {
-    localStorage.setItem(accountStorageKey(OPENING_CACHE_KEY, subject), localDateKey());
-  } catch {
-    // A missing performance cache never changes the server-authoritative flow.
-  }
 }
 
 function LoadingOpening() {
@@ -97,7 +81,6 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
   const [error, setError] = useState<Error & { diagnosticReference?: string } | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const [startupResolved, setStartupResolved] = useState(false);
-  const [forceStartup, setForceStartup] = useState(false);
   const [splashPhase, setSplashPhase] = useState<'visible' | 'fading' | 'done'>(() => (
     sessionStorage.getItem(SPLASH_STORAGE_KEY) === 'true' ? 'done' : 'visible'
   ));
@@ -107,8 +90,7 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
   const pathname = routePathname(location);
   const needsOnboarding = Boolean(user && !user.preferredName?.trim());
   const needsRecovery = Boolean(user?.passwordRecovery) && pathname !== '/auth/callback';
-  const cachedOpening = Boolean(user && hasResolvedOpeningToday(user.id));
-  const openingResolved = !forceStartup && (startupResolved || cachedOpening);
+  const openingResolved = startupResolved;
   const authenticatedExempt = pathname === '/auth' ||
     pathname === '/auth/callback' ||
     (pathname === '/onboarding' && needsOnboarding) ||
@@ -134,7 +116,6 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
     previousUserIdRef.current = user?.id ?? null;
     resetStartupRouting();
     setStartupResolved(false);
-    setForceStartup(false);
     setDecision(null);
     setError(null);
   }, [user?.id]);
@@ -177,7 +158,6 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
           (pathname !== '/' && pathname !== '/walk')
         ) return;
         requestedPathRef.current = null;
-        setForceStartup(true);
         setStartupResolved(false);
         setDecision(null);
         setError(null);
@@ -188,11 +168,13 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
       if (document.visibilityState === 'visible') refreshOnResume();
     };
     window.addEventListener('pageshow', refreshOnResume);
+    window.addEventListener('focus', refreshOnResume);
     window.addEventListener('online', refreshOnResume);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
       disposed = true;
       window.removeEventListener('pageshow', refreshOnResume);
+      window.removeEventListener('focus', refreshOnResume);
       window.removeEventListener('online', refreshOnResume);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
@@ -234,9 +216,14 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!decision || !user || needsOnboarding || needsRecovery) return;
     if (decision.state === 'OPENING_REQUIRED') {
-      rememberResolvedOpening(user.id);
-      setForceStartup(false);
       setStartupResolved(true);
+      if (hasPresentedDailyRhythmDay(user.id, decision.assignedDay)) {
+        if (pathname === '/') {
+          setLocation('/walk', { replace: true });
+        }
+        return;
+      }
+      rememberPresentedDailyRhythmDay(user.id, decision.assignedDay);
       if (!isDailyRhythmTarget(pathname, decision.assignedDay)) {
         if (pathname !== '/' && pathname !== '/walk') {
           rememberOpeningDestination(`${window.location.pathname}${window.location.search}${window.location.hash}`);
@@ -246,8 +233,6 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
       return;
     }
     if (decision.state === 'COMPLETED') {
-      rememberResolvedOpening(user.id);
-      setForceStartup(false);
       setStartupResolved(true);
       if (pathname === '/') {
         setLocation(consumeOpeningDestination('/walk'), { replace: true });
@@ -255,32 +240,6 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
       return;
     }
   }, [decision, pathname, user, needsOnboarding, needsRecovery, setLocation]);
-
-  // Once today's opening has already been resolved, entering the root again
-  // should be as quick as a normal in-app navigation. The cached result is only
-  // valid for this user and this local calendar day; tomorrow still rechecks
-  // the server ledger.
-  useEffect(() => {
-    if (
-      !user ||
-      needsOnboarding ||
-      needsRecovery ||
-      !cachedOpening ||
-      startupResolved ||
-      forceStartup ||
-      pathname !== '/'
-    ) return;
-    setLocation(consumeOpeningDestination('/walk'), { replace: true });
-  }, [
-    user,
-    needsOnboarding,
-    needsRecovery,
-    cachedOpening,
-    startupResolved,
-    forceStartup,
-    pathname,
-    setLocation,
-  ]);
 
   const openingReady = !authLoading &&
     !loadingProfile &&

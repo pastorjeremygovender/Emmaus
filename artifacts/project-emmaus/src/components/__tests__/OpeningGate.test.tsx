@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import OpeningGate from '../OpeningGate';
 import { safeOpeningDestination } from '@/lib/opening-destination';
+import { accountStorageKey } from '@/lib/account-storage';
+import { DAILY_RHYTHM_PRESENTED_DAY_KEY } from '@/lib/daily-rhythm-presentation';
 
 const getDailyRhythmStartup = vi.hoisted(() => vi.fn());
 const setLocation = vi.hoisted(() => vi.fn());
@@ -123,23 +125,24 @@ describe('OpeningGate', () => {
     firstRender.unmount();
     vi.clearAllMocks();
 
-    // The published failure: native tab links reload the app while the current
-    // Daily Rhythm step is still unfinished. The completed opening marker must
-    // allow both normal destinations through without opening Daily Rhythm again.
+    // A native tab link can reload the app while the current Daily Rhythm step
+    // is still unfinished. The server is rechecked, but the separate
+    // presented-day marker allows normal destinations through.
     currentLocation = '/walk';
     render(<OpeningGate><div>member content</div></OpeningGate>);
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
-    expect(getDailyRhythmStartup).not.toHaveBeenCalled();
+    expect(getDailyRhythmStartup).toHaveBeenCalledTimes(1);
     expect(setLocation).not.toHaveBeenCalled();
     expect(screen.getByText('member content')).toBeInTheDocument();
 
     cleanup();
+    vi.clearAllMocks();
     currentLocation = '/journeys';
     render(<OpeningGate><div>journeys content</div></OpeningGate>);
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
-    expect(getDailyRhythmStartup).not.toHaveBeenCalled();
+    expect(getDailyRhythmStartup).toHaveBeenCalledTimes(1);
     expect(setLocation).not.toHaveBeenCalled();
     expect(screen.getByText('journeys content')).toBeInTheDocument();
   });
@@ -266,5 +269,117 @@ describe('OpeningGate', () => {
 
     expect(screen.getByText('member content')).toBeInTheDocument();
     expect(getDailyRhythmStartup).toHaveBeenCalledTimes(1);
+  });
+
+  it('stores the server-assigned day in a separate account-scoped presentation marker', async () => {
+    render(<OpeningGate><div>member content</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(localStorage.getItem(accountStorageKey(
+      DAILY_RHYTHM_PRESENTED_DAY_KEY,
+      'member-1',
+    ))).toBe('1');
+    expect(localStorage.getItem('emmaus_opening_resolved_v1')).toBeNull();
+  });
+
+  it('keeps an unfinished automatic opening non-locking through lifecycle and history events', async () => {
+    const view = render(<OpeningGate><div>member content</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(setLocation).toHaveBeenCalledTimes(1);
+    expect(setLocation).toHaveBeenCalledWith('/daily-rhythm/day/1', { replace: true });
+
+    // The member leaves the unfinished opening for Today's Steps.
+    currentLocation = '/walk';
+    view.rerender(<OpeningGate><div>member content</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    vi.clearAllMocks();
+
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      window.dispatchEvent(new Event('blur'));
+      window.dispatchEvent(new Event('focus'));
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      window.dispatchEvent(new Event('online'));
+      window.dispatchEvent(new PopStateEvent('popstate', { state: { route: '/walk' } }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getDailyRhythmStartup).toHaveBeenCalledTimes(1);
+    expect(setLocation).not.toHaveBeenCalled();
+    expect(screen.getByText('member content')).toBeInTheDocument();
+
+    // A PWA suspension, reload, or remount must preserve the same-day escape.
+    view.unmount();
+    vi.clearAllMocks();
+    currentLocation = '/walk';
+    render(<OpeningGate><div>member content</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(getDailyRhythmStartup).toHaveBeenCalledTimes(1);
+    expect(setLocation).not.toHaveBeenCalled();
+    expect(screen.getByText('member content')).toBeInTheDocument();
+  });
+
+  it('opens again only when the server-assigned day changes', async () => {
+    getDailyRhythmStartup
+      .mockResolvedValueOnce({
+        state: 'OPENING_REQUIRED',
+        destination: '/daily-rhythm/day/1',
+        assignedDay: 1,
+      })
+      .mockResolvedValueOnce({
+        state: 'OPENING_REQUIRED',
+        destination: '/daily-rhythm/day/2',
+        assignedDay: 2,
+      })
+      .mockResolvedValueOnce({
+        state: 'OPENING_REQUIRED',
+        destination: '/daily-rhythm/day/2',
+        assignedDay: 2,
+      });
+    const view = render(<OpeningGate><div>member content</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    currentLocation = '/walk';
+    view.rerender(<OpeningGate><div>member content</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    vi.clearAllMocks();
+
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(setLocation).toHaveBeenCalledTimes(1);
+    expect(setLocation).toHaveBeenCalledWith('/daily-rhythm/day/2', { replace: true });
+    expect(localStorage.getItem(accountStorageKey(
+      DAILY_RHYTHM_PRESENTED_DAY_KEY,
+      'member-1',
+    ))).toBe('2');
+
+    // Repeated resume events on the new day do not add another opening entry.
+    currentLocation = '/walk';
+    view.rerender(<OpeningGate><div>member content</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(getDailyRhythmStartup).toHaveBeenCalledTimes(1);
+    expect(setLocation).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves deliberate Daily Rhythm card navigation outside the automatic gate', async () => {
+    localStorage.setItem(accountStorageKey(
+      DAILY_RHYTHM_PRESENTED_DAY_KEY,
+      'member-1',
+    ), '1');
+    currentLocation = '/daily-rhythm/day/1';
+
+    render(<OpeningGate><div>deliberate reader</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(getDailyRhythmStartup).not.toHaveBeenCalled();
+    expect(setLocation).not.toHaveBeenCalled();
+    expect(screen.getByText('deliberate reader')).toBeInTheDocument();
   });
 });

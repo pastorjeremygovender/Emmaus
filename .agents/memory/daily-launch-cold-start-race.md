@@ -69,6 +69,6 @@ client-router click handlers.
 router Link and an explicit router navigation callback left the URL unchanged,
 while native links reliably exited to Bible and Today's Steps.
 
-**How to apply:** Keep the same-day opening cache as the protection against a
-full-page link navigation reopening Daily Rhythm. Verify both exits in a real
-browser before changing the bottom bar back to client-only routing.
+**How to apply:** Keep the server startup recheck for cold/resume entries, but
+use a separate account-scoped device marker keyed by the server-assigned day to
+suppress replay. Do not use the legacy date cache or any reminder/completion state.

@@ -14,6 +14,7 @@ const UNOWNED_PERSONAL_KEYS = [
   'emmaus_last_opened_v2',
   'emmaus_last_opened_v3',
   'emmaus_opening_resolved_v1',
+  'emmaus_daily_rhythm_presented_day_v1',
   'emmaus_bible_notes',
   'emmaus_bible_highlights',
   'emmaus_bible_completed',
