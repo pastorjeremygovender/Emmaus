@@ -1,0 +1,171 @@
+Urgent Daily Rhythm lifecycle regression.
+
+The completed admin integration must remain frozen and untouched at commit:
+
+`d61ee968da0a9c8121bbccf3f2377a4dc675e5c0`
+
+Do not modify any admin files.
+
+CURRENT FAILURE
+
+10 Minutes with Jesus opens correctly as the first screen of the day. The user deliberately does not press Continue or Complete and navigates away successfully.
+
+However:
+
+* Switching to another mobile app and returning to Emmaus reopens 10 Minutes with Jesus.
+* Switching browser tabs/windows and returning on a laptop reopens it.
+* Reloading or resuming Emmaus reopens it.
+* Browser/PWA Back navigation can return the user to 10 Minutes with Jesus and reactivate the navigation trap.
+* The user can sometimes escape by immediately tapping Today’s Steps or Bible, but the locking behaviour can return.
+
+This is the same previously fixed navigation-lock regression appearing through untested lifecycle and history paths.
+
+REQUIRED BEHAVIOUR
+
+10 Minutes with Jesus must:
+
+* Automatically open only on the first presentation of the current server-authoritative day on that device.
+* Be invitational, never a completion gate.
+* Allow the user to leave without pressing Continue, Finished or Complete.
+* Remain non-locking for the rest of that day.
+* Not automatically reopen merely because the app resumes, regains focus, receives `visibilitychange`, receives `pageshow`, reloads, remounts, restores from PWA suspension, or processes browser Back/Forward navigation.
+* Open automatically again when the server-authoritative day genuinely changes.
+* Still open whenever the user deliberately selects its card.
+
+Do not use completion as the presentation marker.
+
+Do not reuse or change the existing “opened” state if that state affects reminder eligibility.
+
+Introduce or correct a separate account-scoped, device-local “presented for day” marker using the existing safe account-storage abstraction.
+
+The marker must:
+
+* Store the server-authoritative day identifier, not merely the device calendar date.
+* Be written when the automatic first presentation is accepted/rendered.
+* Survive reloads, app suspension, PWA restarts and browser restarts.
+* Be scoped to the signed-in account.
+* Reset naturally when the authoritative day identifier changes.
+* Never mark Daily Rhythm complete.
+* Never suppress the daily reminder.
+* Never unlock a future day.
+* Never affect Previous Days.
+
+HISTORY BEHAVIOUR
+
+Fix the route-history behaviour so the automatic Daily Rhythm opening does not leave a trap entry behind.
+
+When the user leaves an automatically presented Daily Rhythm for Today’s Steps or another permitted destination:
+
+* Do not let browser Back reactivate the automatic opening gate.
+* Do not create a redirect loop.
+* Do not repeatedly add Daily Rhythm entries to browser history.
+* Deliberately opening 10 Minutes with Jesus from its card must still behave as ordinary navigation.
+
+Investigate every place that evaluates or resets the Daily Rhythm opening gate, including:
+
+* Application mount
+* Authentication restoration
+* Route guards
+* Location/path changes
+* `visibilitychange`
+* `focus`
+* `pageshow`
+* PWA resume
+* Browser `popstate`
+* Progress refetch/invalidation
+* Daily Rhythm data refresh
+
+There must be one authoritative decision for automatic first presentation, not multiple competing redirects.
+
+PROTECTED BEHAVIOUR
+
+Preserve:
+
+* Calendar-based Daily Rhythm advancement
+* All elapsed days in Previous Days
+* Reminder eligibility when a day was opened but unfinished
+* Bible exemption and Bible per-book memory
+* User authentication and permissions
+* Groups and meetings
+* The completed simplified admin
+* All production data and API contracts
+
+Do not modify databases, schemas, production data, secrets, environment variables, dependencies or unrelated code.
+
+Do not perform broad refactoring or unrelated type-error cleanup.
+
+Do not fetch, pull, push, merge, rebase or reset.
+
+Before editing:
+
+* Confirm the current commit.
+* Create a local safety branch at the exact current commit:
+  `safety/pre-daily-resume-fix-2026-09-01`
+* Do not switch to it.
+* Record its commit ID.
+
+REGRESSION TESTS
+
+Add tests reproducing the real user sequence:
+
+1. First app opening on a new authoritative day automatically presents 10 Minutes with Jesus.
+2. Without Continue or Complete, navigate to Today’s Steps successfully.
+3. Trigger `visibilitychange` hidden → visible; remain on Today’s Steps.
+4. Trigger window blur/focus; remain on Today’s Steps.
+5. Trigger `pageshow`, including persisted/bfcache restoration; remain on Today’s Steps.
+6. Remount the application; remain free to navigate.
+7. Simulate PWA suspension and resume; do not reopen Daily Rhythm.
+8. Reload while on Today’s Steps; do not reopen Daily Rhythm.
+9. Use browser Back and Forward; do not reactivate a gate or redirect loop.
+10. Navigate to Bible and back; do not reopen or lock Daily Rhythm.
+11. Deliberately open the 10 Minutes card; it opens normally.
+12. Leave it again unfinished; navigation remains available.
+13. Advance to a genuinely new authoritative day; automatic first presentation occurs once again.
+14. Opening without completing does not suppress reminder eligibility.
+15. No future day becomes available.
+16. Previous Days remains correct.
+
+Run:
+
+* New lifecycle/history regression suite
+* Complete Daily Rhythm authority and OpeningGate suites
+* Reminder tests
+* Previous Days tests
+* Bible navigation and memory tests
+* Member-flow tests
+* Admin focused tests
+* Auth identity tests
+* Frontend and API production builds
+* Web and API smoke tests
+* Mobile-width PWA preview
+* Browser console check
+* `git diff --check`
+
+Manually reproduce in the preview:
+
+* Open Daily Rhythm automatically.
+* Leave it unfinished.
+* Navigate to Today’s Steps.
+* Change tabs and return.
+* Reload.
+* Use browser Back.
+* Navigate to Bible and return.
+
+At no point may the user become trapped or be automatically returned to Daily Rhythm during the same authoritative day.
+
+Create one local commit only after the targeted tests and manual reproduction pass.
+
+Do not publish automatically.
+
+Report:
+
+* Exact root cause
+* Every competing redirect/gate location found
+* How first-presentation state is now stored
+* How browser history was corrected
+* Exact files changed
+* New test cases and totals
+* Confirmation that reminders and Previous Days remain correct
+* Confirmation that admin files were untouched
+* New commit ID
+* Final verdict: READY FOR MANUAL PUBLISH or NOT READY
