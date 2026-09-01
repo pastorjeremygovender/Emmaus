@@ -1,0 +1,53 @@
+Urgent regression after the latest release: do not redesign this feature.
+
+Before this release, 10 Minutes with Jesus had already been changed successfully so that:
+
+- It opened first on the first app opening of each new day.
+- It was not a lock.
+- The user could navigate away without pressing Continue, Finished or Complete.
+- The Bible and all other normal areas remained accessible.
+
+The latest release has restored the old locking behaviour. Currently, the user can reach the Bible because of its exemption, but is blocked from navigating anywhere else.
+
+Investigate the regression by comparing:
+
+- The current release commit
+- The immediately preceding working commit
+- The safety branch "safety/pre-user-feedback-publish-2026-09-01"
+
+Identify the exact change that restored the old Daily Rhythm navigation gate.
+
+Restore the previously working non-locking behaviour from the correct earlier implementation. Do not invent another routing system and do not revert the complete user-feedback release.
+
+Required result:
+
+- 10 Minutes with Jesus still opens first once per new server-authoritative day.
+- Opening it does not lock navigation.
+- The user can leave immediately without pressing Continue, Finished or Complete.
+- Today’s Steps and every normally permitted destination remain accessible.
+- Leaving does not mark the Daily Rhythm complete.
+- Calendar-based day advancement, Previous Days and reminders continue working as implemented in the latest release.
+- Bible access remains unchanged.
+- Authentication, roles and admin access remain unchanged.
+
+Make the smallest targeted restoration possible.
+
+Add a regression test specifically reproducing the published failure: while the current Daily Rhythm is open and unfinished, navigate to Today’s Steps and another ordinary non-Bible destination. Both must succeed.
+
+Do not modify production data, schemas, secrets, environment variables or dependencies. Do not perform broad refactoring, unrelated cleanup, branch switching, fetching, pulling, merging, rebasing or resetting.
+
+Run the focused regression test, all OpeningGate and Daily Rhythm tests, frontend and API production builds, smoke tests and "git diff --check".
+
+Create a new local commit only after everything passes.
+
+Do not publish automatically.
+
+Report:
+
+- The exact commit/change that caused the regression
+- The previously working behaviour that was restored
+- Exact files changed
+- New commit ID
+- Test and build results
+- Explicit confirmation that an unfinished Daily Rhythm no longer blocks non-Bible navigation
+- Final verdict: READY FOR MANUAL PUBLISH or NOT READY
