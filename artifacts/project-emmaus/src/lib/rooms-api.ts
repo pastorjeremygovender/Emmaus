@@ -11,6 +11,7 @@ import type {
   RoomSession, SessionMode, ScriptureRef, SessionAttendee,
   RoomHighlight, SharedNote, RoomPoll, RoomPollResults, RoomEmmausAnswer,
   RoomInvitePreview, RoomRole,
+  MediaHostAccess,
 } from './rooms-types';
 
 // ─── Internal fetch helper ─────────────────────────────────────────────────
@@ -171,13 +172,44 @@ export async function apiGetRooms(userId: string): Promise<RoomSummary[]> {
 export async function apiGetRoomById(
   userId: string,
   roomId: string
-): Promise<{ room: RoomDetail; currentUserRole: RoomRole; isLeader: boolean; activeSession: import('./rooms-types').RoomSession | null } | null> {
+): Promise<{
+  room: RoomDetail;
+  currentUserRole: RoomRole;
+  isLeader: boolean;
+  activeSession: import('./rooms-types').RoomSession | null;
+  mediaHostAccess?: Pick<MediaHostAccess, 'audio' | 'video'>;
+} | null> {
   try {
     return await roomsFetch(`/api/rooms/${roomId}`, userId);
   } catch (err) {
     if (err instanceof Error && err.message.includes('404')) return null;
     throw err;
   }
+}
+
+export async function apiGetMediaHostAccess(
+  adminUserId: string,
+  targetUserId: string,
+): Promise<MediaHostAccess> {
+  return roomsFetch<MediaHostAccess>(
+    `/api/rooms/admin/persons/${encodeURIComponent(targetUserId)}/media-access`,
+    adminUserId,
+  );
+}
+
+export async function apiSetMediaHostAccess(
+  adminUserId: string,
+  targetUserId: string,
+  patch: { audio?: boolean; video?: boolean },
+): Promise<MediaHostAccess> {
+  return roomsFetch<MediaHostAccess>(
+    `/api/rooms/admin/persons/${encodeURIComponent(targetUserId)}/media-access`,
+    adminUserId,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    },
+  );
 }
 
 export async function apiRenameRoom(userId: string, roomId: string, name: string): Promise<void> {

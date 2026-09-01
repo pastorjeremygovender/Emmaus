@@ -41,6 +41,9 @@ let roomId = "";
 let sessionId = "";
 let leaderHeaders: { Authorization: string };
 let memberHeaders: { Authorization: string };
+let adminHeaders: { Authorization: string };
+let leaderId = "";
+let adminId = "";
 let preparedMediaId = "";
 const nonce = crypto.randomBytes(6).toString("hex");
 const leaderKey = `room-meeting-leader-${nonce}`;
@@ -192,8 +195,10 @@ before(async () => {
   server = http.createServer(app);
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
 
-  const leaderId = await testUserIdFor(leaderKey);
+  leaderId = await testUserIdFor(leaderKey);
   const memberId = await testUserIdFor(memberKey);
+  adminId = await testUserIdFor(`room-meeting-admin-${nonce}`, "admin");
+  adminHeaders = await authHeader(`room-meeting-admin-${nonce}`, { role: "admin" });
   leaderHeaders = await authHeader(leaderKey);
   memberHeaders = await authHeader(memberKey);
 
@@ -298,6 +303,13 @@ describe("two-device active Group Meeting flow", () => {
       headers: leaderHeaders,
     });
     assert.equal(roomDetail.status, 200, roomDetail.body);
+    const mediaHostAccess = json<{
+      mediaHostAccess: { audio: boolean; video: boolean };
+    }>(roomDetail).mediaHostAccess;
+    assert.deepEqual(
+      { audio: mediaHostAccess.audio, video: mediaHostAccess.video },
+      { audio: false, video: false },
+    );
     assert.match(
       String(roomDetail.headers["cache-control"] ?? ""),
       /no-store/,
@@ -310,6 +322,25 @@ describe("two-device active Group Meeting flow", () => {
     });
     assert.equal(started.status, 201, started.body);
     sessionId = json<{ session: { id: string } }>(started).session.id;
+
+    const [audioStart, videoStart] = await Promise.all([
+      request({
+        method: "POST",
+        path: `/api/rooms/${roomId}/session/start`,
+        headers: leaderHeaders,
+        body: { meetingMode: "audio" },
+      }),
+      request({
+        method: "POST",
+        path: `/api/rooms/${roomId}/session/start`,
+        headers: leaderHeaders,
+        body: { meetingMode: "video" },
+      }),
+    ]);
+    assert.equal(audioStart.status, 403, audioStart.body);
+    assert.match(audioStart.body, /Audio meetings have not been enabled/);
+    assert.equal(videoStart.status, 403, videoStart.body);
+    assert.match(videoStart.body, /Video meetings have not been enabled/);
 
     const [leaderAttendance, memberAttendance, memberChat] = await Promise.all([
       request({
@@ -338,6 +369,54 @@ describe("two-device active Group Meeting flow", () => {
       json<{ attendance: Array<{ userId: string }> }>(memberAttendance).attendance,
     );
     assert.equal(memberChat.status, 403);
+  });
+
+  it("lets an administrator change each media permission independently and records the change", async () => {
+    const nonAdminRead = await request({
+      path: `/api/rooms/admin/persons/${encodeURIComponent(leaderId)}/media-access`,
+      headers: leaderHeaders,
+    });
+    assert.equal(nonAdminRead.status, 403, nonAdminRead.body);
+
+    const enabled = await request({
+      method: "PATCH",
+      path: `/api/rooms/admin/persons/${encodeURIComponent(leaderId)}/media-access`,
+      headers: adminHeaders,
+      body: { audio: true },
+    });
+    assert.equal(enabled.status, 200, enabled.body);
+    const enabledAccess = json<{ audio: boolean; video: boolean }>(enabled);
+    assert.equal(enabledAccess.audio, true);
+    assert.equal(enabledAccess.video, false);
+
+    const audit = await pool.query<{
+      previous_state: { permission?: string; previousValue?: boolean } | null;
+      new_state: { permission?: string; newValue?: boolean } | null;
+    }>(
+      `SELECT previous_state, new_state
+         FROM content_audit_log
+        WHERE content_type = 'user_permission'
+          AND content_id = $1
+          AND performed_by = $2
+        ORDER BY performed_at DESC
+        LIMIT 1`,
+      [leaderId, adminId],
+    );
+    assert.equal(audit.rows.length, 1);
+    assert.equal(audit.rows[0]?.previous_state?.permission, "audio_meetings");
+    assert.equal(audit.rows[0]?.previous_state?.previousValue, false);
+    assert.equal(audit.rows[0]?.new_state?.newValue, true);
+
+    const restored = await request({
+      method: "PATCH",
+      path: `/api/rooms/admin/persons/${encodeURIComponent(leaderId)}/media-access`,
+      headers: adminHeaders,
+      body: { audio: false, video: true },
+    });
+    assert.equal(restored.status, 200, restored.body);
+    const restoredAccess = json<{ audio: boolean; video: boolean }>(restored);
+    assert.equal(restoredAccess.audio, false);
+    assert.equal(restoredAccess.video, true);
   });
 
   it("returns saved attendance, unlocks the same discussion, and delivers realtime history", async () => {

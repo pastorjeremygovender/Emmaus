@@ -74,6 +74,10 @@ interface GuideGroupPanelProps {
   videoEligible?: boolean;
   /** Whether a Live Video session is currently active. */
   videoActive?: boolean;
+  /** Whether the current leader may start live audio. */
+  audioEligible?: boolean;
+  /** Whether the current leader may start live video. */
+  videoHostEligible?: boolean;
   /** The active LiveKit transport mode. */
   meetingMode?: 'audio' | 'video';
   /** Called when leader taps "Start Live Audio" or "Start Live Video". */
@@ -108,6 +112,8 @@ export function GuideGroupPanel({
   onOpenAskEmmaus,
   onOpenDiscussion,
   videoActive = false,
+  audioEligible = false,
+  videoHostEligible = false,
   meetingMode = 'video',
   onStartVideo,
   onEndVideo,
@@ -250,22 +256,31 @@ export function GuideGroupPanel({
               <div className="rounded-2xl border border-border overflow-hidden divide-y divide-border">
                 {!videoActive ? (
                   <>
-                    <ToolRow
-                      icon={<Mic size={18} />}
-                      label="Start Live Audio"
-                      description="Start a microphone-only meeting for everyone in this Group"
-                      loading={busy === 'start-audio'}
-                      disabled={!sessionActive}
-                      onClick={() => run('start-audio', async () => { await onStartVideo?.('audio'); })}
-                    />
-                    <ToolRow
-                      icon={<Video size={18} />}
-                      label="Start Live Video"
-                      description="Start a camera and microphone meeting for everyone in this Group"
-                      loading={busy === 'start-video'}
-                      disabled={!sessionActive}
-                      onClick={() => run('start-video', async () => { await onStartVideo?.('video'); })}
-                    />
+                    {audioEligible && (
+                      <ToolRow
+                        icon={<Mic size={18} />}
+                        label="Start Live Audio"
+                        description="Start a microphone-only meeting for everyone in this Group"
+                        loading={busy === 'start-audio'}
+                        disabled={!sessionActive}
+                        onClick={() => run('start-audio', async () => { await onStartVideo?.('audio'); })}
+                      />
+                    )}
+                    {videoHostEligible && (
+                      <ToolRow
+                        icon={<Video size={18} />}
+                        label="Start Live Video"
+                        description="Start a camera and microphone meeting for everyone in this Group"
+                        loading={busy === 'start-video'}
+                        disabled={!sessionActive}
+                        onClick={() => run('start-video', async () => { await onStartVideo?.('video'); })}
+                      />
+                    )}
+                    {!audioEligible && !videoHostEligible && (
+                      <p className="px-4 py-3 text-[12px] text-muted-foreground">
+                        Live meeting hosting is not enabled for your account.
+                      </p>
+                    )}
                   </>
                 ) : (
                   <ToolRow

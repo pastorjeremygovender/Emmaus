@@ -49,6 +49,7 @@
 - [Navigation Redesign](nav-redesign.md) — new bottom nav order; Discover page; My Journey expansion; AskEmmausBar; Favourites+History+Search backend+frontend; DB import is @workspace/db not ../lib/db.js.
 - [Unified Emmaus Input](unified-emmaus-input.md) — UnifiedEmmausInput replaces AskEmmausBar+search on Walk/Discover/Personal; intent detection routes to Ask Emmaus or grouped search; discoverActive hides Discover tabs.
 - [Rooms Four-Level Architecture](rooms-four-level-architecture.md) — V1 done: dual-dimension rooms (contentType + roomType), prayer requests, leader controls scaffold; LiveKit UI paused pending approval.
+- [Room media host authorization](rooms-four-level-architecture.md) — Text is open to authenticated members; audio/video hosting requires separate account permission plus Owner/Leader room role; admins retain both.
 - [Active meeting synchronization](active-meeting-synchronization.md) — opening a Room observes only; start/join are explicit attendance actions, and active Discussion requires exact room/session attendance.
 - [Foundation v1 Checkpoint](foundation-v1-checkpoint.md) — official restore point 2026-08-08; all systems verified; 3 pre-existing TS errors (canonical-sermon-store/analytics/workflows) are known, not regressions.
 - [Group Media Sharing](group-media-sharing.md) — rooms-api-media.ts is the media API layer; getLeaderAccess takes (userId, appRole) not (roomId, userId); roomsFetch must be exported.

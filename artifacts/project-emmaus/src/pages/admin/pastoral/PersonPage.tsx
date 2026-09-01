@@ -12,10 +12,12 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   ArrowLeft, Bell, Calendar, X, AlertCircle, Loader2,
   MapPin, Star, BookOpen, CalendarDays, Shield, CheckCircle2,
-  ClipboardCheck, ShieldCheck, ChevronDown, ChevronUp, Phone, Mail,
+  ClipboardCheck, ShieldCheck, ChevronDown, ChevronUp, Phone, Mail, Mic, Video,
 } from 'lucide-react';
 import * as api from '@/lib/pastoral-api';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiGetMediaHostAccess, apiSetMediaHostAccess } from '@/lib/rooms-api';
+import type { MediaHostAccess } from '@/lib/rooms-types';
 
 import CareSignalsSection from './profile/CareSignalsSection';
 import LifeMilestones from './profile/LifeMilestones';
@@ -43,8 +45,7 @@ type SectionKey =
   | 'volunteering'
   | 'moments'
   | 'care'
-  | 'administrative'
-  | 'leadership';
+  | 'administrative';
 
 function CollapsibleSection({
   title,
@@ -203,17 +204,15 @@ export default function PersonPage({ person, onBack, scrollToCareSignals }: Prop
     moments: false,
     care: false,
     administrative: false,
-    leadership: false,
   });
 
   const [saveMsg, setSaveMsg] = useState('');
   const [isLinked, setLinked] = useState(person.isLinked);
   const [linkedId, setLinkedId] = useState(person.linkedUserId);
 
-  type LeaderSource = 'admin_role' | 'pastoral_role' | 'explicit' | 'none';
-  const [leaderAuthorized, setLeaderAuthorized] = useState<boolean | null>(null);
-  const [leaderSource, setLeaderSource] = useState<LeaderSource>('none');
-  const [leaderSaving, setLeaderSaving] = useState(false);
+  const [mediaAccess, setMediaAccess] = useState<MediaHostAccess | null>(null);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaSaving, setMediaSaving] = useState<'audio' | 'video' | null>(null);
 
   const [scheduleSignalId, setScheduleSignalId] = useState<string | null>(null);
   const [scheduleDate, setScheduleDate] = useState('');
@@ -301,37 +300,27 @@ export default function PersonPage({ person, onBack, scrollToCareSignals }: Prop
 
   useEffect(() => {
     if (!leaderTargetId) return;
-    fetch(`/api/rooms/admin/persons/${encodeURIComponent(leaderTargetId)}/leader-access`)
-      .then(r => r.ok ? r.json() : null)
-      .then((d: { authorized: boolean; source: LeaderSource } | null) => {
-        if (!d) return;
-        setLeaderAuthorized(d.authorized);
-        setLeaderSource(d.source);
-      })
-      .catch(() => {});
+    let cancelled = false;
+    setMediaLoading(true);
+    apiGetMediaHostAccess(user?.id ?? '', leaderTargetId)
+      .then(d => { if (!cancelled) setMediaAccess(d); })
+      .catch(() => { if (!cancelled) setMediaAccess(null); })
+      .finally(() => { if (!cancelled) setMediaLoading(false); });
+    return () => { cancelled = true; };
   }, [leaderTargetId, user?.id]);
 
-  const handleLeaderAccessToggle = async () => {
-    if (!leaderTargetId || leaderSaving) return;
-    const next = !leaderAuthorized;
-    setLeaderSaving(true);
+  const handleMediaAccessToggle = async (permission: 'audio' | 'video') => {
+    if (!leaderTargetId || !mediaAccess || mediaAccess.isAdministrator || mediaSaving) return;
+    const next = !mediaAccess[permission];
+    setMediaSaving(permission);
     try {
-      const r = await fetch(
-        `/api/rooms/admin/persons/${encodeURIComponent(leaderTargetId)}/leader-access`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ authorized: next }),
-        },
-      );
-      const d: { authorized: boolean; source: LeaderSource } = await r.json();
-      setLeaderAuthorized(d.authorized);
-      setLeaderSource(d.source);
-      flash(next ? 'Leader access granted' : 'Leader access removed');
-    } catch {
-      flash('Save failed');
+      const updated = await apiSetMediaHostAccess(user?.id ?? '', leaderTargetId, { [permission]: next });
+      setMediaAccess(updated);
+      flash(`${permission === 'audio' ? 'Audio' : 'Video'} meeting hosting ${next ? 'enabled' : 'disabled'}`);
+    } catch (err) {
+      flash(err instanceof Error ? err.message : 'Save failed');
     } finally {
-      setLeaderSaving(false);
+      setMediaSaving(null);
     }
   };
 
@@ -747,51 +736,62 @@ export default function PersonPage({ person, onBack, scrollToCareSignals }: Prop
           onLink={handleLink}
         >
           {leaderTargetId && (
-            <CollapsibleSection
-              title="Group Leadership"
-              icon={ShieldCheck}
-              iconColor="text-teal-600"
-              sectionKey="leadership"
-              openSections={openSections}
-              onToggle={toggleSection}
-            >
-              <div className="space-y-3">
-                {leaderAuthorized === null ? (
-                  <div className="flex items-center gap-2 text-gray-400">
-                    <Loader2 size={13} className="animate-spin" />
-                    <span className="text-[13px]">Loading…</span>
-                  </div>
-                ) : (
-                  <>
-                    {(leaderSource === 'admin_role' || leaderSource === 'pastoral_role') && (
-                      <div className="flex items-start gap-2 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2.5">
-                        <ShieldCheck size={13} className="text-teal-600 mt-0.5 shrink-0" />
-                        <p className="text-[12px] text-teal-700 leading-relaxed">
-                          {leaderSource === 'admin_role' ? 'Authorized automatically as a Church Admin.' : 'Authorized automatically as a Pastor.'}
-                        </p>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="min-w-0">
-                        <p className="text-[14px] font-medium text-gray-900">Authorized Group Leader</p>
-                        <p className="text-[12px] text-gray-500 mt-0.5 leading-relaxed">
-                          {leaderAuthorized ? 'Can start live gatherings and use leader tools in their Rooms.' : 'Rooms work for discussion and shared progress only.'}
-                        </p>
-                      </div>
-                      <button
-                        onClick={handleLeaderAccessToggle}
-                        disabled={leaderSaving || leaderSource === 'admin_role' || leaderSource === 'pastoral_role'}
-                        aria-pressed={leaderAuthorized}
-                        className={`relative shrink-0 w-11 h-6 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-teal-500/40 ${leaderAuthorized ? 'bg-teal-600' : 'bg-gray-200'} disabled:opacity-50 disabled:cursor-default`}
-                      >
-                        <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${leaderAuthorized ? 'translate-x-5' : 'translate-x-0'}`} />
-                        {leaderSaving && <span className="absolute inset-0 flex items-center justify-center"><Loader2 size={11} className="text-white animate-spin" /></span>}
-                      </button>
-                    </div>
-                  </>
-                )}
+            <div className="border-t border-gray-100 pt-4 mt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <ShieldCheck size={14} className="text-teal-600" />
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">Group Leadership</p>
               </div>
-            </CollapsibleSection>
+              <p className="text-[12px] text-gray-500 leading-relaxed mb-4">
+                Text Groups are available to every authenticated Emmaus user. These settings only control who may host live audio or video meetings.
+              </p>
+              {mediaLoading ? (
+                <div className="flex items-center gap-2 text-gray-400">
+                  <Loader2 size={13} className="animate-spin" />
+                  <span className="text-[13px]">Loading meeting permissions…</span>
+                </div>
+              ) : mediaAccess ? (
+                <div className="space-y-3">
+                  {mediaAccess.isAdministrator && (
+                    <div className="flex items-start gap-2 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2.5">
+                      <ShieldCheck size={13} className="text-teal-600 mt-0.5 shrink-0" />
+                      <p className="text-[12px] text-teal-700 leading-relaxed">
+                        Church Administrators automatically retain both audio and video meeting permissions.
+                      </p>
+                    </div>
+                  )}
+                  {([
+                    ['audio', 'Allow audio meetings', 'Can start, schedule, and host microphone-only meetings.', Mic],
+                    ['video', 'Allow video meetings', 'Can start, schedule, and host camera and microphone meetings.', Video],
+                  ] as const).map(([permission, title, description, Icon]) => {
+                    const enabled = mediaAccess[permission];
+                    return (
+                      <div key={permission} className="flex items-center justify-between gap-4">
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          <Icon size={15} className={`mt-0.5 shrink-0 ${enabled ? 'text-teal-600' : 'text-gray-400'}`} />
+                          <div className="min-w-0">
+                            <p className="text-[14px] font-medium text-gray-900">{title}</p>
+                            <p className="text-[12px] text-gray-500 mt-0.5 leading-relaxed">{description}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void handleMediaAccessToggle(permission)}
+                          disabled={mediaSaving !== null || mediaAccess.isAdministrator}
+                          aria-label={`${title}: ${enabled ? 'enabled' : 'disabled'}`}
+                          aria-pressed={enabled}
+                          className={`relative shrink-0 w-11 h-6 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-teal-500/40 ${enabled ? 'bg-teal-600' : 'bg-gray-200'} disabled:opacity-50 disabled:cursor-default`}
+                        >
+                          <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                          {mediaSaving === permission && <span className="absolute inset-0 flex items-center justify-center"><Loader2 size={11} className="text-white animate-spin" /></span>}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-[13px] text-gray-400">Meeting permissions are not available for this record.</p>
+              )}
+            </div>
           )}
         </AdminDetails>
 

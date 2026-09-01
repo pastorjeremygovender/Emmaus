@@ -48,7 +48,10 @@ import {
   endVideoSession,
   getActiveVideoRoomCount,
   getRoomMemberCount,
-  canHostVideo,
+  canHostMedia,
+  getMediaHostAccess,
+  setMediaHostAccess,
+  canHostWithRoomRole,
   getLeaderAccess,
   setLeaderAccess,
   getPrayerRequests,
@@ -291,17 +294,24 @@ router.get("/:roomId/video/status", async (req, res) => {
       return;
     }
 
-    const [status, settings, appRole] = await Promise.all([
+    const [status, settings, mediaAccess] = await Promise.all([
       getVideoStatus(String(roomId)),
       getVideoSettings(),
-      getUserRole(userId),
+      getMediaHostAccess(userId),
     ]);
-    const canHost = await canHostVideo(userId, String(roomId), appRole);
+    const isRoomHost = canHostWithRoomRole(memberRole);
+    const canHostAudio = isRoomHost && mediaAccess.audio;
+    const canHostVideo = isRoomHost && mediaAccess.video;
+    const canHost = status.meetingMode === "audio" ? canHostAudio : canHostVideo;
 
     res.json({
       configured: true,
       videoEnabled: settings.videoEnabled,
       canHost,
+      canHostAudio,
+      canHostVideo,
+      audioHostEnabled: mediaAccess.audio,
+      videoHostEnabled: mediaAccess.video,
       livekitUrl: getLiveKitUrl(),
       ...status,
     });
@@ -321,22 +331,22 @@ router.post("/:roomId/video/start", async (req, res) => {
   }
   const meetingMode: "audio" | "video" = requestedMode === "audio" ? "audio" : "video";
 
-  if (!isLiveKitConfigured()) {
-    res.status(503).json({ error: "Live video is not configured on this server." });
-    return;
-  }
-
   try {
-    const settings = await getVideoSettings();
-    if (!settings.videoEnabled) {
-      res.status(403).json({ error: "Video Rooms are not enabled for this church." });
+    const appRole = await getUserRole(userId);
+    const allowed = await canHostMedia(userId, String(roomId), meetingMode, appRole);
+    if (!allowed) {
+      res.status(403).json({
+        error: `${meetingMode === "audio" ? "Audio" : "Video"} meetings have not been enabled for your account.`,
+      });
       return;
     }
-
-    const appRole = await getUserRole(userId);
-    const allowed = await canHostVideo(userId, String(roomId), appRole);
-    if (!allowed) {
-      res.status(403).json({ error: "You are not authorised to start video for this Room." });
+    if (!isLiveKitConfigured()) {
+      res.status(503).json({ error: "Live video is not configured on this server." });
+      return;
+    }
+    const settings = await getVideoSettings();
+    if (meetingMode === "video" && !settings.videoEnabled) {
+      res.status(403).json({ error: "Video Rooms are not enabled for this church." });
       return;
     }
 
@@ -404,13 +414,13 @@ router.post("/:roomId/video/token", async (req, res) => {
   }
 
   try {
+    const status = await getVideoStatus(String(roomId));
     const settings = await getVideoSettings();
-    if (!settings.videoEnabled) {
+    if (status.meetingMode === "video" && !settings.videoEnabled) {
       res.status(403).json({ error: "Video Rooms are not enabled for this church." });
       return;
     }
 
-    const status = await getVideoStatus(String(roomId));
     if (!status.videoActive || !status.livekitRoomName) {
       res.status(409).json({ error: "No active video session for this Room." });
       return;
@@ -437,7 +447,12 @@ router.post("/:roomId/video/token", async (req, res) => {
     }
 
     const appRole = await getUserRole(userId);
-    const isHost = await canHostVideo(userId, String(roomId), appRole);
+    const isHost = await canHostMedia(
+      userId,
+      String(roomId),
+      status.meetingMode,
+      appRole,
+    );
 
     // Resolve display name from user_profiles (never expose raw userId).
     // Resolve by immutable subject, with email fallback for historical rows.
@@ -472,20 +487,27 @@ router.post("/:roomId/video/end", async (req, res) => {
   if (!userId) return;
   const { roomId } = req.params;
 
-  if (!isLiveKitConfigured()) {
-    res.status(503).json({ error: "Live video is not configured on this server." });
-    return;
-  }
-
   try {
+    const status = await getVideoStatus(String(roomId));
     const appRole = await getUserRole(userId);
-    const allowed = await canHostVideo(userId, String(roomId), appRole);
+    const allowed = await canHostMedia(
+      userId,
+      String(roomId),
+      status.meetingMode,
+      appRole,
+    );
     if (!allowed) {
-      res.status(403).json({ error: "Only the room host can end the meeting." });
+      res.status(403).json({
+        error: `${status.meetingMode === "audio" ? "Audio" : "Video"} meetings have not been enabled for your account.`,
+      });
       return;
     }
 
-    const status = await getVideoStatus(String(roomId));
+    if (!isLiveKitConfigured()) {
+      res.status(503).json({ error: "Live video is not configured on this server." });
+      return;
+    }
+
     if (status.livekitRoomName) {
       await deleteLiveKitRoom(status.livekitRoomName);
     }
@@ -515,6 +537,82 @@ router.get("/admin/persons/:userId/leader-access", async (req, res) => {
     res.json(result);
   } catch {
     res.status(500).json({ error: "Failed to load leader access." });
+  }
+});
+
+/**
+ * GET /admin/persons/:userId/media-access
+ * Returns independent audio/video host permissions for an Emmaus account.
+ */
+router.get("/admin/persons/:userId/media-access", async (req, res) => {
+  const adminId = await guardAdmin(req, res);
+  if (!adminId) return;
+  try {
+    const targetId = String(req.params.userId);
+    const appRole = await getUserRole(targetId);
+    res.json(await getMediaHostAccess(targetId, appRole));
+  } catch {
+    res.status(500).json({ error: "Failed to load media host access." });
+  }
+});
+
+/**
+ * PATCH /admin/persons/:userId/media-access
+ * Body: { audio?: boolean; video?: boolean }
+ */
+router.patch("/admin/persons/:userId/media-access", async (req, res) => {
+  const adminId = await guardAdmin(req, res);
+  if (!adminId) return;
+  const body = req.body as { audio?: unknown; video?: unknown };
+  const patch: { audio?: boolean; video?: boolean } = {};
+  if (body.audio !== undefined) {
+    if (typeof body.audio !== "boolean") {
+      res.status(400).json({ error: "audio must be a boolean." });
+      return;
+    }
+    patch.audio = body.audio;
+  }
+  if (body.video !== undefined) {
+    if (typeof body.video !== "boolean") {
+      res.status(400).json({ error: "video must be a boolean." });
+      return;
+    }
+    patch.video = body.video;
+  }
+  if (patch.audio === undefined && patch.video === undefined) {
+    res.status(400).json({ error: "Provide audio or video." });
+    return;
+  }
+  try {
+    const targetId = String(req.params.userId);
+    const targetRole = await getUserRole(targetId);
+    const before = await getMediaHostAccess(targetId, targetRole);
+    if (before.isAdministrator) {
+      res.status(409).json({ error: "Church Administrators are automatically authorised for audio and video meetings." });
+      return;
+    }
+    await setMediaHostAccess(targetId, patch);
+    const after = await getMediaHostAccess(targetId, targetRole);
+    for (const permission of ["audio", "video"] as const) {
+      if (patch[permission] === undefined || before[permission] === after[permission]) continue;
+      await logAuditEvent({
+        contentType: "user_permission",
+        contentId: targetId,
+        action: "edit",
+        performedBy: adminId,
+        previousState: {
+          permission: `${permission}_meetings`,
+          previousValue: before[permission],
+        },
+        newState: {
+          permission: `${permission}_meetings`,
+          newValue: after[permission],
+        },
+      });
+    }
+    res.json(after);
+  } catch {
+    res.status(500).json({ error: "Failed to update media host access." });
   }
 });
 
@@ -823,11 +921,13 @@ router.get("/:roomId", async (req, res) => {
 
     const activeSession = await getActiveSession(String(roomId));
     const isLeader = isRoomLeaderRole(role);
+    const mediaHostAccess = await getMediaHostAccess(userId);
 
     res.json({
       room: sanitisedRoom,
       currentUserRole: role,
       isLeader,
+      mediaHostAccess,
       activeSession: activeSession ?? null,
       sharedPanel: getSharedPanelState(activeSession),
     });
@@ -1977,6 +2077,13 @@ router.post("/:roomId/session/start", async (req, res) => {
       : "text";
   try {
     if (meetingMode !== "text") {
+      const appRole = await getUserRole(userId);
+      if (!(await canHostMedia(userId, String(roomId), meetingMode, appRole))) {
+        res.status(403).json({
+          error: `${meetingMode === "audio" ? "Audio" : "Video"} meetings have not been enabled for your account.`,
+        });
+        return;
+      }
       if (!isLiveKitConfigured()) {
         res.status(503).json({ error: "Live meetings are not configured on this server." });
         return;

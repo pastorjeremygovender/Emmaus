@@ -325,10 +325,10 @@ export default function RoomDetail() {
     }
   }, [lastEvent, presentationDiscussionId, presentationReturnToChat, roomId, setLocation]);
 
-  // Live Video status polling — kept here (before the early returns) so the
+  // Live meeting status polling — kept here (before the early returns) so the
   // hook call count never changes between renders. Runs for ALL room types:
-  // videoActive lets any member join when a leader has started video;
-  // videoCanHost reflects the server-verified authorization to start/end it.
+  // videoActive lets any member join when a leader has started media;
+  // videoCanHost reflects the server-verified authorization to control it.
   useEffect(() => {
     if (!activeSession || !user?.id || !roomId) return;
     let destroyed = false;
@@ -1216,7 +1216,8 @@ export default function RoomDetail() {
             setShowGuideGroup(false);
             openChat(discussionId);
           }}
-          videoEligible={videoCanHost}
+           audioEligible={Boolean(room.mediaHostAccess?.audio)}
+           videoHostEligible={Boolean(room.mediaHostAccess?.video)}
           videoActive={videoActive}
           onStartVideo={handleStartVideo}
           onEndVideo={handleEndVideo}
@@ -1241,21 +1242,38 @@ export default function RoomDetail() {
               </p>
             </div>
             <div className="space-y-2">
-              {([
-                ['text', 'Text meeting', 'Study, notes, prayer, and Group Discussion'],
-                ['audio', 'Live audio', 'Microphone-only meeting; no camera is published'],
-                ['video', 'Live video', 'Camera and microphone meeting'],
-              ] as const).map(([mode, label, description]) => (
+              <button
+                onClick={() => void handleStartMeetingDirect('text')}
+                disabled={startingMeeting}
+                className="w-full text-left p-3.5 rounded-xl border border-border hover:border-primary/50 hover:bg-muted/40 transition-colors disabled:opacity-60"
+              >
+                <p className="text-[14px] font-semibold text-foreground">Text meeting</p>
+                <p className="text-[12px] text-muted-foreground mt-0.5">Study, notes, prayer, and Group Discussion</p>
+              </button>
+              {room.mediaHostAccess?.audio ? (
                 <button
-                  key={mode}
-                  onClick={() => void handleStartMeetingDirect(mode)}
+                  onClick={() => void handleStartMeetingDirect('audio')}
                   disabled={startingMeeting}
                   className="w-full text-left p-3.5 rounded-xl border border-border hover:border-primary/50 hover:bg-muted/40 transition-colors disabled:opacity-60"
                 >
-                  <p className="text-[14px] font-semibold text-foreground">{label}</p>
-                  <p className="text-[12px] text-muted-foreground mt-0.5">{description}</p>
+                  <p className="text-[14px] font-semibold text-foreground">Live audio</p>
+                  <p className="text-[12px] text-muted-foreground mt-0.5">Microphone-only meeting; no camera is published</p>
                 </button>
-              ))}
+              ) : (
+                <p className="px-1 text-[12px] text-muted-foreground">Audio meetings have not been enabled for your account.</p>
+              )}
+              {room.mediaHostAccess?.video ? (
+                <button
+                  onClick={() => void handleStartMeetingDirect('video')}
+                  disabled={startingMeeting}
+                  className="w-full text-left p-3.5 rounded-xl border border-border hover:border-primary/50 hover:bg-muted/40 transition-colors disabled:opacity-60"
+                >
+                  <p className="text-[14px] font-semibold text-foreground">Live video</p>
+                  <p className="text-[12px] text-muted-foreground mt-0.5">Camera and microphone meeting</p>
+                </button>
+              ) : (
+                <p className="px-1 text-[12px] text-muted-foreground">Video meetings have not been enabled for your account.</p>
+              )}
             </div>
             <button
               onClick={() => setShowStartMeetingMode(false)}

@@ -1783,6 +1783,51 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: authorized_room_leader column failed (non-fatal)");
   }
 
+  // ── Separate audio/video host permissions (2026-09) ─────────────────────────
+  // Start nullable so the legacy authorization can be copied exactly once.
+  // The follow-up backfill is guarded by IS NULL; later administrator changes
+  // to either permission are therefore never overwritten on a subsequent boot.
+  try {
+    await pool.query(`
+      ALTER TABLE user_profiles
+        ADD COLUMN IF NOT EXISTS allow_audio_meetings BOOLEAN;
+      ALTER TABLE user_profiles
+        ADD COLUMN IF NOT EXISTS allow_video_meetings BOOLEAN;
+
+      UPDATE user_profiles
+         SET allow_audio_meetings = TRUE
+       WHERE allow_audio_meetings IS NULL
+         AND (
+           authorized_room_leader = TRUE
+           OR pastoral_role = 'pastor'
+           OR app_role IN ('admin', 'superAdmin')
+         );
+
+      UPDATE user_profiles
+         SET allow_video_meetings = TRUE
+       WHERE allow_video_meetings IS NULL
+         AND (
+           authorized_room_leader = TRUE
+           OR pastoral_role = 'pastor'
+           OR app_role IN ('admin', 'superAdmin')
+         );
+
+      UPDATE user_profiles
+         SET allow_audio_meetings = COALESCE(allow_audio_meetings, FALSE),
+             allow_video_meetings = COALESCE(allow_video_meetings, FALSE)
+       WHERE allow_audio_meetings IS NULL OR allow_video_meetings IS NULL;
+
+      ALTER TABLE user_profiles
+        ALTER COLUMN allow_audio_meetings SET DEFAULT FALSE,
+        ALTER COLUMN allow_audio_meetings SET NOT NULL,
+        ALTER COLUMN allow_video_meetings SET DEFAULT FALSE,
+        ALTER COLUMN allow_video_meetings SET NOT NULL;
+    `);
+    logger.info("Startup migration: separate audio/video host permissions ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: separate audio/video host permissions failed (non-fatal)");
+  }
+
   // ── Replace 'the pastor' in companion entries (2026-08) ──────────────────────
   // Generated companion entries may refer to the speaker as "the pastor" or
   // "The pastor". Replace with "Pastor Jeremy" for existing ICC content generated

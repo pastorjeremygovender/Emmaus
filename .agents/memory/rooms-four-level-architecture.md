@@ -35,6 +35,13 @@ Creator's own personal progress is never touched — room tracks separately via 
 Endpoints: `GET /api/rooms/admin/video-settings`, `PATCH /api/rooms/admin/video-settings` (admin only).
 Admin UI: Settings → Rooms & Video Settings section.
 
+## Separate media host authorization
+Text Groups are available to authenticated members without media-host permission. Audio and video host permissions are independent account capabilities, and hosting still requires Owner/Leader membership in the specific room. Church Administrators retain both capabilities automatically.
+
+**Why:** Room creators should be able to create and lead ordinary Text Groups without being granted LiveKit access, while the church retains explicit control over who can host audio or video.
+
+**How to apply:** Enforce the capability and room-role checks on every media start/end path; expose only the current user's capability on room detail and manage account permissions from the administrator's pastoral person page. Preserve the legacy authorized-room-leader grant during migration and audit administrator changes.
+
 ## Build order
 - Step 1: room types, permissions, content linking, video settings schema ✅
 - V1 architecture: dual-dimension rooms (contentType + roomType), prayer requests, content panel, leader controls scaffold ✅

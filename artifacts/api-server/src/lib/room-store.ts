@@ -3528,6 +3528,118 @@ export async function setLeaderAccess(
   }
 }
 
+export type MediaHostPermissionSource = "admin_role" | "explicit" | "none";
+
+export interface MediaHostAccess {
+  audio: boolean;
+  video: boolean;
+  audioSource: MediaHostPermissionSource;
+  videoSource: MediaHostPermissionSource;
+  isAdministrator: boolean;
+}
+
+export function resolveMediaHostAccess(
+  appRole: string,
+  audioEnabled: boolean,
+  videoEnabled: boolean,
+): MediaHostAccess {
+  const isAdministrator = appRole === "admin" || appRole === "superAdmin";
+  if (isAdministrator) {
+    return {
+      audio: true,
+      video: true,
+      audioSource: "admin_role",
+      videoSource: "admin_role",
+      isAdministrator: true,
+    };
+  }
+  return {
+    audio: audioEnabled,
+    video: videoEnabled,
+    audioSource: audioEnabled ? "explicit" : "none",
+    videoSource: videoEnabled ? "explicit" : "none",
+    isAdministrator: false,
+  };
+}
+
+/**
+ * Resolve church-wide media hosting capabilities for one authenticated account.
+ *
+ * Administrators are always allowed to host both media types. Other accounts
+ * use the independent persisted permissions. This intentionally does not check
+ * room membership; callers must still require an Owner/Leader role where
+ * hosting is a room-scoped action.
+ */
+export async function getMediaHostAccess(
+  userId: string,
+  appRole?: string,
+): Promise<MediaHostAccess> {
+  const { rows } = await pool.query(
+    `SELECT app_role, allow_audio_meetings, allow_video_meetings
+       FROM user_profiles
+      WHERE auth_subject = $1 OR email = $1`,
+    [userId],
+  );
+  const row = rows[0];
+  const resolvedRole = appRole ?? String(row?.app_role ?? "user");
+  return resolveMediaHostAccess(
+    resolvedRole,
+    row?.allow_audio_meetings === true,
+    row?.allow_video_meetings === true,
+  );
+}
+
+/**
+ * Update independent media host capabilities. The caller is responsible for
+ * server-side administrator authorization and audit logging.
+ */
+export async function setMediaHostAccess(
+  userId: string,
+  patch: { audio?: boolean; video?: boolean },
+): Promise<void> {
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  let index = 1;
+  if (patch.audio !== undefined) {
+    sets.push(`allow_audio_meetings = $${index++}`);
+    values.push(patch.audio);
+  }
+  if (patch.video !== undefined) {
+    sets.push(`allow_video_meetings = $${index++}`);
+    values.push(patch.video);
+  }
+  if (sets.length === 0) return;
+  values.push(userId);
+  const result = await pool.query(
+    `UPDATE user_profiles
+        SET ${sets.join(", ")}, updated_at = NOW()
+      WHERE auth_subject = $${index} OR email = $${index}`,
+    values,
+  );
+  if (result.rowCount === 0) {
+    throw new Error("Cannot update media host access for an unknown account");
+  }
+}
+
+/**
+ * Check room leadership and the independent church-wide media capability.
+ * Text meetings must not call this function.
+ */
+export async function canHostMedia(
+  userId: string,
+  roomId: string,
+  mode: "audio" | "video",
+  appRole?: string,
+): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT role FROM room_members WHERE room_id = $1 AND user_id = $2`,
+    [roomId, userId],
+  );
+  if (!canHostWithRoomRole(rows[0]?.role)) return false;
+  const access = await getMediaHostAccess(userId, appRole);
+  return mode === "audio" ? access.audio : access.video;
+}
+
 /**
  * Check whether a user is authorised to HOST (start/end) video for a room.
  *
@@ -3540,15 +3652,9 @@ export async function setLeaderAccess(
 export async function canHostVideo(
   userId: string,
   roomId: string,
-  _appRole?: string
+  appRole?: string
 ): Promise<boolean> {
-  // Room hosting is appointed at the room level. The application role is
-  // intentionally ignored so a global admin who is only a Member cannot host.
-  const { rows: memberRows } = await pool.query(
-    `SELECT role FROM room_members WHERE room_id = $1 AND user_id = $2`,
-    [roomId, userId]
-  );
-  return canHostWithRoomRole(memberRows[0]?.role);
+  return canHostMedia(userId, roomId, "video", appRole);
 }
 
 // ─── Church video settings ────────────────────────────────────────────────────

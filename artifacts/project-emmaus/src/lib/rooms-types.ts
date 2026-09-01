@@ -135,6 +135,14 @@ export interface LinkedJourney {
   startedAt: string;
 }
 
+export interface MediaHostAccess {
+  audio: boolean;
+  video: boolean;
+  audioSource?: 'admin_role' | 'explicit' | 'none';
+  videoSource?: 'admin_role' | 'explicit' | 'none';
+  isAdministrator?: boolean;
+}
+
 export interface RoomDetail extends RoomSummary {
   members: RoomMember[];
   linkedJourneys: LinkedJourney[];
@@ -147,6 +155,8 @@ export interface RoomDetail extends RoomSummary {
   activeSession?: RoomSession | null;
   /** When true, members may present their own shared media (default false). */
   allowMemberPresent?: boolean;
+  /** Current user's church-wide media hosting capabilities. */
+  mediaHostAccess?: Pick<MediaHostAccess, 'audio' | 'video'>;
 }
 
 export interface MemberJourneyProgress {
@@ -184,6 +194,11 @@ export interface VideoSessionStatus {
   livekitUrl: string | null;
   /** Whether the current user can start / end video */
   canHost?: boolean;
+  /** Whether the current user can host each media mode in this room. */
+  canHostAudio?: boolean;
+  canHostVideo?: boolean;
+  audioHostEnabled?: boolean;
+  videoHostEnabled?: boolean;
   meetingMode?: 'audio' | 'video';
 }
 

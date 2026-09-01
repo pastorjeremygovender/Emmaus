@@ -138,7 +138,13 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await apiGetRoomById(user.id, roomId);
       if (!res) return null;
-      const detail: RoomDetail = { ...res.room, currentUserRole: res.currentUserRole, isLeader: res.isLeader ?? false, activeSession: res.activeSession ?? null };
+       const detail: RoomDetail = {
+         ...res.room,
+         currentUserRole: res.currentUserRole,
+         isLeader: res.isLeader ?? false,
+         activeSession: res.activeSession ?? null,
+         mediaHostAccess: res.mediaHostAccess ?? res.room.mediaHostAccess ?? { audio: false, video: false },
+       };
       setDetailCache(prev => ({ ...prev, [roomId]: detail }));
       return detail;
     } catch {
