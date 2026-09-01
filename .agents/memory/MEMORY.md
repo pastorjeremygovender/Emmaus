@@ -83,3 +83,4 @@
 - [Appearance preferences](appearance-preferences.md) — dark mode and text size are account-backed with local retry; scale typography utilities, never the entire layout root.
 - [Persistent meeting media](persistent-meeting-media.md) — LiveKit belongs above routes; media permissions follow explicit mode and device intent.
 - [Meeting presentation authority](meeting-presentation-authority.md) — presentation mutations and hydration are session-scoped; REST and SSE responses must pass the same stale-state checks.
+- [Pastoral resource allocation](discipleship-resource-allocation.md) — classify admin profile resources from authoritative source types/IDs, never display-title matching.

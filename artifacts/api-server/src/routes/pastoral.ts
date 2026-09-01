@@ -920,11 +920,12 @@ pastoralRouter.get("/people/:personKey/discipleship-summary", async (req: Reques
 
     // Run all four queries in parallel
     const [journeysRes, roomsRes, devotionalsRes, companionsRes] = await Promise.all([
-      // 1. Journey progress
+       // 1. Journey progress. collection_id is part of the authoritative
+       // distinction between a standalone Walk and a collection Journey.
       pool.query(
         `SELECT ujp.journey_id, ujp.current_day, ujp.completed_days, ujp.status,
                 ujp.started_at, ujp.updated_at,
-                j.title, j.duration_days, j.journey_type
+                 j.title, j.duration_days, j.journey_type, j.collection_id
          FROM   user_journey_progress ujp
          JOIN   journeys j ON j.id = ujp.journey_id
          WHERE  ujp.user_id = $1
@@ -980,6 +981,7 @@ pastoralRouter.get("/people/:personKey/discipleship-summary", async (req: Reques
         journeyId:     String(r.journey_id),
         title:         String(r.title),
         journeyType:   String(r.journey_type ?? ""),
+         collectionId:  r.collection_id ? String(r.collection_id) : null,
         currentDay:    Number(r.current_day ?? 1),
         totalDays:     Number(r.duration_days ?? 0),
         completedDays: completedCount(r.completed_days),

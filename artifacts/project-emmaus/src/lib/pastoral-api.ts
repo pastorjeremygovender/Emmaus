@@ -393,6 +393,7 @@ export interface DiscipleshipJourney {
   journeyId: string;
   title: string;
   journeyType: string;
+  collectionId: string | null;
   currentDay: number;
   totalDays: number;
   completedDays: number;
