@@ -1,0 +1,153 @@
+Proceed with the CONTROLLED ADMIN INTEGRATION identified in your immediately preceding read-only audit.
+
+The current working user application is the protected source of truth. Preserve the complete current baseline, including Bible commit:
+
+`74a2d473d9855eb37eaa974787915bb7c0d04116`
+
+Do not merge the complete pastoral-admin branch.
+
+Do not replace the current `Admin.tsx` with the older conflicting version.
+
+Before editing:
+
+* Confirm the current branch and commit match your audit.
+* Confirm the working tree state matches your audit.
+* Create a local safety branch at the exact current commit named:
+  `safety/pre-admin-integration-2026-09-01`
+* Do not switch to the safety branch.
+* Record its commit ID.
+
+Integrate only the scoped admin implementation paths identified in your audit.
+
+Use the most complete pastoral-admin source commit/checkpoint identified in the audit, but:
+
+* Restore the missing `PastoralRegister.tsx` and its directly required admin components.
+* Integrate the admin navigation into the current newer `Admin.tsx` shell manually and minimally.
+* Preserve all newer user-app routing, authentication, Bible, Daily Rhythm, Groups and Today’s Steps code.
+* Do not overwrite entire shared files when a narrow reconciliation is possible.
+* Do not import unrelated files from the old branch.
+
+FINAL ADMIN SCOPE
+
+Navigation:
+
+* Today
+* People / Church Register
+* Attendance
+* Content Studio
+* Bible Study
+* Advanced administration collapsed and visually secondary
+* Prayer Requests completely excluded
+
+Today:
+
+* Calm pastoral overview
+* Useful pastoral actions and signals only
+* Preserve existing attendance, care and discipleship data
+* No technical dashboard clutter
+
+People / Church Register:
+
+* Search and open existing visible people
+* Preserve the genuine-person visibility filter
+* Do not restore, create, delete, relink, reassign or recover any Church Register member
+* Do not alter People API queries or church-scoping architecture
+* The fact that only Jeremy may currently be visible is a separate data-recovery issue, not part of this integration
+
+Person profile:
+
+* Compact header
+* Contact Information open by default
+* Attendance shows the three most recent records directly
+* “View full attendance history” when more records exist
+* Discipleship
+* Volunteering
+* Significant Moments with its distinct calendar icon
+* Pastoral Care
+* Administrative Details collapsed
+* Group Leadership inside Administrative Details
+* Preserve all existing loaders, actions, mutations and API contracts
+
+Attendance, Content Studio and Bible Study:
+
+* Preserve the existing working admin functionality
+* Include them in the simplified navigation
+* Do not redesign them
+* Do not change their data contracts
+
+STRICT EXCLUSIONS
+
+Do not:
+
+* Modify the user-facing application
+* Modify Daily Rhythm, OpeningGate or Previous Days
+* Modify Bible behaviour or per-book memory
+* Modify Groups, meetings or chat
+* Modify Ask Emmaus
+* Modify production data
+* Modify database schemas
+* Modify secrets or environment variables
+* Upgrade dependencies
+* Perform Church Register recovery
+* Add Prayer Requests
+* Perform broad refactoring or unrelated type cleanup
+* Fetch, pull, push, merge, rebase or reset
+* Publish or deploy automatically
+
+VALIDATION
+
+Admin:
+
+* Admin shell and navigation render
+* Today loads
+* People / Church Register loads
+* Jeremy’s profile opens
+* Every profile accordion section renders in the correct location
+* Attendance loads
+* Content Studio loads
+* Bible Study loads
+* Advanced administration expands and collapses
+* Prayer Requests are absent
+* Existing admin loaders/actions/mutations remain connected
+* Admin role protection still works
+* Ordinary users cannot access admin routes
+
+Protected user application:
+
+* Daily Rhythm/OpeningGate full regression suite
+* Bible navigation/state and per-book-memory regression suite
+* Existing member-flow regression suite
+* Groups/meeting/chat focused suite
+* Auth identity suite
+* Frontend production build
+* API production build
+* Recursive workspace builds
+* API and web smoke tests
+* Fresh browser preview and console check
+* `git diff --check`
+
+Compare any typecheck output to the recorded pre-change baseline. This integration must introduce no new errors.
+
+Manually preview both:
+
+1. The admin interface at mobile width
+2. The normal user interface at mobile width
+
+Create one local commit only after all required checks pass.
+
+Do not publish.
+
+Report:
+
+* Safety branch and safety commit
+* Admin source commit/checkpoint used
+* Exact files added or changed
+* How the `Admin.tsx` conflict was reconciled
+* Completed admin navigation
+* Person-profile verification
+* Admin permission verification
+* All test/build results
+* Confirmation that no user-side behaviour changed
+* Confirmation that no people/data/schema/environment changes occurred
+* New integration commit ID
+* Final verdict: READY FOR MANUAL PUBLISH or NOT READY
