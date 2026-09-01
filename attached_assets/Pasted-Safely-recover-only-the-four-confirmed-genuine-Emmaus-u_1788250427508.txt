@@ -1,0 +1,37 @@
+Safely recover only the four confirmed genuine Emmaus users: Cally, Janine, Radha and Wesley.
+
+This is an authorized data repair, but it must be transactional, reversible and limited strictly to these four identities.
+
+Before writing:
+
+- Reconfirm that each person has exactly one active Supabase provider account.
+- Require a confirmed, non-test email address.
+- Require that provider identity metadata matches the expected person.
+- Confirm that no local users or user_profiles row already exists with the same provider UUID or email.
+- Confirm that the account does not match demo-*, test-*, rooms-*, itest-*, __TEST__, @test.invalid or @emmaus.church fixture patterns.
+- Record a recovery snapshot containing the exact provider UUID, masked email and any existing related records for rollback. Do not expose full email addresses or credentials in output.
+
+Recovery:
+
+- Use each existing provider UUID as the stable identity.
+- Create only the missing local users and user_profiles mirror records required by the current application.
+- Preserve the original provider UUID, confirmed email, preferred/display name and account creation information.
+- Set account_status to active.
+- Do not create new Supabase authentication accounts.
+- Do not change passwords, provider identities or confirmed email addresses.
+- Do not reassign, duplicate or fabricate attendance, Walk, Journey, Daily Rhythm, group, sermon or pastoral activity.
+- If existing activity already references the same stable provider UUID, leave it untouched so it reconnects naturally.
+- Do not recover or modify Bradley, ICC, Legacy or Sarah.
+- Do not modify Jeremy.
+- Abort and roll back the entire transaction if any identity is ambiguous or any duplicate/conflict is found.
+
+After recovery:
+
+- Verify each recovered provider UUID maps to exactly one local users row and one active user_profiles row.
+- Verify the People API returns Jeremy, Cally, Janine, Radha and Wesley exactly once each.
+- Verify automated test accounts remain hidden.
+- Verify no unrelated database rows changed.
+- Run the relevant integrity checks and restart the API only if required.
+- Do not fetch, pull, push, merge, switch branches, publish or deploy.
+- Do not commit source changes.
+- Report the transaction result, recovered people, skipped people, row counts before and after, and the exact rollback method.
