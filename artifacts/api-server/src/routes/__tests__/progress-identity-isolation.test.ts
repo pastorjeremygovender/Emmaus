@@ -222,8 +222,8 @@ describe("ISO-1 — GET /journeys/progress ignores caller-supplied userId query 
 
 // ── ISO-2: POST /api/journeys/:id/progress/start with userId in body ──────────
 
-describe("ISO-2 — POST /journeys/:id/progress/start ignores userId in request body", () => {
-  it("creates progress for Alice only, regardless of userId supplied in body", async () => {
+describe("ISO-2 — POST /journeys/:id/progress/start preserves the requested origin", () => {
+  it("creates Alice's Walk-origin progress even for a legacy core journey", async () => {
     const aliceHeaders = await authHeader(ALICE_KEY);
     const { testUserIdFor } = await import("../../test-utils/test-auth.ts");
     const aliceUserId = await testUserIdFor(ALICE_KEY);

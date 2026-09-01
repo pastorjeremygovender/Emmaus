@@ -1514,11 +1514,11 @@ export async function getDailyRhythmStartup(
 export async function startJourney(
   userId: string,
   journeyId: string,
-  _displayOrigin?: JourneyDisplayOrigin | null,
+  requestedDisplayOrigin?: JourneyDisplayOrigin | null,
 ): Promise<FrontendProgress> {
   const now = new Date();
   const journey = await getJourney(journeyId);
-  const displayOrigin = authoritativeDisplayOrigin(journey);
+  const displayOrigin = requestedDisplayOrigin ?? authoritativeDisplayOrigin(journey);
   // Use onConflictDoNothing so concurrent calls (e.g. from the shared-start
   // endpoint and the legacy start endpoint racing) are safe under the unique
   // index on (user_id, journey_id).  If the INSERT is a no-op, RETURNING is
@@ -1552,7 +1552,13 @@ export async function startJourney(
       hiddenFromToday: false,
       lastOpenedAt: now,
       updatedAt: now,
-      ...(displayOrigin ? { displayOrigin } : {}),
+          ...(displayOrigin
+            ? {
+                // The first member-facing surface that starts a journey owns
+                // its origin. A later re-entry must not reclassify it.
+                displayOrigin: sql`COALESCE(${userJourneyProgressTable.displayOrigin}, EXCLUDED.display_origin)`,
+              }
+            : {}),
     },
   })
   .returning();
@@ -1569,8 +1575,8 @@ export async function completeStep(
   const now = new Date();
   const journey = await getJourney(journeyId);
   const isDailyRhythm = journey?.journeyType === "daily-rhythm" || journey?.journeyType === "core";
-  const displayOrigin = authoritativeDisplayOrigin(journey);
   const existing = await getProgress(userId, journeyId);
+  const displayOrigin = existing?.displayOrigin ?? authoritativeDisplayOrigin(journey);
 
   if (!existing) {
     await startJourney(userId, journeyId);
