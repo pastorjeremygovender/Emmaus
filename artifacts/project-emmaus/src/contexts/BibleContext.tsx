@@ -2,6 +2,13 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useAuth } from './AuthContext';
 import { loadBibleDataWithStatus, patchBibleData } from '../lib/bible-api';
 import { accountStorageKey } from '../lib/account-storage';
+import {
+  getRememberedBibleChapter,
+  loadBibleReadingPositions,
+  rememberBibleChapter,
+  saveBibleReadingPositions,
+  type BibleReadingPositions,
+} from '../lib/bible-reading-position';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -99,6 +106,8 @@ type BibleContextType = {
   readingHistory: ReadingHistoryEntry[];
   lastRead: ReadingHistoryEntry | null;   // convenience: most recent
   markChapterOpened: (entry: Omit<ReadingHistoryEntry, 'openedAt'>) => void;
+  getRememberedChapter: (bookId: string, translationId?: string) => number | null;
+  rememberChapter: (bookId: string, chapter: number, translationId?: string) => void;
 
   // Completed chapters
   completedChapters: Set<string>;
@@ -168,6 +177,7 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
 
    const [translationId, setTranslationIdState] = useState<string>(DEFAULT_BIBLE_TRANSLATION);
   const [readingHistory, setReadingHistory] = useState<ReadingHistoryEntry[]>([]);
+  const [readingPositions, setReadingPositions] = useState<BibleReadingPositions>({});
   const [completedChapters, setCompletedChapters] = useState<Set<string>>(new Set());
   const [journeyProgress, setJourneyProgress] = useState<Record<string, BibleJourneyProgress>>({});
   const [highlights, setHighlights] = useState<VerseHighlight[]>([]);
@@ -212,6 +222,7 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
     setLoadedSubject(null);
     setTranslationIdState(DEFAULT_BIBLE_TRANSLATION);
     setReadingHistory([]);
+    setReadingPositions({});
     setCompletedChapters(new Set());
     setJourneyProgress({});
     setHighlights([]);
@@ -232,6 +243,7 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
     // A present BSB value is intentional; only an absent value gets NIV.
     const cachedTranslation = loadStoredTranslation(accountSubject);
     setTranslationIdState(cachedTranslation ?? DEFAULT_BIBLE_TRANSLATION);
+    setReadingPositions(loadBibleReadingPositions(accountSubject));
 
     async function loadData() {
       const cached = {
@@ -333,6 +345,28 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
   }, [persist]);
+
+  const getRememberedChapter = useCallback((
+    bookId: string,
+    requestedTranslationId = translationId,
+  ) => getRememberedBibleChapter(readingPositions, requestedTranslationId, bookId), [
+    readingPositions,
+    translationId,
+  ]);
+
+  const rememberChapter = useCallback((
+    bookId: string,
+    chapter: number,
+    requestedTranslationId = translationId,
+  ) => {
+    const subject = userIdRef.current;
+    if (!subject) return;
+    setReadingPositions(prev => {
+      const next = rememberBibleChapter(prev, requestedTranslationId, bookId, chapter);
+      if (next !== prev) saveBibleReadingPositions(subject, next);
+      return next;
+    });
+  }, [translationId]);
 
   // ─── Completed chapters ─────────────────────────────────────────────────────
 
@@ -507,7 +541,9 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
   return (
     <BibleContext.Provider value={{
        translationId: ownsVisibleState ? translationId : DEFAULT_BIBLE_TRANSLATION, setTranslation,
-      readingHistory: visibleHistory, lastRead, markChapterOpened,
+       readingHistory: visibleHistory, lastRead, markChapterOpened,
+       getRememberedChapter: ownsVisibleState ? getRememberedChapter : () => null,
+       rememberChapter,
       completedChapters: visibleCompleted, markChapterComplete,
       isChapterComplete: ownsVisibleState ? isChapterComplete : () => false,
       journeyProgress: visibleJourneyProgress, startBibleJourney, markJourneyChapterComplete,

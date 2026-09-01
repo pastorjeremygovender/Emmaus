@@ -26,6 +26,7 @@ const UNOWNED_PERSONAL_KEYS = [
   'emmaus_bible_favourites',
   'emmaus_bible_collections',
   'emmaus_bible_prayers',
+  'emmaus_bible_reading_positions_v1',
   'emmaus_admin_sermons',
   'emmaus_admin_prayers',
   'emmaus_admin_settings',

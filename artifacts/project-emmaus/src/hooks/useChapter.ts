@@ -22,9 +22,12 @@ export function useChapter(
   translationId: string,
 ): UseChapterResult {
   const [chapter, setChapter] = useState<BibleProviderChapter | null>(null);
+  const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+
+  const requestKey = `${translationId}:${bookId}:${chapterNum}`;
 
   useEffect(() => {
     if (!bookId || !chapterNum || !translationId) return;
@@ -37,24 +40,36 @@ export function useChapter(
     setLoading(true);
     setError(null);
     setChapter(null);
+    setLoadedRequestKey(null);
 
     remoteBibleProvider
       .getChapter(bookId, chapterNum, translationId)
       .then(data => {
         if (cancelled) return;
         setChapter(data);
+        setLoadedRequestKey(requestKey);
         setLoading(false);
       })
       .catch(() => {
         if (cancelled) return;
+        setLoadedRequestKey(requestKey);
         setError('This chapter could not be loaded just now.');
         setLoading(false);
       });
 
     return () => { cancelled = true; };
-  }, [bookId, chapterNum, translationId, retryCount]);
+  }, [bookId, chapterNum, translationId, retryCount, requestKey]);
 
   const retry = () => setRetryCount(c => c + 1);
 
-  return { chapter, loading, error, retry };
+  // Route params can change while this component stays mounted. Do not expose
+  // the previous request's chapter during the render before the new effect
+  // gets a chance to clear local state.
+  const requestIsLoaded = loadedRequestKey === requestKey;
+  return {
+    chapter: requestIsLoaded ? chapter : null,
+    loading: loading || !requestIsLoaded,
+    error: requestIsLoaded ? error : null,
+    retry,
+  };
 }

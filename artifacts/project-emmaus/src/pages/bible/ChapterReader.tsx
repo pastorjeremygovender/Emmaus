@@ -48,6 +48,7 @@ export default function ChapterReader() {
   const {
     translationId, setTranslation,
     markChapterOpened,
+    rememberChapter,
     getHighlight, addHighlight, removeHighlight,
     isFavourite, addFavourite, removeFavourite,
     getNote, saveNote, getChapterNotes,
@@ -120,12 +121,13 @@ export default function ChapterReader() {
   // Mark chapter opened; restore scroll when data arrives
   useEffect(() => {
     if (!book || !chapterData) return;
-    markChapterOpened({
+     markChapterOpened({
       bookId: book.id,
       bookName: book.name,
       chapter: chapterNum,
       chapterHeading: chapterData.heading,
     });
+     rememberChapter(book.id, chapterNum, translationId);
     if (scrollBeforeTranslation.current !== null) {
       const y = scrollBeforeTranslation.current;
       scrollBeforeTranslation.current = null;
@@ -151,7 +153,7 @@ export default function ChapterReader() {
     }
     window.scrollTo(0, 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book?.id, chapterNum, chapterData?.heading]);
+  }, [book?.id, chapterNum, chapterData?.heading, translationId, rememberChapter]);
 
   // Pre-fill note when verse sheet opens
   useEffect(() => {

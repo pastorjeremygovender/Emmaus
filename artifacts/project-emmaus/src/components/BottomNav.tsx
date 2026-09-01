@@ -8,7 +8,7 @@ import { getReturnDestination } from '@/lib/emmaus-pending';
 // Discover and My Journey are accessed from the top header and Walk cards.
 
 export function BottomNav() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   const navItems = [
@@ -58,6 +58,13 @@ export function BottomNav() {
             <a
               key={path}
               href={`${base}${path}`}
+              onClick={(event) => {
+                // Keep normal links usable for open-in-new-tab gestures, but
+                // use Wouter for ordinary taps so the app shell stays mounted.
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                event.preventDefault();
+                setLocation(path);
+              }}
               data-testid={`nav-${path.slice(1)}`}
               className="relative flex h-full min-h-[44px] w-28 shrink-0 flex-col items-center justify-center gap-1 px-1"
               aria-current={active ? 'page' : undefined}

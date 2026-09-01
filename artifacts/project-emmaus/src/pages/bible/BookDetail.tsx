@@ -12,12 +12,11 @@ export default function BookDetail() {
   useEffect(() => { window.scrollTo(0, 0); }, []);
   const { bookId } = useParams<{ bookId: string }>();
   const [, setLocation] = useLocation();
-  const { isChapterComplete, lastRead, getJourneyProgress } = useBible();
+  const { isChapterComplete, translationId, getRememberedChapter } = useBible();
 
   const resolvedBookId = bookId || 'luke';
   const book = getBibleBook(resolvedBookId);
   const journey = BIBLE_JOURNEYS.find(j => j.bookId === resolvedBookId && j.available);
-  const journeyProg = journey ? getJourneyProgress(journey.id) : null;
 
   if (!book) {
     return (
@@ -33,10 +32,7 @@ export default function BookDetail() {
   const completedCount = Array.from({ length: book.chapters }, (_, i) => i + 1)
     .filter(ch => isChapterComplete(book.id, ch)).length;
 
-  const nextChapter =
-    lastRead?.bookId === book.id
-      ? lastRead.chapter
-      : journeyProg?.currentChapter ?? 1;
+  const nextChapter = getRememberedChapter(book.id, translationId) ?? 1;
 
   const bookDisplayName = book.genre === 'Gospel' ? `Gospel of ${book.name}` : book.name;
 
