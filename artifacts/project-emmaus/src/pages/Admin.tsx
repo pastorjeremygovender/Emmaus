@@ -5,71 +5,63 @@ import { AdminProvider } from '@/contexts/AdminContext';
 import { MediaStudioProvider } from '@/contexts/MediaStudioContext';
 import { Button } from '@/components/ui/button';
 import {
-  LayoutDashboard,
-  Users,
-  Settings2,
-  ArrowLeft,
-  Menu,
-  PenSquare,
-  FlaskConical,
-  BookOpen,
-  ClipboardList,
-  Heart,
-  BarChart2,
-  ListChecks,
+  ArrowLeft, BookOpen, ClipboardCheck, ClipboardList, FlaskConical,
+  Menu, PenSquare, Settings2, Sun, Users,
 } from 'lucide-react';
 
-import AdminDashboard from './admin/Dashboard';
-import PastoralDashboard from './admin/PastoralDashboard';
-import AnalyticsCentre from './admin/AnalyticsCentre';
-import { PastoralWorkflows } from './admin/PastoralWorkflows';
+import PastoralHome from './admin/pastoral/PastoralHome';
+import PastoralRegister from './admin/pastoral/PastoralRegister';
+import AttendanceSection from './admin/pastoral/AttendanceSection';
 import AdminSettings from './admin/Settings';
 import ContentStudio from './admin/content-studio/ContentStudio';
-import People from './admin/People';
-import type { PeopleTab } from './admin/People';
-import Testing from './admin/Testing';
 import UnifiedBibleStudy from './admin/UnifiedBibleStudy';
 import AuditLog from './admin/AuditLog';
+import Testing from './admin/Testing';
 import type { PersonType } from '@/lib/pastoral-api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type AdminSection =
+  | 'today'
+  | 'people'
+  | 'attendance'
+  // Legacy section identifiers are retained in the type because older,
+  // unmounted admin modules still import AdminNav. They are no longer shown.
   | 'dashboard'
   | 'pastoral-dashboard'
   | 'analytics'
   | 'workflows'
   | 'content-studio'
   | 'bible-study'
-  | 'people'
   | 'settings'
-  | 'testing'
-  | 'audit-log';
+  | 'audit-log'
+  | 'testing';
 
 export type AdminNav = {
   section: AdminSection;
-  // Content Studio deep-links
+  // Kept for legacy dashboard callers while the simplified register owns
+  // people navigation directly.
+  peopleTab?: 'members' | 'attendance' | 'prayer' | 'signals';
   subView?: 'studio-editor';
   journeyId?: string;
-  // People sub-tab
-  peopleTab?: PeopleTab;
-  // People deep-link — open a specific person's profile directly
   personDeepLink?: { personId: string; personType: PersonType; personName?: string };
 };
 
-// ─── Sidebar nav items (4 only) ───────────────────────────────────────────────
+const PRIMARY_NAV: { id: AdminSection; label: string; Icon: React.ElementType }[] = [
+  { id: 'today', label: 'Today', Icon: Sun },
+  { id: 'people', label: 'People', Icon: Users },
+  { id: 'attendance', label: 'Attendance', Icon: ClipboardCheck },
+];
 
-const NAV_ITEMS: { id: AdminSection; label: string; Icon: React.ElementType }[] = [
-  { id: 'dashboard',           label: 'Dashboard',           Icon: LayoutDashboard },
-  { id: 'pastoral-dashboard',  label: 'Pastoral Dashboard',  Icon: Heart },
-  { id: 'people',              label: 'People',              Icon: Users },
-  { id: 'analytics',           label: 'Analytics',           Icon: BarChart2 },
-  { id: 'workflows',           label: 'Workflows',           Icon: ListChecks },
-  { id: 'content-studio',      label: 'Content Studio',      Icon: PenSquare },
-  { id: 'bible-study',         label: 'Bible Study',         Icon: BookOpen },
-  { id: 'settings',            label: 'Settings',            Icon: Settings2 },
-  { id: 'audit-log',           label: 'Audit Log',           Icon: ClipboardList },
-  { id: 'testing',             label: 'Testing',             Icon: FlaskConical },
+const MINISTRY_TOOLS: { id: AdminSection; label: string; Icon: React.ElementType }[] = [
+  { id: 'content-studio', label: 'Content Studio', Icon: PenSquare },
+  { id: 'bible-study', label: 'Bible Study', Icon: BookOpen },
+];
+
+const SYSTEM_TOOLS: { id: AdminSection; label: string; Icon: React.ElementType }[] = [
+  { id: 'settings', label: 'Settings', Icon: Settings2 },
+  { id: 'audit-log', label: 'Audit Log', Icon: ClipboardList },
+  { id: 'testing', label: 'Testing', Icon: FlaskConical },
 ];
 
 // ─── Admin shell ──────────────────────────────────────────────────────────────
@@ -77,7 +69,7 @@ const NAV_ITEMS: { id: AdminSection; label: string; Icon: React.ElementType }[] 
 export default function Admin() {
   const { user, isDemoMode, signOut } = useAuth();
   const [, setLocation] = useLocation();
-  const [nav, setNav] = useState<AdminNav>({ section: 'dashboard' });
+  const [nav, setNav] = useState<AdminNav>({ section: 'today' });
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Allow both admin and superAdmin roles
@@ -99,22 +91,43 @@ export default function Admin() {
   // ─── Section label for mobile header ──────────────────────────────────────
 
   const sectionLabel: Record<AdminSection, string> = {
-    dashboard:             'Dashboard',
-    'pastoral-dashboard':  'Pastoral Dashboard',
-    analytics:             'Analytics Centre',
-    workflows:             'Ministry Workflows',
-    'content-studio':      'Content Studio',
-    'bible-study':         'Bible Study',
-    people:                'People',
-    settings:              'Settings',
-    'audit-log':           'Audit Log',
-    testing:               'Testing',
+    today: 'Today',
+    people: 'People',
+    attendance: 'Attendance',
+    dashboard: 'Today',
+    'pastoral-dashboard': 'Today',
+    analytics: 'Today',
+    workflows: 'Today',
+    'content-studio': 'Content Studio',
+    'bible-study': 'Bible Study',
+    settings: 'Settings',
+    'audit-log': 'Audit Log',
+    testing: 'Testing',
   };
 
   // ─── Content renderer ─────────────────────────────────────────────────────
 
   const renderContent = () => {
     switch (nav.section) {
+      case 'today':
+        return (
+          <PastoralHome
+            onOpenPeople={() => navigate({ section: 'people' })}
+            onOpenAttendance={() => navigate({ section: 'attendance' })}
+            onOpenPerson={(personId, personType, personName) =>
+              navigate({ section: 'people', personDeepLink: { personId, personType, personName } })
+            }
+          />
+        );
+      case 'people':
+        return (
+          <PastoralRegister
+            overridePerson={nav.personDeepLink}
+            onClearOverride={() => navigate({ section: 'people' })}
+          />
+        );
+      case 'attendance':
+        return <AttendanceSection />;
       case 'content-studio':
         return (
           <ContentStudio
@@ -122,19 +135,6 @@ export default function Admin() {
             initialJourneyId={nav.journeyId}
             onOpenLegacyEditor={(jId) =>
               navigate({ section: 'content-studio', subView: 'studio-editor', journeyId: jId })
-            }
-          />
-        );
-      case 'people':
-        return (
-          <People
-            activeTab={nav.peopleTab ?? 'members'}
-            onTabChange={(tab) => navigate({ section: 'people', peopleTab: tab })}
-            overridePerson={nav.personDeepLink}
-            onOverridePersonBack={
-              nav.personDeepLink
-                ? () => navigate({ section: 'pastoral-dashboard' })
-                : undefined
             }
           />
         );
@@ -148,20 +148,30 @@ export default function Admin() {
             <AuditLog />
           </div>
         );
-      case 'pastoral-dashboard':
-        return <PastoralDashboard onNavigate={navigate} />;
-      case 'analytics':
-        return <AnalyticsCentre onNavigate={navigate} />;
-      case 'workflows':
-        return <PastoralWorkflows />;
       case 'testing':
         return <Testing />;
       default:
-        return <AdminDashboard onNavigate={navigate} />;
+        return null;
     }
   };
 
-  // ─── Sidebar ──────────────────────────────────────────────────────────────
+  const NavButton = ({ id, label, Icon }: { id: AdminSection; label: string; Icon: React.ElementType }) => {
+    const active = nav.section === id;
+    return (
+      <button
+        onClick={() => navigate({ section: id })}
+        aria-current={active ? 'page' : undefined}
+        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[14px] text-left transition-colors ${
+          active
+            ? 'bg-teal-50 text-teal-800 font-medium'
+            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+        }`}
+      >
+        <Icon size={16} className={active ? 'text-teal-700' : 'text-gray-400'} />
+        {label}
+      </button>
+    );
+  };
 
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
     <nav
@@ -174,26 +184,26 @@ export default function Admin() {
         <div className="text-[12px] text-gray-400 mt-0.5">Isipingo Community Church</div>
       </div>
 
-      {/* Primary nav */}
-      <div className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map(({ id, label, Icon }) => {
-          const active = nav.section === id;
-          return (
-            <button
-              key={id}
-              onClick={() => navigate({ section: id })}
-              aria-current={active ? 'page' : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[14px] text-left transition-colors ${
-                active
-                  ? 'bg-teal-50 text-teal-800 font-medium'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`}
-            >
-              <Icon size={16} className={active ? 'text-teal-700' : 'text-gray-400'} />
-              {label}
-            </button>
-          );
-        })}
+      <div className="flex-1 px-3 py-4 overflow-y-auto">
+        <div className="space-y-0.5">
+          {PRIMARY_NAV.map(item => <NavButton key={item.id} {...item} />)}
+        </div>
+
+        <div className="mt-6 mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+          Create and manage content
+        </div>
+        <div className="space-y-0.5">
+          {MINISTRY_TOOLS.map(item => <NavButton key={item.id} {...item} />)}
+        </div>
+
+        <details className="mt-6 group">
+          <summary className="px-3 py-2 text-[11px] font-medium text-gray-400 cursor-pointer hover:text-gray-600">
+            Administration tools
+          </summary>
+          <div className="space-y-0.5 mt-1">
+            {SYSTEM_TOOLS.map(item => <NavButton key={item.id} {...item} />)}
+          </div>
+        </details>
       </div>
 
       {/* Footer */}
@@ -237,13 +247,13 @@ export default function Admin() {
           {/* Mobile sidebar overlay */}
           {sidebarOpen && (
             <div className="md:hidden fixed inset-0 z-50 flex">
-              <div className="w-56 flex flex-col shadow-xl">
+              <div className="w-64 flex flex-col shadow-xl">
                 <Sidebar mobile />
               </div>
-              <div
+              <button
                 className="flex-1 bg-black/40"
                 onClick={() => setSidebarOpen(false)}
-                aria-hidden="true"
+                aria-label="Close navigation"
               />
             </div>
           )}

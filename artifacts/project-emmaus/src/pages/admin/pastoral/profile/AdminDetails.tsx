@@ -1,6 +1,6 @@
 /**
- * AdminDetails — contact info, Emmaus account link, and attendance expectations.
- * Administrative detail that supports the profile — never leads it.
+ * AdminDetails — Emmaus account link and attendance expectations.
+ * Contact information is presented separately at the top of the person record.
  */
 import React, { useState } from 'react';
 import {
@@ -20,26 +20,21 @@ interface Props {
   onAddExpectation: (mtId: string, exp: Expectation, notes: string) => Promise<void>;
   onRemoveExpectation: (mtId: string) => Promise<void>;
   onLink: (emmausId: string) => Promise<void>;
+  children?: React.ReactNode;
 }
-
-const SUBTYPE_LABEL: Record<string, string> = {
-  emmaus_user: 'Emmaus User', attendance_only: 'Regular Attender', visitor: 'Visitor',
-};
 
 export default function AdminDetails({
   person, expectations, meetingTypes, allPeople,
-  isLinked, linkedId, onAddExpectation, onRemoveExpectation, onLink,
+  isLinked, linkedId, onAddExpectation, onRemoveExpectation, onLink, children,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
 
-  // Expectation form
   const [showExpForm, setShowExpForm] = useState(false);
   const [newMtId, setNewMtId]         = useState(meetingTypes[0]?.id ?? '');
   const [newExp, setNewExp]           = useState<Expectation>('expected');
   const [newNotes, setNewNotes]       = useState('');
   const [expSaving, setExpSaving]     = useState(false);
 
-  // Link form
   const [showLink, setShowLink]   = useState(false);
   const [linkQuery, setLinkQuery] = useState('');
   const [linkSaving, setLinkSaving] = useState(false);
@@ -84,7 +79,6 @@ export default function AdminDetails({
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-      {/* Collapse toggle */}
       <button
         onClick={() => setExpanded(v => !v)}
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
@@ -98,28 +92,6 @@ export default function AdminDetails({
 
       {expanded && (
         <div className="border-t border-gray-100 divide-y divide-gray-100">
-
-          {/* Contact details */}
-          <div className="px-4 py-3 space-y-1.5">
-            {person.email && (
-              <div className="flex justify-between gap-2 text-[13px]">
-                <span className="text-gray-400">Email</span>
-                <span className="text-gray-900 font-medium truncate">{person.email}</span>
-              </div>
-            )}
-            {person.phone && (
-              <div className="flex justify-between gap-2 text-[13px]">
-                <span className="text-gray-400">Phone</span>
-                <span className="text-gray-900 font-medium">{person.phone}</span>
-              </div>
-            )}
-            <div className="flex justify-between gap-2 text-[13px]">
-              <span className="text-gray-400">Type</span>
-              <span className="text-gray-900 font-medium">{SUBTYPE_LABEL[person.subType] ?? person.subType}</span>
-            </div>
-          </div>
-
-          {/* Emmaus account link (pastoral persons only) */}
           {person.personType === 'pastoral_person' && (
             <div className="px-4 py-3">
               <div className="flex items-center justify-between gap-2">
@@ -184,7 +156,6 @@ export default function AdminDetails({
             </div>
           )}
 
-          {/* Attendance expectations */}
           <div className="px-4 py-3">
             <div className="flex items-center justify-between mb-2">
               <p className="text-[12px] font-medium text-gray-700">Meeting Expectations</p>
@@ -199,20 +170,10 @@ export default function AdminDetails({
             {showExpForm && (
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-2 space-y-2">
                 <div className="grid grid-cols-2 gap-2">
-                  <select
-                    value={newMtId}
-                    onChange={e => setNewMtId(e.target.value)}
-                    className={inp}
-                  >
-                    {meetingTypes.map(mt => (
-                      <option key={mt.id} value={mt.id}>{mt.name}</option>
-                    ))}
+                  <select value={newMtId} onChange={e => setNewMtId(e.target.value)} className={inp}>
+                    {meetingTypes.map(mt => <option key={mt.id} value={mt.id}>{mt.name}</option>)}
                   </select>
-                  <select
-                    value={newExp}
-                    onChange={e => setNewExp(e.target.value as Expectation)}
-                    className={inp}
-                  >
+                  <select value={newExp} onChange={e => setNewExp(e.target.value as Expectation)} className={inp}>
                     <option value="expected">Normally attends</option>
                     <option value="not_expected">Not expected</option>
                   </select>
@@ -224,17 +185,13 @@ export default function AdminDetails({
                   className={inp}
                 />
                 <div className="flex gap-2 justify-end">
-                  <button
-                    onClick={() => setShowExpForm(false)}
-                    className="px-2 py-1 text-[11px] text-gray-500 hover:text-gray-700"
-                  >Cancel</button>
+                  <button onClick={() => setShowExpForm(false)} className="px-2 py-1 text-[11px] text-gray-500 hover:text-gray-700">Cancel</button>
                   <button
                     onClick={handleAddExp}
                     disabled={expSaving}
                     className="flex items-center gap-1 px-3 py-1 rounded-lg bg-teal-600 text-white text-[11px] font-medium hover:bg-teal-700 disabled:opacity-40"
                   >
-                    {expSaving ? <Loader2 size={10} className="animate-spin" /> : <Plus size={10} />}
-                    Save
+                    {expSaving ? <Loader2 size={10} className="animate-spin" /> : <Plus size={10} />} Save
                   </button>
                 </div>
               </div>
@@ -257,9 +214,7 @@ export default function AdminDetails({
                       disabled={removingMt === e.meetingTypeId}
                       className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-400 disabled:opacity-40"
                     >
-                      {removingMt === e.meetingTypeId
-                        ? <Loader2 size={11} className="animate-spin" />
-                        : <X size={11} />}
+                      {removingMt === e.meetingTypeId ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
                     </button>
                   </div>
                 ))}
@@ -267,6 +222,7 @@ export default function AdminDetails({
             )}
           </div>
 
+          {children && <div className="px-4 py-3">{children}</div>}
         </div>
       )}
     </div>

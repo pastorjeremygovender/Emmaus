@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import * as api from '@/lib/pastoral-api';
 import { useAuth } from '@/contexts/AuthContext';
+import { filterVisiblePastoralPeople } from '@/lib/pastoral-visibility';
 
 interface Props {
   onSelectPerson: (person: api.UnifiedPerson, scrollToSignals?: boolean) => void;
@@ -68,8 +69,9 @@ export default function PastoralPeople({ onSelectPerson }: Props) {
   useEffect(() => { load(); }, [load]);
 
   const q = search.toLowerCase().trim();
+  const visiblePeople = filterVisiblePastoralPeople(people);
 
-  const filtered = people.filter(p => {
+  const filtered = visiblePeople.filter(p => {
     if (q && !p.fullName.toLowerCase().includes(q) && !(p.email?.toLowerCase().includes(q) ?? false)) return false;
     if (filter === 'emmaus')          return p.subType === 'emmaus_user';
     if (filter === 'attendance_only') return p.subType === 'attendance_only';
@@ -103,11 +105,11 @@ export default function PastoralPeople({ onSelectPerson }: Props) {
   };
 
   const counts: Record<Filter, number> = {
-    all:             people.length,
-    emmaus:          people.filter(p => p.subType === 'emmaus_user').length,
-    attendance_only: people.filter(p => p.subType === 'attendance_only').length,
-    visitor:         people.filter(p => p.subType === 'visitor').length,
-    unlinked:        people.filter(p => p.personType === 'pastoral_person' && !p.isLinked).length,
+    all:             visiblePeople.length,
+    emmaus:          visiblePeople.filter(p => p.subType === 'emmaus_user').length,
+    attendance_only: visiblePeople.filter(p => p.subType === 'attendance_only').length,
+    visitor:         visiblePeople.filter(p => p.subType === 'visitor').length,
+    unlinked:        visiblePeople.filter(p => p.personType === 'pastoral_person' && !p.isLinked).length,
   };
 
   return (

@@ -15,8 +15,10 @@ interface Props {
 }
 
 const COMMON_TYPES = [
-  { value: 'accepted_christ',       label: 'Accepted Christ' },
+  { value: 'accepted_christ',       label: 'Decision for Christ' },
   { value: 'baptised',              label: 'Baptised' },
+  { value: 'dedication',            label: 'Dedication' },
+  { value: 'bereavement',           label: 'Bereavement' },
   { value: 'joined_church',         label: 'Joined Church' },
   { value: 'completed_foundations', label: 'Completed Foundations' },
   { value: 'completed_made_free',   label: 'Completed Made Free' },
@@ -30,6 +32,8 @@ const COMMON_TYPES = [
 const MILESTONE_ICON: Record<string, string> = {
   accepted_christ:       '✝️',
   baptised:              '💧',
+  dedication:            '🕊️',
+  bereavement:           '🤍',
   joined_church:         '🏛️',
   completed_foundations: '📘',
   completed_made_free:   '🔓',
