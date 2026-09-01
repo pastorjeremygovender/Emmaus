@@ -6,6 +6,8 @@ import {
   consumeOpeningDestination,
   rememberOpeningDestination,
 } from '@/lib/opening-destination';
+import { accountStorageKey } from '@/lib/account-storage';
+import { localDateKey } from '@/lib/daily-lock';
 import { isColdMemberLaunchPath } from '@/lib/tab-paths';
 import { resetStartupRouting } from '@/lib/startup-routing';
 import { bypassesDailyRhythmOpening, routePathname } from '@/lib/route-access';
@@ -33,6 +35,24 @@ function isPublicPath(pathname: string): boolean {
 
 function isDailyRhythmTarget(pathname: string, assignedDay: number | null): boolean {
   return assignedDay !== null && pathname === `/daily-rhythm/day/${assignedDay}`;
+}
+
+const OPENING_CACHE_KEY = 'emmaus_opening_resolved_v1';
+
+function hasResolvedOpeningToday(subject: string): boolean {
+  try {
+    return localStorage.getItem(accountStorageKey(OPENING_CACHE_KEY, subject)) === localDateKey();
+  } catch {
+    return false;
+  }
+}
+
+function rememberResolvedOpening(subject: string): void {
+  try {
+    localStorage.setItem(accountStorageKey(OPENING_CACHE_KEY, subject), localDateKey());
+  } catch {
+    // A missing performance cache never changes the server-authoritative flow.
+  }
 }
 
 function LoadingOpening() {
@@ -87,10 +107,8 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
   const pathname = routePathname(location);
   const needsOnboarding = Boolean(user && !user.preferredName?.trim());
   const needsRecovery = Boolean(user?.passwordRecovery) && pathname !== '/auth/callback';
-  // A successful in-memory response is safe for this mounted launch. Do not
-  // use localStorage as a date authority: only the server opening ledger can
-  // decide whether today's opening is still due.
-  const openingResolved = !forceStartup && startupResolved;
+  const cachedOpening = Boolean(user && hasResolvedOpeningToday(user.id));
+  const openingResolved = !forceStartup && (startupResolved || cachedOpening);
   const authenticatedExempt = pathname === '/auth' ||
     pathname === '/auth/callback' ||
     (pathname === '/onboarding' && needsOnboarding) ||
@@ -216,6 +234,7 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!decision || !user || needsOnboarding || needsRecovery) return;
     if (decision.state === 'OPENING_REQUIRED') {
+      rememberResolvedOpening(user.id);
       setForceStartup(false);
       setStartupResolved(true);
       if (!isDailyRhythmTarget(pathname, decision.assignedDay)) {
@@ -227,6 +246,7 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
       return;
     }
     if (decision.state === 'COMPLETED') {
+      rememberResolvedOpening(user.id);
       setForceStartup(false);
       setStartupResolved(true);
       if (pathname === '/') {
@@ -235,6 +255,32 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
       return;
     }
   }, [decision, pathname, user, needsOnboarding, needsRecovery, setLocation]);
+
+  // Once today's opening has already been resolved, entering the root again
+  // should be as quick as a normal in-app navigation. The cached result is only
+  // valid for this user and this local calendar day; tomorrow still rechecks
+  // the server ledger.
+  useEffect(() => {
+    if (
+      !user ||
+      needsOnboarding ||
+      needsRecovery ||
+      !cachedOpening ||
+      startupResolved ||
+      forceStartup ||
+      pathname !== '/'
+    ) return;
+    setLocation(consumeOpeningDestination('/walk'), { replace: true });
+  }, [
+    user,
+    needsOnboarding,
+    needsRecovery,
+    cachedOpening,
+    startupResolved,
+    forceStartup,
+    pathname,
+    setLocation,
+  ]);
 
   const openingReady = !authLoading &&
     !loadingProfile &&

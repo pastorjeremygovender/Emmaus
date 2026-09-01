@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import OpeningGate from '../OpeningGate';
 import { safeOpeningDestination } from '@/lib/opening-destination';
 
@@ -115,7 +115,7 @@ describe('OpeningGate', () => {
       .toBe('/personal?source=shared#overview');
   });
 
-  it('rechecks the server on a same-day reload without advancing the member', async () => {
+  it('does not lock an unfinished Daily Rhythm reading when leaving for Today’s Steps or Journeys', async () => {
     const firstRender = render(<OpeningGate><div>member content</div></OpeningGate>);
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
@@ -123,15 +123,37 @@ describe('OpeningGate', () => {
     firstRender.unmount();
     vi.clearAllMocks();
 
+    // The published failure: native tab links reload the app while the current
+    // Daily Rhythm step is still unfinished. The completed opening marker must
+    // allow both normal destinations through without opening Daily Rhythm again.
+    currentLocation = '/walk';
     render(<OpeningGate><div>member content</div></OpeningGate>);
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
-    expect(getDailyRhythmStartup).toHaveBeenCalledTimes(1);
-    expect(setLocation).toHaveBeenCalledWith('/daily-rhythm/day/1', { replace: true });
+    expect(getDailyRhythmStartup).not.toHaveBeenCalled();
+    expect(setLocation).not.toHaveBeenCalled();
     expect(screen.getByText('member content')).toBeInTheDocument();
+
+    cleanup();
+    currentLocation = '/journeys';
+    render(<OpeningGate><div>journeys content</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(getDailyRhythmStartup).not.toHaveBeenCalled();
+    expect(setLocation).not.toHaveBeenCalled();
+    expect(screen.getByText('journeys content')).toBeInTheDocument();
   });
 
-  it('opens the next day when the server reports a genuine calendar-day change', async () => {
+  it('rechecks the server when the local calendar day changes', async () => {
+    const firstRender = render(<OpeningGate><div>member content</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(getDailyRhythmStartup).toHaveBeenCalledTimes(1);
+    firstRender.unmount();
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(Date.now() + 24 * 60 * 60 * 1000));
+
     getDailyRhythmStartup.mockResolvedValueOnce({
       state: 'OPENING_REQUIRED',
       destination: '/daily-rhythm/day/2',
