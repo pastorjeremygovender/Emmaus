@@ -12,10 +12,11 @@ import {
   Plus, BookOpen, Pencil, Layers, Clock,
   Tag, Loader2, FolderOpen, CheckCircle2, FileText,
 } from 'lucide-react';
-import { getCollection, listCollectionJourneys, updateCollectionJourney } from '@/lib/collections-api';
+import { getCollection, listCollectionJourneys } from '@/lib/collections-api';
 import type { Collection, CollectionJourney } from '@/lib/collections-api';
 import { StatusBadge, AdminBtn } from '../shared';
 import { ReorderButtons } from './ContentStudioListPage';
+import { reorderContent } from '@/lib/content-reorder-api';
 
 // ─── Props ─────────────────────────────────────────────────────────────────────
 
@@ -82,14 +83,15 @@ export default function CollectionDetailView({
     [journeys],
   );
 
-  const moveJourney = async (index: number, direction: -1 | 1) => {
-    const target = journeys[index];
-    const other = journeys[index + direction];
+  const reorderable = journeys.filter(journey => journey.status !== 'Archived');
+  const moveJourney = async (id: string, direction: -1 | 1) => {
+    const index = reorderable.findIndex(journey => journey.id === id);
+    const target = reorderable[index];
+    const other = reorderable[index + direction];
     if (!target || !other) return;
-    await Promise.all([
-      updateCollectionJourney(target.id, { displayOrder: other.displayOrder ?? index + direction }),
-      updateCollectionJourney(other.id, { displayOrder: target.displayOrder ?? index }),
-    ]);
+    const next = [...reorderable];
+    [next[index], next[index + direction]] = [next[index + direction], next[index]];
+    await reorderContent('journey', next.map(journey => journey.id), { parentId: collectionId, scope: 'collection' });
     await load();
   };
 
@@ -238,13 +240,16 @@ export default function CollectionDetailView({
 
                   <StatusBadge status={j.status ?? 'Draft'} />
 
-                  <ReorderButtons
-                    canMoveUp={index > 0}
-                    canMoveDown={index < journeys.length - 1}
-                    onMoveUp={() => void moveJourney(index, -1)}
-                    onMoveDown={() => void moveJourney(index, 1)}
-                    label={j.title}
-                  />
+                  {j.status !== 'Archived' && (() => {
+                    const reorderIndex = reorderable.findIndex(item => item.id === j.id);
+                    return <ReorderButtons
+                      canMoveUp={reorderIndex > 0}
+                      canMoveDown={reorderIndex >= 0 && reorderIndex < reorderable.length - 1}
+                      onMoveUp={() => void moveJourney(j.id, -1)}
+                      onMoveDown={() => void moveJourney(j.id, 1)}
+                      label={j.title}
+                    />;
+                  })()}
                   <span className="text-xs text-teal-600 font-medium opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0">
                     Open →
                   </span>

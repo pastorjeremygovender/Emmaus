@@ -13,6 +13,7 @@ import { logger } from "./logger.js";
 export type AuditAction =
   | "create"
   | "edit"
+  | "reorder"
   | "publish"
   | "unpublish"
   | "archive"
@@ -23,8 +24,14 @@ export type AuditAction =
 export type AuditContentType =
   | "journey"
   | "journey_step"
+  | "journey_collection"
+  | "content_group"
+  | "content_group_item"
   | "devotional_series"
   | "devotional_entry"
+  | "devotional_entry_group"
+  | "devotional_entry_group_item"
+  | "sermon"
   | "sermon_companion"
   | "sermon_companion_entry"
   | "room"

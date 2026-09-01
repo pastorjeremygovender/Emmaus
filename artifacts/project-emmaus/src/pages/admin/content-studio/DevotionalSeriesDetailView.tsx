@@ -10,13 +10,13 @@ import {
 } from 'lucide-react';
 import {
   getSeriesWithEntriesForAdmin,
-  saveEntry,
   type SeriesWithEntries,
   type DevotionalEntry,
 } from '@/lib/devotionals-api';
 import { StatusBadge, AdminBtn } from '../shared';
 import { ReorderButtons } from './ContentStudioListPage';
 import { useAuth } from '@/contexts/AuthContext';
+import { reorderContent } from '@/lib/content-reorder-api';
 
 const TYPE_LABELS: Record<string, string> = {
   general:         'General',
@@ -87,14 +87,15 @@ export default function DevotionalSeriesDetailView({
   const draftCount = data.entries.filter((e: DevotionalEntry) => e.status !== 'Published').length;
   const typeLabel = TYPE_LABELS[data.seriesType] ?? data.seriesType;
 
-  const moveEntry = async (index: number, direction: -1 | 1) => {
-    const target = data.entries[index];
-    const other = data.entries[index + direction];
+  const reorderableEntries = data.entries.filter(entry => entry.status !== 'Archived');
+  const moveEntry = async (id: string, direction: -1 | 1) => {
+    const index = reorderableEntries.findIndex(entry => entry.id === id);
+    const target = reorderableEntries[index];
+    const other = reorderableEntries[index + direction];
     if (!target || !other) return;
-    await Promise.all([
-      saveEntry(seriesId, target.dayNumber, { displayOrder: other.displayOrder ?? index + direction }, auth),
-      saveEntry(seriesId, other.dayNumber, { displayOrder: target.displayOrder ?? index }, auth),
-    ]);
+    const next = [...reorderableEntries];
+    [next[index], next[index + direction]] = [next[index + direction], next[index]];
+    await reorderContent('devotional-entry', next.map(entry => entry.id), { parentId: seriesId });
     await load();
   };
 
@@ -198,13 +199,16 @@ export default function DevotionalSeriesDetailView({
 
                 <StatusBadge status={entry.status} />
 
-                <ReorderButtons
-                  canMoveUp={index > 0}
-                  canMoveDown={index < data.entries.length - 1}
-                  onMoveUp={() => void moveEntry(index, -1)}
-                  onMoveDown={() => void moveEntry(index, 1)}
-                  label={entry.title || `Day ${entry.dayNumber}`}
-                />
+                {entry.status !== 'Archived' && (() => {
+                  const reorderIndex = reorderableEntries.findIndex(item => item.id === entry.id);
+                  return <ReorderButtons
+                    canMoveUp={reorderIndex > 0}
+                    canMoveDown={reorderIndex >= 0 && reorderIndex < reorderableEntries.length - 1}
+                    onMoveUp={() => void moveEntry(entry.id, -1)}
+                    onMoveDown={() => void moveEntry(entry.id, 1)}
+                    label={entry.title || `Day ${entry.dayNumber}`}
+                  />;
+                })()}
                 <ChevronRight size={14} className="text-teal-500 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0" />
               </div>
             ))}

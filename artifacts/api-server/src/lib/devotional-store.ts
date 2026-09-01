@@ -174,10 +174,13 @@ export async function replaceEntryGroupItems(
     ));
   if (!group) return null;
 
-  const uniqueEntryIds = [...new Set(entryIds)];
+  if (new Set(entryIds).size !== entryIds.length) {
+    throw new Error("An entry may appear only once in a group");
+  }
+  const uniqueEntryIds = [...entryIds];
   if (uniqueEntryIds.length > 0) {
     const valid = await db
-      .select({ id: devotionalEntriesTable.id })
+      .select({ id: devotionalEntriesTable.id, status: devotionalEntriesTable.status })
       .from(devotionalEntriesTable)
       .where(and(
         eq(devotionalEntriesTable.seriesId, seriesId),
@@ -185,6 +188,9 @@ export async function replaceEntryGroupItems(
       ));
     if (valid.length !== uniqueEntryIds.length) {
       throw new Error("Every grouped entry must belong to the selected series");
+    }
+    if (valid.some(entry => entry.status === "Archived")) {
+      throw new Error("Archived entries cannot be added to a group");
     }
   }
 

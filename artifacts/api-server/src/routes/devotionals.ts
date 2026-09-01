@@ -202,16 +202,34 @@ devotionalsRouter.put("/:id/groups/:groupId/items", async (req: Request, res: Re
     : null;
   if (!entryIds) { res.status(400).json({ error: "entryIds must be an array" }); return; }
   try {
+    const before = (await store.getEntryGroupsForSeries(String(req.params.id)))
+      .find(group => group.id === String(req.params.groupId));
     const group = await store.replaceEntryGroupItems(
       String(req.params.id),
       String(req.params.groupId),
       entryIds,
     );
     if (!group) { res.status(404).json({ error: "Group not found" }); return; }
+    const previous = before?.items.map(entry => entry.id) ?? [];
+    const next = group.items.map(entry => entry.id);
+    if (JSON.stringify(previous) !== JSON.stringify(next)) {
+      void logAuditEvent({
+        contentType: "devotional_entry_group",
+        contentId: String(req.params.groupId),
+        action: "reorder",
+        performedBy: adminId,
+        previousState: { entryIds: previous },
+        newState: { entryIds: next },
+      });
+    }
     res.json(group);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Server error";
-    if (message.includes("belong to the selected series")) {
+    if (
+      message.includes("belong to the selected series") ||
+      message.includes("only once") ||
+      message.includes("Archived entries")
+    ) {
       res.status(400).json({ error: message });
       return;
     }

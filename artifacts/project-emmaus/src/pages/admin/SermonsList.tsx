@@ -29,6 +29,7 @@ import {
 import { StatusBadge } from './shared';
 import ContentStudioListItem from './content-studio/ContentStudioListItem';
 import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls, ReorderButtons } from './content-studio/ContentStudioListPage';
+import { moveVisibleOrder, reorderContent } from '@/lib/content-reorder-api';
 
 
 type Props = {
@@ -205,21 +206,26 @@ async function uploadAudioFile(
     return [...list].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || b.createdAt.localeCompare(a.createdAt));
   }, [sermons, statusTab]);
 
+  const reorderable = useMemo(
+    () => sermons
+      .filter(sermon => sermon.status !== 'Archived')
+      .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || b.createdAt.localeCompare(a.createdAt)),
+    [sermons],
+  );
+
   const moveSermon = async (index: number, direction: -1 | 1) => {
-    // Reordering is a canonical list operation. Normalising every row avoids
-    // no-op swaps when legacy sermons share the default displayOrder of 0.
-    // Keep this available from the All tab so status-filtered rows cannot
-    // accidentally collide with hidden sermons' order values.
-    if (statusTab !== 'All') return;
     const target = filtered[index];
-    const other = filtered[index + direction];
-    if (!target || !other) return;
-    const reordered = [...filtered];
-    [reordered[index], reordered[index + direction]] = [reordered[index + direction], reordered[index]];
+    if (!target) return;
+    const visible = filtered.filter(sermon => sermon.status !== 'Archived');
+    const reorderedIds = moveVisibleOrder(
+      reorderable.map(sermon => sermon.id),
+      visible.map(sermon => sermon.id),
+      target.id,
+      direction,
+    );
+    if (reorderedIds.join(',') === reorderable.map(sermon => sermon.id).join(',')) return;
     try {
-      await Promise.all(reordered.map((sermon, order) =>
-        updateAdminSermon(editId(sermon), { displayOrder: order }),
-      ));
+      await reorderContent('sermon', reorderedIds);
       setSuccessMessage('Sermon order saved.');
       setTimeout(() => setSuccessMessage(''), 3000);
       await load();
@@ -591,8 +597,17 @@ async function uploadAudioFile(
               }
               actions={
                 <>
-                  <ReorderButtons canMoveUp={statusTab === 'All' && index > 0} canMoveDown={statusTab === 'All' && index < filtered.length - 1}
-                    onMoveUp={() => void moveSermon(index, -1)} onMoveDown={() => void moveSermon(index, 1)} label={`Display order for ${s.title}`} />
+                  {s.status !== 'Archived' && (() => {
+                    const visible = filtered.filter(sermon => sermon.status !== 'Archived');
+                    const reorderIndex = visible.findIndex(sermon => sermon.id === s.id);
+                    return <ReorderButtons
+                      canMoveUp={reorderIndex > 0}
+                      canMoveDown={reorderIndex >= 0 && reorderIndex < visible.length - 1}
+                      onMoveUp={() => void moveSermon(index, -1)}
+                      onMoveDown={() => void moveSermon(index, 1)}
+                      label={`Display order for ${s.title}`}
+                    />;
+                  })()}
                   {/* Edit */}
                   <button onClick={() => onEdit(editId(s))} className={actionBtnCls}>
                     Edit

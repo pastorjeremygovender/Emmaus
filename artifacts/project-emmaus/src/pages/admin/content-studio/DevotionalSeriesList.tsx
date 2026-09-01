@@ -16,6 +16,7 @@ import { StatusBadge } from '../shared';
 import { useAuth } from '@/contexts/AuthContext';
 import ContentStudioListItem from './ContentStudioListItem';
 import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls, ReorderButtons } from './ContentStudioListPage';
+import { moveVisibleOrder, reorderContent } from '@/lib/content-reorder-api';
 import NewSeriesModal from './NewSeriesModal';
 import GroupMembershipBadge from './GroupMembershipBadge';
 
@@ -64,14 +65,20 @@ export default function DevotionalSeriesList({ onEdit }: Props) {
     .filter(s => statusTab === 'All' || s.status === statusTab)
     .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.createdAt.localeCompare(b.createdAt));
 
-  const moveSeries = async (index: number, direction: -1 | 1) => {
-    const target = filtered[index];
-    const other = filtered[index + direction];
-    if (!target || !other) return;
-    await Promise.all([
-      updateSeries(target.id, { displayOrder: other.displayOrder ?? index + direction }, auth),
-      updateSeries(other.id, { displayOrder: target.displayOrder ?? index }, auth),
-    ]);
+  const reorderable = series
+    .filter(item => item.status !== 'Archived')
+    .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.createdAt.localeCompare(b.createdAt));
+
+  const moveSeries = async (id: string, direction: -1 | 1) => {
+    const visible = filtered.filter(item => item.status !== 'Archived');
+    const nextIds = moveVisibleOrder(
+      reorderable.map(item => item.id),
+      visible.map(item => item.id),
+      id,
+      direction,
+    );
+    if (nextIds.join(',') === reorderable.map(item => item.id).join(',')) return;
+    await reorderContent('devotional-series', nextIds);
     await load();
   };
 
@@ -140,8 +147,12 @@ export default function DevotionalSeriesList({ onEdit }: Props) {
             onClick={() => onEdit(s.id)}
             actions={
               <>
-                <ReorderButtons canMoveUp={index > 0} canMoveDown={index < filtered.length - 1}
-                  onMoveUp={() => void moveSeries(index, -1)} onMoveDown={() => void moveSeries(index, 1)} label={s.title} />
+                {s.status !== 'Archived' && (() => {
+                  const visible = filtered.filter(item => item.status !== 'Archived');
+                  const reorderIndex = visible.findIndex(item => item.id === s.id);
+                  return <ReorderButtons canMoveUp={reorderIndex > 0} canMoveDown={reorderIndex >= 0 && reorderIndex < visible.length - 1}
+                    onMoveUp={() => void moveSeries(s.id, -1)} onMoveDown={() => void moveSeries(s.id, 1)} label={s.title} />;
+                })()}
                 <button onClick={() => onEdit(s.id)} className={actionBtnCls}>
                   Edit
                 </button>

@@ -8,13 +8,14 @@
  */
 import React, { useEffect, useState, useCallback } from 'react';
 import { Plus, FolderOpen, BookOpen, Trash2, MoreHorizontal, Pencil } from 'lucide-react';
-import { listCollections, deleteCollection, updateCollection } from '@/lib/collections-api';
+import { listCollections, deleteCollection } from '@/lib/collections-api';
 import type { Collection } from '@/lib/collections-api';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmDialog } from '../shared';
 import ContentStudioListItem from './ContentStudioListItem';
 import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls, ReorderButtons } from './ContentStudioListPage';
 import NewCollectionModal from './NewCollectionModal';
+import { moveVisibleOrder, reorderContent } from '@/lib/content-reorder-api';
 
 const STATUS_TABS = ['All', 'Draft', 'Published', 'Archived'] as const;
 
@@ -56,15 +57,24 @@ export default function CollectionsList({ onNew: _onNew, onEdit, onViewJourneys 
   );
 
   const ordered = [...filtered].sort((a, b) => a.displayOrder - b.displayOrder || a.createdAt.localeCompare(b.createdAt));
-  const moveCollection = async (index: number, direction: -1 | 1) => {
-    const target = ordered[index];
-    const other = ordered[index + direction];
-    if (!target || !other) return;
-    await Promise.all([
-      updateCollection(target.id, { displayOrder: other.displayOrder }, user?.id),
-      updateCollection(other.id, { displayOrder: target.displayOrder }, user?.id),
-    ]);
-    await load();
+  const reorderable = [...collections]
+    .filter(collection => collection.status !== 'Archived')
+    .sort((a, b) => a.displayOrder - b.displayOrder || a.createdAt.localeCompare(b.createdAt));
+  const moveCollection = async (id: string, direction: -1 | 1) => {
+    const visible = ordered.filter(collection => collection.status !== 'Archived');
+    const nextIds = moveVisibleOrder(
+      reorderable.map(collection => collection.id),
+      visible.map(collection => collection.id),
+      id,
+      direction,
+    );
+    if (nextIds.join(',') === reorderable.map(collection => collection.id).join(',')) return;
+    try {
+      await reorderContent('collection', nextIds);
+      await load();
+    } catch {
+      // The list remains unchanged until the server confirms the transaction.
+    }
   };
 
   return (
@@ -131,8 +141,12 @@ export default function CollectionsList({ onNew: _onNew, onEdit, onViewJourneys 
               onClick={() => onEdit(c.id)}
               actions={
                 <>
-                  <ReorderButtons canMoveUp={index > 0} canMoveDown={index < ordered.length - 1}
-                    onMoveUp={() => void moveCollection(index, -1)} onMoveDown={() => void moveCollection(index, 1)} label={c.title} />
+                  {c.status !== 'Archived' && (() => {
+                    const visible = ordered.filter(collection => collection.status !== 'Archived');
+                    const reorderIndex = visible.findIndex(collection => collection.id === c.id);
+                    return <ReorderButtons canMoveUp={reorderIndex > 0} canMoveDown={reorderIndex >= 0 && reorderIndex < visible.length - 1}
+                      onMoveUp={() => void moveCollection(c.id, -1)} onMoveDown={() => void moveCollection(c.id, 1)} label={c.title} />;
+                  })()}
                   <button onClick={() => onEdit(c.id)} className={actionBtnCls}>
                     Edit
                   </button>

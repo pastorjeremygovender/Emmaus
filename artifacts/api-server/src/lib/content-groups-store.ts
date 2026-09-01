@@ -104,13 +104,23 @@ export async function validateTarget(
 
   if (targetType === "journey" || targetType === "daily-rhythm") {
     const rows = await db
-      .select({ id: journeysTable.id, journeyType: journeysTable.journeyType })
+      .select({
+        id: journeysTable.id,
+        journeyType: journeysTable.journeyType,
+        status: journeysTable.status,
+        deletedAt: journeysTable.deletedAt,
+      })
       .from(journeysTable)
       .where(eq(journeysTable.id, targetId));
 
     if (!rows[0]) {
       const e = new Error(`Journey "${targetId}" not found`) as Error & { status: number };
       e.status = 404;
+      throw e;
+    }
+    if (rows[0].status === "Archived" || rows[0].deletedAt) {
+      const e = new Error(`Journey "${targetId}" is archived or deleted`) as Error & { status: number };
+      e.status = 400;
       throw e;
     }
 
@@ -132,13 +142,18 @@ export async function validateTarget(
   } else {
     // daily-devotional
     const rows = await db
-      .select({ id: devotionalSeriesTable.id })
+      .select({ id: devotionalSeriesTable.id, status: devotionalSeriesTable.status })
       .from(devotionalSeriesTable)
       .where(eq(devotionalSeriesTable.id, targetId));
 
     if (!rows[0]) {
       const e = new Error(`DevotionalSeries "${targetId}" not found`) as Error & { status: number };
       e.status = 404;
+      throw e;
+    }
+    if (rows[0].status === "Archived") {
+      const e = new Error(`DevotionalSeries "${targetId}" is archived`) as Error & { status: number };
+      e.status = 400;
       throw e;
     }
   }
@@ -421,29 +436,33 @@ export async function replaceGroupItems(
   groupId: string,
   items: Array<{ targetType: TargetType; targetId: string }>,
 ): Promise<ContentGroupItemRow[]> {
+  if (new Set(items.map(item => `${item.targetType}:${item.targetId}`)).size !== items.length) {
+    const e = new Error("A content item may appear only once in a group") as Error & { status: number };
+    e.status = 400;
+    throw e;
+  }
+
   // Validate all targets before touching the DB
   for (const item of items) {
     await validateTarget(item.targetType, item.targetId);
   }
 
-  // Delete existing memberships
-  await db
-    .delete(contentGroupItemsTable)
-    .where(eq(contentGroupItemsTable.groupId, groupId));
+  const inserted = await db.transaction(async (tx) => {
+    await tx
+      .delete(contentGroupItemsTable)
+      .where(eq(contentGroupItemsTable.groupId, groupId));
 
-  if (items.length === 0) return [];
+    if (items.length === 0) return [];
 
-  const values = items.map((item, idx) => ({
-    groupId,
-    targetType: item.targetType,
-    targetId: item.targetId,
-    displayOrder: idx,
-  }));
+    const values = items.map((item, idx) => ({
+      groupId,
+      targetType: item.targetType,
+      targetId: item.targetId,
+      displayOrder: idx,
+    }));
 
-  const inserted = await db
-    .insert(contentGroupItemsTable)
-    .values(values)
-    .returning();
+    return tx.insert(contentGroupItemsTable).values(values).returning();
+  });
 
   return inserted
     .sort((a, b) => a.displayOrder - b.displayOrder)

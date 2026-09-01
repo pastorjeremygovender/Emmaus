@@ -14,6 +14,7 @@ import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls, ReorderButt
 import NewJourneyModal from './NewJourneyModal';
 import DeleteJourneyDialog from './DeleteJourneyDialog';
 import GroupMembershipBadge from './GroupMembershipBadge';
+import { moveVisibleOrder, reorderContent } from '@/lib/content-reorder-api';
 
 interface Props {
   collectionId?: string;
@@ -88,14 +89,26 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
     return [...list].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
   }, [journeys, query, statusTab, typeFilter, collectionId, standaloneOnly]);
 
-  const moveJourney = async (index: number, direction: -1 | 1) => {
-    const target = filtered[index];
-    const other = filtered[index + direction];
-    if (!target || !other) return;
-    await Promise.all([
-      updateJourney({ ...target, displayOrder: other.displayOrder ?? index + direction } as any),
-      updateJourney({ ...other, displayOrder: target.displayOrder ?? index } as any),
-    ]);
+  const reorderable = useMemo(() => {
+    let list = (journeys as Journey[]).filter(j => j.journeyType !== 'daily-rhythm' && j.journeyType !== 'companion' && j.status !== 'Archived');
+    if (collectionId) list = list.filter(j => (j as any).collectionId === collectionId);
+    if (standaloneOnly) list = list.filter(j => !(j as any).collectionId);
+    return [...list].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+  }, [journeys, collectionId, standaloneOnly]);
+
+  const moveJourney = async (id: string, direction: -1 | 1) => {
+    const visible = filtered.filter(journey => journey.status !== 'Archived');
+    const nextIds = moveVisibleOrder(
+      reorderable.map(journey => journey.id),
+      visible.map(journey => journey.id),
+      id,
+      direction,
+    );
+    if (nextIds.join(',') === reorderable.map(journey => journey.id).join(',')) return;
+    await reorderContent('journey', nextIds, {
+      scope: collectionId ? 'collection' : standaloneOnly ? 'standalone' : 'library',
+      parentId: collectionId,
+    });
     await refreshJourneys?.();
   };
 
@@ -278,13 +291,17 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
               onClick={() => onEdit(j.id)}
               actions={
                 <>
-                    <ReorderButtons
-                      canMoveUp={index > 0}
-                      canMoveDown={index < filtered.length - 1}
-                      onMoveUp={() => void moveJourney(index, -1)}
-                      onMoveDown={() => void moveJourney(index, 1)}
-                      label={j.title}
-                    />
+                    {j.status !== 'Archived' && (() => {
+                      const visible = filtered.filter(item => item.status !== 'Archived');
+                      const reorderIndex = visible.findIndex(item => item.id === j.id);
+                      return <ReorderButtons
+                        canMoveUp={reorderIndex > 0}
+                         canMoveDown={reorderIndex >= 0 && reorderIndex < visible.length - 1}
+                        onMoveUp={() => void moveJourney(j.id, -1)}
+                        onMoveDown={() => void moveJourney(j.id, 1)}
+                        label={j.title}
+                      />;
+                    })()}
                   <button
                     onClick={() => onEdit(j.id)}
                     className={`${actionBtnCls} flex items-center gap-1`}

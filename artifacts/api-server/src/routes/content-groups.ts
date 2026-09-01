@@ -33,6 +33,7 @@ import {
 } from "../lib/content-groups-store.js";
 import { logger } from "../lib/logger.js";
 import { extractUserId } from "../emmaus/auth.js";
+import { logAuditEvent } from "../lib/audit-log.js";
 
 const router = Router();
 
@@ -258,7 +259,27 @@ router.put("/:id/items", async (req: Request, res: Response) => {
       }
     }
 
+    const previous = group.items.map(item => ({
+      targetType: item.targetType,
+      targetId: item.targetId,
+      displayOrder: item.displayOrder,
+    }));
     const result = await replaceGroupItems(id, items);
+    const next = result.map(item => ({
+      targetType: item.targetType,
+      targetId: item.targetId,
+      displayOrder: item.displayOrder,
+    }));
+    if (JSON.stringify(previous) !== JSON.stringify(next)) {
+      void logAuditEvent({
+        contentType: "content_group",
+        contentId: id,
+        action: "reorder",
+        performedBy: callerId,
+        previousState: { items: previous },
+        newState: { items: next },
+      });
+    }
     res.json({ items: result });
   } catch (err: unknown) {
     const typed = err as Error & { status?: number };

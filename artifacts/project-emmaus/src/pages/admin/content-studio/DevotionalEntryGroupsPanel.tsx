@@ -11,6 +11,7 @@ import {
   type DevotionalEntry,
   type DevotionalEntryGroup,
 } from '@/lib/devotionals-api';
+import { reorderContent } from '@/lib/content-reorder-api';
 
 interface Props {
   seriesId: string;
@@ -48,6 +49,7 @@ export default function DevotionalEntryGroupsPanel({ seriesId, entries, auth }: 
   const orderedSelectedEntries = selectedEntryIds
     .map(id => entryById.get(id))
     .filter((entry): entry is DevotionalEntry => Boolean(entry));
+  const reorderableGroups = groups.filter(group => group.status !== 'Archived');
 
   function chooseGroup(group: DevotionalEntryGroup) {
     setSelectedId(group.id);
@@ -81,6 +83,21 @@ export default function DevotionalEntryGroupsPanel({ seriesId, entries, auth }: 
     setSelectedEntryIds(current =>
       current.includes(entryId) ? current.filter(id => id !== entryId) : [...current, entryId],
     );
+  }
+
+  async function moveGroup(id: string, direction: -1 | 1) {
+    const index = reorderableGroups.findIndex(group => group.id === id);
+    const target = reorderableGroups[index];
+    const other = reorderableGroups[index + direction];
+    if (!target || !other) return;
+    const next = [...reorderableGroups];
+    [next[index], next[index + direction]] = [next[index + direction], next[index]];
+    try {
+      await reorderContent('devotional-entry-group', next.map(group => group.id), { parentId: seriesId });
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not reorder groups');
+    }
   }
 
   async function changeStatus(nextStatus: string) {
@@ -147,22 +164,6 @@ export default function DevotionalEntryGroupsPanel({ seriesId, entries, auth }: 
     }
   }
 
-  async function moveGroup(index: number, direction: -1 | 1) {
-    const next = index + direction;
-    if (next < 0 || next >= groups.length) return;
-    const current = groups[index];
-    const target = groups[next];
-    try {
-      await Promise.all([
-        updateDevotionalEntryGroup(seriesId, current.id, { displayOrder: target.displayOrder }, auth),
-        updateDevotionalEntryGroup(seriesId, target.id, { displayOrder: current.displayOrder }, auth),
-      ]);
-      await load();
-    } catch {
-      toast.error('Could not reorder groups');
-    }
-  }
-
   if (loading) {
     return <div className="border border-gray-200 rounded-2xl bg-white p-5 text-sm text-gray-400 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Loading entry groups…</div>;
   }
@@ -193,14 +194,19 @@ export default function DevotionalEntryGroupsPanel({ seriesId, entries, auth }: 
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(12rem,16rem)_1fr] gap-3">
           <div className="space-y-2">
-            {groups.map((group, index) => (
+            {groups.map(group => (
               <div key={group.id} className={`flex items-center gap-1 rounded-xl border bg-white p-1.5 ${selectedId === group.id ? 'border-teal-400 ring-1 ring-teal-200' : 'border-gray-200'}`}>
                 <button onClick={() => chooseGroup(group)} className="min-w-0 flex-1 text-left px-2 py-2">
                   <span className="block text-sm font-medium text-gray-800 truncate">{group.title}</span>
                   <span className="block text-[11px] text-gray-400">{group.items.length} entr{group.items.length === 1 ? 'y' : 'ies'} · {group.status}</span>
                 </button>
-                <button aria-label={`Move ${group.title} up`} onClick={() => void moveGroup(index, -1)} disabled={index === 0} className="p-1.5 text-gray-400 disabled:opacity-30"><ChevronUp size={14} /></button>
-                <button aria-label={`Move ${group.title} down`} onClick={() => void moveGroup(index, 1)} disabled={index === groups.length - 1} className="p-1.5 text-gray-400 disabled:opacity-30"><ChevronDown size={14} /></button>
+                {group.status !== 'Archived' && (() => {
+                  const reorderIndex = reorderableGroups.findIndex(item => item.id === group.id);
+                  return <>
+                    <button aria-label={`Move ${group.title} up`} onClick={() => void moveGroup(group.id, -1)} disabled={reorderIndex === 0} className="p-1.5 text-gray-400 disabled:opacity-30"><ChevronUp size={14} /></button>
+                    <button aria-label={`Move ${group.title} down`} onClick={() => void moveGroup(group.id, 1)} disabled={reorderIndex < 0 || reorderIndex === reorderableGroups.length - 1} className="p-1.5 text-gray-400 disabled:opacity-30"><ChevronDown size={14} /></button>
+                  </>;
+                })()}
               </div>
             ))}
           </div>
