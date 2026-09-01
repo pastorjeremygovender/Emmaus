@@ -881,3 +881,67 @@ export interface SignalRuleWithConfig {
   thresholds: Record<string, number>;
   thresholdDefs?: ThresholdDef[];
 }
+
+export interface PastoralBriefingRules {
+  attendanceAlertsEnabled: boolean;
+  missedServicesThreshold: number;
+  emmausInactivityAlertsEnabled: boolean;
+  emmausInactivityDays: number;
+  stalledProgressAlertsEnabled: boolean;
+  stalledProgressDays: number;
+  newUserGracePeriodDays: number;
+  excludeTestAccounts: boolean;
+  excludeInactiveAccounts: boolean;
+  excludeVisitors: boolean;
+  excludeUnlinkedProfiles: boolean;
+  excludeChurchAdministrators: boolean;
+  excludeWithoutActiveIdentity: boolean;
+}
+
+export interface StoredPastoralBriefingRules extends PastoralBriefingRules {
+  updatedAt: string | null;
+  updatedBy: string | null;
+  source: 'saved' | 'defaults';
+}
+
+export interface BriefingFlag {
+  type: 'missed_attendance' | 'emmaus_inactivity' | 'stalled_progress';
+  label: string;
+  detail: string;
+}
+
+export interface PastoralBriefingMatch {
+  personId: string;
+  personType: PersonType;
+  personName: string;
+  flags: BriefingFlag[];
+}
+
+export interface PastoralBriefingResponse {
+  rules: StoredPastoralBriefingRules;
+  matches: PastoralBriefingMatch[];
+  evaluatedAt: string;
+}
+
+export interface PastoralBriefingPreview {
+  rules: PastoralBriefingRules;
+  totalFlagged: number;
+  matches: PastoralBriefingMatch[];
+  evaluatedAt: string;
+  readOnly: true;
+}
+
+export const getPastoralBriefingRules = (auth: AuthHeaders) =>
+  apiFetch<StoredPastoralBriefingRules>("/briefing-rules", "GET", auth);
+
+export const previewPastoralBriefingRules = (auth: AuthHeaders, rules: PastoralBriefingRules) =>
+  apiFetch<PastoralBriefingPreview>("/briefing-rules/preview", "POST", auth, rules);
+
+export const savePastoralBriefingRules = (auth: AuthHeaders, rules: PastoralBriefingRules) =>
+  apiFetch<StoredPastoralBriefingRules>("/briefing-rules", "PUT", auth, rules);
+
+export const restorePastoralBriefingDefaults = (auth: AuthHeaders) =>
+  apiFetch<StoredPastoralBriefingRules>("/briefing-rules/restore-defaults", "POST", auth);
+
+export const getPastoralBriefing = (auth: AuthHeaders) =>
+  apiFetch<PastoralBriefingResponse>("/briefing", "GET", auth);

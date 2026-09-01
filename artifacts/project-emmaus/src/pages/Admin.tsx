@@ -17,6 +17,7 @@ import ContentStudio from './admin/content-studio/ContentStudio';
 import UnifiedBibleStudy from './admin/UnifiedBibleStudy';
 import AuditLog from './admin/AuditLog';
 import Testing from './admin/Testing';
+import PastoralBriefingRules from './admin/pastoral/briefing/PastoralBriefingRules';
 import type { PersonType } from '@/lib/pastoral-api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -34,6 +35,7 @@ export type AdminSection =
   | 'content-studio'
   | 'bible-study'
   | 'settings'
+  | 'briefing-rules'
   | 'audit-log'
   | 'testing';
 
@@ -43,6 +45,7 @@ export type AdminNav = {
   // people navigation directly.
   peopleTab?: 'members' | 'attendance' | 'prayer' | 'signals';
   subView?: 'studio-editor';
+  settingsView?: 'briefing-rules';
   journeyId?: string;
   personDeepLink?: { personId: string; personType: PersonType; personName?: string };
 };
@@ -100,7 +103,8 @@ export default function Admin() {
     workflows: 'Today',
     'content-studio': 'Content Studio',
     'bible-study': 'Bible Study',
-    settings: 'Settings',
+     settings: 'Settings',
+     'briefing-rules': 'Pastoral Briefing Rules',
     'audit-log': 'Audit Log',
     testing: 'Testing',
   };
@@ -139,7 +143,9 @@ export default function Admin() {
           />
         );
       case 'settings':
-        return <AdminSettings />;
+        return nav.settingsView === 'briefing-rules'
+          ? <PastoralBriefingRules onBack={() => navigate({ section: 'settings' })} />
+          : <AdminSettings onOpenBriefingRules={() => navigate({ section: 'settings', settingsView: 'briefing-rules' })} />;
       case 'bible-study':
         return <UnifiedBibleStudy />;
       case 'audit-log':

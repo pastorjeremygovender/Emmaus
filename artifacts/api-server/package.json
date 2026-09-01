@@ -18,6 +18,7 @@
     "export:seed": "node --experimental-strip-types src/scripts/export-seed.ts",
     "checksum:content": "node --experimental-strip-types src/scripts/content-checksum.ts",
     "test:unit": "node --test --experimental-strip-types src/lib/__tests__/sermon-start-detector.test.ts src/emmaus/__tests__/system-instructions.test.ts src/lib/__tests__/sermon-companion-description.test.ts src/lib/__tests__/devotional-completion-pct.test.ts src/lib/__tests__/room-role-policy.test.ts src/lib/__tests__/reminder-validation.test.ts src/test-utils/__tests__/test-auth-guard.test.ts && pnpm run test:voice-contracts && pnpm run test:emmaus-canonical && pnpm run test:share-image-style && pnpm run test:bible-import && pnpm run test:bible-import-api && pnpm run test:session-refresh && pnpm run test:auth-identity && pnpm run test:progress-isolation && pnpm run test:auth-recovery-status && pnpm run test:admin-account-source && pnpm run test:account-lifecycle",
+    "test:pastoral-briefing": "node --test --experimental-strip-types src/lib/__tests__/pastoral-briefing.test.ts",
     "test:emmaus-canonical": "node --test --import=tsx/esm src/emmaus/__tests__/intent-router.test.ts src/emmaus/__tests__/canonical-tools.test.ts",
     "test:multi-user-acceptance": "export NODE_ENV=test && export ALLOW_TEST_AUTH_HARNESS=1 && node --test --import=tsx/esm src/emmaus/__tests__/multi-user-acceptance.test.ts",
     "test:share-image-style": "export NODE_ENV=test && node --test --import=tsx/esm src/routes/__tests__/share-image-style.test.ts",

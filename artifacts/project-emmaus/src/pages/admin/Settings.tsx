@@ -531,7 +531,7 @@ function VoiceSettingsSection() {
 
 // ─── Church settings section ──────────────────────────────────────────────────
 
-export default function AdminSettings() {
+export default function AdminSettings({ onOpenBriefingRules }: { onOpenBriefingRules?: () => void }) {
   const { settings, updateSettings } = useAdmin();
   const [form, setForm] = useState<ChurchSettings>({ ...settings });
   const [isDirty, setIsDirty] = useState(false);
@@ -564,6 +564,25 @@ export default function AdminSettings() {
             </div>
           }
         />
+
+        {onOpenBriefingRules && (
+          <button
+            type="button"
+            onClick={onOpenBriefingRules}
+            className="w-full rounded-xl border border-teal-100 bg-teal-50/50 p-5 text-left transition-colors hover:border-teal-200 hover:bg-teal-50"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-semibold text-teal-900">Pastoral Briefing Rules</h2>
+                <p className="mt-1 max-w-xl text-xs leading-relaxed text-teal-800/70">
+                  Decide which observable attendance and discipleship patterns appear in the Today briefing.
+                  Preview changes safely before saving.
+                </p>
+              </div>
+              <span className="shrink-0 text-sm font-medium text-teal-700">Open →</span>
+            </div>
+          </button>
+        )}
 
         <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
           <h2 className="text-sm font-semibold text-gray-700">Church Identity</h2>

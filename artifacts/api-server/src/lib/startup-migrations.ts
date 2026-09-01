@@ -1551,6 +1551,42 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: signal_rule_config table failed (non-fatal)");
   }
 
+  // ── Pastoral briefing rules (2026-09) ───────────────────────────────────────
+  // This is separate from signal_rule_config: the latter controls the
+  // historical 18-rule care-signal generator, while this record is the
+  // church-wide, non-persisting Today briefing policy.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pastoral_briefing_rules (
+        church_id                           TEXT PRIMARY KEY,
+        attendance_alerts_enabled           BOOLEAN NOT NULL DEFAULT true,
+        missed_services_threshold            INTEGER NOT NULL DEFAULT 3,
+        emmaus_inactivity_alerts_enabled    BOOLEAN NOT NULL DEFAULT true,
+        emmaus_inactivity_days              INTEGER NOT NULL DEFAULT 14,
+        stalled_progress_alerts_enabled     BOOLEAN NOT NULL DEFAULT true,
+        stalled_progress_days               INTEGER NOT NULL DEFAULT 7,
+        new_user_grace_period_days          INTEGER NOT NULL DEFAULT 7,
+        exclude_test_accounts               BOOLEAN NOT NULL DEFAULT true,
+        exclude_inactive_accounts           BOOLEAN NOT NULL DEFAULT true,
+        exclude_visitors                    BOOLEAN NOT NULL DEFAULT true,
+        exclude_unlinked_profiles           BOOLEAN NOT NULL DEFAULT true,
+        exclude_church_administrators       BOOLEAN NOT NULL DEFAULT true,
+        exclude_without_active_identity     BOOLEAN NOT NULL DEFAULT true,
+        updated_by                          TEXT,
+        updated_at                          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT pastoral_briefing_rules_thresholds_check CHECK (
+          missed_services_threshold BETWEEN 1 AND 12
+          AND emmaus_inactivity_days BETWEEN 1 AND 90
+          AND stalled_progress_days BETWEEN 1 AND 90
+          AND new_user_grace_period_days BETWEEN 0 AND 90
+        )
+      );
+    `);
+    logger.info("Startup migration: pastoral_briefing_rules table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: pastoral_briefing_rules table failed (non-fatal)");
+  }
+
   // ── Ministry Tasks (CP7) ─────────────────────────────────────────────────
   try {
     await pool.query(`

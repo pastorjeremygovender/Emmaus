@@ -84,3 +84,4 @@
 - [Persistent meeting media](persistent-meeting-media.md) — LiveKit belongs above routes; media permissions follow explicit mode and device intent.
 - [Meeting presentation authority](meeting-presentation-authority.md) — presentation mutations and hydration are session-scoped; REST and SSE responses must pass the same stale-state checks.
 - [Pastoral resource allocation](discipleship-resource-allocation.md) — classify admin profile resources from authoritative source types/IDs, never display-title matching.
+- [Pastoral briefing rules](pastoral-briefing-rules.md) — Today uses a separate church-scoped, read-only evaluation policy; it must not create persisted pastoral side effects.

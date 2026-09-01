@@ -13,8 +13,6 @@ interface Props {
   onOpenPerson: (personId: string, personType: api.PersonType, personName?: string) => void;
 }
 
-const OPEN_STATUSES: api.SignalStatus[] = ['new', 'acknowledged', 'following_up'];
-
 export default function PastoralHome({ onOpenPeople, onOpenAttendance, onOpenPerson }: Props) {
   const { user } = useAuth();
   const auth = useMemo<api.AuthHeaders>(() => ({
@@ -22,7 +20,7 @@ export default function PastoralHome({ onOpenPeople, onOpenAttendance, onOpenPer
     userRole: user?.role ?? 'admin',
   }), [user?.id, user?.role]);
   const [stats, setStats] = useState<api.DashTodayStats | null>(null);
-  const [signals, setSignals] = useState<api.DiscipleshipSignal[]>([]);
+  const [briefing, setBriefing] = useState<api.PastoralBriefingResponse | null>(null);
   const [people, setPeople] = useState<api.UnifiedPerson[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -31,17 +29,13 @@ export default function PastoralHome({ onOpenPeople, onOpenAttendance, onOpenPer
     setLoading(true);
     setError('');
     try {
-      const [today, significant, followUp, attention, allPeople] = await Promise.all([
+      const [today, currentBriefing, allPeople] = await Promise.all([
         api.getDashTodayStats(auth),
-        api.listDiscipleshipSignals(auth, { category: 'significant', status: OPEN_STATUSES, limit: 8 }),
-        api.listDiscipleshipSignals(auth, { category: 'follow_up', status: OPEN_STATUSES, limit: 8 }),
-        api.listDiscipleshipSignals(auth, { category: 'attention', status: OPEN_STATUSES, limit: 8 }),
+        api.getPastoralBriefing(auth),
         api.listPeople(auth),
       ]);
       setStats(today);
-      setSignals([...significant, ...followUp, ...attention]
-        .sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime())
-        .slice(0, 6));
+      setBriefing(currentBriefing);
       setPeople(filterVisiblePastoralPeople(allPeople));
     } catch {
       setError('The pastoral briefing could not be loaded. Your register and attendance remain available.');
@@ -53,6 +47,7 @@ export default function PastoralHome({ onOpenPeople, onOpenAttendance, onOpenPer
   useEffect(() => { void load(); }, [load]);
 
   const emmausPeople = people.filter(p => p.subType === 'emmaus_user').length;
+  const matches = briefing?.matches ?? [];
   const attendanceRecorded = (stats?.attendance.sessionCount ?? 0) > 0;
   const firstName = 'Pastor Jeremy';
 
@@ -79,29 +74,31 @@ export default function PastoralHome({ onOpenPeople, onOpenAttendance, onOpenPer
           <div className="flex items-center gap-2 text-[13px] text-teal-700/70 py-2"><Loader2 size={14} className="animate-spin" />Preparing your briefing…</div>
         ) : error ? (
           <p className="flex items-start gap-2 text-[13px] text-amber-700"><AlertCircle size={14} className="mt-0.5 shrink-0" />{error}</p>
-        ) : signals.length === 0 ? (
+        ) : matches.length === 0 ? (
           <p className="text-[14px] leading-relaxed text-gray-700">Nothing currently needs your attention. Emmaus will keep watching attendance and discipleship activity in the background.</p>
         ) : (
-          <p className="text-[14px] leading-relaxed text-gray-700">{signals.length} {signals.length === 1 ? 'person may' : 'people may'} need your attention. The most recent items are shown below.</p>
+          <p className="text-[14px] leading-relaxed text-gray-700">{matches.length} {matches.length === 1 ? 'person may' : 'people may'} need your attention. The most recent items are shown below.</p>
         )}
       </section>
 
       <section>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-[16px] font-semibold text-gray-900">May need your attention</h2>
-          <span className="text-[12px] text-gray-400">{signals.length || 'None'}</span>
+          <span className="text-[12px] text-gray-400">{matches.length || 'None'}</span>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          {!loading && signals.length === 0 ? (
+          {!loading && matches.length === 0 ? (
             <div className="flex items-center gap-3 px-5 py-5 text-[13px] text-gray-500">
               <CheckCircle2 size={18} className="text-teal-500" />Nothing needs your attention right now.
             </div>
-          ) : signals.map(signal => (
-            <button key={signal.id} onClick={() => onOpenPerson(signal.personId, signal.personType, signal.personName)} className="w-full flex items-center gap-3 px-4 py-4 text-left border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors">
+          ) : matches.slice(0, 8).map(match => (
+            <button key={`${match.personType}-${match.personId}`} onClick={() => onOpenPerson(match.personId, match.personType, match.personName)} className="w-full flex items-center gap-3 px-4 py-4 text-left border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors">
               <span className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 shrink-0"><UserRound size={16} /></span>
               <span className="flex-1 min-w-0">
-                <span className="block text-[13px] font-medium text-gray-900">{signal.personName || 'Person'}</span>
-                <span className="block text-[12px] text-gray-500 mt-0.5 line-clamp-2">{signal.explanation}</span>
+                <span className="block text-[13px] font-medium text-gray-900">{match.personName || 'Person'}</span>
+                <span className="block text-[12px] text-gray-500 mt-0.5 line-clamp-2">
+                  {match.flags.map(flag => flag.detail).join(' ')}
+                </span>
               </span>
               <ChevronRight size={15} className="text-gray-300 shrink-0" />
             </button>

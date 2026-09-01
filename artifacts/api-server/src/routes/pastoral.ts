@@ -37,6 +37,11 @@ import { pool } from "@workspace/db";
 import { requireAuth } from "../emmaus/auth.js";
 import { logger } from "../lib/logger.js";
 import {
+  evaluatePastoralBriefing,
+  validatePastoralBriefingRules,
+} from "../lib/pastoral-briefing.js";
+import * as briefingStore from "../lib/pastoral-briefing-store.js";
+import {
   AccountLifecycleError,
   assertPermanentPurgeAvailable,
   getAccountLifecycleCandidate,
@@ -124,6 +129,18 @@ async function requireSuperAdminAccess(req: Request, res: Response): Promise<str
   if (!userId) return null;
   if (await getUserRole(userId) !== "superAdmin") {
     res.status(403).json({ error: "Only a super administrator can manage member access." });
+    return null;
+  }
+  return userId;
+}
+
+/** Pastoral briefing policy is a church administration function, not a pastoral-role function. */
+async function requireChurchAdministrator(req: Request, res: Response): Promise<string | null> {
+  const userId = requireAuth(req, res);
+  if (!userId) return null;
+  const role = await getUserRole(userId);
+  if (role !== "admin" && role !== "superAdmin") {
+    res.status(403).json({ error: "Church administrator access required." });
     return null;
   }
   return userId;
@@ -866,6 +883,86 @@ pastoralRouter.patch("/care-signals/:id/dismiss", async (req: Request, res: Resp
   } catch (err) {
     logger.error({ err }, "pastoral: dismissCareSignal failed");
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Pastoral briefing rules ───────────────────────────────────────────────────
+
+pastoralRouter.get("/briefing-rules", async (req: Request, res: Response): Promise<void> => {
+  const userId = await requireChurchAdministrator(req, res);
+  if (!userId) return;
+  try {
+    res.json(await briefingStore.getPastoralBriefingRules());
+  } catch (err) {
+    logger.error({ err }, "pastoral: get briefing rules failed");
+    res.status(500).json({ error: "Could not load pastoral briefing rules." });
+  }
+});
+
+pastoralRouter.post("/briefing-rules/preview", async (req: Request, res: Response): Promise<void> => {
+  const userId = await requireChurchAdministrator(req, res);
+  if (!userId) return;
+  const parsed = validatePastoralBriefingRules(req.body);
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+  try {
+    const [people, rules] = await Promise.all([
+      briefingStore.loadBriefingPeople(),
+      Promise.resolve(parsed.value),
+    ]);
+    const matches = evaluatePastoralBriefing(rules, people);
+    res.json({
+      rules,
+      totalFlagged: matches.length,
+      matches: matches.slice(0, 20),
+      evaluatedAt: new Date().toISOString(),
+      readOnly: true,
+    });
+  } catch (err) {
+    logger.error({ err }, "pastoral: preview briefing rules failed");
+    res.status(500).json({ error: "Could not preview pastoral briefing rules." });
+  }
+});
+
+pastoralRouter.put("/briefing-rules", async (req: Request, res: Response): Promise<void> => {
+  const userId = await requireChurchAdministrator(req, res);
+  if (!userId) return;
+  const parsed = validatePastoralBriefingRules(req.body);
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+  try {
+    res.json(await briefingStore.savePastoralBriefingRules(parsed.value, userId));
+  } catch (err) {
+    logger.error({ err }, "pastoral: save briefing rules failed");
+    res.status(500).json({ error: "Could not save pastoral briefing rules." });
+  }
+});
+
+pastoralRouter.post("/briefing-rules/restore-defaults", async (req: Request, res: Response): Promise<void> => {
+  const userId = await requireChurchAdministrator(req, res);
+  if (!userId) return;
+  try {
+    res.json(await briefingStore.restorePastoralBriefingDefaults(userId));
+  } catch (err) {
+    logger.error({ err }, "pastoral: restore briefing defaults failed");
+    res.status(500).json({ error: "Could not restore pastoral briefing defaults." });
+  }
+});
+
+pastoralRouter.get("/briefing", async (req: Request, res: Response): Promise<void> => {
+  const userId = await requirePastoralAccess(req, res);
+  if (!userId) return;
+  try {
+    const rules = await briefingStore.getPastoralBriefingRules();
+    const matches = await briefingStore.evaluateCurrentPastoralBriefing(rules);
+    res.json({ rules, matches, evaluatedAt: new Date().toISOString() });
+  } catch (err) {
+    logger.error({ err }, "pastoral: evaluate briefing failed");
+    res.status(500).json({ error: "Could not load the pastoral briefing." });
   }
 });
 
