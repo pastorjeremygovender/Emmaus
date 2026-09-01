@@ -1,0 +1,78 @@
+We now need to finish the Emmaus admin side as quickly and safely as possible.
+
+This task is READ-ONLY. Do not edit, commit, publish, deploy, switch branches, fetch, pull, push, merge, rebase, reset, cherry-pick or restore a checkpoint.
+
+The currently working user app is frozen. Do not alter it.
+
+Record the current branch, current commit and working-tree state. Confirm whether Bible-quality commit `74a2d473d9855eb37eaa974787915bb7c0d04116` is present and whether it is the current stable release baseline.
+
+Locate all existing pastoral-admin work in local:
+
+* Branches
+* Commits
+* Replit checkpoints
+* Working-tree changes, if any
+
+Pay particular attention to:
+
+* `codex/pastoral-admin-simplification`
+* Any pastoral-admin checkpoint
+* Church Register / People work
+* Person profile redesign
+* Attendance admin
+* Content Studio
+* Bible Study admin
+* Simplified navigation and Today dashboard
+
+Do not recover, relink or modify Church Register people data. The missing genuine-member recovery remains a separate future task.
+
+Compare the existing admin implementation with this final minimum scope:
+
+ADMIN NAVIGATION
+
+* Today
+* People / Church Register
+* Attendance
+* Content Studio
+* Bible Study
+* Advanced administration collapsed and visually secondary
+* Prayer Requests completely excluded
+
+PERSON PROFILE
+
+* Compact header
+* Contact Information open by default
+* Attendance shows three most recent records directly
+* “View full attendance history” when more records exist
+* Discipleship
+* Volunteering
+* Significant Moments with its own calendar icon
+* Pastoral Care
+* Administrative Details collapsed
+* Group Leadership located inside Administrative Details
+* Preserve existing loaders, actions, mutations and API contracts
+
+TODAY
+
+* Calm pastoral overview
+* Only useful actionable information
+* No technical dashboard clutter
+* Existing attendance, care and discipleship signals preserved
+
+Report:
+
+1. Current stable branch and commit
+2. Exact branch/commit/checkpoint containing the most complete admin work
+3. Exact files changed by that admin work
+4. Which final requirements are already complete
+5. Which requirements remain incomplete
+6. Any overlap between admin files and the newly stabilized user-app files
+7. Whether the admin work can be integrated without altering user-side behaviour
+8. The single safest and shortest integration method
+9. Exact validation suite required afterward
+10. Final verdict:
+
+* READY FOR CONTROLLED ADMIN INTEGRATION
+* or NOT READY, with the precise blocker
+
+Do not make any changes and do not propose optional enhancements. We are completing the existing admin design, not redesigning it.
