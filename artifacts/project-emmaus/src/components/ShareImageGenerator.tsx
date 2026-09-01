@@ -102,20 +102,6 @@ type GenerationDetails = {
   prompt: string;
 };
 
-const NEW_METHOD_TEST_QUOTE = `There will be moments when you don't understand everything.
-
-Questions will arise.
-
-Difficulties will come.
-
-Yet faith continues to say,
-
-"I trust Jesus."
-
-Not because every question has been answered.
-
-But because He has proven Himself faithful.`;
-
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -313,7 +299,7 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
   const { user } = useAuth();
 
   // Stable inputs — survive state machine transitions
-  const [text, setText] = useState(NEW_METHOD_TEST_QUOTE);
+  const [text, setText] = useState("");
   const [selectedStyle, setSelectedStyle] = useState<GenerationStyleId>("in-the-middle");
   const [attribution, setAttribution] = useState<Attribution>("emmaus");
   const [editInstruction, setEditInstruction] = useState("");
@@ -425,8 +411,8 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
     setGenError("");
 
     try {
-      const b64 = await callGenerate("edit", prevImage, selectedStyle);
-      setState({ phase: "preview", imageBase64: b64, styleId: state.phase === "preview" ? state.styleId : selectedStyle });
+      const generated = await callGenerate("edit", prevImage, selectedStyle);
+      setState({ phase: "preview", imageBase64: generated.imageBase64, styleId: state.phase === "preview" ? state.styleId : selectedStyle });
       setEditInstruction("");
     } catch (e: unknown) {
       // Retain previous image on failure

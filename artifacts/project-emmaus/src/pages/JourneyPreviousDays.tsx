@@ -51,7 +51,7 @@ export default function JourneyPreviousDays() {
           label: getStepLabel(s, journey),
           title: s.title,
           subtitle: s.scripture || undefined,
-          status: completedSet.has(s.day) ? 'completed' : (s.day === currentDay ? 'current' : 'upcoming'),
+           status: completedSet.has(s.day) ? 'completed' : 'available',
         }))
     : [];
 

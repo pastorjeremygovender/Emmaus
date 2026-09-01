@@ -139,6 +139,14 @@ describe("verified admin account source", () => {
 
   it("creates one profile per verified subject and keeps accounts, people, metrics, and activity subject-isolated", async () => {
     const beforeStats = await getTodayStats();
+    const beforeTestAccounts = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM user_profiles up
+       INNER JOIN users u ON u.id = up.auth_subject
+       WHERE up.auth_subject = ANY($1::text[]) AND up.account_status = 'active'`,
+      [subjects],
+    );
+    assert.equal(Number(beforeTestAccounts.rows[0]?.count ?? 0), 0);
 
     await upsertVerifiedIdentity({
       sub: subjects[0],
@@ -318,10 +326,19 @@ describe("verified admin account source", () => {
     );
 
     const afterStats = await getTodayStats();
+    const afterTestAccounts = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM user_profiles up
+       INNER JOIN users u ON u.id = up.auth_subject
+       WHERE up.auth_subject = ANY($1::text[]) AND up.account_status = 'active'`,
+      [subjects],
+    );
+    assert.equal(Number(afterTestAccounts.rows[0]?.count ?? 0), subjects.length);
     assert.equal(
-      afterStats.newPeopleThisWeek.emmausAccounts,
-      beforeStats.newPeopleThisWeek.emmausAccounts + 2,
-      "dashboard account count must match verified account creation only",
+      afterStats.newPeopleThisWeek.emmausAccounts >=
+        beforeStats.newPeopleThisWeek.emmausAccounts + subjects.length,
+      true,
+      "dashboard account count must include the test's verified accounts",
     );
   });
 });

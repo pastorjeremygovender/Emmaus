@@ -200,7 +200,7 @@ export default function CreateRoom() {
             value={name}
             onChange={e => { setName(e.target.value); setError(''); }}
             onKeyDown={e => e.key === 'Enter' && handleCreate()}
-            placeholder="e.g. The Govender Family"
+            placeholder="e.g. Family Group"
             className="w-full h-12 px-4 rounded-xl border border-border bg-card text-[16px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
             maxLength={60}
             autoFocus

@@ -9,7 +9,7 @@
  * ═════════════════════════════════════════════════════════════════════════════
  *
  * Behaviour rules:
- *   • Only completed days show a "Review →" action.
+ *   • Completed and elapsed available days show a "Review →" action.
  *   • Current / future days show a status badge without a review link.
  *   • Review is always read-only — the reading page is responsible for
  *     never advancing progress when opened in replay mode.
@@ -45,10 +45,11 @@ export interface PreviousDayEntry {
   label?: string;
   /**
    * 'completed' — member has completed this day; shows "Review →" action.
+   * 'available' — elapsed day is available to review but unfinished.
    * 'current'   — today's in-progress or latest available day.
    * 'locked'    — not yet available; shown but not tappable.
    */
-  status: 'completed' | 'current' | 'locked';
+  status: 'completed' | 'available' | 'current' | 'locked';
 }
 
 interface PreviousDaysScreenProps {
@@ -83,6 +84,13 @@ function StatusBadge({ status }: { status: PreviousDayEntry['status'] }) {
       <span className="flex items-center gap-1 text-[12px] font-medium text-green-600">
         <CheckCircle2 size={13} />
         Completed
+      </span>
+    );
+  }
+  if (status === 'available') {
+    return (
+      <span className="text-[12px] font-medium text-primary">
+        Available to review
       </span>
     );
   }
@@ -168,7 +176,7 @@ export function PreviousDaysScreen({
           /* ── Day list ─────────────────────────────────────────────────── */
           <div className="divide-y divide-border/50">
             {entries.map(entry => {
-              const isReviewable = entry.status === 'completed';
+              const isReviewable = entry.status === 'completed' || entry.status === 'available';
               const isContinuable = entry.status === 'current' && !!onContinueDay;
               const eyebrow = entry.label ?? `Day ${entry.dayNumber}`;
               return (

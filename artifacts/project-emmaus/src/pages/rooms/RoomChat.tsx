@@ -102,6 +102,18 @@ export default function RoomChat({ embedded = false, onClose, activePresentation
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
+  // Clear the previous conversation before a new room/discussion history can
+  // arrive. The loading effect below separately rejects late old responses.
+  useEffect(() => {
+    setMessages([]);
+    setBody('');
+    setLoadError('');
+    setPendingAttachment(null);
+    setShowPicker(false);
+    setSending(false);
+    sendingRef.current = false;
+  }, [roomId, discussionId]);
+
   const onCloseRef = useRef(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;

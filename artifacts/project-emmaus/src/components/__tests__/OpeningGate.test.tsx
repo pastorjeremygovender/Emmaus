@@ -115,7 +115,7 @@ describe('OpeningGate', () => {
       .toBe('/personal?source=shared#overview');
   });
 
-  it('opens the Walk immediately on a same-day reload after the opening is resolved', async () => {
+  it('rechecks the server on a same-day reload without advancing the member', async () => {
     const firstRender = render(<OpeningGate><div>member content</div></OpeningGate>);
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
@@ -126,8 +126,23 @@ describe('OpeningGate', () => {
     render(<OpeningGate><div>member content</div></OpeningGate>);
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
-    expect(getDailyRhythmStartup).not.toHaveBeenCalled();
-    expect(setLocation).toHaveBeenCalledWith('/walk', { replace: true });
+    expect(getDailyRhythmStartup).toHaveBeenCalledTimes(1);
+    expect(setLocation).toHaveBeenCalledWith('/daily-rhythm/day/1', { replace: true });
+    expect(screen.getByText('member content')).toBeInTheDocument();
+  });
+
+  it('opens the next day when the server reports a genuine calendar-day change', async () => {
+    getDailyRhythmStartup.mockResolvedValueOnce({
+      state: 'OPENING_REQUIRED',
+      destination: '/daily-rhythm/day/2',
+      assignedDay: 2,
+    });
+
+    render(<OpeningGate><div>member content</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(getDailyRhythmStartup).toHaveBeenCalledTimes(1);
+    expect(setLocation).toHaveBeenCalledWith('/daily-rhythm/day/2', { replace: true });
     expect(screen.getByText('member content')).toBeInTheDocument();
   });
 

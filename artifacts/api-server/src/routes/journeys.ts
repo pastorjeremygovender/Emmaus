@@ -911,8 +911,9 @@ router.get("/journeys/:id/steps", async (req: Request, res: Response) => {
   if (isDailyRhythm && userId) {
     const progress = await store.getProgress(userId, journeyId);
     const currentDay = progress?.currentDay ?? 1;
-    const completed = new Set(progress?.completedDays ?? []);
-    res.json({ steps: steps.filter(step => step.day <= currentDay && (step.day === currentDay || completed.has(step.day))) });
+    // All elapsed published days remain available for review, whether or not
+    // the member opened or finished them. Future days stay server-gated.
+    res.json({ steps: steps.filter(step => step.day <= currentDay) });
     return;
   }
   res.json({ steps });
