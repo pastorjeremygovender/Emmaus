@@ -18,6 +18,7 @@ import { generateJourney, generateStructuredJourney, generateWalkIntroduction, a
 import { logAuditEvent } from "../lib/audit-log.js";
 import { isAdmin, getUserRole } from "../lib/user-role-store.js";
 import * as dailyRhythmGroups from "../lib/daily-rhythm-groups-store.js";
+import { selectDailyRhythmSteps } from "../lib/daily-rhythm-content-access.js";
 
 const router = Router();
 
@@ -922,12 +923,23 @@ router.get("/journeys/:id/steps", async (req: Request, res: Response) => {
   const userId = resolveUserId(req);
   const journey = await store.getJourney(journeyId);
   const isDailyRhythm = journey?.journeyType === "daily-rhythm" || journey?.journeyType === "core";
-  if (isDailyRhythm && userId) {
+  if (isDailyRhythm) {
+    if (!userId) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+    const role = await getUserRole(userId);
+    if (role === "admin" || role === "superAdmin") {
+      // Do not read member progress for authoring requests. Admins need the
+      // complete authored catalogue, including future and Draft steps.
+      res.json({ steps });
+      return;
+    }
     const progress = await store.getProgress(userId, journeyId);
     const currentDay = progress?.currentDay ?? 1;
     // All elapsed published days remain available for review, whether or not
     // the member opened or finished them. Future days stay server-gated.
-    res.json({ steps: steps.filter(step => step.day <= currentDay) });
+    res.json({ steps: selectDailyRhythmSteps(steps, role, currentDay) });
     return;
   }
   res.json({ steps });

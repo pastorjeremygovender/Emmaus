@@ -22,26 +22,39 @@ export default function PastoralHome({ onOpenPeople, onOpenAttendance, onOpenPer
   const [stats, setStats] = useState<api.DashTodayStats | null>(null);
   const [briefing, setBriefing] = useState<api.PastoralBriefingResponse | null>(null);
   const [people, setPeople] = useState<api.UnifiedPerson[]>([]);
+  const [statsError, setStatsError] = useState('');
+  const [briefingError, setBriefingError] = useState('');
+  const [peopleError, setPeopleError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError('');
-    try {
-      const [today, currentBriefing, allPeople] = await Promise.all([
-        api.getDashTodayStats(auth),
-        api.getPastoralBriefing(auth),
-        api.listPeople(auth),
-      ]);
-      setStats(today);
-      setBriefing(currentBriefing);
-      setPeople(filterVisiblePastoralPeople(allPeople));
-    } catch {
-      setError('The pastoral briefing could not be loaded. Your register and attendance remain available.');
-    } finally {
-      setLoading(false);
+    setStatsError('');
+    setBriefingError('');
+    setPeopleError('');
+
+    const [todayResult, briefingResult, peopleResult] = await Promise.allSettled([
+      api.getDashTodayStats(auth),
+      api.getPastoralBriefing(auth),
+      api.listPeople(auth),
+    ]);
+
+    if (todayResult.status === 'fulfilled') {
+      setStats(todayResult.value);
+    } else {
+      setStatsError('Today’s pastoral figures could not be loaded.');
     }
+    if (briefingResult.status === 'fulfilled') {
+      setBriefing(briefingResult.value);
+    } else {
+      setBriefingError('The pastoral briefing could not be loaded.');
+    }
+    if (peopleResult.status === 'fulfilled') {
+      setPeople(filterVisiblePastoralPeople(peopleResult.value));
+    } else {
+      setPeopleError('The church register could not be loaded.');
+    }
+    setLoading(false);
   }, [auth]);
 
   useEffect(() => { void load(); }, [load]);
@@ -72,8 +85,8 @@ export default function PastoralHome({ onOpenPeople, onOpenAttendance, onOpenPer
         </div>
         {loading ? (
           <div className="flex items-center gap-2 text-[13px] text-teal-700/70 py-2"><Loader2 size={14} className="animate-spin" />Preparing your briefing…</div>
-        ) : error ? (
-          <p className="flex items-start gap-2 text-[13px] text-amber-700"><AlertCircle size={14} className="mt-0.5 shrink-0" />{error}</p>
+        ) : briefingError ? (
+          <p className="flex items-start gap-2 text-[13px] text-rose-700"><AlertCircle size={14} className="mt-0.5 shrink-0" />{briefingError}</p>
         ) : matches.length === 0 ? (
           <p className="text-[14px] leading-relaxed text-gray-700">Nothing currently needs your attention. Emmaus will keep watching attendance and discipleship activity in the background.</p>
         ) : (
@@ -84,10 +97,12 @@ export default function PastoralHome({ onOpenPeople, onOpenAttendance, onOpenPer
       <section>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-[16px] font-semibold text-gray-900">May need your attention</h2>
-          <span className="text-[12px] text-gray-400">{matches.length || 'None'}</span>
+          <span className="text-[12px] text-gray-400">{briefingError ? 'Unavailable' : matches.length || 'None'}</span>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          {!loading && matches.length === 0 ? (
+          {!loading && briefingError ? (
+            <p className="flex items-start gap-2 px-5 py-5 text-[13px] text-rose-700"><AlertCircle size={14} className="mt-0.5 shrink-0" />{briefingError}</p>
+          ) : !loading && matches.length === 0 ? (
             <div className="flex items-center gap-3 px-5 py-5 text-[13px] text-gray-500">
               <CheckCircle2 size={18} className="text-teal-500" />Nothing needs your attention right now.
             </div>
@@ -110,20 +125,20 @@ export default function PastoralHome({ onOpenPeople, onOpenAttendance, onOpenPer
         <button onClick={onOpenAttendance} className="text-left bg-white border border-gray-200 rounded-xl p-4 hover:border-teal-200 hover:bg-teal-50/30 transition-colors">
           <CalendarCheck size={17} className="text-teal-600 mb-3" />
           <span className="block text-[12px] text-gray-400">Today’s attendance</span>
-          <strong className="block text-[17px] font-semibold text-gray-900 mt-1">{attendanceRecorded ? `${stats?.attendance.present ?? 0} present` : 'Not recorded'}</strong>
+          <strong className="block text-[17px] font-semibold text-gray-900 mt-1">{statsError ? 'Unavailable' : attendanceRecorded ? `${stats?.attendance.present ?? 0} present` : 'Not recorded'}</strong>
           <span className="block text-[11px] text-teal-700 mt-2">Open attendance →</span>
         </button>
         <button onClick={onOpenPeople} className="text-left bg-white border border-gray-200 rounded-xl p-4 hover:border-teal-200 hover:bg-teal-50/30 transition-colors">
           <Users size={17} className="text-teal-600 mb-3" />
           <span className="block text-[12px] text-gray-400">Church register</span>
-          <strong className="block text-[17px] font-semibold text-gray-900 mt-1">{people.length} people</strong>
-          <span className="block text-[11px] text-teal-700 mt-2">Find a person →</span>
+          <strong className="block text-[17px] font-semibold text-gray-900 mt-1">{peopleError ? 'Unavailable' : `${people.length} people`}</strong>
+          <span className="block text-[11px] text-teal-700 mt-2">{peopleError ? peopleError : 'Find a person →'}</span>
         </button>
         <button onClick={onOpenPeople} className="text-left bg-white border border-gray-200 rounded-xl p-4 hover:border-teal-200 hover:bg-teal-50/30 transition-colors">
           <BookOpenCheck size={17} className="text-teal-600 mb-3" />
           <span className="block text-[12px] text-gray-400">People on Emmaus</span>
-          <strong className="block text-[17px] font-semibold text-gray-900 mt-1">{emmausPeople}</strong>
-          <span className="block text-[11px] text-gray-500 mt-2">{stats?.activeWalks ?? 0} active Walks</span>
+          <strong className="block text-[17px] font-semibold text-gray-900 mt-1">{peopleError ? 'Unavailable' : emmausPeople}</strong>
+          <span className="block text-[11px] text-gray-500 mt-2">{statsError ? 'Active Walks unavailable' : `${stats?.activeWalks ?? 0} active Walks`}</span>
         </button>
       </section>
 

@@ -135,7 +135,8 @@ export async function loadBriefingPeople(): Promise<BriefingPersonRecord[]> {
       `SELECT
          u.id AS person_id, 'emmaus_user' AS person_type,
          COALESCE(NULLIF(up.preferred_name, ''), NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''), u.email) AS person_name,
-         u.email, u.created_at, up.app_role, up.account_status,
+          u.email, u.created_at, NULL::text AS linked_user_id,
+          up.app_role, up.account_status,
          true AS is_linked, true AS has_active_identity, false AS is_visitor
        FROM users u
        JOIN user_profiles up ON up.auth_subject = u.id

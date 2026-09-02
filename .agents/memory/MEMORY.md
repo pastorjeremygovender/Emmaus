@@ -86,3 +86,4 @@
 - [Meeting presentation authority](meeting-presentation-authority.md) — presentation mutations and hydration are session-scoped; REST and SSE responses must pass the same stale-state checks.
 - [Pastoral resource allocation](discipleship-resource-allocation.md) — classify admin profile resources from authoritative source types/IDs, never display-title matching.
 - [Pastoral briefing rules](pastoral-briefing-rules.md) — Today uses a separate church-scoped, read-only evaluation policy; it must not create persisted pastoral side effects.
+- [Pastoral dashboard error boundaries](pastoral-dashboard-error-boundaries.md) — distinguish valid empty pastoral data from failed aggregates and preserve healthy sections.

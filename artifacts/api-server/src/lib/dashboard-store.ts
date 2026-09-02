@@ -1,14 +1,14 @@
 /**
  * dashboard-store.ts — Data layer for the Pastoral Dashboard (Checkpoint 5).
  *
- * Each exported function is a single focused query. The routes call them
- * independently so that one slow query never blocks the rest.
+ * Each exported function is a single focused aggregate. The routes call them
+ * independently so that one slow aggregate never blocks the rest.
  *
- * Every query gracefully returns empty/zero data when tables are empty.
+ * Empty tables return valid empty/zero data. Query failures propagate so the
+ * route and UI can distinguish failure from an empty result.
  */
 
 import { pool } from "@workspace/db";
-import { logger } from "./logger.js";
 
 export const CHURCH_ID = "icc";
 
@@ -71,7 +71,7 @@ export interface ActivityItem {
 
 export async function getTodayStats(): Promise<TodayStats> {
   const [attRes, walksRes, devRes, devTodayRes, newPpRes, newEuRes, followUpRes] =
-    await Promise.allSettled([
+    await Promise.all([
       // Today's attendance
       pool.query<{ present: string; expected: string; session_count: string }>(`
         SELECT
@@ -132,9 +132,8 @@ export async function getTodayStats(): Promise<TodayStats> {
       `, [CHURCH_ID]),
     ]);
 
-  const att = attRes.status === "fulfilled" ? attRes.value.rows[0] : null;
-  const n = (r: PromiseSettledResult<{ rows: { count: string }[] }>) =>
-    r.status === "fulfilled" ? Number(r.value.rows[0]?.count ?? 0) : 0;
+  const att = attRes.rows[0];
+  const n = (r: { rows: { count: string }[] }) => Number(r.rows[0]?.count ?? 0);
 
   return {
     attendance: {
@@ -158,7 +157,7 @@ export async function getTodayStats(): Promise<TodayStats> {
 export async function getDiscipleshipMovement(): Promise<MovementCard[]> {
   const monthStart = `DATE_TRUNC('month', CURRENT_DATE)`;
 
-  const results = await Promise.allSettled([
+  const results = await Promise.all([
     // Started walks this month
     pool.query<{ count: string }>(`
       SELECT COUNT(*)::text AS count FROM user_journey_progress
@@ -204,10 +203,7 @@ export async function getDiscipleshipMovement(): Promise<MovementCard[]> {
     `, [CHURCH_ID]),
   ]);
 
-  const n = (idx: number) =>
-    results[idx].status === "fulfilled"
-      ? Number((results[idx] as PromiseFulfilledResult<{ rows: { count: string }[] }>).value.rows[0]?.count ?? 0)
-      : 0;
+  const n = (idx: number) => Number(results[idx].rows[0]?.count ?? 0);
 
   return [
     { id: "walks_started",    label: "Walks Started",     count: n(0) },
@@ -224,7 +220,7 @@ export async function getDiscipleshipMovement(): Promise<MovementCard[]> {
 // ─── Engagement Chart Data ────────────────────────────────────────────────────
 
 export async function getEngagementData(): Promise<EngagementData> {
-  const [attRes, devRes, walkStartRes, walkComplRes, roomRes] = await Promise.allSettled([
+  const [attRes, devRes, walkStartRes, walkComplRes, roomRes] = await Promise.all([
     // Attendance last 12 sessions (any type)
     pool.query<{ date: string; present: string; expected: string; meeting_type: string }>(`
       SELECT ms.session_date::text AS date,
@@ -284,22 +280,17 @@ export async function getEngagementData(): Promise<EngagementData> {
     `),
   ]);
 
-  const toPoints = (r: PromiseSettledResult<{ rows: { date: string; count: string }[] }>) =>
-    r.status === "fulfilled"
-      ? r.value.rows.map((x) => ({ date: x.date, count: Number(x.count) }))
-      : [];
+  const toPoints = (r: { rows: { date: string; count: string }[] }) =>
+    r.rows.map((x) => ({ date: x.date, count: Number(x.count) }));
 
-  const attRows =
-    attRes.status === "fulfilled"
-      ? attRes.value.rows
-          .reverse() // oldest first for chart
-          .map((r) => ({
-            date: r.date,
-            present:  Number(r.present),
-            expected: Number(r.expected),
-            meetingType: r.meeting_type,
-          }))
-      : [];
+  const attRows = attRes.rows
+    .reverse() // oldest first for chart
+    .map((r) => ({
+      date: r.date,
+      present:  Number(r.present),
+      expected: Number(r.expected),
+      meetingType: r.meeting_type,
+    }));
 
   return {
     attendanceLast12:      attRows,
@@ -334,12 +325,12 @@ export async function getNewBelievers(): Promise<NewBeliever[]> {
            OR j.title ILIKE '%salvation%' OR j.title ILIKE '%prayer walk%')
     ORDER BY ujp.last_completed_at DESC
     LIMIT 20
-  `).catch(() => ({ rows: [] as { user_id: string; person_name: string; journey_title: string; completed_at: string }[] }));
+  `);
 
   // Check baptism milestones + room membership for each
   const believers = await Promise.all(
     res.rows.map(async (r) => {
-      const [baptRes, roomRes] = await Promise.allSettled([
+      const [baptRes, roomRes] = await Promise.all([
         pool.query(
           `SELECT 1 FROM pastoral_milestones pm
            JOIN pastoral_persons pp ON pp.id::text = pm.person_id
@@ -359,8 +350,8 @@ export async function getNewBelievers(): Promise<NewBeliever[]> {
         personName:   r.person_name,
         journeyTitle: r.journey_title,
         completedAt:  r.completed_at,
-        hasBaptism:   baptRes.status === "fulfilled" && baptRes.value.rows.length > 0,
-        hasRoom:      roomRes.status === "fulfilled" && roomRes.value.rows.length > 0,
+         hasBaptism:   baptRes.rows.length > 0,
+         hasRoom:      roomRes.rows.length > 0,
       };
     }),
   );
@@ -445,9 +436,7 @@ export async function getRecentActivity(limit = 25): Promise<ActivityItem[]> {
     ) sub
     ORDER BY event_at DESC
     LIMIT $2
-  `, [CHURCH_ID, limit]).catch(() => ({
-    rows: [] as { id: string; type: string; person_name: string; detail: string; event_at: string }[],
-  }));
+  `, [CHURCH_ID, limit]);
 
   return res.rows.map((r) => ({
     id:         r.id,
