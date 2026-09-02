@@ -16,7 +16,7 @@ Step upsert uses COALESCE so authored content is **never overwritten** by seed d
 - `content` (JSONB): `CASE WHEN existing IS NOT NULL AND existing::text NOT IN ('null','{}','[]') THEN existing ELSE seed END`
 - Text fields (`teaching_content`, `reflection_question`, `prayer`, `todays_action`, `mentor_intro`): `COALESCE(NULLIF(existing, ''), seed)`
 - `share_image_url`: `COALESCE(existing, seed)`
-- `status`: intentionally omitted from DO UPDATE — admin publish/unpublish is source of truth
+- `status`: a seeded existing step may upgrade from `Draft` to `Published`, but never downgrade an existing published step
 
 **Why:** A previous version directly overwrote content columns on every boot, wiping anything an admin had written in production that wasn't in the seed file.
 
@@ -39,7 +39,7 @@ The export-seed reads the **dev** database. Content written in the production ad
 ## Seeded journeys (current)
 - `the-road-to-emmaus` — "The Road to Emmaus", 3 steps, all with content
 - `coming-to-jesus` — "Who Is God?", 5 steps + completion, all currently empty
-- `15-minutes-with-jesus` — "10 Minutes with Jesus", 7 steps, all with content
+- `15-minutes-with-jesus` — "10 Minutes with Jesus", 30 steps, all with content
 
 ## Tombstoned journey steps
 When a seed journey is skipped because its ID is in `reseed_tombstones`, its seed steps must be skipped too.
@@ -47,3 +47,10 @@ When a seed journey is skipped because its ID is in `reseed_tombstones`, its see
 **Why:** The journey tombstone intentionally prevents recreation; attempting its steps afterward violates the `journey_steps.journey_id` foreign key on every production boot.
 
 **How to apply:** Keep the tombstone check before every step upsert, not only before the parent journey upsert.
+
+## Production correction boundary
+The production query surface is read-only for the agent. A narrow production data correction must use an explicitly supported production-write path; do not substitute the broad boot-time sync, which can update multiple existing journey and step fields.
+
+**Why:** A content-equivalent correction may still be unsafe if the chosen mechanism rewrites unrelated records or fields.
+
+**How to apply:** Capture a timestamped pre-change export, verify exact IDs/content hashes/current values, apply only guarded field updates in one transaction through the supported production mechanism, then verify progress and authored-content invariants before republishing.

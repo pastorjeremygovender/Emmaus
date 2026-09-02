@@ -1,0 +1,71 @@
+APPROVED — APPLY THE GUARDED CORRECTION AND REPUBLISH
+
+Proceed with the exact guarded production correction you described.
+
+Before changing anything:
+
+1. Export and timestamp the two affected production rows.
+2. Record their IDs, existing values and Day 8 content hash.
+3. Record the current production user-progress count.
+4. Abort if any value differs from the verified baseline.
+
+Apply only these two production field changes:
+
+1. Existing Day 8 journey step:
+   status: Draft → Published
+
+2. Existing Daily Rhythm journey:
+   duration_days: 7 → 30
+
+Do not:
+
+- insert or delete anything;
+- rewrite content;
+- change IDs or sequence numbers;
+- modify user progress;
+- modify completed-day history;
+- change DATABASE_URL;
+- change database infrastructure;
+- run unrelated migrations;
+- start the suggested typecheck cleanup;
+- or make any additional code changes.
+
+After the transaction, verify:
+
+- 30 active numbered Daily Rhythm records;
+- 30 Published Daily Rhythm days;
+- 0 Draft Daily Rhythm days;
+- duration_days = 30;
+- Day 8 remains in position 8;
+- all IDs, content hashes and display orders remain unchanged;
+- user-progress row count remains 12;
+- completed-day entry count remains 57.
+
+If every verification passes, republish the already completed Daily Rhythm build.
+
+Do not add or change anything else before republishing.
+
+After deployment, perform a read-only production smoke test confirming:
+
+- www.emmaus.co.za loads normally;
+- authentication still works;
+- Today’s Steps loads;
+- Daily Rhythm resolves the correct calendar day;
+- the current day opens without requiring yesterday’s completion;
+- My Bible remains accessible;
+- all 30 Daily Rhythm days are present in the canonical sequence;
+- no new production console or server errors appear;
+- and the production database still contains the verified user progress.
+
+Do not create test production records or alter a real user’s progress during the smoke test.
+
+If any correction, deployment or verification step fails, stop immediately, do not attempt unrelated repairs, and report exactly what failed.
+
+When complete, report:
+
+- backup completed;
+- correction completed;
+- post-correction values;
+- deployment completed;
+- production smoke-test results;
+- and whether rollback was required.
