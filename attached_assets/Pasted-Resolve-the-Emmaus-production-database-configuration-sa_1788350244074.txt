@@ -1,0 +1,51 @@
+Resolve the Emmaus production database configuration safely.
+
+The published Daily Rhythm build is already working. Do not republish it.
+
+NON-NEGOTIABLE SAFETY RULES
+
+- Do not delete, overwrite, reset, replace, truncate or recreate any database, schema, table, record or user information.
+- Do not run migrations.
+- Do not run seed scripts.
+- Do not run any production data sync, backfill, import or export.
+- Do not change application code.
+- Do not change Secrets, DATABASE_URL, deployment settings or domains during this investigation.
+- Never display or reveal database URLs, passwords, tokens or credentials.
+- Do not create a second database.
+- Do not switch databases merely because Replit displays a warning.
+- Use read-only inspection only.
+
+TASK
+
+Determine definitively which database the currently published app at https://www.emmaus.co.za is reading from and writing to.
+
+Safely compare, without revealing credentials:
+
+1. The database configured for the active production deployment.
+2. The database configured in the development workspace.
+3. Their provider, host fingerprint, database name, project/database identifier and environment—but redact all credentials.
+4. The active deployment version/commit and the project from which it was published.
+5. Whether any code path overrides DATABASE_URL or connects to another database.
+6. Whether scheduled jobs, background workers or server processes use a different database.
+7. Whether the live app’s existing recent data corresponds to the identified production database.
+
+Do not create or delete a test record. If write-path verification is needed, use a transaction that is rolled back completely and confirm that nothing persisted.
+
+REPORT BEFORE CHANGING ANYTHING
+
+Return a simple table showing:
+
+- Production deployment database fingerprint
+- Development database fingerprint
+- Same database: YES or NO
+- Live reads confirmed: YES or NO
+- Live writes route to the same database: YES or NO
+- Additional database connections found: YES or NO
+- Exact cause of any mismatch
+- Exact minimal correction required
+
+If everything already points to one database, state clearly: “No database change is required.”
+
+If a mismatch exists, stop and explain the exact minimal correction. Do not apply it until I explicitly approve it.
+
+If any check fails or remains uncertain, stop immediately and report what could not be verified. Do not guess.
