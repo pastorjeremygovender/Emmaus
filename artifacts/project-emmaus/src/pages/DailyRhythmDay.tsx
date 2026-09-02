@@ -43,6 +43,7 @@ import { DevModeBanner } from '@/components/DevModeBanner';
 import { goBackOrFallback } from '@/lib/return-context';
 import { getDailyRhythmState } from '@/lib/journeys-api';
 import { consumeOpeningDestination } from '@/lib/opening-destination';
+import { resolveDailyRhythmCalendar } from '@/lib/daily-rhythm-calendar';
 
 // ─── Ahead-of-rhythm screen (Dev Mode only) ───────────────────────────────────
 // Shown ONLY in Development Mode so admins/testers can diagnose future-day access.
@@ -92,7 +93,7 @@ export default function DailyRhythmDay() {
   const { dayNumber } = useParams<{ dayNumber: string }>();
   const [location, setLocation] = useLocation();
   const { user } = useAuth();
-  const { journeys, progress, getStepsForJourney, completeStep } = useJourney();
+  const { journeys, progress, getStepsForJourney, completeStep, dailyRhythmState } = useJourney();
 
   // Resolve the daily-rhythm journey dynamically so any slug works in production.
   // Falls back to the known seed ID so existing deep-links don't break.
@@ -114,8 +115,9 @@ export default function DailyRhythmDay() {
 
   const journey = journeys.find(j => j.id === journeyId);
   const isDailyRhythmJourney = journey?.journeyType === 'daily-rhythm';
-  const prog = dailyProgress ?? progress[journeyId];
-  const currentDay = prog?.currentDay ?? 1;
+  const prog = dailyProgress ?? dailyRhythmState?.progress ?? progress[journeyId];
+  const resolution = resolveDailyRhythmCalendar(undefined, dailyRhythmState);
+  const currentDay = resolution?.currentDay ?? prog?.currentDay ?? 1;
   const steps = getStepsForJourney(journeyId);
 
   // Startup can advance Daily Rhythm immediately before this page mounts,
@@ -128,21 +130,30 @@ export default function DailyRhythmDay() {
       return;
     }
     let cancelled = false;
-    setDailyProgressLoading(true);
-    void getDailyRhythmState()
-      .then(state => {
-        if (!cancelled) setDailyProgress(state?.progress ?? null);
-      })
-      .catch(error => {
-        if (!cancelled) {
-          console.warn('[Daily Rhythm] fresh route state unavailable; using loaded progress', error);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setDailyProgressLoading(false);
-      });
+    const refresh = () => {
+      setDailyProgressLoading(true);
+      // Hold the page while resolving; falling back to the old context snapshot
+      // here would briefly apply yesterday's future-day guard after a resume.
+      setDailyProgress(null);
+      void getDailyRhythmState()
+        .then(state => {
+          if (!cancelled) setDailyProgress(state?.progress ?? null);
+        })
+        .catch(error => {
+          if (!cancelled) console.warn('[Daily Rhythm] fresh route state unavailable', error);
+        })
+        .finally(() => {
+          if (!cancelled) setDailyProgressLoading(false);
+        });
+    };
+    refresh();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [journey?.id, journey?.journeyType, user?.id]);
 

@@ -20,7 +20,6 @@ import { dismissBadge, computeUpdatedBadge } from '@/lib/badge-api';
 import { motion } from 'framer-motion';
 import { CheckCircle2, Compass, X } from 'lucide-react';
 import { useEnrollment } from '@/lib/enrollment';
-import { isCompletedToday } from '@/lib/daily-lock';
 import { getStepLabel, resolveStepPrefix, getDevotionalLabel } from '@/lib/step-label';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
@@ -41,6 +40,7 @@ import { ContentBadge } from '@/components/ContentBadge';
 import type { ReactNode } from 'react';
 import { listCollections, type Collection } from '@/lib/collections-api';
 import { projectTodaysJourneys } from '@/lib/todays-journey-projection';
+import { resolveDailyRhythmCalendar, publishedDailyRhythmStep } from '@/lib/daily-rhythm-calendar';
 
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -238,7 +238,7 @@ function AddMoreRow({ label, onClick }: { label: string; onClick: () => void }) 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Walk() {
   const { user } = useAuth();
-  const { journeys, progress, loading, getStepsForJourney } = useJourney();
+  const { journeys, progress, loading, getStepsForJourney, dailyRhythmState } = useJourney();
   const { getState } = useEnrollment();
   const { getMyRooms, loadRooms } = useRooms();
   const [, setLocation] = useLocation();
@@ -418,7 +418,8 @@ export default function Walk() {
   // Daily Rhythm journey from 'core' → 'daily-rhythm', so any remaining 'core'
   // journey is an admin-created growth journey and must NOT be shown here.
   const coreJourney = publishedJourneys.find(j => j.journeyType === 'daily-rhythm');
-  const coreProg = coreJourney ? progress[coreJourney.id] : undefined;
+  const coreProg = coreJourney ? (dailyRhythmState?.progress ?? progress[coreJourney.id]) : undefined;
+  const rhythmResolution = resolveDailyRhythmCalendar(undefined, dailyRhythmState);
 
   const visibleSermonCompanions = (() => {
     const companions = sermonCompanionEngagements ?? [];
@@ -452,11 +453,13 @@ export default function Walk() {
   const coreMaxPublishedDay = coreSteps.length > 0
     ? Math.max(...coreSteps.map(s => s.day))
     : 0;
-  const rawCoreCurrentDay   = coreProg?.currentDay ?? 1;
+  const rawCoreCurrentDay   = rhythmResolution?.currentDay ?? coreProg?.currentDay ?? 1;
   // "Caught up" = the member's progress has advanced past all published content.
   const coreCaughtUp        = coreMaxPublishedDay > 0 && rawCoreCurrentDay > coreMaxPublishedDay;
   // Calendar-day gating keeps the next day closed until tomorrow.
-  const coreCompletedToday  = !devMode && isCompletedToday(coreProg?.lastCompletedAt);
+  // Calendar gating is server-owned. Do not derive it from a timestamp or the
+  // device clock (which can be stale after a PWA resume).
+  const coreCompletedToday  = !devMode && Boolean(rhythmResolution?.completedToday || rhythmResolution?.currentStepCompleted);
   // The day we actually show and route to — clamped to real published content.
   const lastCompletedCoreDay = coreProg?.completedDays?.length
     ? Math.max(...coreProg.completedDays)
@@ -467,7 +470,7 @@ export default function Walk() {
       ? coreMaxPublishedDay
       : rawCoreCurrentDay;
   // The concrete published entry for effectiveCoreDay (null if no entries loaded yet).
-  const coreCurrentEntry    = coreSteps.find(s => s.day === effectiveCoreDay) ?? null;
+  const coreCurrentEntry    = publishedDailyRhythmStep(coreSteps, effectiveCoreDay);
 
   // True when the member has nothing left to act on today — used to suppress
   // the heartbeat animation so it only pulses when there is something to open.

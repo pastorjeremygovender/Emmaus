@@ -20,3 +20,9 @@ Completion must return the committed opening decision to the client, and the gat
 **Why:** Clearing the gate after completion unmounted the reader before the member could choose where to go, while a splash owned by Welcome was skipped whenever the gate blocked an authenticated cold launch.
 
 **How to apply:** Treat `emmaus:opening-completed` as a handoff of the server response, not as a request to re-resolve startup; keep the splash animation independent from route authority and only fade it after auth/opening readiness.
+
+The authoritative response must also be the cache-invalidation boundary: when startup or resume resolves, refresh shared journey state and keep member day rendering held until that response is available. Notification links should enter a resolver route rather than carrying a stale numbered day.
+
+**Why:** PWA resume, foreground restoration, and notification taps can outlive the client state that created the original route; rendering cached progress first causes stale-day flashes or opens the wrong day.
+
+**How to apply:** Use one shared client resolver for Walk, day navigation, and history; dispatch a resolution event after opening; bypass conditional browser caching for authenticated state endpoints; filter published lesson selection to exclude completion steps.

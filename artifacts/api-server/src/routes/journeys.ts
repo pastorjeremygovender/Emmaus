@@ -86,6 +86,20 @@ router.get("/journeys/daily-rhythm/state", async (req: Request, res: Response) =
   }
 });
 
+router.get("/journeys/daily-rhythm/history", async (req: Request, res: Response) => {
+  const userId = resolveUserId(req);
+  if (!userId) { res.status(401).json({ error: "Authentication required" }); return; }
+  try {
+    res.set("Cache-Control", "no-store");
+    const history = await store.getDailyRhythmHistory(userId);
+    if (!history) { res.status(404).json({ error: "Daily Rhythm progress not found" }); return; }
+    res.json(history);
+  } catch (err) {
+    console.error("GET /journeys/daily-rhythm/history failed", err);
+    res.status(500).json({ error: "Could not load Daily Rhythm history" });
+  }
+});
+
 router.get("/journeys/daily-rhythm/startup", async (req: Request, res: Response) => {
   const userId = resolveUserId(req);
   if (!userId) { res.status(401).json({ error: "Authentication required" }); return; }

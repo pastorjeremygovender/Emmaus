@@ -193,6 +193,8 @@ export interface DailyRhythmStartup {
   state: "OPENING_REQUIRED" | "COMPLETED" | "OPENING_ERROR";
   completedToday: boolean;
   assignedDay: number | null;
+  todayAvailableDay: number | null;
+  openingState: "OPENING_REQUIRED" | "COMPLETED";
   targetStepId: string | null;
   localTimezone: string;
   localDate: string | null;
@@ -215,6 +217,26 @@ export interface DailyRhythmState {
   reviewableStepIds: string[];
   nextStepLocked: boolean;
   nextEligibleUnlockDate: string | null;
+  todayAvailableDay: number | null;
+  assignedDay: number | null;
+  openingState: "OPENING_REQUIRED" | "COMPLETED" | null;
+  localTimezone: string;
+  localDate: string | null;
+}
+
+export interface DailyRhythmHistoryEntry {
+  localDate: string;
+  state: "Completed" | "Open" | "Missed";
+  assignedDay: number;
+  decisionId: string | null;
+  targetStepId: string | null;
+}
+
+export interface DailyRhythmHistory {
+  journeyId: string;
+  localTimezone: string;
+  localDate: string;
+  entries: DailyRhythmHistoryEntry[];
 }
 
 function calendarDateInTimezone(date: Date, timezone: string): string {
@@ -1203,7 +1225,7 @@ export async function getProgress(userId: string, journeyId: string): Promise<Fr
 /** Read-only canonical Daily Rhythm snapshot shared by all member surfaces. */
 export async function getDailyRhythmState(userId: string): Promise<DailyRhythmState | null> {
   const journeyRows = await db.execute(sql`
-    SELECT id FROM journeys
+    SELECT id, start_date, duration_days FROM journeys
     WHERE journey_type IN ('daily-rhythm', 'core') AND status = 'Published'
     ORDER BY display_order ASC, created_at DESC LIMIT 1
   `);
@@ -1211,7 +1233,30 @@ export async function getDailyRhythmState(userId: string): Promise<DailyRhythmSt
   if (!journeyId) return null;
 
   const progress = await getProgress(userId, journeyId);
-  const currentDayNumber = progress?.currentDay ?? 1;
+  const profileRows = await db.execute(sql`
+    SELECT timezone FROM user_profiles
+    WHERE auth_subject = ${userId} OR email = ${userId}
+    ORDER BY CASE WHEN auth_subject = ${userId} THEN 0 ELSE 1 END
+    LIMIT 1
+  `);
+  const timezone = validTimezone(
+    progress?.dailyRhythmTimezone ||
+      (profileRows.rows[0]?.timezone ? String(profileRows.rows[0].timezone) : null),
+  );
+  const now = new Date();
+  const localDate = calendarDateInTimezone(now, timezone);
+  const authoredStartDate = journeyRows.rows[0]?.start_date
+    ? String(journeyRows.rows[0].start_date).slice(0, 10)
+    : null;
+  const progressStartDate = progress?.startedAt
+    ? calendarDateInTimezone(new Date(progress.startedAt), timezone)
+    : localDate;
+  const anchorDate = authoredStartDate || progressStartDate;
+  const anchorMs = Date.parse(`${anchorDate}T00:00:00Z`);
+  const todayMs = Date.parse(`${localDate}T00:00:00Z`);
+  const elapsedCalendarDays = Number.isFinite(anchorMs) && Number.isFinite(todayMs)
+    ? Math.max(0, Math.floor((todayMs - anchorMs) / 86_400_000))
+    : 0;
   const completedDays = new Set(progress?.completedDays ?? []);
   const stepRows = await db.execute(sql`
     SELECT id, day, title
@@ -1226,6 +1271,24 @@ export async function getDailyRhythmState(userId: string): Promise<DailyRhythmSt
     day: Number(row.day),
     title: row.title ? String(row.title) : null,
   }));
+  const maxPublishedDay = steps.reduce((max, step) => Math.max(max, step.day), 0);
+  const todayAvailableDay = Math.min(
+    maxPublishedDay || Number(journeyRows.rows[0]?.duration_days || 1),
+    Math.max(1, elapsedCalendarDays + 1),
+  );
+  const currentDayNumber = Math.min(
+    maxPublishedDay || Number(journeyRows.rows[0]?.duration_days || 1),
+    Math.max(progress?.currentDay ?? 1, todayAvailableDay),
+  );
+  const ledgerRows = await db.execute(sql`
+    SELECT assigned_day, completed_today, state
+    FROM daily_rhythm_opening_ledger
+    WHERE user_id = ${userId} AND journey_id = ${journeyId} AND local_date = ${localDate}
+    LIMIT 1
+  `);
+  const ledger = ledgerRows.rows[0];
+  const assignedDay = ledger?.assigned_day ? Number(ledger.assigned_day) : todayAvailableDay;
+  const completedToday = Boolean(ledger?.completed_today);
   const currentStep = steps.find(step => step.day === currentDayNumber) ?? null;
   const completedStepIds = steps.filter(step => completedDays.has(step.day)).map(step => step.id);
   const availableStepIds = steps.filter(step => step.day <= currentDayNumber).map(step => step.id);
@@ -1240,12 +1303,17 @@ export async function getDailyRhythmState(userId: string): Promise<DailyRhythmSt
     currentStepId: currentStep?.id ?? null,
     currentDayNumber,
     currentStepTitle: currentStep?.title ?? null,
-    currentStepCompleted: completedDays.has(currentDayNumber),
+    currentStepCompleted: completedToday || completedDays.has(currentDayNumber),
     completedStepIds,
     availableStepIds,
     reviewableStepIds,
-    nextStepLocked: completedDays.has(currentDayNumber),
+    nextStepLocked: completedToday,
     nextEligibleUnlockDate,
+    todayAvailableDay,
+    assignedDay,
+    openingState: ledger ? (completedToday ? "COMPLETED" : "OPENING_REQUIRED") : null,
+    localTimezone: timezone,
+    localDate,
   };
 }
 
@@ -1271,7 +1339,7 @@ export async function getDailyRhythmStartup(
     await client.query("BEGIN");
     const assignmentStartedAt = performance.now();
     const journeyResult = await client.query(
-      `SELECT id FROM journeys
+      `SELECT id, start_date, duration_days FROM journeys
        WHERE journey_type IN ('daily-rhythm', 'core') AND status = 'Published'
        ORDER BY CASE WHEN journey_type = 'daily-rhythm' THEN 0 ELSE 1 END,
                 display_order ASC, created_at DESC LIMIT 1`,
@@ -1304,6 +1372,13 @@ export async function getDailyRhythmStartup(
       );
     }
     const today = calendarDateInTimezone(now, timezone);
+    // The calendar is anchored to authored journey start_date when present,
+    // otherwise to the persisted progress start timestamp. This deliberately
+    // uses calendar dates (not elapsed 24 hour periods), so DST cannot move a
+    // member backwards or forwards.
+    const journeyStartDate = journeyResult.rows[0]?.start_date
+      ? String(journeyResult.rows[0].start_date).slice(0, 10)
+      : null;
     const requestedSession = startupSessionId.trim().slice(0, 160) || randomUUID();
     mark("profile_timezone", profileStartedAt);
 
@@ -1382,6 +1457,41 @@ export async function getDailyRhythmStartup(
     mark("progress_lookup_or_create", progressStartedAt);
     const currentDay = Number(row.current_day || 1);
     const previousLastDailyOpenDate = row.last_daily_open_date ?? null;
+
+    const anchorDate = journeyStartDate || calendarDateInTimezone(
+      new Date(row.started_at || now),
+      storedTimezone,
+    );
+    const startMs = Date.parse(`${anchorDate}T00:00:00Z`);
+    const todayMs = Date.parse(`${today}T00:00:00Z`);
+    const elapsedCalendarDays = Number.isFinite(startMs) && Number.isFinite(todayMs)
+      ? Math.max(0, Math.floor((todayMs - startMs) / 86_400_000))
+      : 0;
+    let todayAvailableDay = Math.min(
+      Number(journeyResult.rows[0]?.duration_days || 365),
+      elapsedCalendarDays + 1,
+    );
+    // Compatibility with legacy rows that only persisted the opening marker
+    // (and not a trustworthy start timestamp). It still advances one day at
+    // most; a real authored start date always wins and can account for
+    // multiple missed calendar days without blocking today's assignment.
+    if (previousLastDailyOpenDate && previousLastDailyOpenDate < today &&
+        todayAvailableDay <= currentDay) {
+      todayAvailableDay = Math.min(
+        Number(journeyResult.rows[0]?.duration_days || 365),
+        currentDay + 1,
+      );
+    }
+    // A missed day never blocks the current calendar day. Move the position
+    // directly to today's authored day, while retaining completion history.
+    if (todayAvailableDay > currentDay) {
+      await client.query(
+        `UPDATE user_journey_progress SET current_day = $1, daily_rhythm_unlock_at = $2,
+                updated_at = $3 WHERE id = $4`,
+        [todayAvailableDay, now, now, row.id],
+      );
+      row = (await client.query(`SELECT * FROM user_journey_progress WHERE id = $1`, [row.id])).rows[0];
+    }
 
     // Resolve today's ledger before changing the position. The unique
     // user/date ledger row is the durable acknowledgement that prevents
@@ -1492,6 +1602,8 @@ export async function getDailyRhythmStartup(
       state,
       completedToday,
       assignedDay: Number(ledger.assigned_day),
+      todayAvailableDay,
+      openingState: state,
       targetStepId: ledger.target_step_id ? String(ledger.target_step_id) : null,
       localTimezone: storedTimezone,
       localDate: today,
@@ -1509,6 +1621,55 @@ export async function getDailyRhythmStartup(
   } finally {
     client.release();
   }
+}
+
+/** Return the server-authoritative calendar history for the Daily Rhythm. */
+export async function getDailyRhythmHistory(userId: string): Promise<DailyRhythmHistory | null> {
+  const result = await pool.query(
+    `SELECT p.journey_id, p.started_at, p.daily_rhythm_timezone,
+            j.start_date, j.duration_days
+       FROM user_journey_progress p
+       JOIN journeys j ON j.id = p.journey_id
+      WHERE p.user_id = $1
+        AND j.journey_type IN ('daily-rhythm', 'core')
+      ORDER BY p.updated_at DESC LIMIT 1`,
+    [userId],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  const timezone = validTimezone(row.daily_rhythm_timezone);
+  const localDate = calendarDateInTimezone(new Date(), timezone);
+  const anchor = row.start_date
+    ? String(row.start_date).slice(0, 10)
+    : calendarDateInTimezone(new Date(row.started_at), timezone);
+  const start = Date.parse(`${anchor}T00:00:00Z`);
+  const end = Date.parse(`${localDate}T00:00:00Z`);
+  const dates: string[] = [];
+  for (let t = start; Number.isFinite(t) && t <= end && dates.length < 366; t += 86_400_000) {
+    dates.push(new Date(t).toISOString().slice(0, 10));
+  }
+  const ledgers = await pool.query(
+    `SELECT local_date, assigned_day, state, completed_today, decision_id, target_step_id
+       FROM daily_rhythm_opening_ledger
+      WHERE user_id = $1 AND journey_id = $2
+        AND local_date >= $3 AND local_date <= $4
+      ORDER BY local_date ASC`,
+    [userId, row.journey_id, anchor, localDate],
+  );
+  const byDate = new Map(ledgers.rows.map((entry: Record<string, unknown>) => [String(entry.local_date), entry]));
+  const entries = dates.map((date) => {
+    const ledger = byDate.get(date);
+    const assignedDay = ledger ? Number(ledger.assigned_day) :
+      Math.min(Number(row.duration_days || 365), Math.max(1, Math.floor((Date.parse(`${date}T00:00:00Z`) - start) / 86_400_000) + 1));
+    return {
+      localDate: date,
+      state: ledger ? (ledger.completed_today ? "Completed" : "Open") : "Missed",
+      assignedDay,
+      decisionId: ledger?.decision_id ? String(ledger.decision_id) : null,
+      targetStepId: ledger?.target_step_id ? String(ledger.target_step_id) : null,
+    } as DailyRhythmHistoryEntry;
+  });
+  return { journeyId: String(row.journey_id), localTimezone: timezone, localDate, entries };
 }
 
 export async function startJourney(
@@ -1665,6 +1826,15 @@ export async function completeStep(
     if (isDailyRhythm) {
       const timezone = validTimezone(prog.dailyRhythmTimezone);
       const localDate = calendarDateInTimezone(now, timezone);
+      const ledger = await tx.execute(sql`
+        SELECT assigned_day FROM daily_rhythm_opening_ledger
+         WHERE user_id = ${userId} AND journey_id = ${journeyId}
+           AND local_date = ${localDate}
+         FOR UPDATE
+      `);
+      if (!ledger.rows[0] || Number((ledger.rows[0] as { assigned_day: number }).assigned_day) !== day) {
+        throw new Error("Daily Rhythm completion is only available for today's assigned day");
+      }
       await tx.execute(sql`
         UPDATE daily_rhythm_opening_ledger
            SET completed_today = true,

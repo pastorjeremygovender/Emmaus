@@ -802,6 +802,7 @@ function DevSection() {
 
   return (
     <>
+      <DailyRhythmTestClock />
       {/* Confirm dialog */}
       {showResetConfirm && (
         <ConfirmDialog
@@ -985,5 +986,46 @@ function DevSection() {
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * Local-only calendar simulator. This intentionally has no JourneyContext or
+ * API wiring: it cannot alter member progress, send notifications, or create
+ * production writes. Existing development progress tools remain separate.
+ */
+function DailyRhythmTestClock() {
+  const [enabled, setEnabled] = useState(false);
+  const [date, setDate] = useState('');
+  const [day, setDay] = useState(1);
+  const reset = () => { setEnabled(false); setDate(''); setDay(1); };
+  return (
+    <div className="bg-slate-50 rounded-xl border border-slate-200 p-6 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold text-gray-700">Daily Rhythm Test Clock</h2>
+        <p className="text-xs text-gray-500 mt-1">
+          Admin preview only. This simulates calendar routing locally and never changes member progress or sends notifications.
+        </p>
+      </div>
+      <label className="flex items-center gap-3 text-sm text-gray-700">
+        <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} className="w-4 h-4 rounded" />
+        Enable local simulation
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Simulated date">
+          <input type="date" value={date} disabled={!enabled} onChange={e => setDate(e.target.value)}
+            className="w-full h-9 rounded-lg border border-gray-200 px-3 text-sm disabled:opacity-50" />
+        </Field>
+        <Field label="Assigned day">
+          <input type="number" min={1} value={day} disabled={!enabled} onChange={e => setDay(Math.max(1, Number(e.target.value) || 1))}
+            className="w-full h-9 rounded-lg border border-gray-200 px-3 text-sm disabled:opacity-50" />
+        </Field>
+      </div>
+      <div className="flex gap-2">
+        <AdminBtn variant="secondary" onClick={reset}>Reset clock</AdminBtn>
+        <AdminBtn variant="secondary" onClick={() => { setDate(''); setDay(1); }}>Clear simulation</AdminBtn>
+      </div>
+      {enabled && date && <p className="text-xs text-slate-600">Preview: {date} · Day {day} (local only)</p>}
+    </div>
   );
 }

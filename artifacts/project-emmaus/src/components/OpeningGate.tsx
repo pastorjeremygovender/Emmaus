@@ -215,6 +215,9 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!decision || !user || needsOnboarding || needsRecovery) return;
+    window.dispatchEvent(new CustomEvent('emmaus:daily-rhythm-resolved', {
+      detail: { decision },
+    }));
     if (decision.state === 'OPENING_REQUIRED') {
       setStartupResolved(true);
       if (hasPresentedDailyRhythmDay(user.id, decision.assignedDay)) {

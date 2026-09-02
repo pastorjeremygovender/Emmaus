@@ -299,6 +299,30 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, [user?.id, user?.role]);
 
+  // OpeningGate re-resolves the calendar on cold launch, notification tap, and
+  // PWA resume. Refresh this shared snapshot so Walk and navigators do not keep
+  // rendering the pre-resume day from the initial bootstrap.
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    const refresh = () => {
+      void api.getDailyRhythmState().then(state => {
+        if (cancelled || !state || activeSubjectRef.current !== user.id) return;
+        setDailyRhythmState(state);
+        if (state.progress) {
+          setProgress(previous => ({ ...previous, [state.journeyId]: state.progress! }));
+        }
+      }).catch(() => {
+        // OpeningGate remains the user-facing error boundary for startup.
+      });
+    };
+    window.addEventListener('emmaus:daily-rhythm-resolved', refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('emmaus:daily-rhythm-resolved', refresh);
+    };
+  }, [user?.id]);
+
   // ─── Getters ───────────────────────────────────────────────────────────────
 
   const getJourney = useCallback(

@@ -203,6 +203,8 @@ export type DailyRhythmStartup = {
   state: 'OPENING_REQUIRED' | 'COMPLETED' | 'OPENING_ERROR';
   completedToday: boolean;
   assignedDay: number | null;
+  todayAvailableDay: number | null;
+  openingState: 'OPENING_REQUIRED' | 'COMPLETED';
   targetStepId: string | null;
   localTimezone: string;
   localDate: string | null;
@@ -243,10 +245,34 @@ export type DailyRhythmState = {
   reviewableStepIds: string[];
   nextStepLocked: boolean;
   nextEligibleUnlockDate: string | null;
+  todayAvailableDay: number | null;
+  assignedDay: number | null;
+  openingState: 'OPENING_REQUIRED' | 'COMPLETED' | null;
+  localTimezone: string;
+  localDate: string | null;
 };
 
 export async function getDailyRhythmState(): Promise<DailyRhythmState | null> {
   return apiFetch<DailyRhythmState | null>('/api/journeys/daily-rhythm/state');
+}
+
+export type DailyRhythmHistoryEntry = {
+  localDate: string;
+  state: 'Completed' | 'Open' | 'Missed';
+  assignedDay: number;
+  decisionId: string | null;
+  targetStepId: string | null;
+};
+
+export type DailyRhythmHistory = {
+  journeyId: string;
+  localTimezone: string;
+  localDate: string;
+  entries: DailyRhythmHistoryEntry[];
+};
+
+export async function getDailyRhythmHistory(): Promise<DailyRhythmHistory | null> {
+  return apiFetch<DailyRhythmHistory | null>('/api/journeys/daily-rhythm/history');
 }
 
 export async function getDailyRhythmStartup(options?: { signal?: AbortSignal }): Promise<DailyRhythmStartup> {

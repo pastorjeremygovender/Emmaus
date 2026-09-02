@@ -112,6 +112,13 @@ function safeReminderUrl(value, absolute) {
   try {
     const parsed = new URL(value, self.location.origin);
     if (parsed.origin !== self.location.origin) throw new Error('cross-origin notification URL');
+    // A notification must never pin a member to a stale calendar day. Let the
+    // app resolve the authoritative startup/state response on the navigator.
+    if (/^\/daily-rhythm\/day\/\d+$/.test(parsed.pathname)) {
+      parsed.pathname = REMINDER_URL;
+      parsed.search = '';
+      parsed.hash = '';
+    }
     return absolute ? parsed.href : parsed.pathname + parsed.search;
   } catch {
     const fallback = new URL(REMINDER_URL, self.location.origin);

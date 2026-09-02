@@ -16,7 +16,7 @@ import { getStepLabel } from '@/lib/step-label';
 import { BottomNav } from '@/components/BottomNav';
 import { ContentStepList } from '@/components/ContentStepList';
 import { BrowseModeToggle } from '@/components/BrowseModeToggle';
-import { listDailyRhythmGroups, type DailyRhythmGroup } from '@/lib/journeys-api';
+import { getDailyRhythmState, listDailyRhythmGroups, type DailyRhythmGroup, type DailyRhythmState } from '@/lib/journeys-api';
 import type { Journey } from '@/contexts/JourneyContext';
 import { goBackOrFallback } from '@/lib/return-context';
 
@@ -33,7 +33,8 @@ function readingPath(mode: Props['mode'], journey: Journey, day: number) {
 export function StepNavigatorPage({ mode }: Props) {
   const params = useParams<{ journeyId?: string }>();
   const [, setLocation] = useLocation();
-  const { journeys, progress, getStepsForJourney } = useJourney();
+  const { journeys, progress, getStepsForJourney, dailyRhythmState } = useJourney();
+  const [freshDailyRhythmState, setFreshDailyRhythmState] = useState<DailyRhythmState | null>(null);
   const [groups, setGroups] = useState<DailyRhythmGroup[]>([]);
   const [browseMode, setBrowseMode] = useState<'groups' | 'all'>('all');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -43,12 +44,18 @@ export function StepNavigatorPage({ mode }: Props) {
       ? journeys.find(j => j.journeyType === 'daily-rhythm')
       : journeys.find(j => j.id === params.journeyId);
 
-  const prog = journey ? progress[journey.id] : undefined;
+  const prog = journey
+    ? (mode === 'daily-rhythm' ? (freshDailyRhythmState?.progress ?? dailyRhythmState?.progress ?? progress[journey.id]) : progress[journey.id])
+    : undefined;
   const completedSet = new Set(prog?.completedDays ?? []);
   // The current day remains visible after completion so the Days screen agrees
   // with Today's Steps. It is still the server's current day; showing it does
   // not unlock the next day.
-  const availableThroughDay = prog?.currentDay ?? 1;
+  // Daily Rhythm availability comes from the canonical state response. The
+  // progress row is retained only as a compatibility fallback during bootstrap.
+  const availableThroughDay = mode === 'daily-rhythm'
+    ? (freshDailyRhythmState?.todayAvailableDay ?? freshDailyRhythmState?.currentDayNumber ?? dailyRhythmState?.todayAvailableDay ?? dailyRhythmState?.currentDayNumber ?? prog?.currentDay ?? 1)
+    : (prog?.currentDay ?? 1);
 
   // All published non-completion steps — every one is accessible
   const allSteps = journey
@@ -88,6 +95,7 @@ export function StepNavigatorPage({ mode }: Props) {
 
   useEffect(() => {
     if (mode !== 'daily-rhythm' || !journey) return;
+    getDailyRhythmState().then(setFreshDailyRhythmState).catch(() => setFreshDailyRhythmState(null));
     listDailyRhythmGroups(journey.id).then(setGroups).catch(() => setGroups([]));
   }, [mode, journey?.id]);
 
@@ -175,7 +183,7 @@ export function StepNavigatorPage({ mode }: Props) {
                 const isCurrent = step.day === currentDay && !done;
                 const label = getStepLabel(step, journey);
                 return {
-                  id: step.id,
+                   id: (step as { id?: string }).id ?? `${journey.id}-${step.day}`,
                   index: step.day,
                   title: step.title || label,
                   subtitle: step.scripture,

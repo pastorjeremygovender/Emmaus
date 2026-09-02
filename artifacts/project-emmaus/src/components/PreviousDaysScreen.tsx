@@ -50,6 +50,7 @@ export interface PreviousDayEntry {
    * 'locked'    — not yet available; shown but not tappable.
    */
   status: 'completed' | 'available' | 'current' | 'locked';
+  statusLabel?: 'Completed' | 'Open' | 'Missed';
 }
 
 interface PreviousDaysScreenProps {
@@ -78,7 +79,10 @@ interface PreviousDaysScreenProps {
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: PreviousDayEntry['status'] }) {
+function StatusBadge({ status, label }: { status: PreviousDayEntry['status']; label?: PreviousDayEntry['statusLabel'] }) {
+  if (label) {
+    return <span className="text-[12px] font-medium text-primary">{label}</span>;
+  }
   if (status === 'completed') {
     return (
       <span className="flex items-center gap-1 text-[12px] font-medium text-green-600">
@@ -199,7 +203,7 @@ export function PreviousDaysScreen({
                         </div>
                       )}
                       <div className="mt-1.5">
-                        <StatusBadge status={entry.status} />
+                        <StatusBadge status={entry.status} label={entry.statusLabel} />
                       </div>
                     </div>
 

@@ -1,0 +1,284 @@
+IMPLEMENT THE DAILY RHYTHM REBUILD NOW — DEVELOPMENT ONLY
+
+The previous response reported the results of the earlier Admin Daily Rhythm/content-reorder fix. It did not implement the comprehensive Daily Rhythm rebuild I supplied.
+
+Your own report explicitly states that the following remain unimplemented:
+
+- correct calendar-day progression;
+- automatic opening once per day;
+- notification integration;
+- PWA launch and overnight resume handling;
+- cache invalidation;
+- past-day history;
+- Daily Rhythm Test Clock;
+- diagnostics;
+- and the required regression tests.
+
+These are the task. Implement them now.
+
+Do not merely inspect, summarise, propose a follow-up task or report the previous fix again.
+
+RELEASE SAFETY
+
+Work in development only.
+
+Do not:
+
+- publish or republish;
+- change production data;
+- remove, edit or replace DATABASE_URL;
+- migrate to another database;
+- change deployment or database infrastructure;
+- reset real user progress;
+- modify unrelated Emmaus features;
+- or begin the proposed broader Content Studio regression task.
+
+If a database schema change is genuinely required, implement and test it only in development. Before production deployment, report the exact migration, backup requirement and rollback procedure.
+
+CURRENT CONFIRMED PROBLEM
+
+This morning:
+
+- the notification arrived;
+- Emmaus did not automatically open onto Daily Rhythm;
+- Daily Rhythm did not advance to today’s day;
+- it displayed yesterday’s item;
+- yesterday’s item was itself still the previous day because Continue had not been pressed.
+
+This proves that progression is still incorrectly affected by completion/navigation state, stale state or caching.
+
+CORE BEHAVIOUR
+
+Daily Rhythm must work according to these rules:
+
+1. The day available today is calculated from:
+   - the user’s Daily Rhythm start date;
+   - the current calendar date in the user’s local timezone;
+   - and the canonical published Daily Rhythm sequence.
+
+2. Continue, Finished, Complete and Back to Today’s Steps must never control calendar progression.
+
+3. An unfinished or completely missed day must never block today’s day.
+
+4. On the first normal opening of Emmaus each new local day, today’s correct Daily Rhythm must open automatically once.
+
+5. After it opens once, the user must be free to navigate away without pressing any completion button.
+
+6. Emmaus must not repeatedly force Daily Rhythm open again during that same local day.
+
+7. My Bible must always remain accessible and exempt from any Daily Rhythm restriction.
+
+8. Reviewing a past day must never:
+   - replace today’s day;
+   - become the default on the next normal opening;
+   - count as opening today;
+   - or suppress today’s notification.
+
+9. If the PWA remains open overnight, returning to it after midnight must recalculate and open the new day once.
+
+10. Refreshing, reopening, signing in on another device or tapping a notification must never restore an old cached day instead of today.
+
+ONE AUTHORITATIVE RESOLVER
+
+Create one authoritative Daily Rhythm resolver used by:
+
+- initial app launch;
+- post-login routing;
+- Today’s Steps;
+- the Daily Rhythm reader;
+- normal website opening;
+- PWA cold launch;
+- PWA foreground resume;
+- notification scheduling;
+- notification deep links;
+- completion screens;
+- past-day review;
+- and cross-device progress.
+
+Remove or replace competing current-day calculations.
+
+The resolver must determine:
+
+- effective user timezone;
+- current local calendar date;
+- user’s Daily Rhythm start date;
+- today’s calculated day number;
+- today’s canonical published content ID;
+- whether that exact content was opened on that exact local date;
+- whether the user is deliberately reviewing a past day;
+- and whether automatic opening should occur.
+
+SEPARATE THE STATES
+
+Do not use one progress value or boolean for multiple purposes.
+
+Keep these concepts separate:
+
+- todayAvailableDay;
+- todayContentId;
+- lastOpenedDay;
+- openedAt;
+- openedLocalDate;
+- explicitlyCompleted;
+- completedAt;
+- reviewDay;
+- notification/opening state for today.
+
+The once-per-day opening record must be keyed by both:
+
+- today’s content/day;
+- and today’s local calendar date.
+
+Yesterday’s opened or completed record must never suppress today.
+
+BUTTON BEHAVIOUR
+
+Continue, Finished and Complete may record explicit completion and navigate within the current experience.
+
+They must not:
+
+- unlock tomorrow;
+- delay tomorrow;
+- change the start date;
+- increment the current calendar day;
+- or determine what appears on the following morning.
+
+The completion screen must remain visible until the user chooses where to go. It must not flash and automatically redirect.
+
+PAST-DAY HISTORY
+
+Every day that became available from the user’s start date through today must remain reviewable.
+
+Show accurate states:
+
+- Completed — Finished/Complete was pressed.
+- Opened — opened but not explicitly completed.
+- Missed — became available but was never opened.
+
+Future days must remain unavailable.
+
+NOTIFICATIONS
+
+The notification must resolve today’s actual Daily Rhythm day.
+
+Suppress today’s reminder only if today’s exact content has already been opened on today’s exact local date.
+
+Opening yesterday or reviewing any past day must not suppress today’s reminder.
+
+When a notification is tapped:
+
+1. Recalculate today’s day.
+2. Open today’s content.
+3. Ignore a stale content ID contained in an old notification.
+4. Never briefly display an older cached day first.
+
+CONTENT INTEGRITY PROBLEM TO RESOLVE
+
+Your report found this inconsistent state:
+
+- Journey duration: 7 days.
+- Canonical grouped steps: 30.
+- Published steps: 29.
+- Day 8, “God Loves You”: Draft.
+- User progress reaches Day 13.
+
+The intended Daily Rhythm contains 30 days.
+
+Investigate this inconsistency in development and correct the model so that:
+
+- duration reflects the canonical 30-day sequence;
+- all 30 intended days are discoverable;
+- sequence numbers are unique and complete;
+- Day 8 cannot disappear between Days 7 and 9;
+- and progression does not fail because duration says seven days.
+
+Do not invent, rewrite or replace devotional content.
+
+Do not change production content during this task.
+
+If Day 8 already contains the intended completed content and is draft only because of an incorrect status, prepare the correction in development and clearly report it before production publication. If its content is incomplete, stop and identify that rather than silently publishing it.
+
+ADMIN TEST CLOCK
+
+Add an admin-only Daily Rhythm Test Clock under:
+
+Administration Tools → Settings → Daily Rhythm Testing
+
+It must allow an authorised administrator to:
+
+- select a dedicated test user;
+- see the user’s start date and timezone;
+- see the calculated current day and content;
+- simulate consecutive local dates without changing the device clock;
+- simulate app launch;
+- simulate PWA overnight resume;
+- simulate notification tapping;
+- leave a day unfinished;
+- miss a day;
+- complete a day;
+- review a past day;
+- and reset only isolated test data.
+
+Test mode must be clearly labelled and must never affect real users, real progress or production notifications.
+
+AUTOMATED AND SIMULATED ACCEPTANCE TESTS
+
+Prove at least this sequence:
+
+Day 1:
+- Day 1 opens automatically.
+- User navigates away without Continue or Finished.
+- It does not repeatedly force itself open again that day.
+
+Day 2:
+- Day 2 opens automatically despite Day 1 being unfinished.
+- Day 1 remains reviewable as Opened.
+
+Day 3:
+- Day 3 opens even if Day 2 was completely missed.
+- Day 2 remains reviewable as Missed.
+
+Day 4:
+- User reviews Day 1.
+- Reopening Daily Rhythm normally returns to Day 4, not Day 1.
+
+Day 5:
+- PWA is left open overnight.
+- Foreground resume recalculates and opens Day 5 once.
+
+Day 6:
+- Notification tap opens Day 6.
+- No older content flashes first.
+- Opening a past day does not suppress the Day 6 reminder.
+
+Also verify:
+
+- My Bible remains accessible.
+- Future days remain inaccessible.
+- Refresh does not revert to yesterday.
+- A second device resolves the same available day.
+- The completion screen does not auto-redirect.
+- All 30 canonical days resolve in order.
+- Day 8 resolves correctly between Days 7 and 9.
+- The frontend production build passes.
+- No production data is changed.
+
+REQUIRED FINAL REPORT
+
+When implementation and testing are complete, stop without publishing and report:
+
+1. The root cause of the stuck day.
+2. The root cause of automatic opening failing.
+3. Every conflicting progression calculation removed.
+4. How notification, PWA resume and caching now work.
+5. The status of the 7-day/30-step/Day-8 inconsistency.
+6. Whether any schema migration is required.
+7. Automated test results.
+8. Test Clock results across consecutive simulated days.
+9. Files changed.
+10. Any remaining limitation.
+11. A clear recommendation: SAFE TO PUBLISH or NOT SAFE TO PUBLISH.
+
+Do not declare success because an existing 47/47 suite passes unless that suite now includes the new calendar progression, automatic opening, missed-day, unfinished-day, notification, caching and PWA-resume cases.
+
+Do not publish. Wait for my explicit approval.
