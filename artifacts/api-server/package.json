@@ -11,6 +11,7 @@
     "seed:content": "node --experimental-strip-types src/scripts/seed-content.ts",
     "seed:demo": "node --experimental-strip-types src/scripts/seed-demo.ts",
     "repair:step-statuses": "node --experimental-strip-types src/scripts/repair-step-statuses.ts",
+    "test:daily-rhythm-production-correction": "NODE_ENV=test node --test --import=tsx/esm src/lib/__tests__/daily-rhythm-production-correction.test.ts",
     "repair:progress-duplicates": "node --experimental-strip-types src/scripts/repair-progress-duplicates.ts",
     "backfill:knowledge-index": "node --experimental-strip-types src/scripts/backfill-knowledge-index.ts",
     "repair:knowledge-index": "node --experimental-strip-types src/scripts/repair-knowledge-index.ts",

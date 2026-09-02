@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { runSignalsEngine, logEngineRun } from "./lib/pastoral-store.js";
 import { ensureAuthSchema } from "./lib/ensure-auth-schema.js";
 import { getCanonicalPublicOrigin } from "./lib/public-origin.js";
+import { runDailyRhythmProductionCorrection } from "./lib/daily-rhythm-production-correction.js";
 
 const rawPort = process.env["PORT"];
 
@@ -21,6 +22,7 @@ if (Number.isNaN(port) || port <= 0) {
 async function startServer(): Promise<void> {
   const publicOrigin = getCanonicalPublicOrigin();
   await ensureAuthSchema();
+  await runDailyRhythmProductionCorrection();
 
   const server = app.listen(port, () => {
     logger.info({ port, publicOrigin }, "Server listening");
