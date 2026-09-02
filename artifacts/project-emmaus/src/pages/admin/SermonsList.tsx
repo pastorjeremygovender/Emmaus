@@ -208,7 +208,7 @@ async function uploadAudioFile(
 
   const reorderable = useMemo(
     () => sermons
-      .filter(sermon => sermon.status !== 'Archived')
+      .filter(sermon => (sermon.status as string) !== 'Archived')
       .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || b.createdAt.localeCompare(a.createdAt)),
     [sermons],
   );
@@ -216,7 +216,7 @@ async function uploadAudioFile(
   const moveSermon = async (index: number, direction: -1 | 1) => {
     const target = filtered[index];
     if (!target) return;
-    const visible = filtered.filter(sermon => sermon.status !== 'Archived');
+    const visible = filtered.filter(sermon => (sermon.status as string) !== 'Archived');
     const reorderedIds = moveVisibleOrder(
       reorderable.map(sermon => sermon.id),
       visible.map(sermon => sermon.id),
@@ -597,8 +597,8 @@ async function uploadAudioFile(
               }
               actions={
                 <>
-                  {s.status !== 'Archived' && (() => {
-                    const visible = filtered.filter(sermon => sermon.status !== 'Archived');
+                  {(s.status as string) !== 'Archived' && (() => {
+                    const visible = filtered.filter(sermon => (sermon.status as string) !== 'Archived');
                     const reorderIndex = visible.findIndex(sermon => sermon.id === s.id);
                     return <ReorderButtons
                       canMoveUp={reorderIndex > 0}

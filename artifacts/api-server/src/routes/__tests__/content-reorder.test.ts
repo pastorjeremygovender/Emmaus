@@ -268,7 +268,7 @@ describe("Content Studio reorder API", () => {
       sermonIds[2],
       sermonIds[0],
       sermonIds[1],
-      ...activeSermonIds.filter(id => !sermonIds.includes(id)),
+      ...activeSermonIds.filter(id => !(new Set<string>(sermonIds)).has(id)),
     ];
     const response = await request({
       method: "POST",
