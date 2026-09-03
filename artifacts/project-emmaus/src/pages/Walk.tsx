@@ -331,6 +331,10 @@ export default function Walk() {
   // devotionals), so we track hidden IDs in a local Set for instant UI updates
   // rather than mutating the shared context.
   const [hiddenJourneyIds, setHiddenJourneyIds] = useState<Set<string>>(new Set());
+  // Groups do not have engagement-progress rows, so keep their Today's Steps
+  // dismissal local to this Walk screen rather than treating dismissal as
+  // leaving the group.
+  const [hiddenRoomIds, setHiddenRoomIds] = useState<Set<string>>(new Set());
 
   // ── Sermon Companions — this week first, then accessed companions ───────────
   const [sermonCompanionEngagements, setSermonCompanionEngagements] =
@@ -883,7 +887,7 @@ export default function Walk() {
 
         {/* ── 5. My Groups — always visible ─────────────────────────────────── */}
         {(() => {
-          const myRooms = getMyRooms(user.id);
+          const myRooms = getMyRooms(user.id).filter(room => !hiddenRoomIds.has(room.id));
           return (
             <SectionWrapper color="blue" label="My Groups" delay={0.13}>
               {myRooms.map(room => (
@@ -897,6 +901,13 @@ export default function Walk() {
                   }
                   ctaLabel="Open"
                   onAction={() => setLocation(`/rooms/${room.id}`)}
+                  trailing={
+                    <WalkDismissButton
+                      onDismiss={() => {
+                        setHiddenRoomIds(prev => new Set([...prev, room.id]));
+                      }}
+                    />
+                  }
                 />
               ))}
               <AddMoreRow label="Add a Group" onClick={() => setLocation('/rooms?chooser=1')} />
