@@ -755,6 +755,26 @@ export async function startJourney(
   );
 }
 
+export type MemberHomeDefaults = {
+  initialized: boolean;
+  seeded: boolean;
+  defaults: {
+    journeyIds: string[];
+    devotionalSeriesIds: string[];
+    companionIds: string[];
+  };
+};
+
+export async function initializeMemberHomeDefaults(): Promise<MemberHomeDefaults> {
+  const res = await fetch(getApiUrl('/api/member-home/initialize-defaults'), {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error(`Could not initialize Today's Steps (${res.status})`);
+  return res.json() as Promise<MemberHomeDefaults>;
+}
+
 export async function completeStep(
   journeyId: string,
   day: number,

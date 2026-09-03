@@ -30,6 +30,7 @@ export async function ensureAuthSchema(): Promise<void> {
     ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS app_role text NOT NULL DEFAULT 'user';
     ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS role_assigned_at timestamptz;
     ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS account_status text NOT NULL DEFAULT 'active';
+    ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS home_defaults_initialized_at timestamptz;
     ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS removed_at timestamptz;
     ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS removed_by varchar;
     ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();

@@ -828,6 +828,19 @@ export default function Walk() {
                   setLocation(`/journeys/collections/${collection.id}?source=today&resume=${encodeURIComponent(journey.id)}`);
                 }}
                 done={allComplete}
+                trailing={
+                  !allComplete ? (
+                    <WalkDismissButton
+                      onDismiss={() => {
+                        const ids = children.map(child => child.journey.id);
+                        setHiddenJourneyIds(prev => new Set([...prev, ...ids]));
+                        ids.forEach(id => {
+                          void callEngagementAction('journey', id, 'hide', user?.id);
+                        });
+                      }}
+                    />
+                  ) : undefined
+                }
               />
             );
           })}

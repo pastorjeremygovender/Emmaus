@@ -33,6 +33,7 @@ import contentGroupsRouter from "./content-groups";
 import illustrationsRouter from "./illustrations";
 import { remindersRouter } from "./reminders";
 import contentReorderRouter from "./content-reorder";
+import memberHomeRouter from "./member-home";
 
 const router: IRouter = Router();
 
@@ -72,5 +73,6 @@ router.use(shareImageRouter);
 router.use(illustrationsRouter);
 router.use(remindersRouter);
 router.use(contentReorderRouter);
+router.use(memberHomeRouter);
 
 export default router;

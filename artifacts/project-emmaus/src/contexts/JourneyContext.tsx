@@ -250,6 +250,25 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
           setDailyRhythmState(rhythm);
         }
 
+        // A brand-new account gets a server-backed starting set across all
+        // Today's Steps content systems. Refresh this map after seeding so the
+        // Daily Rhythm and Journey cards are available without a page reload.
+        if (user?.role === 'user') {
+          try {
+            const defaults = await api.initializeMemberHomeDefaults();
+            if (defaults.seeded) {
+              const seededProgress = await api.getAllProgress();
+              if (!cancelled && activeSubjectRef.current === subject) {
+                setProgress(seededProgress);
+              }
+            }
+          } catch (error) {
+            // Initial content is supplementary; a transient initializer failure
+            // must not prevent the member from opening the app.
+            console.warn('[MemberHome] default initialization unavailable', error);
+          }
+        }
+
         // The opening only needs the canonical journey and its current step.
         // Remaining journey steps load in parallel after the first useful screen
         // can render, instead of blocking every member on the full catalogue.

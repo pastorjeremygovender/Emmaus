@@ -78,6 +78,7 @@ export const userProfilesTable = pgTable(
     timezone: text("timezone").notNull().default("Africa/Johannesburg"),
     appearanceTheme: text("appearance_theme").notNull().default("light"),
     appearanceTextSize: text("appearance_text_size").notNull().default("standard"),
+    homeDefaultsInitializedAt: timestamp("home_defaults_initialized_at", { withTimezone: true }),
     removedAt: timestamp("removed_at", { withTimezone: true }),
     removedBy: varchar("removed_by"),
     updatedAt: timestamp("updated_at", { withTimezone: true })
