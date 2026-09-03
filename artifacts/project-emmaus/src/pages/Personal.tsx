@@ -16,6 +16,7 @@ import { MemberHeaderActions } from '@/components/MemberHeaderActions';
 import { fetchFavourites, type Favourite } from '@/lib/favourites-api';
 import { fetchHistory, historyTimeLabel, type HistoryEntry } from '@/lib/history-api';
 import { motion } from 'framer-motion';
+import { getMemberProfile, type MemberProfile } from '@/lib/member-profile-api';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -133,6 +134,8 @@ export default function Personal() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [histLoading, setHistLoading] = useState(true);
   const [showAllHistory, setShowAllHistory] = useState(false);
+  const [memberProfile, setMemberProfile] = useState<MemberProfile | null>(null);
+  const [detailsPromptDismissed, setDetailsPromptDismissed] = useState(false);
 
   const loadData = useCallback(async () => {
     setFavsLoading(true);
@@ -152,6 +155,18 @@ export default function Personal() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    if (!user) return;
+    setMemberProfile(null);
+    const dismissalKey = `emmaus_personal_details_prompt_dismissed:${user.id}`;
+    setDetailsPromptDismissed(localStorage.getItem(dismissalKey) === 'true');
+    getMemberProfile()
+      .then(setMemberProfile)
+      .catch(() => {
+        // The profile page remains fully usable if the member record is unavailable.
+      });
+  }, [user?.id]);
 
   if (!user) return null;
 
@@ -184,6 +199,17 @@ export default function Personal() {
     toast({ title: 'Name updated', description: name ? `We'll call you ${name}.` : 'Your name has been cleared.' });
   };
   const handleCancelNameEdit = () => { setEditingName(false); setNameInput(''); };
+  const detailsIncomplete = memberProfile
+    ? !memberProfile.preferredName.trim() ||
+      !memberProfile.contactNumber ||
+      !memberProfile.physicalAddress ||
+      !memberProfile.dateOfBirth ||
+      !memberProfile.iccMembership
+    : false;
+  const dismissDetailsPrompt = () => {
+    setDetailsPromptDismissed(true);
+    localStorage.setItem(`emmaus_personal_details_prompt_dismissed:${user.id}`, 'true');
+  };
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -247,6 +273,43 @@ export default function Personal() {
             </div>
           </div>
         </motion.header>
+
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.06 }}
+          className="rounded-2xl border border-primary/20 bg-primary/[0.045] px-4 py-3.5"
+        >
+          <button
+            type="button"
+            onClick={() => setLocation('/profile/personal-details')}
+            className="flex w-full items-center justify-between gap-3 text-left"
+            data-testid="button-personal-details"
+          >
+            <span className="min-w-0">
+              <span className="block text-[14px] font-semibold text-foreground">Personal details</span>
+              <span className="mt-0.5 block text-[12px] leading-5 text-muted-foreground">
+                Keep your church contact record up to date
+              </span>
+            </span>
+            <ChevronRight size={17} className="shrink-0 text-primary" aria-hidden="true" />
+          </button>
+          {detailsIncomplete && !detailsPromptDismissed && (
+            <div className="mt-3 flex items-start gap-3 border-t border-primary/15 pt-3">
+              <p className="flex-1 text-[12px] leading-5 text-primary/80">
+                A few details are still missing. Add them whenever you have a quiet moment.
+              </p>
+              <button
+                type="button"
+                onClick={dismissDetailsPrompt}
+                className="min-h-[32px] shrink-0 rounded-lg px-2 text-[12px] font-semibold text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
+                aria-label="Dismiss personal details reminder"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+        </motion.div>
 
         {(user.role === 'admin' || user.role === 'superAdmin') && (
           <motion.div

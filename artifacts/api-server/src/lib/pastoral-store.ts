@@ -118,6 +118,9 @@ export interface UnifiedPerson {
   fullName: string;
   email: string | null;
   phone: string | null;
+  physicalAddress: string | null;
+  dateOfBirth: string | null;
+  iccMembership: "yes" | "no" | "unsure" | null;
   linkedUserId: string | null;
   isLinked: boolean;
   subType: "emmaus_user" | "attendance_only" | "visitor";
@@ -495,6 +498,10 @@ export async function listUnifiedPeople(): Promise<UnifiedPerson[]> {
        u.first_name,
        u.last_name,
        up.preferred_name,
+       up.contact_number,
+       up.physical_address,
+       up.date_of_birth::text,
+       up.icc_membership,
        ar_latest.session_date  AS last_attendance_date,
        ar_latest.status        AS last_attendance_status,
        COALESCE(sig.open_count, 0) AS open_signals
@@ -572,7 +579,12 @@ export async function listUnifiedPeople(): Promise<UnifiedPerson[]> {
       ""
     ),
     email:                String(r.email),
-    phone:                null,
+    phone:                r.contact_number != null ? String(r.contact_number) : null,
+    physicalAddress:      r.physical_address != null ? String(r.physical_address) : null,
+    dateOfBirth:          r.date_of_birth != null ? String(r.date_of_birth).slice(0, 10) : null,
+    iccMembership:        r.icc_membership === "yes" || r.icc_membership === "no" || r.icc_membership === "unsure"
+      ? r.icc_membership
+      : null,
     linkedUserId:         String(r.id),
     isLinked:             true,
     subType:              "emmaus_user" as const,
@@ -589,6 +601,9 @@ export async function listUnifiedPeople(): Promise<UnifiedPerson[]> {
     fullName:             String(r.full_name ?? ""),
     email:                r.email != null ? String(r.email) : null,
     phone:                r.phone != null ? String(r.phone) : null,
+    physicalAddress:      null,
+    dateOfBirth:          null,
+    iccMembership:        null,
     linkedUserId:         r.linked_user_id != null ? String(r.linked_user_id) : null,
     isLinked:             r.linked_user_id != null,
     subType:              String(r.person_type) as "attendance_only" | "visitor",

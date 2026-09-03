@@ -31,6 +31,10 @@ export async function ensureAuthSchema(): Promise<void> {
     ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS role_assigned_at timestamptz;
     ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS account_status text NOT NULL DEFAULT 'active';
     ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS home_defaults_initialized_at timestamptz;
+    ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS contact_number text;
+    ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS physical_address text;
+    ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS date_of_birth date;
+    ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS icc_membership text;
     ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS removed_at timestamptz;
     ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS removed_by varchar;
     ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
@@ -45,6 +49,17 @@ export async function ensureAuthSchema(): Promise<void> {
         ALTER TABLE user_profiles
           ADD CONSTRAINT user_profiles_auth_subject_users_id_fk
           FOREIGN KEY (auth_subject) REFERENCES users(id) ON DELETE RESTRICT;
+      END IF;
+    END $$;
+
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'user_profiles_icc_membership_check'
+      ) THEN
+        ALTER TABLE user_profiles
+          ADD CONSTRAINT user_profiles_icc_membership_check
+          CHECK (icc_membership IS NULL OR icc_membership IN ('yes', 'no', 'unsure'));
       END IF;
     END $$;
 

@@ -365,14 +365,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!preferredName) return;
       const subject = user.id;
 
-      const response = await fetch(getApiUrl("/api/users/profile"), {
-        method: "POST",
+      const response = await fetch(getApiUrl("/api/member/profile"), {
+        method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ preferredName }),
       });
       if (!response.ok) {
-        throw new Error("We could not save your preferred name.");
+        const body = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(body?.error ?? "We could not save your preferred name.");
       }
       setUser((current) =>
         current?.id === subject ? { ...current, preferredName } : current,

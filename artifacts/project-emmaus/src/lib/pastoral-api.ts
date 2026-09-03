@@ -52,6 +52,9 @@ export interface UnifiedPerson {
   fullName: string;
   email: string | null;
   phone: string | null;
+  physicalAddress: string | null;
+  dateOfBirth: string | null;
+  iccMembership: "yes" | "no" | "unsure" | null;
   linkedUserId: string | null;
   isLinked: boolean;
   subType: "emmaus_user" | "attendance_only" | "visitor";

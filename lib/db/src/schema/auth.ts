@@ -6,6 +6,7 @@ import {
   jsonb,
   pgTable,
   text,
+  date,
   timestamp,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -59,6 +60,10 @@ export const userProfilesTable = pgTable(
   {
     email: text("email").primaryKey(),
     preferredName: text("preferred_name").notNull().default(""),
+    contactNumber: text("contact_number"),
+    physicalAddress: text("physical_address"),
+    dateOfBirth: date("date_of_birth", { mode: "string" }),
+    iccMembership: text("icc_membership"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

@@ -512,9 +512,18 @@ export default function PersonPage({ person, onBack, scrollToCareSignals }: Prop
                 </a>
               ) : undefined}
             />
-            <ContactRow label="Physical address" value={null} />
-            <ContactRow label="Date of birth" value={null} />
-            <ContactRow label="ICC membership" value={null} />
+            <ContactRow label="Physical address" value={person.physicalAddress} />
+            <ContactRow label="Date of birth" value={person.dateOfBirth ? fmt(person.dateOfBirth) : null} />
+            <ContactRow
+              label="ICC membership"
+              value={person.iccMembership === 'yes'
+                ? 'Yes'
+                : person.iccMembership === 'no'
+                  ? 'No'
+                  : person.iccMembership === 'unsure'
+                    ? "I'm not sure"
+                    : null}
+            />
           </div>
         </CollapsibleSection>
 

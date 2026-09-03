@@ -34,6 +34,7 @@ import illustrationsRouter from "./illustrations";
 import { remindersRouter } from "./reminders";
 import contentReorderRouter from "./content-reorder";
 import memberHomeRouter from "./member-home";
+import memberProfileRouter from "./member-profile";
 
 const router: IRouter = Router();
 
@@ -74,5 +75,6 @@ router.use(illustrationsRouter);
 router.use(remindersRouter);
 router.use(contentReorderRouter);
 router.use(memberHomeRouter);
+router.use(memberProfileRouter);
 
 export default router;

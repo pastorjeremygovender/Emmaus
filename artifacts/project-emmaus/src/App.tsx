@@ -43,6 +43,7 @@ import ExploreJourneys from '@/pages/journeys/ExploreJourneys';
 import CollectionPage from '@/pages/journeys/CollectionPage';
 import ContentGroupPage from '@/pages/ContentGroupPage';
 import Personal from '@/pages/Personal';
+import PersonalDetails from '@/pages/PersonalDetails';
 import Admin from '@/pages/Admin';
 import NotFound from '@/pages/not-found';
 
@@ -166,6 +167,7 @@ function Router() {
       <Route path="/content-groups/:id" component={ContentGroupPage} />
       <Route path="/journeys/:id" component={JourneyDetail} />
       <Route path="/personal" component={Personal} />
+      <Route path="/profile/personal-details" component={PersonalDetails} />
       <Route path="/personal/ask-emmaus" component={AskEmmausHome} />
       <Route path="/personal/ask-emmaus/voice" component={VoiceMode} />
       <Route path="/personal/ask-emmaus/conversation" component={AskEmmausConversation} />
