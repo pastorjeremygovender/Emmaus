@@ -52,7 +52,7 @@ type GenPhase =
   | { phase: "preview"; imageBase64: string; styleId: GenerationStyleId }
   | { phase: "editing"; imageBase64: string; applying: boolean };
 
-type GenerationStyleId = "dark-cinematic" | "light-floral" | "in-the-middle";
+type GenerationStyleId = "dark-cinematic" | "light-floral" | "in-the-middle" | "drama";
 
 const STYLE_OPTIONS: Array<{
   value: GenerationStyleId;
@@ -73,6 +73,11 @@ const STYLE_OPTIONS: Array<{
     value: "in-the-middle",
     label: "In the Middle",
     description: "Balanced editorial imagery with varied subjects and atmosphere.",
+  },
+  {
+    value: "drama",
+    label: "Drama",
+    description: "Dramatic and illustrative scenes with expressive light, texture, and visual storytelling.",
   },
 ];
 

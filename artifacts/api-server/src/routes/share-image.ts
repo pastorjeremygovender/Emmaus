@@ -30,7 +30,7 @@ const IMAGE_QUALITY = "high";
 const IMAGE_SIZE = "1024x1024";
 const NEW_METHOD_PROMPT_VERSION = "share-image-ab-test-v3";
 
-export type ShareImageStyleId = "dark-cinematic" | "light-floral" | "in-the-middle";
+export type ShareImageStyleId = "dark-cinematic" | "light-floral" | "in-the-middle" | "drama";
 type ShareImagePipeline = "art-direction" | "visual-reasoning";
 
 const SHARE_IMAGE_STYLES: Array<{
@@ -57,6 +57,12 @@ const SHARE_IMAGE_STYLES: Array<{
     description: "Balanced editorial imagery with varied subjects, colour, and atmosphere.",
     pipeline: "visual-reasoning",
   },
+  {
+    id: "drama",
+    label: "Drama",
+    description: "Dramatic and illustrative scenes with expressive light, texture, and visual storytelling.",
+    pipeline: "art-direction",
+  },
 ];
 
 export function getShareImageStyle(value: unknown): typeof SHARE_IMAGE_STYLES[number] {
@@ -70,6 +76,8 @@ Create a moody, filmic visual language: deep charcoal, midnight blue, forest gre
 Create a bright, airy, tender visual language: pale sky, cream, sage, powder blue, blush, lavender, soft yellow, or fresh green with luminous daylight and gentle depth. A flower, leaf, garden, or botanical detail may appear when it genuinely supports the text, but it must not be repeated mechanically; also consider bright interiors, water, objects, architecture, and human moments. Keep the result light and graceful, not childish or overly ornamental.`,
   "in-the-middle": `STYLE PRESET — IN THE MIDDLE:
 Create a balanced contemporary editorial visual language. Keep the current improvements in colour range, emotional specificity, legible typography, and negative space, but choose the subject independently for this quote. Rotate between objects, architecture, rooms, doorways, water, human moments, weather, landscape, light and shadow, and material texture. Botanical or growth imagery is allowed only when the quote specifically calls for it and must never be the default.`,
+  "drama": `STYLE PRESET — DRAMA:
+Create a dramatic, illustrative visual language with expressive lighting, painterly texture, bold shape, atmospheric depth, and a strong emotional focal point. Use a distinctive scene with theatrical light, rich contrast, and layered visual storytelling; consider architecture, weather, water, a human moment, symbolic objects, or a striking landscape. The result should feel artful and intentional rather than generic, gloomy, violent, or overloaded with symbolism.`,
 };
 
 export function getShareImageStyleDirection(styleId: ShareImageStyleId): string {

@@ -21,6 +21,7 @@ describe("share image style presets", () => {
     assert.equal(getShareImageStyle("dark-cinematic").pipeline, "art-direction");
     assert.equal(getShareImageStyle("light-floral").pipeline, "art-direction");
     assert.equal(getShareImageStyle("in-the-middle").pipeline, "visual-reasoning");
+    assert.equal(getShareImageStyle("drama").pipeline, "art-direction");
   });
 
   it("falls back safely to the balanced style for an unknown style ID", () => {
@@ -37,6 +38,7 @@ describe("share image style presets", () => {
       "dark-cinematic": buildNewMethodPrompt("Trust God", reasoning, "dark-cinematic"),
       "light-floral": buildNewMethodPrompt("Trust God", reasoning, "light-floral"),
       "in-the-middle": buildNewMethodPrompt("Trust God", reasoning, "in-the-middle"),
+      drama: buildNewMethodPrompt("Trust God", reasoning, "drama"),
     };
 
     assert.match(prompts["dark-cinematic"], /DARK AND CINEMATIC/);
@@ -45,6 +47,8 @@ describe("share image style presets", () => {
     assert.match(prompts["light-floral"], /bright, airy, tender visual language/);
     assert.match(prompts["in-the-middle"], /IN THE MIDDLE/);
     assert.match(prompts["in-the-middle"], /balanced contemporary editorial visual language/);
+    assert.match(prompts.drama, /DRAMA/);
+    assert.match(prompts.drama, /dramatic, illustrative visual language/);
   });
 
   it("protects the balanced prompt from default plant and growth imagery", () => {

@@ -7,7 +7,7 @@ import {
 
 const templates = [['bible-map', 'Bible Map'], ['timeline', 'Timeline'], ['book-outline', 'Five-Part Book Outline'], ['journey-route', 'Journey Route'], ['teaching-diagram', 'Teaching Diagram'], ['comparison', 'Comparison'], ['people-groups', 'People Groups'], ['custom-diagram', 'Custom Diagram']];
 const placements = [['below-scripture', 'Below Scripture'], ['below-welcome', 'Below Welcome'], ['within-reflection', 'Within Reflection'], ['after-reflection', 'After Reflection'], ['before-consider-this', 'Before Consider This']];
-const styles = [['dark-cinematic', 'Dark and cinematic'], ['light-floral', 'Light and floral'], ['in-the-middle', 'In the middle']];
+const styles = [['dark-cinematic', 'Dark and cinematic'], ['light-floral', 'Light and floral'], ['in-the-middle', 'In the middle'], ['drama', 'Drama']];
 
 function imageSource(item: Illustration) {
   if (item.displayObjectPath) return item.displayObjectPath;
