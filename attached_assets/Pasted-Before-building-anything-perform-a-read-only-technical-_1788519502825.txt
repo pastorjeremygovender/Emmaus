@@ -1,0 +1,183 @@
+Before building anything, perform a read-only technical feasibility investigation for a proposed Emmaus feature called “Welcome Assist.”
+
+DO NOT change application code, database schemas, Secrets, deployment configuration, DNS, production data or the currently published app. Do not install packages, create migrations, package the app, publish anything or purchase/recommend purchasing hardware yet.
+
+CONTEXT AND PASTORAL PURPOSE
+
+Emmaus is currently a PWA. ICC may grow to 500 or more Sunday attendees.
+
+The purpose of Welcome Assist is not to score attendance or monitor people. It is to help the pastoral and welcome teams notice people, recognise them personally and become aware when someone may need care.
+
+The desired experience is:
+
+1. A participating Emmaus user arrives at the ICC property for the Sunday service.
+2. Without opening Emmaus, scanning a QR code or tapping “I’m here,” the native app detects that the user has entered the church area.
+3. Emmaus sends one private Sunday presence event to the server.
+4. The person is recorded as “Automatically noticed” or “Likely present”—never definitively labelled absent if no signal is received.
+5. An authorised welcome-team member may see the arriving person’s name and profile photograph in a temporary “Arriving now” view, allowing the team member to greet the person naturally by name.
+6. Emmaus must not continuously track movement, retain location history, record routes or use location outside configured church service windows.
+7. The feature must be completely optional, transparent and consent-based.
+
+INVESTIGATION REQUIRED
+
+Inspect the current Emmaus architecture and provide a definitive report on the following:
+
+A. CURRENT APP ARCHITECTURE
+
+- Confirm the current frontend framework and PWA implementation.
+- Confirm whether Emmaus is already using Capacitor, Cordova, React Native, Expo or any other native wrapper.
+- Confirm whether the current codebase can realistically be packaged as native Android and iPhone apps without rebuilding Emmaus from scratch.
+- Identify which existing PWA functionality may behave differently or break inside a native wrapper.
+- Identify whether push notifications, microphone, camera, audio/video meetings, file handling, authentication, deep links and service workers will need special native handling.
+- Do not expose Secrets, tokens, database URLs or credentials in the report.
+
+B. LOCATION-BASED PRESENCE
+
+Determine whether a properly packaged native Emmaus app could:
+
+- Register a geofence around the ICC property.
+- Detect entry when the phone is locked and Emmaus is not open.
+- Restrict detection to configured Sunday service windows.
+- Send one presence event rather than continuous location updates.
+- Use a dwell rule to reduce false positives from people driving past.
+- Avoid recording exact coordinates or location history.
+- Continue working reasonably after the phone restarts.
+- Avoid excessive battery consumption.
+- Support both Android and iPhone.
+
+Explain the expected behaviour when:
+
+- Location is disabled.
+- Precise location is disabled.
+- Background location is denied.
+- Emmaus has been force-closed.
+- Battery optimisation restricts Emmaus.
+- The phone has no internet connection on arrival.
+- The user arrives early, late or leaves early.
+- The user lives, works or passes close to the church property.
+
+C. APP-STORE AND PERMISSION FEASIBILITY
+
+Check the current official Apple App Store and Google Play requirements for background location.
+
+Determine:
+
+- Whether Welcome Assist is likely to qualify for background-location permission.
+- Whether Google Play could reject it because background location is not the primary purpose of Emmaus.
+- What prominent disclosure and consent screens would be required.
+- Whether iPhone would require “Always Allow.”
+- Whether Android would require the user to manually enable “Allow all the time” in Settings.
+- Whether there is a compliant design that uses geofencing without continuous tracking.
+- Whether Bluetooth beacon detection would face fewer, equal or greater permission and store-review difficulties.
+
+Use current official Apple and Google documentation in the report and include the links.
+
+D. BLUETOOTH BEACON OPTION
+
+Compare location-only geofencing with fixed Bluetooth beacons at the church entrances.
+
+Determine whether Emmaus could:
+
+- Detect an iBeacon-compatible BLE beacon in the background.
+- Identify approximately which entrance the person is approaching.
+- Work when the app is closed or the phone is locked.
+- Use a beacon such as the Minew E8.
+- Operate without continuous Bluetooth scanning.
+- Avoid requiring every member to carry a separate beacon or tag.
+
+Explain exactly which permissions and native capabilities would be required on Android and iPhone.
+
+E. RECOMMENDED ARCHITECTURE
+
+Recommend the safest and simplest design from these options:
+
+1. Location geofence only.
+2. Bluetooth beacon only.
+3. Location geofence for probable presence plus entrance beacon for timely Welcome Assist.
+4. Another technically superior privacy-respecting method.
+
+The recommendation must prioritise:
+
+- Seamless use for technologically challenged people.
+- No visible check-in action after initial consent.
+- Privacy and POPIA-conscious data minimisation.
+- Reliability at 500 or more attendees.
+- Minimal battery use.
+- No interruption to the existing Emmaus PWA.
+- Graceful fallback when automatic detection fails.
+- No automatic conclusion that an undetected person was absent.
+
+F. DATA AND PRIVACY DESIGN
+
+Propose—but do not create—the minimum data structure required.
+
+The system should retain only what is necessary, such as:
+
+- Service identifier.
+- User identifier.
+- Presence status.
+- Detection method.
+- Detection timestamp.
+- Optional entrance identifier.
+- Confidence/status such as confirmed, automatically noticed or not yet noticed.
+
+Do not propose storing ongoing coordinates, travel history or departure movements.
+
+Explain:
+
+- How long presence events should be retained.
+- Who should be authorised to see them.
+- What limited information a welcome-team member should see.
+- How a user can opt in, opt out and delete previously collected automatic-presence information.
+- How profile photographs and visitor information should be protected.
+
+G. VISITORS AND PEOPLE WITHOUT COMPATIBLE PHONES
+
+Explain the graceful fallback for:
+
+- First-time visitors.
+- Returning visitors.
+- People without Emmaus.
+- People without smartphones.
+- People who deny permissions.
+- People whose phones fail to generate an arrival event.
+
+Automatic detection must complement human welcome; it must not become a condition of entry or belonging.
+
+H. PILOT PLAN, EFFORT AND COST
+
+Provide a staged pilot plan using a small number of consenting test users and one church entrance.
+
+Include:
+
+- The smallest technical proof of concept.
+- Devices and Android/iPhone versions to test.
+- Locked phone and closed-app testing.
+- Offline arrival testing.
+- False-positive and missed-detection testing.
+- Success criteria that must be met before continuing.
+- What can be tested without purchasing a beacon.
+- Whether one inexpensive beacon would later be sufficient for beacon testing.
+- Estimated Replit development effort and cost/credit range for:
+  1. Architecture proof.
+  2. Android pilot.
+  3. iPhone pilot.
+  4. Production implementation.
+- Any Apple Developer, Google Play, hosting, mapping, notification, native-build or ongoing service costs.
+
+FINAL RESPONSE FORMAT
+
+Return a clear report containing:
+
+1. Feasible / feasible with conditions / not advisable.
+2. Current architecture findings.
+3. Location-only feasibility.
+4. Beacon feasibility.
+5. App-store approval risks.
+6. Recommended approach.
+7. Pilot plan.
+8. Estimated development and ongoing costs.
+9. Specific risks or blockers.
+10. Exact next implementation prompt—but do not execute it.
+
+Again: this is a read-only investigation. Make no changes and stop after delivering the report for approval.
