@@ -51,6 +51,38 @@
   overflow: visible !important;
 }
 
+/* ── Actionable Daily Rhythm card ───────────────────────────────────────────
+   The Start Here card is the only Today’s Steps card that uses this treatment.
+   The completed state does not receive the class, so it remains unchanged. */
+@keyframes daily-rhythm-actionable-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgb(185 28 28 / 0);
+  }
+  16% {
+    box-shadow: 0 0 0 3px rgb(185 28 28 / 0.14);
+  }
+  32% {
+    box-shadow: 0 0 0 0 rgb(185 28 28 / 0);
+  }
+}
+
+.daily-rhythm-actionable-card {
+  background-color: rgb(254 242 242 / 0.85);
+  border-color: rgb(254 202 202 / 0.9);
+  animation: daily-rhythm-actionable-pulse 6.5s ease-in-out infinite;
+}
+
+.dark .daily-rhythm-actionable-card {
+  background-color: rgb(69 10 10 / 0.42);
+  border-color: rgb(127 29 29 / 0.65);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .daily-rhythm-actionable-card {
+    animation: none;
+  }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /* ── Global page-bottom clearance ───────────────────────────────────────────

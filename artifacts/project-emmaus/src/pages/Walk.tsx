@@ -164,6 +164,7 @@ function CompactCard({
   badge,
   trailing,
   imageUrl,
+  className,
 }: {
   title: string;
   subtitle?: string;
@@ -173,6 +174,7 @@ function CompactCard({
   badge?: 'UPDATED' | 'NEW' | null;
   trailing?: ReactNode;
   imageUrl?: string;
+  className?: string;
 }) {
   const clickable = !!onAction;
   return (
@@ -180,6 +182,7 @@ function CompactCard({
       className={cn(
         'bg-card rounded-xl border border-border/50 px-3.5 py-2.5 select-none',
         clickable && 'cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors',
+        className,
       )}
       onClick={clickable ? onAction : undefined}
     >
@@ -649,6 +652,7 @@ export default function Walk() {
               ctaLabel={drCtaLabel}
               onAction={handleDrAction}
               done={drState === 'uptodate'}
+              className={drState !== 'uptodate' ? 'daily-rhythm-actionable-card' : undefined}
             />
           </SectionWrapper>
         ) : (
