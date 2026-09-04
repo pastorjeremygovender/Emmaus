@@ -13,6 +13,14 @@ description: How code changes and seed data reach the production app; what break
 
 **How to apply**: Any time voice, frontend, or UI code changes are made, running the data-safety workflow before publishing is the reliable guarantee. Do not advise the user to manually run `pnpm build` — the workflow handles it automatically.
 
+## Failed pre-listen startup diagnostics
+
+Replit's production `executeSql({ environment: "production" })` activity/lock views are read-only replica observations and do not expose the ephemeral publishing container's PostgreSQL session. A clean `pg_stat_activity`/`pg_locks` result therefore cannot prove that a pre-`app.listen()` startup transaction is not blocked.
+
+**Why:** Failed artifact promotion exposed only metasidecar health-check logs (`/api` 500 and port never opened); application stdout and the publishing container's primary DB session were not available through deployment-log or production-replica queries.
+
+**How to apply:** Treat absent app sessions and absent locks as "not observable", not "no blocker". Require publishing-platform application stdout or primary-database lock diagnostics before changing startup sequencing.
+
 ## Replit file replacement flows
 
 - `.replit`: never edit directly. Write full updated TOML to a temp file, then call `verifyAndReplaceDotReplit({ tempFilePath })` via CodeExecution.
