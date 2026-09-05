@@ -633,6 +633,14 @@ async function resolveDailyRhythm(userId: string): Promise<EmmausResponseMetadat
   return metadata;
 }
 
+async function resolveTodaySteps(userId: string): Promise<EmmausResponseMetadata> {
+  const rhythm = await resolveDailyRhythm(userId);
+  if ((rhythm.recommendations?.length ?? 0) > 0 || rhythm.nextStep?.path?.startsWith("/daily-rhythm/")) {
+    return rhythm;
+  }
+  return resolveActiveProgress(userId);
+}
+
 async function resolveContinueJourney(userId: string, type: "walk" | "journey"): Promise<EmmausResponseMetadata> {
   const metadata = emptyMetadata();
   const journeys = await listPublishedJourneys();
@@ -768,6 +776,9 @@ export async function resolveCanonicalAskRequest(
         }
         return { handled: true, metadata: await resolveSermonSearch(routed.resourceQuery ?? message) };
       case "DIRECT_ACTION":
+        if (routed.requestedCapability === "todays-steps") {
+          return { handled: true, metadata: await resolveTodaySteps(userId) };
+        }
         if (routed.requestedCapability === "daily-devotional") {
           return { handled: true, metadata: await resolveTodayDevotional(userId) };
         }

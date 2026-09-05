@@ -78,6 +78,7 @@
 - [Shared room tool lifecycle](shared-room-tool-lifecycle.md) — chat and shared AI surfaces need durable session state plus the session SSE path; message SSE alone cannot close or recover tools.
 - [Room message reconciliation](room-message-reconciliation.md) — optimistic Room posts must use a client-generated ID shared by POST and SSE; field-based echo matching is only a fallback.
 - [Ask Emmaus capability router](ask-emmaus-capability-router.md) — typed app actions resolve from server-owned capabilities; preserve the Voice-context bypass in the shared service.
+- [Jarvis foundation](jarvis-foundation.md) — typed Ask Emmaus contract wraps legacy metadata; authenticated context is server-assembled and Voice remains outside the boundary.
 - [Ask Emmaus release gate](ask-emmaus-release-gate.md) — final visible latency follows normalization; TTFT alone is not a user-facing release measure.
 - [Dated devotional resolution](ask-emmaus-dated-devotionals.md) — Ask Emmaus resolves date-labelled devotionals by Johannesburg date, never progress; Daily Rhythm remains server-gated.
 - [Daily Reminders delivery](daily-reminders-delivery.md) — Web Push uses per-device ownership, timezone-instant completion suppression, and an at-most-once scheduled worker.

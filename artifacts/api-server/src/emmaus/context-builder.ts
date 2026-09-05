@@ -9,6 +9,7 @@
 
 import type { EntryPoint, EmmausMemory } from "./firestore-model.js";
 import type { VoiceContextEnvelope } from "./voice-contracts.js";
+import type { JarvisContext } from "./jarvis-contract.js";
 
 // ─── Input Types ──────────────────────────────────────────────────────────────
 
@@ -59,6 +60,8 @@ export interface EmmausContextInput {
   voiceAppContext?: string;
   /** Server-generated envelope for Voice requests; never supplied as prose by the model. */
   voiceContextEnvelope?: VoiceContextEnvelope;
+  /** Server-assembled, owner-scoped context for typed Ask Emmaus requests. */
+  jarvisContext?: JarvisContext;
 }
 
 /** Flat context accepted from web clients and translated before orchestration. */
@@ -219,6 +222,41 @@ export function buildContext(input: EmmausContextInput): BuiltContext {
       `  Current activity: ${envelope.activity.isReading ? "reading aloud" : "not reading aloud"}`,
       `  Content, safety, and routes: server-authoritative`,
     );
+  }
+
+  if (input.jarvisContext) {
+    const jc = input.jarvisContext;
+    lines.push(`\n[Verified Emmaus account context — server assembled]`);
+    if (jc.identity.displayName) lines.push(`  Display name: ${jc.identity.displayName}`);
+    if (jc.dailyRhythm) {
+      lines.push(
+        `  Daily Rhythm: Day ${jc.dailyRhythm.currentDay}` +
+        `${jc.dailyRhythm.stepTitle ? ` — "${jc.dailyRhythm.stepTitle}"` : ""}` +
+        `${jc.dailyRhythm.completedToday ? " (completed today)" : ""}` +
+        `${jc.dailyRhythm.locked ? ` (next step unlocks ${jc.dailyRhythm.unlockDate ?? "later"})` : ""}`,
+      );
+    }
+    for (const progress of jc.activeProgress.slice(0, 6)) {
+      lines.push(
+        `  Active ${progress.journeyType}: "${progress.title}" — Day ${progress.currentDay}` +
+        `${progress.stepTitle ? `, "${progress.stepTitle}"` : ""}`,
+      );
+    }
+    if (jc.bible) {
+      lines.push(`  Saved Bible position: ${jc.bible.bookName} ${jc.bible.chapter}`);
+    }
+    if (jc.devotional) {
+      lines.push(
+        `  Current devotional: "${jc.devotional.seriesTitle}" — Day ${jc.devotional.currentDay}` +
+        `${jc.devotional.entryTitle ? `, "${jc.devotional.entryTitle}"` : ""}`,
+      );
+    }
+    const unavailable = jc.sourceStatuses
+      .filter((source) => source.status === "unavailable")
+      .map((source) => source.source);
+    if (unavailable.length > 0) {
+      lines.push(`  Account context unavailable for: ${unavailable.join(", ")}. Do not infer missing data.`);
+    }
   }
 
   // User memories (only approved ones are passed in)

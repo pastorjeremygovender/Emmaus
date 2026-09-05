@@ -11,6 +11,7 @@ import {
   validateCitations,
 } from "./citation-validation.js";
 import type { EmmausResource } from "./resource-catalogue.js";
+import { buildJarvisResponseContract } from "./jarvis-contract.js";
 
 const MAX_DISPLAY_CHARS = 2400;
 const MAX_SPEAKABLE_CHARS = 720;
@@ -331,5 +332,10 @@ export function normalizeEmmausResponse(input: {
   metadata.answer = displayAnswer;
   metadata.displayAnswer = displayAnswer;
   metadata.speakableAnswer = spoken;
+  metadata.jarvis = buildJarvisResponseContract({
+    intent: metadata.jarvisIntent,
+    pastoralText: displayAnswer,
+    metadata,
+  });
   return { metadata, displayAnswer, speakableAnswer: spoken };
 }

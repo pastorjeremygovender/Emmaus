@@ -63,6 +63,8 @@ import { resolveCanonicalAskRequest } from "./canonical-tools.js";
 import { promptIntentMode, routeAskEmmausRequest } from "./intent-router.js";
 import { normalizeEmmausResponse } from "./response-normalization.js";
 import { createTypedStreamConsumer } from "./typed-stream-normalizer.js";
+import { assembleJarvisContext } from "./context-assembler.js";
+import type { JarvisIntent } from "./jarvis-contract.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -84,6 +86,20 @@ const RESOURCE_TYPE_TO_CONTRACT: Record<CatalogueResourceType, ContractResourceT
   sermon: "sermon",
   "daily-rhythm": "daily_rhythm",
 };
+
+function jarvisIntentForRoute(
+  routed: ReturnType<typeof routeAskEmmausRequest>,
+): JarvisIntent {
+  if (routed.intent === "BIBLE_READ") return "BIBLE_READ";
+  if (routed.intent === "BIBLE_CONTINUE") return "CONTINUE";
+  if (routed.intent === "RESOURCE_SEARCH" && routed.requestedCapability === "sermons") return "SERMON_SEARCH";
+  if (routed.intent === "APP_HELP") return "APP_HELP";
+  if (routed.intent === "DIRECT_ACTION" && routed.requestedCapability === "todays-steps") return "TODAY";
+  if (routed.intent === "DIRECT_ACTION" && routed.requestedCapability === "daily-rhythm") return "DAILY_RHYTHM";
+  if (routed.intent === "DIRECT_ACTION" && routed.requestedCapability === "daily-devotional") return "DAILY_DEVOTIONAL";
+  if (routed.intent === "DIRECT_ACTION") return "CONTINUE";
+  return "ASK";
+}
 
 export type SseEventType = "text" | "done" | "error";
 
@@ -501,6 +517,7 @@ async function completeCanonicalResponse(
   const finalMeta: EmmausResponseMetadata = {
     ...metadata,
     requestedIntent: requestedIntent.mode,
+    jarvisIntent: jarvisIntentForRoute(routeAskEmmausRequest(req.message)),
     ...(requestId ? { requestId } : {}),
     scriptureReferences: metadata.scriptureReferences ?? (metadata.scripture ? [metadata.scripture] : []),
     ...(pipelineTimings
@@ -515,6 +532,7 @@ async function completeCanonicalResponse(
   const normalizedMeta = {
     ...normalized.metadata,
     requestedIntent: requestedIntent.mode,
+    jarvisIntent: jarvisIntentForRoute(routeAskEmmausRequest(req.message)),
     ...(requestId ? { requestId } : {}),
   };
   const answer = normalized.displayAnswer;
@@ -608,6 +626,12 @@ export async function handleConversation(
   };
   const isVoiceRequest = Boolean(rawContext.voiceContextEnvelope);
   const contextInput = await reconstructTrustedContext(rawContext, rawContext.userId ?? "anonymous");
+  const userIdForJarvis = rawContext.userId ?? "anonymous";
+  if (!isVoiceRequest && userIdForJarvis !== "anonymous") {
+    const jarvisContext = await assembleJarvisContext(userIdForJarvis, contextInput);
+    contextInput.jarvisContext = jarvisContext;
+    contextInput.userName = jarvisContext.identity.displayName;
+  }
   const builtCtx = buildContext(contextInput);
   const userId = builtCtx.userId;
 
@@ -651,6 +675,9 @@ export async function handleConversation(
   // the system context with previously approved notes about the user.
   const tSearch = Date.now();
   const retrievalFailures: string[] = [];
+  for (const source of contextInput.jarvisContext?.sourceStatuses ?? []) {
+    if (source.status === "unavailable") retrievalFailures.push(source.source);
+  }
   const bibleBookId = contextInput.bibleContext?.bookId;
   const bibleChapter = contextInput.bibleContext?.chapter;
   // AE-1: resolve userId early so we can fetch memories in this parallel step.
@@ -1068,6 +1095,7 @@ export async function handleConversation(
   finalMeta.nextStep = validatedMeta.nextStep;
   finalMeta.recommendations = validatedMeta.recommendations;
   finalMeta.requestedIntent = requestedIntent.mode;
+  finalMeta.jarvisIntent = jarvisIntentForRoute(routeAskEmmausRequest(req.message));
   finalMeta.retrievalFailures = Array.from(new Set(retrievalFailures));
   finalMeta.resourceActions = resourceCatalogue.resources
     .slice(0, 28)

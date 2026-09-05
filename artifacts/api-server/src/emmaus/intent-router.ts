@@ -86,6 +86,26 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
     };
   }
 
+  if (/^what should i do today\b/.test(value) || /^what(?:'s| is) on my (?:steps|walk) today\b/.test(value)) {
+    return {
+      intent: "DIRECT_ACTION",
+      requestedCapability: "todays-steps",
+      requestedOperation: "CONTINUE",
+      confidence: 0.99,
+      clarificationRequired: false,
+    };
+  }
+
+  if (/^(?:continue|resume)\s+(?:where i left off|from where i left off)\b/.test(value)) {
+    return {
+      intent: "BIBLE_CONTINUE",
+      requestedCapability: "saved-bible-position",
+      requestedOperation: "CONTINUE",
+      confidence: 0.98,
+      clarificationRequired: false,
+    };
+  }
+
   if (/^what (?:devotional|daily devotional) resources?\b/.test(value)) {
     return {
       intent: "RESOURCE_SEARCH",
@@ -195,6 +215,7 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
   if (/^(?:what have we preached|find|search|show me).*\b(?:sermon|sermons|preached|preaching)\b/.test(routingValue)
     || /^(?:show me|find|search for)\b.*\b(?:teaching|message|talk)\b.*\b(?:in|on)\b/.test(routingValue)
     || /^has .*\bpreached on\b/.test(routingValue)
+    || /^what did (?:pastor\s+)?[a-z][\w'-]*(?:\s+[a-z][\w'-]*)*\s+preach(?:ed)? about\b/.test(routingValue)
     || /\bsermon archive\b/.test(routingValue)) {
     return {
       intent: "RESOURCE_SEARCH",

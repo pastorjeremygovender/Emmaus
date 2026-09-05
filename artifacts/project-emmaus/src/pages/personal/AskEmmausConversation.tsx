@@ -270,7 +270,10 @@ export default function AskEmmausConversation() {
                   // The server may apply a final transport-level redaction
                   // after parsing metadata. Reconcile the streamed text
                   // with that canonical answer before marking it complete.
-                  content: payload.metadata.displayAnswer ?? payload.metadata.answer ?? m.content,
+                  content: payload.metadata.jarvis?.pastoralText
+                    ?? payload.metadata.displayAnswer
+                    ?? payload.metadata.answer
+                    ?? m.content,
                   isStreaming: false,
                   metadata: payload.metadata,
                 }
@@ -565,6 +568,20 @@ export default function AskEmmausConversation() {
                     {msg.metadata.nextStep && (
                       <NextStepCard nextStep={msg.metadata.nextStep} />
                     )}
+                    {!msg.metadata.nextStep && msg.metadata.jarvis?.suggestedNextAction && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const route = msg.metadata?.jarvis?.suggestedNextAction?.route;
+                          if (route?.startsWith('/') && !route.includes('\n') && !route.includes('\r')) {
+                            setLocation(route);
+                          }
+                        }}
+                        className="w-full rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-left text-[13px] font-semibold text-primary hover:bg-primary/10 transition-colors"
+                      >
+                        {msg.metadata.jarvis.suggestedNextAction.label}
+                      </button>
+                    )}
                     {msg.metadata.capabilityActions?.map((action) => (
                       <button
                         key={`${action.capabilityId}:${action.kind}:${action.route}`}
@@ -583,7 +600,7 @@ export default function AskEmmausConversation() {
                       <ResourceCard
                         key={i}
                         recommendation={rec}
-                        actions={msg.metadata.resourceActions?.filter((action) =>
+                        actions={msg.metadata?.resourceActions?.filter((action) =>
                           action.resourceId === rec.resourceId
                         )}
                       />

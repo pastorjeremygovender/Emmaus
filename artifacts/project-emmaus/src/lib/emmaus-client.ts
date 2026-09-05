@@ -149,6 +149,8 @@ export interface EmmausMetadata {
     label: string;
     route: string;
   }>;
+  jarvis?: JarvisResponseContract;
+  jarvisIntent?: JarvisIntent;
   pipelineTimings?: {
     authMs: number | null;
     contextMs: number;
@@ -164,6 +166,44 @@ export interface EmmausMetadata {
     validationMs: number;
     totalMs: number;
   };
+}
+
+export type JarvisIntent =
+  | 'TODAY'
+  | 'CONTINUE'
+  | 'DAILY_RHYTHM'
+  | 'DAILY_DEVOTIONAL'
+  | 'BIBLE_READ'
+  | 'SERMON_SEARCH'
+  | 'APP_HELP'
+  | 'ASK';
+
+export interface JarvisAction {
+  kind: 'OPEN' | 'READ' | 'CONTINUE';
+  targetType: 'capability' | 'resource' | 'scripture';
+  targetId: string;
+  label: string;
+  route: string;
+  resourceType?: string;
+  parentId?: string;
+}
+
+export interface JarvisResponseContract {
+  contractVersion: 'jarvis.v1';
+  intent: JarvisIntent;
+  pastoralText: string;
+  scriptureReferences: ScriptureRef[];
+  contentReferences: Array<{
+    resourceType: string;
+    resourceId: string;
+    parentId?: string;
+    title: string;
+    reason: string;
+  }>;
+  suggestedNextAction: JarvisAction | null;
+  actions: JarvisAction[];
+  handoffType: 'pastoral' | 'crisis' | null;
+  retrievalFailures: string[];
 }
 
 export interface ConversationStub {

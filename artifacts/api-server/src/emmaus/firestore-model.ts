@@ -15,6 +15,8 @@
  * No startup errors are thrown.
  */
 
+import type { JarvisIntent, JarvisResponseContract } from "./jarvis-contract.js";
+
 // ─── Firestore Collection Paths ───────────────────────────────────────────────
 
 export const COLLECTIONS = {
@@ -174,6 +176,10 @@ export interface EmmausResponseMetadata {
     label: string;
     route: string;
   }>;
+  /** Versioned Jarvis foundation response; legacy fields remain for compatibility. */
+  jarvis?: JarvisResponseContract;
+  /** More specific typed intent used by the versioned Jarvis contract. */
+  jarvisIntent?: JarvisIntent;
   /** Correlates the SSE response with the server's structured request log. */
   requestId?: string;
   /** Structured stage timings used for release acceptance comparisons. */

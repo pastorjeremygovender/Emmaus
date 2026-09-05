@@ -27,6 +27,8 @@ describe("typed Ask Emmaus request router", () => {
     assert.equal(routeAskEmmausRequest("What journey am I busy with?").requestedCapability, "active-progress");
     assert.equal(routeAskEmmausRequest("What's in my Journey?").requestedCapability, "active-progress");
     assert.equal(routeAskEmmausRequest("Which walk am I currently on?").requestedCapability, "active-progress");
+    assert.equal(routeAskEmmausRequest("What should I do today?").requestedCapability, "todays-steps");
+    assert.equal(routeAskEmmausRequest("Continue where I left off").intent, "BIBLE_CONTINUE");
   });
 
   it("requires an explicit read/open command for Bible navigation", () => {
@@ -62,6 +64,10 @@ describe("typed Ask Emmaus request router", () => {
     assert.equal(routeAskEmmausRequest("Has Emmaus preached on the lost son?").requestedCapability, "sermons");
     assert.equal(
       routeAskEmmausRequest("Please show me the covenant lantern teaching in John 3.").requestedCapability,
+      "sermons",
+    );
+    assert.equal(
+      routeAskEmmausRequest("What did Pastor Jeremy preach about grace?").requestedCapability,
       "sermons",
     );
   });
