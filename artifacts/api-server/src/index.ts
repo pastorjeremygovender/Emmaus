@@ -21,8 +21,21 @@ if (Number.isNaN(port) || port <= 0) {
 
 async function startServer(): Promise<void> {
   const publicOrigin = getCanonicalPublicOrigin();
+  const authSchemaStartedAt = Date.now();
+  logger.info("Startup phase beginning: ensure authentication schema");
   await ensureAuthSchema();
+  logger.info(
+    { durationMs: Date.now() - authSchemaStartedAt },
+    "Startup phase complete: ensure authentication schema",
+  );
+
+  const dailyRhythmCorrectionStartedAt = Date.now();
+  logger.info("Startup phase beginning: Daily Rhythm production correction");
   await runDailyRhythmProductionCorrection();
+  logger.info(
+    { durationMs: Date.now() - dailyRhythmCorrectionStartedAt },
+    "Startup phase complete: Daily Rhythm production correction",
+  );
 
   const server = app.listen(port, () => {
     logger.info({ port, publicOrigin }, "Server listening");

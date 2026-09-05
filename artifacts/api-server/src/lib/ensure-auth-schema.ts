@@ -8,6 +8,8 @@ import { pool } from "@workspace/db";
 export async function ensureAuthSchema(): Promise<void> {
   await pool.query(`
     BEGIN;
+    SET LOCAL lock_timeout = '10s';
+    SET LOCAL statement_timeout = '30s';
 
     CREATE TABLE IF NOT EXISTS users (
       id varchar PRIMARY KEY,

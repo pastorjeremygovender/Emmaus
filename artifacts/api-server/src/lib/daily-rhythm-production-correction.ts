@@ -290,6 +290,8 @@ export async function runDailyRhythmProductionCorrection(): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    await client.query("SET LOCAL lock_timeout = '10s'");
+    await client.query("SET LOCAL statement_timeout = '30s'");
     const result = await applyDailyRhythmProductionCorrection(client);
     await client.query("COMMIT");
     logger.info(result, "Daily Rhythm production correction result");
