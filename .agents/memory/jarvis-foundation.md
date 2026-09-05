@@ -7,4 +7,4 @@ The Jarvis foundation is an additive typed boundary around the existing Ask Emma
 
 **Why:** Emmaus already has canonical action/resource validation and a separate Voice contract. Replacing those paths or trusting model/client routes would weaken security and risk regressions in mobile/PWA and Voice behavior.
 
-**How to apply:** Extend the server assembler and canonical registries for new member capabilities. Keep routes and resource IDs server-derived, report source failures by safe source name only, and keep Voice outside the typed Jarvis path unless its contract is deliberately versioned too.
+**How to apply:** Extend the server assembler and canonical registries for new member capabilities. Keep routes, resource IDs, and identity server-derived; ignore browser-supplied names; report source failures by safe source name only; and keep Voice outside the typed Jarvis path unless its contract is deliberately versioned too.
