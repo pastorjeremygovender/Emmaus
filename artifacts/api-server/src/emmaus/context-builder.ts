@@ -109,7 +109,6 @@ export function toEmmausContextInput(
     entryPoint,
     userId,
     conversationId: flat?.conversationId,
-    userName: flat?.userName,
   };
 
   if (flat?.bookId || flat?.bookName || flat?.chapter) {

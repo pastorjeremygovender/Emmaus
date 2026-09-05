@@ -54,11 +54,41 @@ async function readDisplayName(userId: string): Promise<string | undefined> {
   return preferred || undefined;
 }
 
-async function readActiveProgress(userId: string, journeys: FrontendJourney[]) {
+export interface JarvisContextReaders {
+  readDisplayName: typeof readDisplayName;
+  getDailyRhythmState: typeof getDailyRhythmState;
+  getProgress: typeof getProgress;
+  listPublishedJourneys: typeof listPublishedJourneys;
+  listSteps: typeof listSteps;
+  getBibleData: typeof getBibleData;
+  getAllProgressForUser: typeof getAllProgressForUser;
+  getSeriesById: typeof getSeriesById;
+  listPublishedSeries: typeof listPublishedSeries;
+  getPublishedSermonById: typeof getPublishedSermonById;
+}
+
+const productionReaders: JarvisContextReaders = {
+  readDisplayName,
+  getDailyRhythmState,
+  getProgress,
+  listPublishedJourneys,
+  listSteps,
+  getBibleData,
+  getAllProgressForUser,
+  getSeriesById,
+  listPublishedSeries,
+  getPublishedSermonById,
+};
+
+async function readActiveProgress(
+  userId: string,
+  journeys: FrontendJourney[],
+  readers: JarvisContextReaders,
+) {
   const active: JarvisContext["activeProgress"] = [];
   for (const journey of journeys) {
     if (journey.journeyType === "daily-rhythm" || journey.journeyType === "core") continue;
-    const progress = await getProgress(userId, journey.id);
+    const progress = await readers.getProgress(userId, journey.id);
     if (
       !progress
       || progress.status === "paused"
@@ -66,7 +96,7 @@ async function readActiveProgress(userId: string, journeys: FrontendJourney[]) {
       || progress.completedDays.length >= journey.durationDays
     ) continue;
     const currentDay = Math.max(1, progress.currentDay);
-    const steps = await listSteps(journey.id);
+    const steps = await readers.listSteps(journey.id);
     const step = steps.find((candidate) =>
       candidate.day === currentDay
       && candidate.status === "Published"
@@ -85,10 +115,10 @@ async function readActiveProgress(userId: string, journeys: FrontendJourney[]) {
   return active;
 }
 
-async function readDevotionalContext(userId: string) {
+async function readDevotionalContext(userId: string, readers: JarvisContextReaders) {
   const [series, progress] = await Promise.all([
-    listPublishedSeries(),
-    getAllProgressForUser(userId),
+    readers.listPublishedSeries(),
+    readers.getAllProgressForUser(userId),
   ]);
   const published = new Map(series.map((item) => [item.id, item]));
   const active = progress
@@ -101,7 +131,7 @@ async function readDevotionalContext(userId: string) {
   if (!active) return undefined;
   const selectedSeries = published.get(active.seriesId);
   if (!selectedSeries) return undefined;
-  const full = await getSeriesById(selectedSeries.id);
+  const full = await readers.getSeriesById(selectedSeries.id);
   const entry = full?.entries
     .filter((item) => item.status === "Published")
     .sort((a, b) => a.dayNumber - b.dayNumber)
@@ -122,9 +152,11 @@ async function readDevotionalContext(userId: string) {
 export async function assembleJarvisContext(
   userId: string,
   input?: Pick<EmmausContextInput, "sermonContext">,
+  overrides: Partial<JarvisContextReaders> = {},
 ): Promise<JarvisContextEnvelope> {
+  const readers: JarvisContextReaders = { ...productionReaders, ...overrides };
   const sourceStatuses: JarvisSourceStatus[] = [];
-  const identity = await readDisplayName(userId)
+  const identity = await readers.readDisplayName(userId)
     .then((displayName) => {
       sourceStatuses.push(status("identity", displayName ? "ok" : "empty"));
       return { displayName };
@@ -137,7 +169,7 @@ export async function assembleJarvisContext(
 
   const [rhythmResult, journeysResult, bibleResult, devotionalResult, sermonResult] =
     await Promise.all([
-      getDailyRhythmState(userId)
+      readers.getDailyRhythmState(userId)
         .then((value) => {
           sourceStatuses.push(status("daily-rhythm", value ? "ok" : "empty"));
           return value;
@@ -147,9 +179,9 @@ export async function assembleJarvisContext(
           sourceStatuses.push(status("daily-rhythm", "unavailable"));
           return null;
         }),
-      listPublishedJourneys()
+      readers.listPublishedJourneys()
         .then(async (journeys) => {
-          const active = await readActiveProgress(userId, journeys);
+          const active = await readActiveProgress(userId, journeys, readers);
           sourceStatuses.push(status("active-progress", active.length > 0 ? "ok" : "empty"));
           return active;
         })
@@ -158,7 +190,7 @@ export async function assembleJarvisContext(
           sourceStatuses.push(status("active-progress", "unavailable"));
           return [];
         }),
-      getBibleData(userId)
+      readers.getBibleData(userId)
         .then((data) => {
           const last = data?.history?.[0];
           sourceStatuses.push(status("bible", last ? "ok" : "empty"));
@@ -169,7 +201,7 @@ export async function assembleJarvisContext(
           sourceStatuses.push(status("bible", "unavailable"));
           return undefined;
         }),
-      readDevotionalContext(userId)
+      readDevotionalContext(userId, readers)
         .then((value) => {
           sourceStatuses.push(status("devotional", value ? "ok" : "empty"));
           return value;
@@ -180,7 +212,7 @@ export async function assembleJarvisContext(
           return undefined;
         }),
       input?.sermonContext?.sermonId
-        ? getPublishedSermonById(input.sermonContext.sermonId)
+        ? readers.getPublishedSermonById(input.sermonContext.sermonId)
             .then((sermon) => {
               sourceStatuses.push(status("sermon", sermon ? "ok" : "empty"));
               return sermon;
