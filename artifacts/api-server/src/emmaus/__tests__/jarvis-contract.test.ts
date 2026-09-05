@@ -1,8 +1,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildJarvisResponseContract } from "../jarvis-contract.ts";
+import {
+  buildJarvisResponseContract,
+  JARVIS_CONTEXT_VERSION,
+} from "../jarvis-contract.ts";
 
 describe("Jarvis response contract", () => {
+  it("uses a versioned authenticated-user context envelope", () => {
+    assert.equal(JARVIS_CONTEXT_VERSION, "jarvis.context.v1");
+  });
+
   it("keeps pastoral prose separate from server-owned actions and content references", () => {
     const result = buildJarvisResponseContract({
       intent: "BIBLE_READ",
@@ -54,6 +61,42 @@ describe("Jarvis response contract", () => {
         resourceActions: [],
         capabilityActions: [],
         nextStep: null,
+        handoffType: null,
+      },
+    });
+
+    assert.equal(result.contentReferences.length, 0);
+    assert.equal(result.actions.length, 0);
+    assert.equal(result.suggestedNextAction, null);
+  });
+
+  it("drops unknown resource types and unsafe routes at the contract boundary", () => {
+    const result = buildJarvisResponseContract({
+      intent: "ASK",
+      pastoralText: "Safe answer.",
+      metadata: {
+        scriptureReferences: [],
+        recommendations: [{
+          type: "unknown-resource",
+          title: "Untrusted resource",
+          resourceId: "fake-1",
+        }],
+        resourceActions: [{
+          kind: "OPEN",
+          resourceType: "walk",
+          resourceId: "walk-1",
+          route: "https://example.test/fake",
+        }],
+        capabilityActions: [{
+          kind: "OPEN",
+          capabilityId: "discover",
+          label: "Open Discover",
+          route: "/discover\n/fake",
+        }],
+        nextStep: {
+          primaryButtonText: "Untrusted",
+          path: "javascript:alert(1)",
+        },
         handoffType: null,
       },
     });

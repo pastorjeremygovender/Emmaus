@@ -22,7 +22,12 @@ import { getPublishedSermonById } from "../lib/canonical-sermon-store.js";
 import { pool } from "@workspace/db";
 import { logger } from "../lib/logger.js";
 import type { EmmausContextInput } from "./context-builder.js";
-import type { JarvisContext, JarvisSourceStatus } from "./jarvis-contract.js";
+import {
+  JARVIS_CONTEXT_VERSION,
+  type JarvisContext,
+  type JarvisContextEnvelope,
+  type JarvisSourceStatus,
+} from "./jarvis-contract.js";
 
 function status(
   source: JarvisSourceStatus["source"],
@@ -117,7 +122,7 @@ async function readDevotionalContext(userId: string) {
 export async function assembleJarvisContext(
   userId: string,
   input?: Pick<EmmausContextInput, "sermonContext">,
-): Promise<JarvisContext> {
+): Promise<JarvisContextEnvelope> {
   const sourceStatuses: JarvisSourceStatus[] = [];
   const identity = await readDisplayName(userId)
     .then((displayName) => {
@@ -187,6 +192,9 @@ export async function assembleJarvisContext(
             })
         : Promise.resolve(null),
     ]);
+  if (!input?.sermonContext?.sermonId) {
+    sourceStatuses.push(status("sermon", "empty"));
+  }
 
   const dailyRhythm = rhythmResult
     ? {
@@ -203,32 +211,36 @@ export async function assembleJarvisContext(
     : undefined;
 
   return {
-    identity,
-    ...(dailyRhythm ? { dailyRhythm } : {}),
-    activeProgress: journeysResult,
-    ...(bibleResult
-      ? {
-          bible: {
-            bookId: bibleResult.bookId,
-            bookName: bibleResult.bookName,
-            chapter: bibleResult.chapter,
-            ...(bibleResult.chapterHeading ? { chapterHeading: bibleResult.chapterHeading } : {}),
-            ...(bibleResult.openedAt ? { openedAt: bibleResult.openedAt } : {}),
-          },
-        }
-      : {}),
-    ...(devotionalResult ? { devotional: devotionalResult } : {}),
-    ...(sermonResult
-      ? {
-          sermon: {
-            sermonId: sermonResult.id,
-            title: sermonResult.title,
-            speaker: sermonResult.speaker,
-            ...(sermonResult.scriptureReference ? { scriptureReference: sermonResult.scriptureReference } : {}),
-            ...(sermonResult.sermonDate ? { sermonDate: sermonResult.sermonDate } : {}),
-          },
-        }
-      : {}),
-    sourceStatuses,
+    schemaVersion: JARVIS_CONTEXT_VERSION,
+    scope: "authenticated-user",
+    context: {
+      identity,
+      ...(dailyRhythm ? { dailyRhythm } : {}),
+      activeProgress: journeysResult,
+      ...(bibleResult
+        ? {
+            bible: {
+              bookId: bibleResult.bookId,
+              bookName: bibleResult.bookName,
+              chapter: bibleResult.chapter,
+              ...(bibleResult.chapterHeading ? { chapterHeading: bibleResult.chapterHeading } : {}),
+              ...(bibleResult.openedAt ? { openedAt: bibleResult.openedAt } : {}),
+            },
+          }
+        : {}),
+      ...(devotionalResult ? { devotional: devotionalResult } : {}),
+      ...(sermonResult
+        ? {
+            sermon: {
+              sermonId: sermonResult.id,
+              title: sermonResult.title,
+              speaker: sermonResult.speaker,
+              ...(sermonResult.scriptureReference ? { scriptureReference: sermonResult.scriptureReference } : {}),
+              ...(sermonResult.sermonDate ? { sermonDate: sermonResult.sermonDate } : {}),
+            },
+          }
+        : {}),
+      sourceStatuses,
+    },
   };
 }

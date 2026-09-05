@@ -10,6 +10,7 @@
 import type { HandoffType, EmmausResourceType, ScriptureRef } from "./firestore-model.js";
 
 export const JARVIS_CONTRACT_VERSION = "jarvis.v1" as const;
+export const JARVIS_CONTEXT_VERSION = "jarvis.context.v1" as const;
 
 export type JarvisIntent =
   | "TODAY"
@@ -111,6 +112,37 @@ export interface JarvisContext {
   sourceStatuses: JarvisSourceStatus[];
 }
 
+export interface JarvisContextEnvelope {
+  schemaVersion: typeof JARVIS_CONTEXT_VERSION;
+  scope: "authenticated-user";
+  context: JarvisContext;
+}
+
+const RESOURCE_TYPE_ALIASES: Record<string, EmmausResourceType> = {
+  sermon: "sermon",
+  "sermon-companion": "sermon_companion",
+  sermon_companion: "sermon_companion",
+  devotional: "devotional",
+  walk: "walk",
+  "walk-step": "walk_step",
+  walk_step: "walk_step",
+  journey: "journey",
+  "bible-study": "bible_study",
+  bible_study: "bible_study",
+  "daily-rhythm": "daily_rhythm",
+  daily_rhythm: "daily_rhythm",
+};
+
+function canonicalResourceType(value: string): EmmausResourceType | null {
+  return RESOURCE_TYPE_ALIASES[value.trim().toLowerCase()] ?? null;
+}
+
+function isSafeInternalRoute(route: string): boolean {
+  return route.startsWith("/")
+    && !route.startsWith("//")
+    && !/[\r\n]/u.test(route);
+}
+
 export function buildJarvisResponseContract(input: {
   intent?: JarvisIntent;
   pastoralText: string;
@@ -142,37 +174,44 @@ export function buildJarvisResponseContract(input: {
   };
 }): JarvisResponseContract {
   const contentReferences = (input.metadata.recommendations ?? [])
-    .filter((recommendation) => recommendation.resourceId)
-    .map((recommendation) => ({
-      resourceType: recommendation.type as EmmausResourceType,
-      resourceId: recommendation.resourceId!,
-      ...(recommendation.parentId ? { parentId: recommendation.parentId } : {}),
-      title: recommendation.title,
-      reason: recommendation.description?.slice(0, 240) ?? "Relevant published Emmaus content.",
-    }))
+    .flatMap((recommendation) => {
+      const resourceType = canonicalResourceType(recommendation.type);
+      if (!resourceType || !recommendation.resourceId) return [];
+      return [{
+        resourceType,
+        resourceId: recommendation.resourceId,
+        ...(recommendation.parentId ? { parentId: recommendation.parentId } : {}),
+        title: recommendation.title,
+        reason: recommendation.description?.slice(0, 240) ?? "Relevant published Emmaus content.",
+      }];
+    })
     .slice(0, 8);
 
   const actions: JarvisAction[] = [
-    ...(input.metadata.capabilityActions ?? []).map((action) => ({
-      kind: action.kind,
-      targetType: "capability" as const,
-      targetId: action.capabilityId,
-      label: action.label,
-      route: action.route,
-    })),
-    ...(input.metadata.resourceActions ?? []).map((action) => ({
-      kind: action.kind,
-      targetType: "resource" as const,
-      targetId: action.resourceId,
-      label: `${action.kind === "CONTINUE" ? "Continue" : action.kind === "READ" ? "Read" : "Open"} ${action.resourceType.replace(/_/g, " ")}`,
-      route: action.route,
-      resourceType: action.resourceType,
-      ...(action.parentId ? { parentId: action.parentId } : {}),
-    })),
+    ...(input.metadata.capabilityActions ?? [])
+      .filter((action) => isSafeInternalRoute(action.route))
+      .map((action) => ({
+        kind: action.kind,
+        targetType: "capability" as const,
+        targetId: action.capabilityId,
+        label: action.label,
+        route: action.route,
+      })),
+    ...(input.metadata.resourceActions ?? [])
+      .filter((action) => isSafeInternalRoute(action.route))
+      .map((action) => ({
+        kind: action.kind,
+        targetType: "resource" as const,
+        targetId: action.resourceId,
+        label: `${action.kind === "CONTINUE" ? "Continue" : action.kind === "READ" ? "Read" : "Open"} ${action.resourceType.replace(/_/g, " ")}`,
+        route: action.route,
+        resourceType: action.resourceType,
+        ...(action.parentId ? { parentId: action.parentId } : {}),
+      })),
   ];
 
   const suggestedNextAction = actions[0]
-    ?? (input.metadata.nextStep?.path
+    ?? (input.metadata.nextStep?.path && isSafeInternalRoute(input.metadata.nextStep.path)
       ? {
           kind: "OPEN" as const,
           targetType: "scripture" as const,

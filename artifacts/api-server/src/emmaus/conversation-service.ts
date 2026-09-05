@@ -630,7 +630,7 @@ export async function handleConversation(
   if (!isVoiceRequest && userIdForJarvis !== "anonymous") {
     const jarvisContext = await assembleJarvisContext(userIdForJarvis, contextInput);
     contextInput.jarvisContext = jarvisContext;
-    contextInput.userName = jarvisContext.identity.displayName;
+    contextInput.userName = jarvisContext.context.identity.displayName;
   }
   const builtCtx = buildContext(contextInput);
   const userId = builtCtx.userId;
@@ -675,7 +675,7 @@ export async function handleConversation(
   // the system context with previously approved notes about the user.
   const tSearch = Date.now();
   const retrievalFailures: string[] = [];
-  for (const source of contextInput.jarvisContext?.sourceStatuses ?? []) {
+  for (const source of contextInput.jarvisContext?.context.sourceStatuses ?? []) {
     if (source.status === "unavailable") retrievalFailures.push(source.source);
   }
   const bibleBookId = contextInput.bibleContext?.bookId;

@@ -19,6 +19,7 @@ import {
   cleanupTestAuth,
   testUserIdFor,
 } from "../../test-utils/test-auth.ts";
+import { pool } from "@workspace/db";
 
 const BASE_URL = process.env.TEST_SERVER_URL ?? "http://localhost:8080";
 const url = new URL(BASE_URL);
@@ -86,6 +87,12 @@ async function startConversation(userId: string, message = "Help me understand p
     }
   }
   throw new Error(`No done event received.\nResponse:\n${res.body.slice(0, 500)}`);
+}
+
+async function donePayload(responseBody: string): Promise<Record<string, any>> {
+  const line = responseBody.split("\n").find((candidate) => candidate.includes('"type":"done"'));
+  assert.ok(line, `No done event received.\nResponse:\n${responseBody.slice(0, 500)}`);
+  return JSON.parse(line!.replace(/^data:\s*/, "")) as Record<string, any>;
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -235,6 +242,76 @@ describe("Emmaus authz — list conversations", () => {
       bob.every((c) => c.userId === bobId),
       "Bob should only see his own conversations"
     );
+  });
+});
+
+describe("Emmaus Jarvis foundation — typed boundary and owner scope", () => {
+  it("emits the versioned contract for a canonical Bible action", async () => {
+    const response = await request({
+      method: "POST",
+      path: "/api/emmaus/conversation",
+      userId: "jarvis-contract-owner",
+      body: {
+        message: "Read John 3:16",
+        context: { entryPoint: "personal" },
+      },
+    });
+    assert.equal(response.status, 200);
+    const payload = await donePayload(response.body);
+    const contract = (payload.metadata as Record<string, any>).jarvis;
+    assert.equal(contract.contractVersion, "jarvis.v1");
+    assert.equal(contract.intent, "BIBLE_READ");
+    assert.equal(contract.scriptureReferences[0].reference, "John 3:16");
+    assert.match(contract.suggestedNextAction.route, /^\/bible\/read\/john\/3/);
+  });
+
+  it("does not expose one member's saved Bible position to another member", async () => {
+    const ownerKey = "jarvis-position-owner";
+    const otherKey = "jarvis-position-other";
+    const ownerId = await testUserIdFor(ownerKey, "user");
+    const otherId = await testUserIdFor(otherKey, "user");
+
+    try {
+      const saved = await request({
+        method: "PATCH",
+        path: "/api/bible/data",
+        userId: ownerKey,
+        body: {
+          history: [{
+            bookId: "john",
+            bookName: "John",
+            chapter: 3,
+            chapterHeading: "The New Birth",
+            openedAt: new Date().toISOString(),
+          }],
+        },
+      });
+      assert.equal(saved.status, 200);
+
+      const ownerResponse = await request({
+        method: "POST",
+        path: "/api/emmaus/conversation",
+        userId: ownerKey,
+        body: { message: "Continue where I left off", context: { entryPoint: "personal" } },
+      });
+      const otherResponse = await request({
+        method: "POST",
+        path: "/api/emmaus/conversation",
+        userId: otherKey,
+        body: { message: "Continue where I left off", context: { entryPoint: "personal" } },
+      });
+      assert.equal(ownerResponse.status, 200);
+      assert.equal(otherResponse.status, 200);
+
+      const ownerContract = (await donePayload(ownerResponse.body)).metadata as Record<string, any>;
+      const otherContract = (await donePayload(otherResponse.body)).metadata as Record<string, any>;
+      assert.equal(ownerContract.jarvis.intent, "CONTINUE");
+      assert.match(ownerContract.jarvis.pastoralText, /John 3/i);
+      assert.doesNotMatch(otherContract.jarvis.pastoralText, /John 3/i);
+      assert.match(otherContract.jarvis.pastoralText, /saved Bible position|My Bible/i);
+    } finally {
+      await pool.query("DELETE FROM user_bible_data WHERE user_id = ANY($1::text[])", [[ownerId, otherId]]);
+    }
   });
 });
 

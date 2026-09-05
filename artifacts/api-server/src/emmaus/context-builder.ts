@@ -9,7 +9,7 @@
 
 import type { EntryPoint, EmmausMemory } from "./firestore-model.js";
 import type { VoiceContextEnvelope } from "./voice-contracts.js";
-import type { JarvisContext } from "./jarvis-contract.js";
+import type { JarvisContextEnvelope } from "./jarvis-contract.js";
 
 // ─── Input Types ──────────────────────────────────────────────────────────────
 
@@ -61,7 +61,7 @@ export interface EmmausContextInput {
   /** Server-generated envelope for Voice requests; never supplied as prose by the model. */
   voiceContextEnvelope?: VoiceContextEnvelope;
   /** Server-assembled, owner-scoped context for typed Ask Emmaus requests. */
-  jarvisContext?: JarvisContext;
+  jarvisContext?: JarvisContextEnvelope;
 }
 
 /** Flat context accepted from web clients and translated before orchestration. */
@@ -225,8 +225,10 @@ export function buildContext(input: EmmausContextInput): BuiltContext {
   }
 
   if (input.jarvisContext) {
-    const jc = input.jarvisContext;
+    const envelope = input.jarvisContext;
+    const jc = envelope.context;
     lines.push(`\n[Verified Emmaus account context — server assembled]`);
+    lines.push(`  Context schema: ${envelope.schemaVersion}; scope: ${envelope.scope}`);
     if (jc.identity.displayName) lines.push(`  Display name: ${jc.identity.displayName}`);
     if (jc.dailyRhythm) {
       lines.push(
