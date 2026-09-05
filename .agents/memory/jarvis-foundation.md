@@ -3,7 +3,7 @@ name: Jarvis foundation
 description: Typed Ask Emmaus boundary and authenticated context rules for future assistant work.
 ---
 
-The Jarvis foundation is an additive typed boundary around the existing Ask Emmaus pipeline. The server assembles authenticated, owner-scoped account context and emits a versioned response contract containing pastoral prose, validated Scripture references, published Emmaus content references, and server-owned actions. Legacy metadata remains for compatibility with existing clients.
+The Jarvis foundation is an additive typed boundary around the existing Ask Emmaus pipeline. The server assembles authenticated, owner-scoped account context inside a `jarvis.context.v1` envelope and emits a `jarvis.v1` response contract containing pastoral prose, validated Scripture references, published Emmaus content references, and server-owned actions. The contract boundary accepts only recognized resource types and safe internal routes. Legacy metadata remains for compatibility with existing clients.
 
 **Why:** Emmaus already has canonical action/resource validation and a separate Voice contract. Replacing those paths or trusting model/client routes would weaken security and risk regressions in mobile/PWA and Voice behavior.
 
