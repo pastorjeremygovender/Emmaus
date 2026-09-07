@@ -1,0 +1,38 @@
+EMMAUS READ-ONLY PORTABILITY AUDIT — EVIDENCE COLLECTION ONLY
+
+Do not change any code, database, secret, environment variable, deployment setting, DNS record, branch, commit, file, package or published application.
+
+Do not run migrations, republish, restart production, push to GitHub, create commits or modify git state.
+
+Do not reveal the value of DATABASE_URL, passwords, API keys, SESSION_SECRET, tokens or other credentials.
+
+Produce a sanitised report containing:
+
+1. Current git branch and full HEAD commit.
+2. Git status, including every modified, staged and untracked file.
+3. Every local branch and its latest commit/date.
+4. Every branch or commit not currently present on GitHub.
+5. Whether the previously created poc/android-geofence-proof branch still exists locally, including its HEAD commit.
+6. A summary of differences between this Replit workspace and GitHub branch development/next-phase, without changing either.
+7. All environment-variable NAMES required by the application, but never their values.
+8. A safe fingerprint of the database used by:
+   - the development workspace;
+   - the currently published deployment at www.emmaus.co.za.
+   For each, report only provider/product, hostname suffix or provider category, database name hash, schema/table-count fingerprint and whether they are the same database. Never print connection strings, usernames or passwords.
+9. Every place data is stored:
+   - PostgreSQL tables;
+   - local JSON files;
+   - Replit Object Storage;
+   - Firebase;
+   - browser localStorage;
+   - uploaded audio, images, PDFs or other media.
+10. The exact authentication system used by the published app.
+11. Every Replit-specific runtime dependency, connector, proxy route or storage service.
+12. Current deployment build command, start command, health check and domain attachment.
+13. Existing database/file backup procedures and dates of the latest verified backups.
+14. A list headed CRITICAL PORTABILITY RISKS.
+15. A list headed SAFE ITEMS TO COPY FIRST.
+
+This investigation is strictly read-only. If any requested fact cannot be obtained without changing something or exposing a credential, mark it UNVERIFIED and explain why.
+
+Return the complete report in one response.
