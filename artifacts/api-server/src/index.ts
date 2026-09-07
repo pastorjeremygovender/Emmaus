@@ -6,6 +6,8 @@ process.on("unhandledRejection", (reason) => {
   console.error("UNHANDLED:", reason);
 });
 
+let startupLogger: typeof import("./lib/logger.js").logger | undefined;
+
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
@@ -39,6 +41,7 @@ async function startServer(): Promise<void> {
     import("./lib/startup-readiness.js"),
   ]);
 
+  startupLogger = logger;
   const publicOrigin = getCanonicalPublicOrigin();
   const server = app.listen(port, "0.0.0.0", () => {
     logger.info({ port, publicOrigin }, "Server listening; startup checks beginning");
@@ -72,7 +75,11 @@ async function startServer(): Promise<void> {
 }
 
 void startServer().catch((err) => {
-  logger.fatal({ err }, "Secure authentication startup failed");
+  if (startupLogger) {
+    startupLogger.fatal({ err }, "Secure authentication startup failed");
+  } else {
+    console.error("STARTUP FAILURE:", err);
+  }
   process.exit(1);
 });
 
@@ -83,8 +90,8 @@ void startServer().catch((err) => {
  * Calculates the delay to the next 2am, then repeats every 24 hours.
  */
 function scheduleNightlySignalsEngine(
-  runSignalsEngine: () => Promise<unknown>,
-  logEngineRun: (result: never, trigger: string) => Promise<unknown>,
+  runSignalsEngine: typeof import("./lib/pastoral-store.js").runSignalsEngine,
+  logEngineRun: typeof import("./lib/pastoral-store.js").logEngineRun,
 ): void {
   const now = new Date();
   const next2am = new Date(
@@ -99,7 +106,7 @@ function scheduleNightlySignalsEngine(
   }
   const msUntilFirst = next2am.getTime() - now.getTime();
 
-  logger.info(
+  startupLogger?.info(
     { nextRunAt: next2am.toISOString(), msUntilFirst },
     "Signals engine: nightly run scheduled",
   );
@@ -114,14 +121,14 @@ function scheduleNightlySignalsEngine(
 }
 
 async function runNightlySignalsEngine(
-  runSignalsEngine: () => Promise<unknown>,
-  logEngineRun: (result: never, trigger: string) => Promise<unknown>,
+  runSignalsEngine: typeof import("./lib/pastoral-store.js").runSignalsEngine,
+  logEngineRun: typeof import("./lib/pastoral-store.js").logEngineRun,
 ): Promise<void> {
   const { logger } = await import("./lib/logger.js");
   logger.info("Signals engine: nightly run starting");
   try {
     const result = await runSignalsEngine();
-    await logEngineRun(result as never, "scheduler");
+    await logEngineRun(result, "scheduler");
     logger.info(result, "Signals engine: nightly run complete");
   } catch (err) {
     logger.error({ err }, "Signals engine: nightly run failed");
