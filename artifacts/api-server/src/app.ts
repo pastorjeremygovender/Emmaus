@@ -13,7 +13,7 @@ import { recoverInterruptedSharedEmmausRequests } from "./lib/room-store.js";
 import { authMiddleware } from "./middlewares/authMiddleware.js";
 import { protectCookieAuthenticatedMutation } from "./middlewares/originProtection.js";
 import { isCanonicalRequestOrigin } from "./lib/public-origin.js";
-import { runDailyRhythmProductionCorrection } from "./lib/daily-rhythm-production-correction.js";
+import { isApplicationReady } from "./lib/startup-readiness.js";
 
 const app: Express = express();
 
@@ -53,6 +53,16 @@ app.use(cookieParser());
 // The voice/transcribe route enforces a tighter per-request guard inside the handler.
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use("/api", (req, res, next) => {
+  if (req.path === "/" || req.path === "/healthz" || isApplicationReady()) {
+    next();
+    return;
+  }
+  res.status(503).json({
+    error: "Emmaus is starting. Please try again shortly.",
+    code: "APPLICATION_STARTING",
+  });
+});
 app.use(authMiddleware);
 app.use(protectCookieAuthenticatedMutation);
 

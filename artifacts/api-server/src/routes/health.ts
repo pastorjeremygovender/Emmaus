@@ -5,6 +5,7 @@ import {
   type Response,
 } from "express";
 import { HealthCheckResponse } from "@workspace/api-zod";
+import { isApplicationReady } from "../lib/startup-readiness.js";
 
 const router: IRouter = Router();
 
@@ -17,6 +18,12 @@ function sendHealthResponse(_req: Request, res: Response): void {
 // Keep the explicit health endpoint as well, but make the preview path a
 // successful liveness response so publishing can promote the API process.
 router.get("/", sendHealthResponse);
-router.get("/healthz", sendHealthResponse);
+router.get("/healthz", (_req, res) => {
+  if (!isApplicationReady()) {
+    res.status(503).json({ status: "starting" });
+    return;
+  }
+  sendHealthResponse(_req, res);
+});
 
 export default router;

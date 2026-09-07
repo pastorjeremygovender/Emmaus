@@ -6,13 +6,6 @@ process.on("unhandledRejection", (reason) => {
   console.error("UNHANDLED:", reason);
 });
 
-import app, { startBackgroundInitialization } from "./app";
-import { logger } from "./lib/logger";
-import { runSignalsEngine, logEngineRun } from "./lib/pastoral-store.js";
-import { ensureAuthSchema } from "./lib/ensure-auth-schema.js";
-import { getCanonicalPublicOrigin } from "./lib/public-origin.js";
-import { runDailyRhythmProductionCorrection } from "./lib/daily-rhythm-production-correction.js";
-
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
@@ -28,7 +21,34 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 async function startServer(): Promise<void> {
+  const [
+    { default: app, startBackgroundInitialization },
+    { logger },
+    { runSignalsEngine, logEngineRun },
+    { ensureAuthSchema },
+    { getCanonicalPublicOrigin },
+    { runDailyRhythmProductionCorrection },
+    { markApplicationReady },
+  ] = await Promise.all([
+    import("./app.js"),
+    import("./lib/logger.js"),
+    import("./lib/pastoral-store.js"),
+    import("./lib/ensure-auth-schema.js"),
+    import("./lib/public-origin.js"),
+    import("./lib/daily-rhythm-production-correction.js"),
+    import("./lib/startup-readiness.js"),
+  ]);
+
   const publicOrigin = getCanonicalPublicOrigin();
+  const server = app.listen(port, "0.0.0.0", () => {
+    logger.info({ port, publicOrigin }, "Server listening; startup checks beginning");
+  });
+
+  server.on("error", (err) => {
+    logger.error({ err }, "Error listening on port");
+    process.exit(1);
+  });
+
   const authSchemaStartedAt = Date.now();
   logger.info("Startup phase beginning: ensure authentication schema");
   await ensureAuthSchema();
@@ -45,16 +65,10 @@ async function startServer(): Promise<void> {
     "Startup phase complete: Daily Rhythm production correction",
   );
 
-  const server = app.listen(port, () => {
-    logger.info({ port, publicOrigin }, "Server listening");
-    scheduleNightlySignalsEngine();
-    startBackgroundInitialization();
-  });
-
-  server.on("error", (err) => {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  });
+  markApplicationReady();
+  logger.info("Startup checks complete; application ready");
+  scheduleNightlySignalsEngine(runSignalsEngine, logEngineRun);
+  startBackgroundInitialization();
 }
 
 void startServer().catch((err) => {
@@ -68,7 +82,10 @@ void startServer().catch((err) => {
  * Schedules the signals engine to run every day at 02:00 local server time.
  * Calculates the delay to the next 2am, then repeats every 24 hours.
  */
-function scheduleNightlySignalsEngine(): void {
+function scheduleNightlySignalsEngine(
+  runSignalsEngine: () => Promise<unknown>,
+  logEngineRun: (result: never, trigger: string) => Promise<unknown>,
+): void {
   const now = new Date();
   const next2am = new Date(
     now.getFullYear(),
@@ -88,17 +105,23 @@ function scheduleNightlySignalsEngine(): void {
   );
 
   setTimeout(() => {
-    void runNightlySignalsEngine();
+    void runNightlySignalsEngine(runSignalsEngine, logEngineRun);
     // Repeat every 24 hours thereafter
-    setInterval(() => { void runNightlySignalsEngine(); }, 24 * 60 * 60 * 1000);
+    setInterval(() => {
+      void runNightlySignalsEngine(runSignalsEngine, logEngineRun);
+    }, 24 * 60 * 60 * 1000);
   }, msUntilFirst);
 }
 
-async function runNightlySignalsEngine(): Promise<void> {
+async function runNightlySignalsEngine(
+  runSignalsEngine: () => Promise<unknown>,
+  logEngineRun: (result: never, trigger: string) => Promise<unknown>,
+): Promise<void> {
+  const { logger } = await import("./lib/logger.js");
   logger.info("Signals engine: nightly run starting");
   try {
     const result = await runSignalsEngine();
-    await logEngineRun(result, "scheduler");
+    await logEngineRun(result as never, "scheduler");
     logger.info(result, "Signals engine: nightly run complete");
   } catch (err) {
     logger.error({ err }, "Signals engine: nightly run failed");
