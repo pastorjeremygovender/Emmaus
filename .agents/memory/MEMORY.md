@@ -89,3 +89,4 @@
 - [Pastoral briefing rules](pastoral-briefing-rules.md) — Today uses a separate church-scoped, read-only evaluation policy; it must not create persisted pastoral side effects.
 - [Pastoral dashboard error boundaries](pastoral-dashboard-error-boundaries.md) — distinguish valid empty pastoral data from failed aggregates and preserve healthy sections.
 - [Member Personal Details](member-personal-details.md) — self-service profile fields stay on the auth-subject profile row and sync directly to Church Register.
+- [API artifact health path](api-artifact-health-path.md) — Replit promotion probes the API artifact preview path as well as the explicit health endpoint.
