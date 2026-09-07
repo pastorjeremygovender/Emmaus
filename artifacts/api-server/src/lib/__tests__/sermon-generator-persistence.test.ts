@@ -11,6 +11,13 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
+const companionStorePath = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "sermon-companion-store.ts",
+);
+const companionStoreSource = readFileSync(companionStorePath, "utf8");
+
 const sourcePath = join(
   dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -19,6 +26,14 @@ const sourcePath = join(
 const source = readFileSync(sourcePath, "utf8");
 
 describe("audio-first companion persistence", () => {
+  it("casts the legacy text sermon_id comparison as text", () => {
+    assert.match(
+      companionStoreSource,
+      /WHERE sermon_uuid = \$1::uuid OR sermon_id = \$1::text/,
+      "the UUID parameter must be explicitly cast to text for the legacy sermon_id column",
+    );
+  });
+
   it("does not signal READY_FOR_REVIEW before the companion replacement is committed", () => {
     const audioFirstStart = source.indexOf(
       "export async function generateSermonContentFromTranscript",

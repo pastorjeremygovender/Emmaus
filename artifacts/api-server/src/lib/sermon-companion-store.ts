@@ -225,7 +225,7 @@ export async function replaceCompanionForSermon(data: {
     const oldRes = await client.query<{ id: string }>(
       `SELECT id::text
          FROM sermon_companion
-        WHERE sermon_uuid = $1::uuid OR sermon_id = $1
+        WHERE sermon_uuid = $1::uuid OR sermon_id = $1::text
         ORDER BY created_at DESC
         LIMIT 1
         FOR UPDATE`,
