@@ -23,6 +23,35 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 async function startServer(): Promise<void> {
+  const { createServer } = await import("node:http");
+  const server = createServer((req, res) => {
+    const path = req.url?.split("?")[0];
+    if (path === "/api" || path === "/api/healthz") {
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ status: "ok" }));
+      return;
+    }
+    res.statusCode = 503;
+    res.setHeader("content-type", "application/json");
+    res.end(
+      JSON.stringify({
+        error: "Emmaus is starting. Please try again shortly.",
+        code: "APPLICATION_STARTING",
+      }),
+    );
+  });
+
+  server.on("error", (err) => {
+    console.error("LISTENER ERROR:", err);
+    process.exit(1);
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, "0.0.0.0", resolve);
+  });
+
   const [
     { default: app, startBackgroundInitialization },
     { logger },
@@ -43,14 +72,9 @@ async function startServer(): Promise<void> {
 
   startupLogger = logger;
   const publicOrigin = getCanonicalPublicOrigin();
-  const server = app.listen(port, "0.0.0.0", () => {
-    logger.info({ port, publicOrigin }, "Server listening; startup checks beginning");
-  });
-
-  server.on("error", (err) => {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  });
+  server.removeAllListeners("request");
+  server.on("request", app);
+  logger.info({ port, publicOrigin }, "Server listening; startup checks beginning");
 
   const authSchemaStartedAt = Date.now();
   logger.info("Startup phase beginning: ensure authentication schema");
