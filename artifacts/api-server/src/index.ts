@@ -1,3 +1,11 @@
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT:", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("UNHANDLED:", reason);
+});
+
 import app, { startBackgroundInitialization } from "./app";
 import { logger } from "./lib/logger";
 import { runSignalsEngine, logEngineRun } from "./lib/pastoral-store.js";
