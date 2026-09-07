@@ -7,6 +7,10 @@ process.on("unhandledRejection", (reason) => {
 });
 
 let startupLogger: typeof import("./lib/logger.js").logger | undefined;
+let bootstrapReady = false;
+let applicationHandler:
+  | ((req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) => void)
+  | undefined;
 
 const rawPort = process.env["PORT"];
 
@@ -26,10 +30,19 @@ async function startServer(): Promise<void> {
   const { createServer } = await import("node:http");
   const server = createServer((req, res) => {
     const path = req.url?.split("?")[0];
-    if (path === "/api" || path === "/api/healthz") {
+    if (
+      path === "/" ||
+      path === "/healthz" ||
+      path === "/api" ||
+      path === "/api/healthz"
+    ) {
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ status: "ok" }));
+      res.end(JSON.stringify({ status: "ok", ready: bootstrapReady }));
+      return;
+    }
+    if (applicationHandler) {
+      applicationHandler(req, res);
       return;
     }
     res.statusCode = 503;
@@ -72,8 +85,7 @@ async function startServer(): Promise<void> {
 
   startupLogger = logger;
   const publicOrigin = getCanonicalPublicOrigin();
-  server.removeAllListeners("request");
-  server.on("request", app);
+  applicationHandler = app;
   logger.info({ port, publicOrigin }, "Server listening; startup checks beginning");
 
   const authSchemaStartedAt = Date.now();
@@ -93,6 +105,7 @@ async function startServer(): Promise<void> {
   );
 
   markApplicationReady();
+  bootstrapReady = true;
   logger.info("Startup checks complete; application ready");
   scheduleNightlySignalsEngine(runSignalsEngine, logEngineRun);
   startBackgroundInitialization();

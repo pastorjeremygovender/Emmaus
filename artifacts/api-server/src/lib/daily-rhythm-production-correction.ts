@@ -145,6 +145,15 @@ function verifiedSeedStep(): VerifiedStep {
   throw new Error("Verified Daily Rhythm Day 8 snapshot is unavailable");
 }
 
+export function hasVerifiedDay8Snapshot(): boolean {
+  try {
+    verifiedSeedStep();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function assertVerifiedDay8Content(row: DbRow): void {
   const expected = verifiedSeedStep();
 
@@ -283,6 +292,14 @@ export async function runDailyRhythmProductionCorrection(): Promise<void> {
     logger.info(
       { migration: MIGRATION_NAME },
       "Daily Rhythm production correction skipped outside production",
+    );
+    return;
+  }
+
+  if (!hasVerifiedDay8Snapshot()) {
+    logger.warn(
+      { migration: MIGRATION_NAME },
+      "Daily Rhythm production correction skipped: verified Day 8 snapshot is unavailable",
     );
     return;
   }
