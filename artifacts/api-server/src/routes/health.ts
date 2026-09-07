@@ -19,11 +19,13 @@ function sendHealthResponse(_req: Request, res: Response): void {
 // successful liveness response so publishing can promote the API process.
 router.get("/", sendHealthResponse);
 router.get("/healthz", (_req, res) => {
-  if (!isApplicationReady()) {
-    res.status(503).json({ status: "starting" });
-    return;
-  }
-  sendHealthResponse(_req, res);
+  // This endpoint is the deployment liveness probe. It must stay successful
+  // while the process completes its database startup work; application routes
+  // remain gated separately in app.ts until readiness is true.
+  res.json({
+    status: "ok",
+    ready: isApplicationReady(),
+  });
 });
 
 export default router;
