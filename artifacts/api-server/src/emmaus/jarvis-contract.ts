@@ -87,6 +87,12 @@ export interface JarvisContext {
     stepTitle?: string;
     route: string;
   }>;
+  completedProgress: Array<{
+    journeyId: string;
+    journeyType: "walk" | "journey";
+    title: string;
+    route: string;
+  }>;
   bible?: {
     bookId: string;
     bookName: string;
