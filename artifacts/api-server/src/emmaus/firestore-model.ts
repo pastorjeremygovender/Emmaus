@@ -16,6 +16,7 @@
  */
 
 import type { JarvisIntent, JarvisResponseContract } from "./jarvis-contract.js";
+import { PostgresConversationStore } from "./postgres-conversation-store.js";
 
 // ─── Firestore Collection Paths ───────────────────────────────────────────────
 
@@ -360,9 +361,12 @@ let _store: ConversationStore | null = null;
 
 export function getConversationStore(): ConversationStore {
   if (!_store) {
-    // Future: initialise FirestoreConversationStore when FIREBASE_PROJECT_ID is set
-    // For now, always use in-memory store.
-    _store = new InMemoryConversationStore();
+    // Unit tests stay isolated and deterministic. Runtime conversations use
+    // Emmaus's existing PostgreSQL database so context survives restarts and
+    // remains consistent across multiple API instances.
+    _store = process.env.NODE_ENV === "test"
+      ? new InMemoryConversationStore()
+      : new PostgresConversationStore();
   }
   return _store;
 }
