@@ -14,3 +14,17 @@ mtime_ms = 1787928383166
 storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:56d2210c-938e-4468-a6aa-b25d01eaaa3b/cadba9e0-4ac3-4ae0-9c90-398525ae3afa/ea3930e2-598d-4f21-8384-68426d6bc86f"
 storage_version_token = "1787928875811805"
 content_type = "image/jpeg"
+
+[[outputs]]
+id = "EJh1FrkU09zGJbYiY3620"
+uri = "file://attached_assets/Emmaus-Phase1-Test.apk"
+type = "unspecified"
+title = "Download Emmaus Phase 1 Test APK"
+description = "Direct download copy of the existing Emmaus Phase 1 debug APK. SHA-256: 5361e960cae65296d522231cbe8de08b8c2b3918f5e037ef27dbbcc3beb1a79b"
+logical_id = "b323d86d-e0e9-4989-84c7-d258bed28ca5"
+content_hash = "sha256:5361e960cae65296d522231cbe8de08b8c2b3918f5e037ef27dbbcc3beb1a79b"
+size = 7510956
+mtime_ms = 1788869756254
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:56d2210c-938e-4468-a6aa-b25d01eaaa3b/b323d86d-e0e9-4989-84c7-d258bed28ca5/d659794c-8955-4398-ab8f-5842af0e60a1"
+storage_version_token = "1788869766611055"
+content_type = "application/octet-stream"
