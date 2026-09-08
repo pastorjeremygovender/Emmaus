@@ -746,6 +746,91 @@ async function resolveSermonSearch(message: string): Promise<EmmausResponseMetad
   return metadata;
 }
 
+function safeStoredRoute(route: string): boolean {
+  return route.startsWith("/") && !route.startsWith("//") && !/[\r\n]/u.test(route);
+}
+
+/**
+ * Resolve short follow-up commands from the previous server-validated assistant
+ * action. Model prose and legacy nextStep paths are deliberately ignored.
+ */
+export async function resolveContextualFollowUp(
+  message: string,
+  previousMetadata?: EmmausResponseMetadata,
+): Promise<EmmausResponseMetadata | null> {
+  if (!previousMetadata) return null;
+  const value = message.toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, " ").trim();
+
+  if (/^(?:read|open|show me)\s+(?:the\s+)?next chapter[.!?]*$/.test(value)) {
+    const previous = previousMetadata.scriptureReferences?.[0] ?? previousMetadata.scripture;
+    if (!previous) return null;
+    return resolveBibleRead({
+      intent: "BIBLE_READ",
+      requestedCapability: "my-bible",
+      requestedOperation: value.startsWith("open") ? "OPEN" : "READ",
+      bibleReference: {
+        bookId: previous.book,
+        bookName: canonicalBibleBookName(previous.book),
+        chapter: previous.chapter + 1,
+      },
+      confidence: 0.99,
+      clarificationRequired: false,
+    });
+  }
+
+  const followUp = value.match(/^(open|continue|resume|read|show me|take me there|go there)(?:\s+(?:it|that|this|there))?[.!?]*$/);
+  if (!followUp) return null;
+  const requestedKind = /continue|resume/.test(followUp[1])
+    ? "CONTINUE"
+    : /read|show me/.test(followUp[1])
+      ? "READ"
+      : "OPEN";
+
+  const resourceActions = (previousMetadata.resourceActions ?? [])
+    .filter((action) => safeStoredRoute(action.route));
+  const resourceAction = resourceActions.find((action) => action.kind === requestedKind)
+    ?? resourceActions[0];
+  if (resourceAction) {
+    const metadata = emptyMetadata();
+    const recommendation = (previousMetadata.recommendations ?? []).find((item) =>
+      item.resourceId === resourceAction.resourceId
+      && (!resourceAction.parentId || item.parentId === resourceAction.parentId),
+    );
+    const title = recommendation?.title ?? "that Emmaus resource";
+    metadata.answer = `I can ${requestedKind === "CONTINUE" ? "continue" : requestedKind === "READ" ? "read" : "open"} “${title}”.`;
+    metadata.recommendations = recommendation ? [recommendation] : [];
+    metadata.resourceRecommendations = (previousMetadata.resourceRecommendations ?? []).filter((item) =>
+      item.resourceId === resourceAction.resourceId
+      && (!resourceAction.parentId || item.parentId === resourceAction.parentId),
+    );
+    metadata.resourceActions = [resourceAction];
+    metadata.nextStep = {
+      action: `${requestedKind === "CONTINUE" ? "Continue" : requestedKind === "READ" ? "Read" : "Open"} ${title}.`,
+      primaryButtonText: requestedKind === "CONTINUE" ? "Continue" : requestedKind === "READ" ? "Read" : "Open",
+      path: resourceAction.route,
+    };
+    return metadata;
+  }
+
+  const capabilityActions = (previousMetadata.capabilityActions ?? [])
+    .filter((action) => safeStoredRoute(action.route));
+  const capabilityAction = capabilityActions.find((action) => action.kind === requestedKind)
+    ?? capabilityActions[0];
+  if (capabilityAction) {
+    const metadata = emptyMetadata();
+    metadata.answer = `I can ${requestedKind === "CONTINUE" ? "continue" : requestedKind === "READ" ? "read" : "open"} that part of Emmaus.`;
+    metadata.capabilityActions = [capabilityAction];
+    metadata.nextStep = {
+      action: capabilityAction.label,
+      primaryButtonText: capabilityAction.label,
+      path: capabilityAction.route,
+    };
+    return metadata;
+  }
+
+  return null;
+}
+
 export function canonicalFailureMetadata(routed: TypedAskEmmausIntent): EmmausResponseMetadata {
   const metadata = emptyMetadata();
   const source = routed.requestedCapability ?? (
@@ -762,7 +847,10 @@ export function canonicalFailureMetadata(routed: TypedAskEmmausIntent): EmmausRe
 export async function resolveCanonicalAskRequest(
   message: string,
   userId: string,
+  previousMetadata?: EmmausResponseMetadata,
 ): Promise<CanonicalToolResolution> {
+  const contextual = await resolveContextualFollowUp(message, previousMetadata);
+  if (contextual) return { handled: true, metadata: contextual };
   const routed = routeAskEmmausRequest(message);
   try {
     switch (routed.intent) {
