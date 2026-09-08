@@ -24,6 +24,7 @@
  */
 
 import type { Response } from "express";
+import { pool } from "@workspace/db";
 import { buildSystemPrompt, PROMPT_VERSION } from "./system-instructions.js";
 import { buildContext, type EmmausContextInput } from "./context-builder.js";
 import { isOwner } from "./auth.js";
@@ -32,15 +33,38 @@ import { createLLMProvider, type LLMMessage } from "./llm-provider.js";
 import {
   getConversationStore,
   type EmmausResponseMetadata,
+  type EmmausResourceType as ContractResourceType,
   type NextStepItem,
   type EntryPoint,
+  type EmmausMemory,
 } from "./firestore-model.js";
 import {
   retrieveSermon,
+  retrieveSermons,
   type SermonRetrievalResult,
 } from "./sermon-retrieval.js";
 import { searchBibleVerses, type BiblePassage } from "../lib/bible-verse-search.js";
+import { getRoomsForUser, type RoomSummary } from "../lib/room-store.js";
+import { buildEmmausResourceCatalogue, type EmmausResourceType as CatalogueResourceType } from "./resource-catalogue.js";
+import { getJourney, getProgress } from "../lib/journey-store.js";
+import { getPublishedSermonById } from "../lib/canonical-sermon-store.js";
+import { actionsForResource } from "./action-registry.js";
 import { logger } from "../lib/logger.js";
+import {
+  buildScriptureRoute,
+  canonicalBibleBookName,
+  extractValidatedScriptureReferences,
+  normalizeBibleBook,
+  validateCitations,
+  validateModelResponse,
+} from "./citation-validation.js";
+import { checkSafetyKeywordsOnly } from "./safety-layer.js";
+import { resolveCanonicalAskRequest } from "./canonical-tools.js";
+import { promptIntentMode, routeAskEmmausRequest } from "./intent-router.js";
+import { normalizeEmmausResponse } from "./response-normalization.js";
+import { createTypedStreamConsumer } from "./typed-stream-normalizer.js";
+import { assembleJarvisContext } from "./context-assembler.js";
+import type { JarvisIntent } from "./jarvis-contract.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,9 +72,125 @@ export interface ConversationRequest {
   message: string;
   context?: EmmausContextInput;
   history?: Array<{ role: "user" | "assistant"; content: string }>;
+  /** Set by the HTTP route after verified auth; not accepted from clients. */
+  authMs?: number;
+}
+
+const RESOURCE_TYPE_TO_CONTRACT: Record<CatalogueResourceType, ContractResourceType> = {
+  journey: "journey",
+  walk: "walk",
+  walk_step: "walk_step",
+  "bible-study": "bible_study",
+  devotional: "devotional",
+  "sermon-companion": "sermon_companion",
+  sermon: "sermon",
+  "daily-rhythm": "daily_rhythm",
+};
+
+function jarvisIntentForRoute(
+  routed: ReturnType<typeof routeAskEmmausRequest>,
+): JarvisIntent {
+  if (routed.intent === "BIBLE_READ") return "BIBLE_READ";
+  if (routed.intent === "BIBLE_CONTINUE") return "CONTINUE";
+  if (routed.intent === "RESOURCE_SEARCH" && routed.requestedCapability === "sermons") return "SERMON_SEARCH";
+  if (routed.intent === "APP_HELP") return "APP_HELP";
+  if (routed.intent === "DIRECT_ACTION" && routed.requestedCapability === "todays-steps") return "TODAY";
+  if (routed.intent === "DIRECT_ACTION" && routed.requestedCapability === "daily-rhythm") return "DAILY_RHYTHM";
+  if (routed.intent === "DIRECT_ACTION" && routed.requestedCapability === "daily-devotional") return "DAILY_DEVOTIONAL";
+  if (routed.intent === "DIRECT_ACTION") return "CONTINUE";
+  return "ASK";
 }
 
 export type SseEventType = "text" | "done" | "error";
+
+async function getTrustedDisplayName(userId: string): Promise<string | undefined> {
+  if (!userId || userId === "anonymous") return undefined;
+  try {
+    const result = await pool.query<{ preferred_name: string | null; app_role: string | null }>(
+      `SELECT preferred_name, app_role FROM user_profiles
+       WHERE auth_subject = $1 OR email = $1
+       ORDER BY CASE WHEN auth_subject = $1 THEN 0 ELSE 1 END
+       LIMIT 1`,
+      [userId],
+    );
+    const profile = result.rows[0];
+    const preferred = profile?.preferred_name?.trim();
+    if (profile?.app_role === "admin" || profile?.app_role === "superAdmin") {
+      // ICC's administrator account is addressed by the ministry name, not the
+      // account's legal/display identity.
+      return preferred && !/^(pastor govender|jeremy govender|the pastor|the user)$/i.test(preferred)
+        ? preferred
+        : "Pastor Jeremy";
+    }
+    return preferred || undefined;
+  } catch (err) {
+    logger.warn({ err: String(err) }, "emmaus: trusted display name unavailable");
+    return undefined;
+  }
+}
+
+/**
+ * Client context identifies where the member opened Ask Emmaus, but it is not
+ * an authority for titles, speakers, Scripture names, or progress. Rebuild
+ * those fields from authenticated server data before placing context in the
+ * model prompt. Voice uses a separately authenticated envelope and bypasses
+ * this adapter.
+ */
+async function reconstructTrustedContext(
+  input: EmmausContextInput,
+  userId: string,
+): Promise<EmmausContextInput> {
+  if (input.voiceContextEnvelope) return input;
+
+  const trusted: EmmausContextInput = {
+    entryPoint: input.entryPoint,
+    userId,
+    conversationId: input.conversationId,
+  };
+
+  if (input.bibleContext) {
+    const bookId = normalizeBibleBook(input.bibleContext.bookId || input.bibleContext.bookName);
+    const chapter = Number(input.bibleContext.chapter);
+    if (bookId && buildScriptureRoute({ book: bookId, chapter })) {
+      trusted.bibleContext = {
+        bookId,
+        bookName: canonicalBibleBookName(bookId),
+        chapter,
+      };
+    }
+  }
+
+  try {
+    if (input.journeyContext?.journeyId) {
+      const journey = await getJourney(input.journeyContext.journeyId);
+      if (journey?.status === "Published") {
+        const progress = await getProgress(userId, journey.id);
+        trusted.journeyContext = {
+          journeyId: journey.id,
+          journeyTitle: journey.title,
+          currentDay: progress?.currentDay ?? 1,
+        };
+      }
+    }
+
+    if (input.sermonContext?.sermonId) {
+      const sermon = await getPublishedSermonById(input.sermonContext.sermonId);
+      if (sermon?.status === "Published") {
+        trusted.sermonContext = {
+          sermonId: sermon.id,
+          sermonTitle: sermon.title,
+          speaker: sermon.speaker,
+          scriptureReference: sermon.scriptureReference,
+          sermonDate: sermon.sermonDate,
+        };
+      }
+    }
+  } catch (err) {
+    logger.warn({ err: String(err) }, "emmaus: optional client context could not be verified");
+  }
+
+  return trusted;
+}
 
 export interface SseDonePayload {
   conversationId: string;
@@ -203,9 +343,9 @@ function routeSettings(route: Route) {
       | "medium"
       | "high",
     // EMMAUS_FAST_MODEL overrides the provider default for fast-path requests.
-    // Allows routing quick questions to a low-latency model (e.g. gpt-4o)
-    // while keeping a stronger model for deep-path reasoning.
-    model: process.env.EMMAUS_FAST_MODEL,
+      // Use a low-latency default for ordinary questions while keeping the
+      // configured provider model available for the deep path.
+      model: process.env.EMMAUS_FAST_MODEL ?? "gpt-4o-mini",
   };
 }
 
@@ -222,7 +362,12 @@ function extractMeta(fullText: string): {
   const closeIdx = fullText.indexOf(META_CLOSE);
 
   if (openIdx === -1 || closeIdx === -1) {
-    return { cleanText: fullText.trim(), metadata: null };
+    // A malformed metadata block must never leak its control tags or JSON
+    // into the member-facing answer.
+    return {
+      cleanText: (openIdx >= 0 ? fullText.slice(0, openIdx) : fullText).trim(),
+      metadata: null,
+    };
   }
 
   const cleanText = fullText.substring(0, openIdx).trim();
@@ -236,6 +381,50 @@ function extractMeta(fullText: string): {
   } catch {
     return { cleanText, metadata: null };
   }
+}
+
+/**
+ * Sermon prose is only trusted when retrieval supplied a verified sermon.
+ * The model prompt asks it not to invent sermon connections, but the final
+ * response still needs a transport-level guard because model compliance is
+ * not an authorization boundary.
+ */
+function stripUnverifiedSermonMentions(text: string): string {
+  return text
+    .split(/(?<=[.!?])\s+/u)
+    .filter((sentence) => !/\b(?:sermon|preach(?:ed|es|ing)?|preacher)\b/i.test(sentence))
+    .join(" ");
+}
+
+/**
+ * Apply the transport-level redactions that are safe to perform while the
+ * model is still generating. The final answer is sanitised again after the
+ * metadata block has been parsed.
+ */
+function sanitizeStreamingText(text: string): string {
+  return text
+    .replace(/<EMMAUS_META[\s\S]*$/gi, "")
+    .replace(/<\/?EMMAUS_META>/gi, "")
+    .replace(/https?:\/\/[^\s)\]}"']+/gi, "")
+    .replace(/(?:^|\s)\/(?:api\/)?(?:bible|journeys?|journey|devotional|sermon(?:-companion)?|rooms?|admin)[^\s)\]}"']*/gi, " ");
+}
+
+/**
+ * Return the portion of a rolling model buffer that cannot be part of a split
+ * metadata tag or an unfinished URL/app route. This lets the visible stream
+ * start earlier without weakening the final redaction pass.
+ */
+function safeStreamingLength(text: string): number {
+  let safeLength = Math.max(0, text.length - (META_OPEN.length - 1));
+  const unsafeStartPattern =
+    /https?:\/\/|(?:^|\s)\/(?:api\/)?(?:bible|journeys?|journey|devotional|sermon(?:-companion)?|rooms?|admin)/gi;
+
+  for (const match of text.matchAll(unsafeStartPattern)) {
+    const start = match.index ?? 0;
+    if (start < safeLength) safeLength = start;
+  }
+
+  return safeLength;
 }
 
 function defaultMetadata(): EmmausResponseMetadata {
@@ -253,13 +442,129 @@ function defaultMetadata(): EmmausResponseMetadata {
   };
 }
 
+function isLockedDailyRhythmRecommendation(item: { type?: string; title?: string; path?: string }): boolean {
+  const title = String(item.title ?? "").toLowerCase();
+  const path = String(item.path ?? "").toLowerCase();
+  return title === "10 minutes with jesus"
+    || path.includes("/15-minutes-with-jesus");
+}
+
 // ─── SSE Helpers ──────────────────────────────────────────────────────────────
 
 function sseWrite(res: Response, type: SseEventType, payload: unknown) {
   res.write(
     `data: ${JSON.stringify({ type, ...((payload as object) ?? {}) })}\n\n`
   );
+  // Flush immediately when compression/proxy middleware exposes a flush
+  // method. Without this, several SSE events can be buffered into one batch.
+  (res as Response & { flush?: () => void }).flush?.();
 }
+
+/**
+ * Complete a request resolved by a server-owned canonical tool.
+ *
+ * Canonical responses deliberately use the same persistence and SSE boundary as
+ * model responses. The client therefore has one contract, while clear
+ * navigation/read requests do not incur broad retrieval or model drift.
+ */
+async function completeCanonicalResponse(
+  req: ConversationRequest,
+  res: Response,
+  store: ReturnType<typeof getConversationStore>,
+  builtCtx: ReturnType<typeof buildContext>,
+  contextInput: EmmausContextInput,
+  metadata: EmmausResponseMetadata,
+  pipelineTimings?: EmmausResponseMetadata["pipelineTimings"],
+  pipelineStartMs?: number,
+  requestId?: string,
+): Promise<void> {
+  const userId = builtCtx.userId;
+  const requestedIntent = { mode: promptIntentMode(routeAskEmmausRequest(req.message)) };
+  let conversationId = contextInput.conversationId;
+
+  if (!conversationId) {
+    const conversation = await store.createConversation({
+      userId,
+      title: builtCtx.conversationTitle,
+      entryPoint: builtCtx.entryPoint,
+    });
+    conversationId = conversation.id;
+  } else {
+    const existing = await store.getConversation(conversationId);
+    if (!existing) {
+      sseWrite(res, "error", { message: "Conversation not found." });
+      res.end();
+      return;
+    }
+    if (!isOwner(userId, existing.userId)) {
+      sseWrite(res, "error", { message: "Forbidden." });
+      res.end();
+      return;
+    }
+  }
+
+  await store.addMessage({
+    conversationId,
+    userId,
+    role: "user",
+    content: req.message,
+    promptVersion: PROMPT_VERSION,
+    entryPoint: builtCtx.entryPoint,
+    safetyChecked: true,
+    resourceInteractions: [],
+  });
+
+  const finalMeta: EmmausResponseMetadata = {
+    ...metadata,
+    requestedIntent: requestedIntent.mode,
+    jarvisIntent: jarvisIntentForRoute(routeAskEmmausRequest(req.message)),
+    ...(requestId ? { requestId } : {}),
+    scriptureReferences: metadata.scriptureReferences ?? (metadata.scripture ? [metadata.scripture] : []),
+    ...(pipelineTimings
+      ? { pipelineTimings: { ...pipelineTimings, totalMs: pipelineStartMs ? Date.now() - pipelineStartMs : pipelineTimings.totalMs } }
+      : {}),
+  };
+  const canonicalAnswer = finalMeta.answer ?? "I found the relevant Emmaus destination for you.";
+  const normalized = normalizeEmmausResponse({
+    answer: canonicalAnswer,
+    metadata: finalMeta,
+  });
+  const normalizedMeta = {
+    ...normalized.metadata,
+    requestedIntent: requestedIntent.mode,
+    jarvisIntent: jarvisIntentForRoute(routeAskEmmausRequest(req.message)),
+    ...(requestId ? { requestId } : {}),
+  };
+  const answer = normalized.displayAnswer;
+  // Keep canonical responses progressive for the existing client experience,
+  // without pretending that a deterministic result is an LLM token stream.
+  sseWrite(res, "text", { content: answer });
+
+  const assistantMsg = await store.addMessage({
+    conversationId,
+    userId,
+    role: "assistant",
+    content: answer,
+    metadata: normalizedMeta,
+    promptVersion: PROMPT_VERSION,
+    entryPoint: builtCtx.entryPoint,
+    safetyChecked: true,
+    resourceInteractions: [],
+  });
+
+  sseWrite(res, "done", {
+    conversationId,
+    messageId: assistantMsg.id,
+    metadata: normalizedMeta,
+    promptVersion: PROMPT_VERSION,
+  } satisfies SseDonePayload);
+  res.end();
+  logger.info(
+    { reqId: requestId, pipelineTimings: finalMeta.pipelineTimings },
+    "emmaus: request_complete",
+  );
+}
+
 
 export function setSseHeaders(res: Response) {
   res.setHeader("Content-Type", "text/event-stream");
@@ -279,53 +584,150 @@ export async function handleConversation(
   const reqId = Math.random().toString(36).slice(2, 8);
   const t0 = Date.now();
   const ms = () => Date.now() - t0;
+  const pipelineTimings: NonNullable<EmmausResponseMetadata["pipelineTimings"]> = {
+    authMs: req.authMs ?? null,
+    contextMs: 0,
+    routingMs: 0,
+    retrievalScriptureMs: 0,
+    retrievalSermonsMs: 0,
+    retrievalResourcesMs: 0,
+    retrievalMemoriesMs: 0,
+    retrievalRoomsMs: 0,
+    modelTtftMs: null,
+    firstValidatedVisibleMs: null,
+    modelGenerationMs: 0,
+    validationMs: 0,
+    totalMs: 0,
+  };
 
   const store = getConversationStore();
   const provider = createLLMProvider();
 
   // ── 1. Route classification + name-update detection ───────────────────────
+  const routingStart = Date.now();
   const route = classifyRoute(req.message);
+  const requestedIntent = { mode: promptIntentMode(routeAskEmmausRequest(req.message)) };
   const settings = routeSettings(route);
   const detectedNameUpdate = detectNameUpdate(req.message);
+  pipelineTimings.routingMs = Date.now() - routingStart;
 
   if (detectedNameUpdate) {
-    logger.info(`[emmaus:${reqId}] name_update detected="${detectedNameUpdate}"`);
+    logger.info(`[emmaus:${reqId}] name_update detected`);
   }
 
   logger.info(
-    `[emmaus:${reqId}] recv route=${route} maxTokens=${settings.maxTokens} msg="${req.message.slice(0, 60)}"`
+    `[emmaus:${reqId}] recv route=${route} model=${settings.model ?? "provider-default"} ` +
+    `maxTokens=${settings.maxTokens} message_chars=${req.message.length}`
   );
 
   // ── 2. Build context ──────────────────────────────────────────────────────
-  const contextInput: EmmausContextInput = req.context ?? {
+  const rawContext: EmmausContextInput = req.context ?? {
     entryPoint: "standalone",
   };
+  const isVoiceRequest = Boolean(rawContext.voiceContextEnvelope);
+  const contextInput = await reconstructTrustedContext(rawContext, rawContext.userId ?? "anonymous");
+  const userIdForJarvis = rawContext.userId ?? "anonymous";
+  if (!isVoiceRequest && userIdForJarvis !== "anonymous") {
+    const jarvisContext = await assembleJarvisContext(userIdForJarvis, contextInput);
+    contextInput.jarvisContext = jarvisContext;
+    contextInput.userName = jarvisContext.context.identity.displayName;
+  }
   const builtCtx = buildContext(contextInput);
   const userId = builtCtx.userId;
 
+  pipelineTimings.contextMs = Date.now() - t0 - pipelineTimings.routingMs;
   logger.info(`[emmaus:${reqId}] context_built ms=${ms()}`);
 
-  // ── 3. Parallel: Bible verse search + Sermon retrieval ───────────────────
+  // ── 3. Canonical typed request router ─────────────────────────────────────
   //
-  // Both run concurrently — Bible search injects relevant BSB passages into
-  // the system context; sermon retrieval finds a verified timestamped match.
+  // Safety remains the first authority. For safe, high-confidence requests we
+  // resolve against authenticated application data before any sermon/resource
+  // retrieval or LLM call. General and pastoral language falls through to the
+  // established Scripture-first conversation pipeline below.
+  // Voice deliberately remains on the existing shared retrieval pipeline.
+  // Its authenticated envelope is the transport boundary, not a user hint.
+  if (!contextInput.voiceContextEnvelope && checkSafetyKeywordsOnly(req.message).isSafe) {
+    const canonical = await resolveCanonicalAskRequest(req.message, userId);
+    if (canonical.handled) {
+      logger.info(
+        `[emmaus:${reqId}] canonical_resolved intent=${routeAskEmmausRequest(req.message).intent} ms=${ms()}`
+      );
+      pipelineTimings.totalMs = ms();
+      await completeCanonicalResponse(
+        req,
+        res,
+        store,
+        builtCtx,
+        contextInput,
+        canonical.metadata,
+        pipelineTimings,
+        t0,
+        reqId,
+      );
+      return;
+    }
+  }
+
+  // ── 4. Scripture-first retrieval ─────────────────────────────────────────
+  //
+  // All three run concurrently — Bible search injects relevant BSB passages;
+  // sermon retrieval finds a verified timestamped match; memories personalise
+  // the system context with previously approved notes about the user.
   const tSearch = Date.now();
+  const retrievalFailures: string[] = [];
+  for (const source of contextInput.jarvisContext?.context.sourceStatuses ?? []) {
+    if (source.status === "unavailable") retrievalFailures.push(source.source);
+  }
   const bibleBookId = contextInput.bibleContext?.bookId;
   const bibleChapter = contextInput.bibleContext?.chapter;
+  // AE-1: resolve userId early so we can fetch memories in this parallel step.
+  const preUserId = contextInput.userId ?? "anonymous";
 
-  const [biblePassages, sermonResult] = await Promise.all([
-    Promise.resolve(searchBibleVerses(req.message, 5)).catch((): BiblePassage[] => []),
-    retrieveSermon(req.message, bibleBookId, bibleChapter).catch(() => null),
+  // Scripture is deliberately awaited before Emmaus resources. This ordering is
+  // part of the safety contract, not merely prompt wording.
+  const scriptureStart = Date.now();
+  const biblePassages = await Promise.resolve(searchBibleVerses(req.message, 5))
+    .catch((err): BiblePassage[] => {
+      retrievalFailures.push("scripture");
+      logger.warn({ err: String(err) }, "emmaus: Scripture retrieval unavailable");
+      return [];
+    });
+  pipelineTimings.retrievalScriptureMs = Date.now() - scriptureStart;
+  logger.info(`[emmaus:${reqId}] scripture_retrieved count=${biblePassages.length}`);
+  const timed = <T>(key: keyof typeof pipelineTimings, work: Promise<T>): Promise<T> => {
+    const started = Date.now();
+    return work.finally(() => {
+      pipelineTimings[key] = Date.now() - started;
+    });
+  };
+  const [sermonResults, userMemories, resourceCatalogue, userRooms] = await Promise.all([
+    timed("retrievalSermonsMs", retrieveSermons(req.message, bibleBookId, bibleChapter, 3).catch((err) => {
+      retrievalFailures.push("sermons");
+      logger.warn({ err: String(err) }, "emmaus: sermon retrieval unavailable");
+      return [];
+    })),
+    timed("retrievalMemoriesMs", preUserId !== "anonymous"
+      ? store.getMemories(preUserId).catch((): EmmausMemory[] => [])
+      : Promise.resolve([] as EmmausMemory[])),
+    timed("retrievalResourcesMs", buildEmmausResourceCatalogue(req.message, bibleBookId, bibleChapter, preUserId)),
+    timed("retrievalRoomsMs", preUserId !== "anonymous"
+      ? getRoomsForUser(preUserId).catch((): RoomSummary[] => [])
+      : Promise.resolve([] as RoomSummary[])),
   ]);
 
   logger.info(
     `[emmaus:${reqId}] parallel_search ms=${Date.now() - tSearch} ` +
-    `bible=${biblePassages.length} sermon=${!!sermonResult}` +
-    (sermonResult ? ` sermon_id=${sermonResult.sermonId} src=${sermonResult.source}` : "")
+    `bible=${biblePassages.length} sermons=${sermonResults.length} resources=${resourceCatalogue.resources.length}` +
+    (resourceCatalogue.sourceFailures.length > 0
+      ? ` resource_failures=${resourceCatalogue.sourceFailures.join(",")}`
+      : "") +
+    (sermonResults[0] ? ` sermon_id=${sermonResults[0].sermonId} src=${sermonResults[0].source}` : "")
   );
+  const sermonResult = sermonResults[0] ?? null;
 
-  // ── 4. Get or create conversation ─────────────────────────────────────────
+  // ── 5. Get or create conversation ─────────────────────────────────────────
   let conversationId = contextInput.conversationId;
+  let canonicalHistory: Array<{ role: "user" | "assistant"; content: string }> = [];
   if (!conversationId) {
     const conv = await store.createConversation({
       userId,
@@ -345,9 +747,14 @@ export async function handleConversation(
       res.end();
       return;
     }
+    const storedMessages = await store.getMessages(conversationId);
+    canonicalHistory = storedMessages
+      .filter((message) => message.role === "user" || message.role === "assistant")
+      .map((message) => ({ role: message.role, content: message.content }))
+      .slice(-settings.historyTurns);
   }
 
-  // ── 5. Persist user message ───────────────────────────────────────────────
+  // ── 6. Persist user message ───────────────────────────────────────────────
   await store.addMessage({
     conversationId,
     userId,
@@ -359,7 +766,7 @@ export async function handleConversation(
     resourceInteractions: [],
   });
 
-  // ── 6. Safety check ───────────────────────────────────────────────────────
+  // ── 7. Safety check ───────────────────────────────────────────────────────
   const safetyResult = checkSafety(req.message, store, {
     userId,
     conversationId,
@@ -397,14 +804,33 @@ export async function handleConversation(
     return;
   }
 
-  // ── 7. Check for pastoral handoff (soft) ─────────────────────────────────
+  // ── 8. Check for pastoral handoff (soft) ─────────────────────────────────
   const needsPastoralNote = checkPastoralHandoff(req.message);
 
-  // ── 8. Build messages for LLM ─────────────────────────────────────────────
+  // ── 9. Build messages for LLM ─────────────────────────────────────────────
   //
   // Inject verified sermon info into the context block so the model can
   // reference it naturally in prose — but card data comes from retrieval only.
   let contextBlock = builtCtx.systemContextBlock;
+  contextBlock +=
+    `\n\nREQUESTED EMMAUS INTENT: ${requestedIntent.mode}. ` +
+    "A Bible reference is evidence, not permission to navigate. " +
+    (requestedIntent.mode === "ASK"
+      ? "Answer in Ask Emmaus and surface validated Scripture; do not direct the member to a route automatically."
+      : requestedIntent.mode === "FIND"
+        ? "Return validated Bible/resource results inside Ask Emmaus; do not navigate automatically."
+        : requestedIntent.mode === "READ"
+          ? "Use only validated published content or the validated Bible reference for reading; never invent a route or media URL."
+          : "Open only the exact server-valid destination represented by the validated reference; never use a model-generated route.");
+
+  // AE-1: Inject approved user memories (fetched in parallel at step 3).
+  // Mirrors the format in context-builder.ts so the model sees a consistent block.
+  if (userMemories.length > 0) {
+    contextBlock += "\n\nApproved notes about this user (do not reference them directly — weave them in naturally):";
+    for (const m of userMemories) {
+      contextBlock += `\n  - ${m.content}`;
+    }
+  }
 
   // Inject relevant BSB passages — gives the LLM exact verse text to quote
   if (biblePassages.length > 0) {
@@ -414,9 +840,52 @@ export async function handleConversation(
     }
   }
 
-  // Inject verified sermon context — do NOT include the timestamped URL in the
-  // prose (the Preached Here card handles that); just let the model know the
-  // sermon exists so it can reference the insight naturally.
+  // Inject the live, publication-safe Emmaus catalogue. Each resource includes
+  // bounded authored excerpts so Emmaus can explain and quote content accurately,
+  // while exact routes prevent fabricated recommendations.
+  {
+    const resourceLines: string[] = [];
+
+    resourceLines.push(
+      "LIVE PUBLISHED EMMAUS RESOURCES (use these exact titles and paths; quoted material is approved authored content):",
+    );
+    for (const resource of resourceCatalogue.resources) {
+      const details = [
+        resource.scripture ? `Scripture: ${resource.scripture}` : "",
+        resource.description ? `About: ${resource.description}` : "",
+        resource.excerpts.length > 0 ? `Approved excerpts: ${resource.excerpts.map(e => `"${e}"`).join(" | ")}` : "",
+        `Source: ${resource.provenance}`,
+      ].filter(Boolean).join(" — ");
+      resourceLines.push(
+        `  - [${resource.type}] id="${resource.resourceId}"${resource.parentId ? ` parentId="${resource.parentId}"` : ""} ` +
+        `"${resource.title}" → ${resource.route}${details ? ` — ${details}` : ""}`,
+      );
+    }
+
+    if (userRooms.length > 0) {
+      const room = userRooms[0] as { id: string; name: string };
+      resourceLines.push("MEMBER'S ROOM:");
+      resourceLines.push(
+        `  - "${room.name}" — this member belongs to this room. Where genuinely appropriate, gently suggest sharing a prayer request here. Path: /rooms/${room.id}`
+      );
+    }
+
+    if (resourceLines.length > 0) {
+      contextBlock +=
+        "\n\n" +
+        resourceLines.join("\n");
+    }
+    if (resourceCatalogue.sourceFailures.length > 0) {
+      retrievalFailures.push(...resourceCatalogue.sourceFailures);
+      contextBlock +=
+        `\n\nRESOURCE CATALOGUE NOTICE: These sources were unavailable for this request: ${resourceCatalogue.sourceFailures.join(", ")}. ` +
+        "Do not imply that unavailable sources were searched or complete.";
+    }
+  }
+
+  // Inject verified sermon context. The timestamped URL is intentionally kept out
+  // of prose because the Preached Here card handles it, but the model must still
+  // name the sermon connection and weave its verified insight into the answer.
   if (sermonResult) {
     contextBlock +=
       `\n\nVerified ICC sermon matching this conversation:\n` +
@@ -425,22 +894,26 @@ export async function handleConversation(
       `  Scripture: ${sermonResult.scriptureReference}\n` +
       `  Preached: ${sermonResult.sermonDate}\n` +
       `  Summary: ${sermonResult.summary}\n` +
-      `\nYou may weave this sermon's insight naturally into your prose` +
-      ` (e.g. "Pastor ${sermonResult.speaker.split(" ").at(-1)} preached on this — …").` +
-      ` Do not fabricate any detail. The Preached Here card and listen step are added` +
+      `\nYou must weave this sermon's insight naturally into the pastoral prose` +
+      ` (e.g. "Pastor ${sermonResult.speaker.split(" ").at(-1)} preached on this — …"),` +
+      ` not only provide the link/card. Do not fabricate any detail. The Preached Here card and listen step are added` +
       ` automatically — do NOT generate a "listen" nextStep or a sermon recommendation in metadata.`;
   }
 
   // When the user just asked for a name change, use the new name in this
   // response's prompt so Emmaus immediately addresses them correctly.
-  const effectiveUserName = detectedNameUpdate ?? (contextInput.userName?.trim() || undefined);
+  const trustedUserName = await getTrustedDisplayName(userId);
+  const effectiveUserName = detectedNameUpdate ?? trustedUserName;
   const systemPrompt = buildSystemPrompt(contextBlock, effectiveUserName, detectedNameUpdate ?? undefined);
 
   const messages: LLMMessage[] = [{ role: "system", content: systemPrompt }];
 
   // Inject conversation history — capped by route
-  if (req.history && req.history.length > 0) {
-    for (const h of req.history.slice(-settings.historyTurns)) {
+  const historyForPrompt = canonicalHistory.length > 0
+    ? canonicalHistory
+    : (req.history ?? []).slice(-settings.historyTurns);
+  if (historyForPrompt.length > 0) {
+    for (const h of historyForPrompt) {
       const content =
         h.role === "assistant" ? extractMeta(h.content).cleanText : h.content;
       messages.push({ role: h.role, content });
@@ -449,7 +922,7 @@ export async function handleConversation(
 
   messages.push({ role: "user", content: req.message });
 
-  // ── 9. Stream LLM response ────────────────────────────────────────────────
+  // ── 10. Stream LLM response ───────────────────────────────────────────────
   //
   // Rolling-buffer streaming parser — handles <EMMAUS_META> appearing:
   //   • fully in one chunk
@@ -458,7 +931,41 @@ export async function handleConversation(
   let fullResponse = "";
   let emitBuffer = "";
   let pastMetaOpen = false;
+  let streamedText = "";
   let firstTextEmitted = false;
+  const typedStream = !isVoiceRequest
+    ? createTypedStreamConsumer(
+        {
+          resources: resourceCatalogue.allResources ?? resourceCatalogue.resources,
+          sermonRecommendations: sermonResults.map((sermon) => ({
+            sermonId: sermon.sermonId,
+            ...(sermon.segmentId ? { segmentId: sermon.segmentId } : {}),
+            source: sermon.source,
+            title: sermon.title,
+            speaker: sermon.speaker,
+            sermonDate: sermon.sermonDate,
+            excerpt: sermon.excerpt,
+            reason: sermon.reason,
+            ...(sermon.openPath ? { openPath: sermon.openPath } : {}),
+            ...(sermon.timestampedUrl ? { watchUrl: sermon.timestampedUrl } : {}),
+            listenAvailable: Boolean(sermon.audioUrl),
+            ...(sermon.listenPath ? { listenPath: sermon.listenPath } : {}),
+          })),
+          unresolvedSources: resourceCatalogue.sourceFailures,
+        },
+        (content) => {
+          if (!content) return;
+          if (pipelineTimings.firstValidatedVisibleMs == null) {
+            pipelineTimings.firstValidatedVisibleMs = ms();
+            logger.info(
+              `[emmaus:${reqId}] first_validated_visible_ms=${pipelineTimings.firstValidatedVisibleMs}`,
+            );
+          }
+          sseWrite(res, "text", { content });
+          streamedText += content;
+        },
+      )
+    : null;
   const tLLM = Date.now();
 
   logger.info(`[emmaus:${reqId}] llm_start context_ms=${tLLM - t0}`);
@@ -474,6 +981,7 @@ export async function handleConversation(
       // Log time-to-first-token once
       if (!firstTextEmitted && chunk.content) {
         firstTextEmitted = true;
+        pipelineTimings.modelTtftMs = Date.now() - tLLM;
         logger.info(`[emmaus:${reqId}] TTFT=${Date.now() - tLLM}ms total_ms=${ms()}`);
       }
 
@@ -485,16 +993,37 @@ export async function handleConversation(
         const metaIdx = emitBuffer.indexOf(META_OPEN);
         if (metaIdx !== -1) {
           const beforeMeta = emitBuffer.slice(0, metaIdx);
-          if (beforeMeta) sseWrite(res, "text", { content: beforeMeta });
+          if (isVoiceRequest) {
+            const safeChunk = sermonResults.length > 0
+              ? sanitizeStreamingText(beforeMeta)
+              : "";
+            if (safeChunk) {
+              sseWrite(res, "text", { content: safeChunk });
+              streamedText += safeChunk;
+            }
+          } else {
+            typedStream?.push(beforeMeta);
+            typedStream?.flush();
+          }
           pastMetaOpen = true;
           emitBuffer = "";
         } else {
-          const safeLen = Math.max(
-            0,
-            emitBuffer.length - (META_OPEN.length - 1)
-          );
+          const safeLen = isVoiceRequest
+            ? sermonResults.length > 0
+              ? safeStreamingLength(emitBuffer)
+              : 0
+            : Math.max(0, emitBuffer.length - (META_OPEN.length - 1));
           if (safeLen > 0) {
-            sseWrite(res, "text", { content: emitBuffer.slice(0, safeLen) });
+            const safeText = emitBuffer.slice(0, safeLen);
+            if (isVoiceRequest) {
+              const safeChunk = sanitizeStreamingText(safeText);
+              if (safeChunk) {
+                sseWrite(res, "text", { content: safeChunk });
+                streamedText += safeChunk;
+              }
+            } else {
+              typedStream?.push(safeText);
+            }
             emitBuffer = emitBuffer.slice(safeLen);
           }
         }
@@ -509,46 +1038,174 @@ export async function handleConversation(
     return;
   }
 
-  // Flush remaining buffer
-  if (!pastMetaOpen && emitBuffer) {
-    sseWrite(res, "text", { content: emitBuffer });
+  // If the provider returned plain prose without a metadata block, release the
+  // guarded tail now that the stream has ended. When sermon retrieval found
+  // nothing, keep all prose buffered until the validated final answer exists:
+  // otherwise a model can stream an unverified sermon mention before the
+  // transport-level redaction runs.
+  if (isVoiceRequest && !pastMetaOpen && emitBuffer && sermonResults.length > 0) {
+    const safeChunk = sanitizeStreamingText(emitBuffer);
+    if (safeChunk) {
+      sseWrite(res, "text", { content: safeChunk });
+      streamedText += safeChunk;
+    }
+  }
+  if (!isVoiceRequest) {
+    if (!pastMetaOpen && emitBuffer) typedStream?.push(emitBuffer);
+    typedStream?.flush();
   }
 
+  // Flush remaining buffer
   logger.info(
     `[emmaus:${reqId}] llm_done llm_ms=${Date.now() - tLLM} total_ms=${ms()} chars=${fullResponse.length}`
   );
+  pipelineTimings.modelGenerationMs = Date.now() - tLLM;
 
-  // ── 10. Parse metadata ────────────────────────────────────────────────────
+  // ── 11. Parse metadata ────────────────────────────────────────────────────
+  const validationStart = Date.now();
   const { cleanText, metadata } = extractMeta(fullResponse);
-  const finalMeta: EmmausResponseMetadata = metadata ?? defaultMetadata();
+  const groundingResources = resourceCatalogue.allResources ?? resourceCatalogue.resources;
+  const finalMeta: EmmausResponseMetadata = metadata
+    ? validateModelResponse(metadata, groundingResources)
+    : defaultMetadata();
+  finalMeta.requestId = reqId;
 
   if (needsPastoralNote && !finalMeta.handoffType) {
     finalMeta.handoffType = "pastoral";
   }
 
-  // ── 11. Inject verified sermon result (strip LLM-generated sermon recs) ───
+  // ── 12. Inject verified sermon result (strip LLM-generated sermon recs) ───
   //
   // The LLM is instructed not to include sermon recommendations in metadata,
   // but strip any that appear anyway to prevent fabricated data reaching the UI.
   finalMeta.recommendations = (finalMeta.recommendations ?? []).filter(
-    (r) => r.type !== "sermon"
+    (r) => r.type !== "sermon" && !isLockedDailyRhythmRecommendation(r)
+  );
+  finalMeta.nextSteps = (finalMeta.nextSteps ?? []).filter(
+    (s) => !isLockedDailyRhythmRecommendation(s)
   );
 
   // Ensure nextSteps is always an array (LLM may omit it)
   if (!finalMeta.nextSteps) finalMeta.nextSteps = [];
 
-  if (sermonResult) {
-    // ── Preached Here card ──────────────────────────────────────────────────
-    finalMeta.recommendations.unshift({
-      type: "sermon",
-      label: "Preached Here",
-      title: sermonResult.title,
-      speakerName: sermonResult.speaker,
-      description: sermonResult.summary,
-      path: sermonResult.timestampedUrl,
-      sermonId: sermonResult.sermonId,
-      timestampSeconds: sermonResult.timestampSeconds,
-    });
+  // Model metadata is advisory. Only catalogue-backed resources and valid
+  // Scripture references are allowed to reach the client.
+  const validatedMeta = validateCitations(finalMeta, groundingResources);
+  finalMeta.scripture = validatedMeta.scripture;
+  finalMeta.nextStep = validatedMeta.nextStep;
+  finalMeta.recommendations = validatedMeta.recommendations;
+  finalMeta.requestedIntent = requestedIntent.mode;
+  finalMeta.jarvisIntent = jarvisIntentForRoute(routeAskEmmausRequest(req.message));
+  finalMeta.retrievalFailures = Array.from(new Set(retrievalFailures));
+  finalMeta.resourceActions = resourceCatalogue.resources
+    .slice(0, 28)
+    .flatMap((resource) => actionsForResource(resource))
+    .map((action) => ({
+      ...action,
+      resourceType: RESOURCE_TYPE_TO_CONTRACT[action.resourceType],
+    }));
+  finalMeta.sermonRecommendations = sermonResults.map((sermon) => ({
+    sermonId: sermon.sermonId,
+    ...(sermon.segmentId ? { segmentId: sermon.segmentId } : {}),
+    source: sermon.source,
+    title: sermon.title,
+    speaker: sermon.speaker,
+    sermonDate: sermon.sermonDate,
+    excerpt: sermon.excerpt,
+    reason: sermon.reason,
+    ...(sermon.openPath ? { openPath: sermon.openPath } : {}),
+    ...(sermon.timestampedUrl ? { watchUrl: sermon.timestampedUrl } : {}),
+    ...(sermon.timestampSeconds != null ? { watchTimestampSeconds: sermon.timestampSeconds } : {}),
+    listenAvailable: Boolean(sermon.audioUrl),
+    ...(sermon.listenPath ? { listenPath: sermon.listenPath } : {}),
+    ...(sermon.audioUrl ? {
+      audioUrl: sermon.audioUrl,
+      ...(sermon.relativeStartSeconds != null ? { relativeStartSeconds: sermon.relativeStartSeconds } : {}),
+    } : {}),
+  }));
+
+  // If the model omitted a recommendation despite a clearly matching
+  // published resource, expose the best catalogue match deterministically.
+  // This keeps retrieval useful without allowing invented routes or IDs.
+  if (finalMeta.recommendations.length === 0) {
+    const bestResource = resourceCatalogue.resources.find((resource) =>
+      resource.type !== "sermon" && resource.relevance >= 1
+    );
+    if (bestResource) {
+      const recommendationType =
+        bestResource.type === "bible-study"
+          ? "bible_study"
+          : bestResource.type === "sermon-companion"
+            ? "sermon_companion"
+            : bestResource.type === "daily-rhythm"
+              ? "daily_rhythm"
+              : bestResource.type;
+      finalMeta.recommendations.push({
+        type: recommendationType,
+        title: bestResource.title,
+        description: bestResource.description ?? `A published ${bestResource.provenance.toLowerCase()} relevant to this question.`,
+        resourceId: bestResource.resourceId,
+        parentId: bestResource.parentId,
+        path: bestResource.route,
+      });
+    }
+  }
+
+  // Never stream untrusted model URLs. The response body is intentionally
+  // sanitized after metadata parsing and before the first text event.
+  const safeCleanText = sanitizeStreamingText(cleanText)
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  const hasVerifiedSermonForAnswer = (finalMeta.sermonRecommendations?.length ?? 0) > 0;
+  const safeAnswer = !hasVerifiedSermonForAnswer
+    ? stripUnverifiedSermonMentions(safeCleanText)
+    : safeCleanText;
+
+  // The model sometimes mentions additional passages in prose without
+  // repeating them in scriptureReferences. Promote any exact BSB references
+  // it actually named into the trusted citation set so every quoted passage
+  // can still be rendered as a clickable citation.
+  const proseScriptures = extractValidatedScriptureReferences(safeAnswer);
+  const modelScriptureKeys = new Set(
+    (finalMeta.scriptureReferences ?? []).map(ref => ref.reference.toLowerCase()),
+  );
+  const missingProseScriptures = proseScriptures.filter(
+    ref => !modelScriptureKeys.has(ref.reference.toLowerCase()),
+  );
+  if (missingProseScriptures.length > 0) {
+    logger.info({
+      references: missingProseScriptures.map(ref => ref.reference),
+    }, "emmaus: validated Scripture references recovered from prose");
+  }
+  finalMeta.scriptureReferences = Array.from(
+    new Map(
+      [...(finalMeta.scriptureReferences ?? []), ...proseScriptures]
+        .map(ref => [ref.reference.toLowerCase(), ref] as const),
+    ).values(),
+  );
+  if (!finalMeta.scripture && proseScriptures[0]) finalMeta.scripture = proseScriptures[0];
+  if (!hasVerifiedSermonForAnswer) {
+    // A "listen" item is a sermon action and must be server-verified just
+    // like sermonRecommendations. The model is never allowed to create one.
+    finalMeta.nextSteps = finalMeta.nextSteps.filter((step) => step.type !== "listen");
+  }
+  pipelineTimings.validationMs = Date.now() - validationStart;
+   if (sermonResult) {
+     // Voice keeps its legacy generic sermon recommendation for compatibility.
+     // Typed Ask Emmaus renders the dedicated sermonRecommendations card only,
+     // preventing the same sermon from appearing twice.
+     if (isVoiceRequest) {
+       finalMeta.recommendations.unshift({
+         type: "sermon",
+         label: "Preached Here",
+         title: sermonResult.title,
+         speakerName: sermonResult.speaker,
+         description: sermonResult.summary,
+         path: sermonResult.timestampedUrl || sermonResult.openPath,
+         sermonId: sermonResult.sermonId,
+         timestampSeconds: sermonResult.timestampSeconds,
+       });
+     }
 
     // ── Listen step (always verified — never LLM-generated) ────────────────
     const hasListen = finalMeta.nextSteps.some((s) => s.type === "listen");
@@ -571,31 +1228,58 @@ export async function handleConversation(
     }
   }
 
-  // ── 12. Persist assistant message ─────────────────────────────────────────
+  // This is the final response boundary. Typed Ask Emmaus deliberately emits
+  // no model prose before this point, so the answer sent over SSE is identical
+  // to the grounded answer persisted below. Voice remains on its existing
+  // streaming path and receives the legacy metadata shape.
+  pipelineTimings.validationMs = Date.now() - validationStart;
+  pipelineTimings.totalMs = ms();
+  finalMeta.pipelineTimings = pipelineTimings;
+  const normalized = isVoiceRequest
+    ? {
+        metadata: finalMeta,
+        displayAnswer: safeAnswer,
+        speakableAnswer: safeAnswer,
+      }
+    : normalizeEmmausResponse({
+        answer: safeAnswer,
+        metadata: finalMeta,
+        resources: groundingResources,
+        unresolvedSources: resourceCatalogue.sourceFailures,
+      });
+  const responseMeta = normalized.metadata;
+  responseMeta.answer = normalized.displayAnswer;
+  responseMeta.pipelineTimings = pipelineTimings;
+
+  if (normalized.displayAnswer && (!isVoiceRequest || !streamedText)) {
+    sseWrite(res, "text", { content: normalized.displayAnswer });
+  }
+
+  // ── 13. Persist assistant message ─────────────────────────────────────────
   const assistantMsg = await store.addMessage({
     conversationId,
     userId,
     role: "assistant",
-    content: cleanText,
-    metadata: finalMeta,
+    content: normalized.displayAnswer,
+    metadata: responseMeta,
     promptVersion: PROMPT_VERSION,
     entryPoint: builtCtx.entryPoint,
     safetyChecked: true,
     resourceInteractions: [],
   });
 
-  // ── 13. Send done event ───────────────────────────────────────────────────
+  // ── 14. Send done event ───────────────────────────────────────────────────
   const donePayload: SseDonePayload = {
     conversationId,
     messageId: assistantMsg.id,
-    metadata: finalMeta,
+    metadata: responseMeta,
     promptVersion: PROMPT_VERSION,
     ...(detectedNameUpdate ? { detectedNameUpdate } : {}),
   };
   sseWrite(res, "done", donePayload);
   res.end();
 
-  logger.info(`[emmaus:${reqId}] request_complete total_ms=${ms()}`);
+  logger.info({ reqId, pipelineTimings }, "emmaus: request_complete");
 }
 
 // ─── List Conversations ───────────────────────────────────────────────────────

@@ -12,8 +12,10 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { EmbeddedScripture } from '@/components/EmbeddedScripture';
+import { ShareButton } from '@/components/ShareButton';
+import { ShareImageCard } from '@/components/ShareImageCard';
+import type { SharePayload } from '@/lib/share';
 import {
-  SectionLabel,
   personalizeGreeting,
 } from '@/components/DailyRhythmReading';
 
@@ -64,6 +66,26 @@ export interface DevotionalReadingProps {
 
   /** Primary action rendered at the bottom (Continue button etc.). */
   actionButton?: React.ReactNode;
+
+  /**
+   * Pre-built share payload. When provided (member view only), a subtle
+   * Share button is rendered above the action button. Omit for admin previews.
+   */
+  sharePayload?: SharePayload;
+
+  /**
+   * Resolved display label (e.g. "1 January"). When provided and non-empty,
+   * replaces the default "Day N" sub-heading. Pass the output of
+   * `getDevotionalLabel(entry)` from the caller; do not pass the raw DB value.
+   */
+  displayLabel?: string;
+
+  /**
+   * Optional share image — object-storage path ("/objects/…").
+   * When present, a "Take this with you" card is rendered above the Share button.
+   * Omit for admin previews.
+   */
+  shareImageUrl?: string | null;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -82,6 +104,9 @@ export function DevotionalReading({
   returnPath,
   previewMode = false,
   actionButton,
+  sharePayload,
+  displayLabel,
+  shareImageUrl,
 }: DevotionalReadingProps) {
 
   const greetingFull = greeting
@@ -93,15 +118,15 @@ export function DevotionalReading({
   const greetingRest = firstBreak === -1 ? '' : greetingFull.slice(firstBreak + 2).trim();
 
   return (
-    <div className="px-5 pt-10 max-w-[640px] mx-auto">
+    <div className="px-4 pt-8 max-w-[640px] mx-auto">
 
       {/* ── Identity header ─────────────────────────────────────────────────── */}
-      <section className="mb-10 text-center">
+      <section className="mb-7 text-center">
         <p className="text-[14px] font-medium text-muted-foreground tracking-wide mb-1">
           {seriesTitle}
         </p>
         <p className="text-[13px] text-muted-foreground mb-4">
-          Day {dayNumber}
+          {displayLabel || `Day ${dayNumber}`}
         </p>
         <h1 className="text-[26px] font-semibold text-foreground leading-snug">
           {title || (previewMode
@@ -110,10 +135,20 @@ export function DevotionalReading({
         </h1>
       </section>
 
+      {/* ── Share image and sharing action — directly under the title ────────── */}
+      {shareImageUrl && (
+        <div className="mb-4">
+          <ShareImageCard shareImageUrl={shareImageUrl} />
+        </div>
+      )}
       {/* ── Greeting / introductory paragraph ───────────────────────────────── */}
       {(greeting || previewMode) && (
-        <section className="mb-10">
-          <div className="mt-3">
+        <section className="mb-3.5">
+          <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">Greeting</h2>
+            </div>
             {greeting ? (
               <>
                 <p className="text-[17px] font-medium text-foreground leading-[1.65]">
@@ -136,9 +171,12 @@ export function DevotionalReading({
 
       {/* ── Today's Reading ─────────────────────────────────────────────────── */}
       {(scripture || previewMode) && (
-        <section className="mb-10">
-          <SectionLabel>Today's Reading</SectionLabel>
-          <div className="mt-3">
+        <section className="mb-3.5">
+          <div className="rounded-2xl border border-sky-200/60 bg-sky-50/60 px-4 py-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-sky-700">Today's Reading</h2>
+            </div>
             {scripture ? (
               <EmbeddedScripture scripture={scripture} returnPath={returnPath} />
             ) : previewMode ? (
@@ -154,9 +192,12 @@ export function DevotionalReading({
 
       {/* ── Consider This ───────────────────────────────────────────────────── */}
       {(considerThis || previewMode) && (
-        <section className="mb-10">
-          <SectionLabel>Consider This</SectionLabel>
-          <div className="mt-3">
+        <section className="mb-3.5">
+          <div className="rounded-2xl border border-violet-200/60 bg-violet-50/60 px-4 py-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">Consider This</h2>
+            </div>
             {considerThis ? (
               <BodyParagraphs text={considerThis} />
             ) : previewMode ? (
@@ -168,9 +209,12 @@ export function DevotionalReading({
 
       {/* ── Prayer ──────────────────────────────────────────────────────────── */}
       {(prayer || previewMode) && (
-        <section className="mb-10">
-          <SectionLabel>Prayer</SectionLabel>
-          <div className="mt-3">
+        <section className="mb-3.5">
+          <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/60 px-4 py-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">Prayer</h2>
+            </div>
             {prayer ? (
               <BodyParagraphs text={prayer} />
             ) : previewMode ? (
@@ -182,9 +226,12 @@ export function DevotionalReading({
 
       {/* ── Your Next Step ───────────────────────────────────────────────────── */}
       {(nextStep || previewMode) && (
-        <section className="mb-10">
-          <SectionLabel>Your Next Step</SectionLabel>
-          <div className="mt-3">
+        <section className="mb-3.5">
+          <div className="rounded-2xl border border-orange-200/60 bg-orange-50/60 px-4 py-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-orange-700">Your Next Step</h2>
+            </div>
             {nextStep ? (
               <BodyParagraphs text={nextStep} />
             ) : previewMode ? (
@@ -196,7 +243,7 @@ export function DevotionalReading({
 
       {/* ── Closing ─────────────────────────────────────────────────────────── */}
       {closing && (
-        <section className="mb-8">
+        <section className="mt-2 mb-6">
           <BodyParagraphs
             text={closing}
             className="!text-[16px] !text-muted-foreground"
@@ -205,6 +252,11 @@ export function DevotionalReading({
       )}
 
       {/* ── Action button slot ───────────────────────────────────────────────── */}
+      {sharePayload && !previewMode && (
+        <div className="mb-3">
+          <ShareButton payload={sharePayload} />
+        </div>
+      )}
       <div className="pt-2 pb-8">
         {actionButton}
       </div>

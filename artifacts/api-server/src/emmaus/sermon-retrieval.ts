@@ -2,12 +2,10 @@
  * Emmaus Sermon Retrieval — Verified Record Search
  *
  * Priority order:
- *   1. YouTube Archive search (approved sermon segments from sermon-store)
- *   2. Hard-coded VERIFIED_SERMONS registry (demo/fallback — for records not yet
- *      imported into the archive but already manually curated)
+ *   1. Published canonical sermons and the publication-safe knowledge index
+ *   2. Approved YouTube Archive sermon segments
  *
- * The YouTube archive search is preferred when segments exist. The hardcoded
- * registry provides a fallback so existing curated sermons still surface.
+ * Canonical records take precedence; approved archive segments fill gaps.
  *
  * Retrieval runs with a bounded timeout so it never delays Ask Emmaus.
  * When no verified match clears the minimum threshold, returns null and
@@ -19,92 +17,13 @@
  *   EMMAUS_SERMON_MIN_SCORE — minimum retrieval score (default: 5)
  */
 
-import { searchSermons } from "../lib/sermon-search.js";
+import { searchSermons, type SermonSearchResult } from "../lib/sermon-search.js";
 import { logger } from "../lib/logger.js";
-
-// ─── Verified Sermon Registry (hardcoded demo fallback) ───────────────────────
-//
-// These records back-fill the search when the YouTube archive has no
-// approved segments. Only add entries with a corresponding admin record.
-
-interface VerifiedSermon {
-  id: string;
-  title: string;
-  speaker: string;
-  sermonDate: string;    // ISO date "YYYY-MM-DD"
-  series?: string;
-  scriptureReference: string;
-  scriptureBookIds: string[];
-  scriptureChapters: number[];
-  youtubeUrl: string;
-  summary: string;
-  topics: string[];
-  priorityKeywords: string[];
-  keywords: string[];
-}
-
-const VERIFIED_SERMONS: VerifiedSermon[] = [
-  {
-    id: "sermon-john-3",
-    title: "Born Again: The Night Nicodemus Met Jesus",
-    speaker: "Pastor Jeremy Govender",
-    sermonDate: "2024-09-15",
-    series: "Gospel of John",
-    scriptureReference: "John 3:1–21",
-    scriptureBookIds: ["john"],
-    scriptureChapters: [3],
-    youtubeUrl: "https://www.youtube.com/watch?v=PLACEHOLDER_VIDEO_ID",
-    summary:
-      'Jesus tells Nicodemus something that changes everything: "You must be born again." What does it mean, and why does it matter for you today?',
-    topics: ["salvation", "rebirth", "holy spirit", "new birth", "eternal life", "regeneration"],
-    priorityKeywords: ["nicodemus", "born again", "john 3:16", "born of water", "born of spirit"],
-    keywords: ["john 3", "spirit", "eternal life", "darkness and light", "believe", "perish"],
-  },
-  {
-    id: "sermon-2-samuel-9",
-    title: "God's Kindness Restores the Broken",
-    speaker: "Pastor Jeremy Govender",
-    sermonDate: "2024-11-10",
-    series: "Stories of Grace",
-    scriptureReference: "2 Samuel 9",
-    scriptureBookIds: ["2samuel", "2-samuel", "2 samuel"],
-    scriptureChapters: [9],
-    youtubeUrl: "https://www.youtube.com/watch?v=PLACEHOLDER_VIDEO_ID",
-    summary:
-      "Exploring how God's covenant kindness reaches those who feel most broken and unworthy, through the story of Mephibosheth.",
-    topics: ["grace", "restoration", "identity", "belonging", "covenant kindness", "worth", "brokenness"],
-    priorityKeywords: ["mephibosheth", "lo debar", "hesed", "2 samuel 9"],
-    keywords: ["david", "covenant", "kindness", "broken", "restore", "worthy", "unworthy", "2 samuel", "table"],
-  },
-];
-
-// ─── Scoring (hardcoded registry) ─────────────────────────────────────────────
-
-function scoreVerifiedSermon(
-  sermon: VerifiedSermon,
-  query: string,
-  bibleBookId?: string,
-  bibleChapter?: number
-): number {
-  let score = 0;
-  const q = query.toLowerCase();
-
-  if (bibleBookId) {
-    const bookIdNorm = bibleBookId.toLowerCase();
-    if (sermon.scriptureBookIds.includes(bookIdNorm)) {
-      score += 12;
-      if (bibleChapter != null && sermon.scriptureChapters.includes(bibleChapter)) {
-        score += 8;
-      }
-    }
-  }
-  for (const topic of sermon.topics) { if (q.includes(topic)) score += 4; }
-  for (const kw of sermon.priorityKeywords) { if (q.includes(kw)) score += 5; }
-  for (const kw of sermon.keywords) { if (q.includes(kw)) score += 3; }
-  for (const bookId of sermon.scriptureBookIds) { if (q.includes(bookId)) score += 2; }
-
-  return score;
-}
+import {
+  listPublishedSermons,
+  type CanonicalSermon,
+} from "../lib/canonical-sermon-store.js";
+import { searchKnowledgeIndex } from "../lib/sermon-knowledge-index.js";
 
 // ─── Public Result Type ───────────────────────────────────────────────────────
 
@@ -122,98 +41,333 @@ export interface SermonRetrievalResult {
   timestampSeconds?: number;         // absolute YouTube timestamp (Watch)
   timestampLabel?: string;
   transcriptEvidence?: string;
-  source: "archive" | "registry";
+  /** "canonical" = DB sermon table; "archive" = approved YouTube archive segment */
+  source: "canonical" | "archive";
   audioUrl?: string;                 // in-app audio URL (Listen)
   relativeStartSeconds?: number;     // position within trimmed audio
   relativeTimestampLabel?: string;
+  /** Only canonical records have a published member route. */
+  openPath?: string;
+  /** Canonical audio opens the member page; archive audio is played directly. */
+  listenPath?: string;
+  /** Archive results use this for canonical duplicate suppression. */
+  youtubeVideoId?: string;
+  relevanceScore?: number;
 }
 
-// ─── Retrieval ────────────────────────────────────────────────────────────────
+export interface SermonSearchCardResult extends SermonRetrievalResult {
+  reason: string;
+  excerpt: string;
+}
 
-const RETRIEVAL_TIMEOUT_MS = 2500;
+// ─── Canonical DB sermon scoring ─────────────────────────────────────────────
 
-/**
- * Find the strongest verified sermon match for this query.
- *
- * Returns null when no match clears the minimum score threshold.
- * The caller must not show a sermon card when this returns null.
- */
-export async function retrieveSermon(
+function scoreCanonicalSermon(
+  sermon: CanonicalSermon,
   query: string,
   bibleBookId?: string,
   bibleChapter?: number
-): Promise<SermonRetrievalResult | null> {
-  const minScore = parseInt(process.env.EMMAUS_SERMON_MIN_SCORE ?? "5", 10);
-  const tStart = Date.now();
+): number {
+  let score = 0;
+  const q = query.toLowerCase();
 
-  // ── 1. YouTube Archive search (primary) ──────────────────────────────────
+  // Scripture match — strong signal
+  if (bibleBookId) {
+    const normBookId = bibleBookId.toLowerCase();
+    if (sermon.scriptureBookIds.some(id => id.toLowerCase() === normBookId)) {
+      score += 12;
+      if (bibleChapter != null && sermon.scriptureChapters.includes(bibleChapter)) {
+        score += 8;
+      }
+    }
+  }
 
+  // Keyword / theme overlap
+  for (const theme of sermon.themes)   { if (q.includes(theme.toLowerCase()))   score += 4; }
+  for (const kw   of sermon.keywords)  { if (q.includes(kw.toLowerCase()))       score += 3; }
+
+  // Scripture reference text in query
+  const ref = sermon.scriptureReference.toLowerCase();
+  if (ref && q.includes(ref.split(" ")[0])) score += 3; // book name
+
+  // Title word overlap
+  const titleWords = sermon.title.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  for (const w of titleWords) { if (q.includes(w)) score += 1; }
+
+  // Main theme in query
+  if (sermon.mainTheme && q.includes(sermon.mainTheme.toLowerCase().slice(0, 20))) score += 6;
+
+  return score;
+}
+
+function isEligibleCanonical(sermon: CanonicalSermon): boolean {
+  return Boolean(
+    sermon.id &&
+    sermon.title.trim() &&
+    sermon.speaker.trim() &&
+    sermon.speaker.trim().toLowerCase() !== "unknown speaker" &&
+    !/\bshorts?\b/i.test(sermon.title),
+  );
+}
+
+/** Reject malformed or non-YouTube URLs before they reach a member-facing card. */
+export function isValidYouTubeUrl(value: string): boolean {
   try {
-    const archiveResults = await Promise.race([
-      searchSermons(query, { bibleBookId, bibleChapter, maxResults: 1 }),
-      new Promise<null>((r) => setTimeout(() => r(null), RETRIEVAL_TIMEOUT_MS)),
-    ]);
-
-    if (archiveResults && archiveResults.length > 0) {
-      const best = archiveResults[0];
-      // Use archive MIN threshold: relevance score ≥ minScore (search uses its own threshold)
-      logger.info(
-        { source: "archive", score: best.relevanceScore, ms: Date.now() - tStart },
-        "Sermon retrieved from archive"
-      );
-      return {
-        sermonId: best.sermonId,
-        segmentId: best.segmentId,
-        title: best.title,
-        speaker: best.speaker,
-        sermonDate: best.sermonDate,
-        series: best.series,
-        scriptureReference: best.scriptureReference,
-        youtubeUrl: best.youtubeUrl,
-        timestampedUrl: best.timestampedUrl,
-        summary: best.summary ?? best.transcriptEvidence,
-        timestampSeconds: best.absoluteStartSeconds ?? best.startTimeSeconds,
-        timestampLabel: best.timestampLabel,
-        transcriptEvidence: best.transcriptEvidence,
-        source: "archive",
-        audioUrl: best.audioUrl,
-        relativeStartSeconds: best.relativeStartSeconds,
-        relativeTimestampLabel: best.relativeStartSeconds !== undefined
-          ? formatTimestampLabel(best.relativeStartSeconds)
-          : undefined,
-      };
-    }
-  } catch (err) {
-    logger.warn({ err: String(err) }, "Archive search failed — falling back to registry");
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      (url.hostname === "www.youtube.com" ||
+        url.hostname === "youtube.com" ||
+        url.hostname === "youtu.be") &&
+      Boolean(url.searchParams.get("v") || url.hostname === "youtu.be")
+    );
+  } catch {
+    return false;
   }
+}
 
-  // ── 2. Hardcoded registry fallback ───────────────────────────────────────
-
-  let best: { sermon: VerifiedSermon; score: number } | null = null;
-  for (const sermon of VERIFIED_SERMONS) {
-    const score = scoreVerifiedSermon(sermon, query, bibleBookId, bibleChapter);
-    if (score >= minScore && (!best || score > best.score)) {
-      best = { sermon, score };
-    }
-  }
-
-  if (!best) return null;
-
-  const { sermon } = best;
-  const timestampedUrl = buildTimestampedUrl(sermon.youtubeUrl, undefined);
+function canonicalCard(
+  sermon: CanonicalSermon,
+  score: number,
+  query: string,
+  summaryOverride?: string,
+): SermonSearchCardResult {
+  const timestampSeconds = sermon.sections.find((s) => Number.isFinite(s.timestampSeconds))?.timestampSeconds;
+  const youtubeUrl = isValidYouTubeUrl(sermon.youtubeUrl) ? sermon.youtubeUrl : "";
+  const timestampedUrl = youtubeUrl ? buildTimestampedUrl(youtubeUrl, timestampSeconds) : "";
+  const excerpt = (summaryOverride || sermon.summary || sermon.mainTheme || sermon.scriptureReference || "")
+    .slice(0, 300);
 
   return {
     sermonId: sermon.id,
     title: sermon.title,
     speaker: sermon.speaker,
     sermonDate: sermon.sermonDate,
-    series: sermon.series,
+    series: sermon.series || undefined,
     scriptureReference: sermon.scriptureReference,
-    youtubeUrl: sermon.youtubeUrl,
+    youtubeUrl,
     timestampedUrl,
-    summary: sermon.summary,
-    source: "registry",
+    summary: excerpt,
+    timestampSeconds,
+    timestampLabel: timestampSeconds == null ? undefined : formatTimestampLabel(timestampSeconds),
+    source: "canonical",
+    audioUrl: sermon.audioPath
+      ? `${process.env.BASE_URL ?? ""}/storage/objects/${sermon.audioPath.replace(/^\/objects\//, "")}`
+      : undefined,
+    openPath: `/sermon/${sermon.id}`,
+    listenPath: sermon.audioPath ? `/sermon/${sermon.id}` : undefined,
+    relevanceScore: score,
+    reason: query.trim()
+      ? `Matches your search for “${query.trim().slice(0, 80)}”.`
+      : "A published sermon from Emmaus.",
+    excerpt,
   };
+}
+
+function archiveCard(result: SermonSearchResult): SermonSearchCardResult {
+  const excerpt = (result.summary?.trim() || result.transcriptEvidence || "").slice(0, 300);
+  return {
+    sermonId: result.sermonId,
+    segmentId: result.segmentId,
+    title: result.title,
+    speaker: result.speaker,
+    sermonDate: result.sermonDate,
+    series: result.series,
+    scriptureReference: result.scriptureReference,
+    youtubeUrl: result.youtubeUrl,
+    timestampedUrl: result.timestampedUrl,
+    summary: excerpt,
+    timestampSeconds: result.absoluteStartSeconds ?? result.startTimeSeconds,
+    timestampLabel: result.timestampLabel,
+    transcriptEvidence: result.transcriptEvidence,
+    source: "archive",
+    audioUrl: result.audioUrl,
+    relativeStartSeconds: result.relativeStartSeconds,
+    relativeTimestampLabel: result.relativeTimestampLabel,
+    youtubeVideoId: result.youtubeVideoId,
+    relevanceScore: result.relevanceScore,
+    reason: `Matches an approved ICC sermon archive segment${result.timestampLabel ? ` at ${result.timestampLabel}` : ""}.`,
+    excerpt,
+  };
+}
+
+/**
+ * Return the publication-safe hybrid set used by typed Ask Emmaus and Voice.
+ * Canonical records and their knowledge-index entries are preferred, while
+ * approved archive segments fill gaps such as Prodigal/Luke 15.
+ */
+export async function retrieveSermons(
+  query: string,
+  bibleBookId?: string,
+  bibleChapter?: number,
+  maxResults = 3,
+): Promise<SermonSearchCardResult[]> {
+  const minScore = parseInt(process.env.EMMAUS_SERMON_MIN_SCORE ?? "5", 10);
+  const tStart = Date.now();
+
+  try {
+    const [published, indexResults, archiveResults] = await Promise.all([
+      Promise.race([
+        listPublishedSermons().catch((err) => {
+          logger.warn({ err: String(err) }, "Canonical sermon source unavailable");
+          return null;
+        }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), RETRIEVAL_TIMEOUT_MS)),
+      ]),
+      Promise.race([
+        searchKnowledgeIndex(query, bibleBookId, bibleChapter).catch((err) => {
+          logger.warn({ err: String(err) }, "Sermon knowledge index unavailable");
+          return null;
+        }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), RETRIEVAL_TIMEOUT_MS)),
+      ]),
+      Promise.race([
+        searchSermons(query, { bibleBookId, bibleChapter, maxResults: Math.max(maxResults, 5) }).catch((err) => {
+          logger.warn({ err: String(err) }, "YouTube sermon archive unavailable");
+          return null;
+        }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), RETRIEVAL_TIMEOUT_MS)),
+      ]),
+    ]);
+
+    const publishedRows = published ?? [];
+    const canonicalById = new Map(publishedRows.map((sermon) => [sermon.id, sermon]));
+    const suppressedVideoIds = new Set(
+      publishedRows.map((sermon) => sermon.youtubeVideoId.trim()).filter(Boolean),
+    );
+    const candidates: Array<{ result: SermonSearchCardResult; sourceRank: number }> = [];
+
+    for (const sermon of publishedRows) {
+      if (!isEligibleCanonical(sermon)) continue;
+      const score = scoreCanonicalSermon(sermon, query, bibleBookId, bibleChapter);
+      if (score >= minScore) {
+        candidates.push({ result: canonicalCard(sermon, score, query), sourceRank: 3 });
+      }
+    }
+
+    for (const indexed of indexResults ?? []) {
+      if (indexed.score < minScore) continue;
+      const canonical = canonicalById.get(indexed.sermonId);
+      if (canonical && isEligibleCanonical(canonical)) {
+        if (!candidates.some(({ result }) => result.sermonId === canonical.id)) {
+          candidates.push({
+            result: canonicalCard(canonical, indexed.score, query, indexed.summary || indexed.mainTheme),
+            sourceRank: 2,
+          });
+        }
+        continue;
+      }
+      // The index query is publication-joined. This fallback covers a brief
+      // list timeout while retaining a canonical-only member route.
+      if (indexed.sermonId && indexed.title.trim() && indexed.speaker.trim()) {
+        const indexedSermon: CanonicalSermon = {
+          id: indexed.sermonId,
+          legacyJsonId: null,
+          title: indexed.title,
+          speaker: indexed.speaker,
+          sermonDate: indexed.sermonDate,
+          series: indexed.series ?? "",
+          scriptureReference: indexed.scriptureReference,
+          scriptureBookIds: indexed.scriptureBookIds,
+          scriptureChapters: indexed.scriptureChapters,
+          youtubeUrl: indexed.youtubeUrl,
+          youtubeVideoId: "",
+          audioPath: indexed.audioPath,
+          notes: "",
+          transcript: "",
+          fullTranscript: "",
+          transcriptStatus: "none",
+          summary: indexed.summary,
+          themes: [],
+          keywords: [],
+          mainTheme: indexed.mainTheme,
+          sections: [],
+          sermonStartTime: "",
+          sermonEndTime: "",
+          detectionConfidence: 0,
+          detectionMethod: "none",
+          status: "Published",
+          publishedAt: null,
+          processingStage: "complete",
+          processingError: "",
+          createdAt: "",
+          updatedAt: "",
+          displayOrder: 0,
+        };
+        candidates.push({ result: canonicalCard(indexedSermon, indexed.score, query, indexed.summary), sourceRank: 2 });
+      }
+    }
+
+    for (const archived of archiveResults ?? []) {
+      if (
+        suppressedVideoIds.has(archived.youtubeVideoId) ||
+        suppressedVideoIds.has(archived.sermonId)
+      ) {
+        continue;
+      }
+      if (
+        !archived.title.trim() ||
+        !archived.speaker.trim() ||
+        archived.speaker.trim().toLowerCase() === "unknown speaker" ||
+        !isValidYouTubeUrl(archived.youtubeUrl)
+      ) {
+        continue;
+      }
+      candidates.push({ result: archiveCard(archived), sourceRank: 1 });
+    }
+
+    const deduped = new Map<string, { result: SermonSearchCardResult; sourceRank: number }>();
+    for (const candidate of candidates) {
+      const key = candidate.result.source === "canonical"
+        ? `canonical:${candidate.result.sermonId}`
+        : `archive:${candidate.result.youtubeVideoId || candidate.result.youtubeUrl}`;
+      const existing = deduped.get(key);
+      if (
+        !existing ||
+        candidate.sourceRank > existing.sourceRank ||
+        (candidate.sourceRank === existing.sourceRank &&
+          (candidate.result.relevanceScore ?? 0) > (existing.result.relevanceScore ?? 0))
+      ) {
+        deduped.set(key, candidate);
+      }
+    }
+
+    const results = [...deduped.values()]
+      .sort((a, b) =>
+        b.sourceRank - a.sourceRank ||
+        (b.result.relevanceScore ?? 0) - (a.result.relevanceScore ?? 0),
+      )
+      .slice(0, maxResults)
+      .map(({ result }) => result);
+
+    logger.info(
+      {
+        query: query.slice(0, 60),
+        results: results.length,
+        sources: results.map((result) => result.source),
+        ms: Date.now() - tStart,
+      },
+      "Hybrid sermon retrieval complete",
+    );
+    return results;
+  } catch (err) {
+    logger.warn({ err: String(err), ms: Date.now() - tStart }, "Hybrid sermon retrieval failed");
+    return [];
+  }
+}
+
+// ─── Retrieval ────────────────────────────────────────────────────────────────
+
+const RETRIEVAL_TIMEOUT_MS = 2500;
+
+/** Return the strongest result from the same hybrid contract used by cards. */
+export async function retrieveSermon(
+  query: string,
+  bibleBookId?: string,
+  bibleChapter?: number,
+): Promise<SermonRetrievalResult | null> {
+  const [result] = await retrieveSermons(query, bibleBookId, bibleChapter, 1);
+  return result ?? null;
 }
 
 // ─── URL Helpers ──────────────────────────────────────────────────────────────

@@ -1,0 +1,244 @@
+# EMMAUS - COMBINE ASK EMMAUS AND SEARCH
+
+Remove the separate Search field from Discover.
+
+Replace the current Ask Emmaus card and Search box with ONE unified Emmaus input.
+
+--------------------------------------------------
+
+Layout
+
+💬 Ask Emmaus
+
+Ask Emmaus or search...
+
+🎤
+
+--------------------------------------------------
+
+There should only be ONE input.
+
+The user should never have to decide whether they are:
+
+- Asking Emmaus
+- Searching Emmaus
+
+Emmaus decides automatically.
+
+--------------------------------------------------
+INTELLIGENT INPUT
+--------------------------------------------------
+
+If the input is a natural language question:
+
+Example:
+
+How do I forgive?
+
+I'm anxious.
+
+Who is Jesus?
+
+Open a normal Ask Emmaus conversation.
+
+Follow the existing Emmaus response protocol.
+
+At the bottom of every response recommend relevant:
+
+- Scriptures
+- Daily Rhythm
+- Walks
+- Journeys
+- Sermons
+- Bible Studies
+
+Do not change the existing Emmaus conversation style.
+
+--------------------------------------------------
+IF THE INPUT LOOKS LIKE A SEARCH
+--------------------------------------------------
+
+Examples:
+
+Jesus
+
+Prayer
+
+Romans
+
+Coming to Jesus
+
+Made Free
+
+Psalm 23
+
+John 3
+
+Return search results instead of an AI conversation.
+
+Search ALL published Emmaus content.
+
+Never search only the current Discover page.
+
+--------------------------------------------------
+SEARCH MUST INCLUDE
+--------------------------------------------------
+
+Walks
+
+Journeys
+
+Bible
+
+Bible Studies
+
+Daily Devotionals
+
+Daily Rhythm
+
+Sermon Companions
+
+Sermons
+
+Ask Emmaus saved conversations (future)
+
+--------------------------------------------------
+SEARCH QUALITY
+--------------------------------------------------
+
+The current search is not acceptable.
+
+Searching:
+
+Jesus
+
+currently returns:
+
+"No results"
+
+even though content exists:
+
+Coming to Jesus
+
+10 Minutes with Jesus
+
+Jesus at the Center
+
+This must be fixed.
+
+Search should support:
+
+Partial matching
+
+Keyword matching
+
+Phrase matching
+
+Case-insensitive matching
+
+Relevant ranking
+
+Examples:
+
+Searching:
+
+Jesus
+
+should find:
+
+Coming to Jesus
+
+10 Minutes with Jesus
+
+Jesus at the Center
+
+John 1
+
+Bible studies containing Jesus
+
+Relevant sermons
+
+Searching:
+
+Pray
+
+should find:
+
+Prayer
+
+Praying
+
+Prayer Walk
+
+Prayer Bible Study
+
+Searching:
+
+Romans
+
+should find:
+
+Romans
+
+Romans Bible Studies
+
+Romans Sermons
+
+Searching:
+
+Gideon
+
+should find sermons or devotionals mentioning Gideon even if Gideon is not in the title.
+
+--------------------------------------------------
+RESULTS
+--------------------------------------------------
+
+Group results by type.
+
+For example:
+
+Walks
+
+Coming to Jesus
+
+Prayer
+
+----------------
+
+Bible
+
+John
+
+Romans
+
+----------------
+
+Daily Devotionals
+
+...
+
+----------------
+
+Sermons
+
+...
+
+Selecting a result opens it immediately.
+
+--------------------------------------------------
+GENERAL RULE
+--------------------------------------------------
+
+The user should only ever see ONE input box.
+
+Emmaus decides whether the request is:
+
+- Search
+- Bible reference
+- Walk
+- Conversation
+- Sermon
+- Daily Devotional
+
+The user should never need to think about the difference.

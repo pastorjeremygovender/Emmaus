@@ -4,13 +4,20 @@
  * There is one Daily Rhythm: "10 Minutes with Jesus".
  * Displays every day using the shared ContentStudioListItem row.
  */
-import React, { useMemo } from 'react';
-import { Sun, Plus, Clock, FileText, AlertTriangle } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Sun, Plus, Clock, FileText, AlertTriangle, Tag } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import type { Journey, Step } from '@/lib/journeys-api';
+import { bulkGenerateStepLabels } from '@/lib/journeys-api';
+import { useAuth } from '@/contexts/AuthContext';
 import { StatusBadge } from '../shared';
 import ContentStudioListItem from './ContentStudioListItem';
 import ContentStudioListPage, { actionBtnCls, newBtnCls } from './ContentStudioListPage';
+import NewDayModal from './NewDayModal';
+import GenerateLabelsModal from './GenerateLabelsModal';
+import DailyRhythmGroupsPanel from './DailyRhythmGroupsPanel';
+
+const STATUS_TABS = ['All', 'Draft', 'Published', 'Archived'] as const;
 
 interface Props {
   onNewDay: (journeyId: string) => void;
@@ -18,7 +25,11 @@ interface Props {
 }
 
 export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
-  const { journeys, steps, loading } = useJourney();
+  const { journeys, steps, loading, refreshSteps } = useJourney();
+  const { user } = useAuth();
+  const [statusTab,          setStatusTab]          = useState<string>('All');
+  const [showNewModal,       setShowNewModal]        = useState(false);
+  const [showLabelsModal,    setShowLabelsModal]     = useState(false);
 
   const journey = useMemo(
     () => (journeys as Journey[]).find(j => j.journeyType === 'daily-rhythm') ?? null,
@@ -28,29 +39,55 @@ export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
   const days = useMemo(() => {
     if (!journey) return [];
     return [...(steps as Step[]).filter(s => s.journeyId === journey.id)]
-      .sort((a, b) => a.day - b.day);
+       .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.day - b.day);
   }, [steps, journey]);
+
+  const filtered = useMemo(() =>
+    statusTab === 'All'
+      ? days
+      : days.filter(s => ((s as any).status ?? 'Draft') === statusTab),
+    [days, statusTab],
+  );
 
   const description = journey
     ? `10 Minutes with Jesus · ${days.length} day${days.length !== 1 ? 's' : ''} authored`
     : 'A daily walk with Jesus for every member.';
 
   return (
+    <>
     <ContentStudioListPage
       title="Daily Rhythm"
-      description={description}
-      newButton={
-        <button
-          onClick={() => journey && onNewDay(journey.id)}
-          disabled={!journey || loading}
-          className={newBtnCls}
-        >
-          <Plus size={14} /> New Day
-        </button>
+      description={
+        <span>
+          {description}
+        </span>
       }
+      beforeList={journey ? <DailyRhythmGroupsPanel journeyId={journey.id} steps={days} /> : null}
+      newButton={
+        <div className="flex items-center gap-2">
+          {journey && days.length > 0 && (
+            <button
+              onClick={() => setShowLabelsModal(true)}
+              disabled={loading}
+              className={actionBtnCls}
+              title="Bulk-generate display labels"
+            >
+              <Tag size={13} /> Generate Labels
+            </button>
+          )}
+          <button
+            onClick={() => journey && setShowNewModal(true)}
+            disabled={!journey || loading}
+            className={newBtnCls}
+          >
+            <Plus size={14} /> New Day
+          </button>
+        </div>
+      }
+      filters={{ tabs: STATUS_TABS, active: statusTab, onChange: setStatusTab }}
       loading={loading}
       loadingText="Loading Daily Rhythm…"
-      isEmpty={!loading && (!journey || days.length === 0)}
+      isEmpty={!loading && (!journey || filtered.length === 0)}
       emptyState={
         !journey ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -74,20 +111,24 @@ export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
               <FileText size={22} className="text-teal-400" />
             </div>
             <p className="text-sm font-medium text-gray-700">
-              No Daily Rhythm days have been created yet.
+              {statusTab === 'All' ? 'No Daily Rhythm days have been created yet.' : `No ${statusTab} days.`}
             </p>
-            <p className="text-xs text-gray-400 mt-1">Click "New Day" to write Day 1.</p>
-            <button
-              onClick={() => onNewDay(journey!.id)}
-              className="mt-5 px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 transition-colors"
-            >
-              + New Day
-            </button>
+            {statusTab === 'All' && (
+              <>
+                <p className="text-xs text-gray-400 mt-1">Click "New Day" to write Day 1.</p>
+                <button
+                  onClick={() => setShowNewModal(true)}
+                  className="mt-5 px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 transition-colors"
+                >
+                  + New Day
+                </button>
+              </>
+            )}
           </div>
         )
       }
     >
-      {days.map(step => (
+       {filtered.map(step => (
         <ContentStudioListItem
           key={step.day}
           iconBg="bg-teal-50"
@@ -109,16 +150,35 @@ export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
           }
           status={<StatusBadge status={(step as any).status ?? 'Draft'} />}
           actions={
-            <button
-              onClick={() => onEditDay(journey!.id, step.day)}
-              className={actionBtnCls}
-            >
-              Edit
-            </button>
+             <>
+               <button onClick={() => onEditDay(journey!.id, step.day)} className={actionBtnCls}>Edit</button>
+             </>
           }
           onClick={() => onEditDay(journey!.id, step.day)}
         />
       ))}
     </ContentStudioListPage>
+
+    {showNewModal && journey && (
+      <NewDayModal
+        journeyId={journey.id}
+        onClose={() => setShowNewModal(false)}
+        onScratch={() => { setShowNewModal(false); onNewDay(journey.id); }}
+        onCreated={(day) => { setShowNewModal(false); onEditDay(journey.id, day); }}
+      />
+    )}
+
+    {showLabelsModal && journey && (
+      <GenerateLabelsModal
+        itemCount={days.filter(s => !(s as any).isCompletionStep).length}
+        onApply={async (opts) => {
+          const result = await bulkGenerateStepLabels(journey.id, opts, user?.id);
+          await refreshSteps(journey.id);
+          return result.updated;
+        }}
+        onClose={() => setShowLabelsModal(false)}
+      />
+    )}
+  </>
   );
 }

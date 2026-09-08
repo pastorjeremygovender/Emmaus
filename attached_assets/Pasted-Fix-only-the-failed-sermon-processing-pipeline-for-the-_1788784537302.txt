@@ -1,0 +1,42 @@
+Fix only the failed sermon-processing pipeline for the sermon “Dare to Trust.”
+
+Current production error:
+operator does not exist: text = uuid
+
+The transcription completed successfully and must not be repeated, deleted, or overwritten. The failure occurs when “Creating 5-Day Companion” begins, and the next stage is waiting because the previous stage failed.
+
+Before changing anything:
+
+1. Inspect the server logs and obtain the complete PostgreSQL error context, including the failing SQL/query, table, columns and parameter types.
+2. Identify exactly where a text column is being compared with a UUID value.
+3. Confirm the actual database types from the schema rather than guessing.
+4. Check whether the mismatch was introduced by a migration, schema drift, or application query.
+
+Then make the smallest safe correction:
+
+- Prefer correcting the application query or parameter so both sides use their proper intended type.
+- Do not broadly alter production column types.
+- Do not delete or recreate the sermon.
+- Do not rerun transcription.
+- Do not lose or overwrite the audio, transcript, title, metadata or existing generated content.
+- Do not change unrelated content pipelines, databases, Secrets, DNS or deployment settings.
+- Preserve compatibility with older sermon records if their identifiers are stored as text.
+- Do not hide the error with a generic catch or unsafe cast.
+
+After fixing it:
+
+1. Add a regression test covering this exact text-versus-UUID mismatch.
+2. Resume processing from “Creating 5-Day Companion” using the saved transcript.
+3. Confirm all five companion days are generated—not four.
+4. Confirm the remaining processing stages finish.
+5. Confirm the sermon remains in review and is not automatically published.
+6. Report:
+   - the failing query and columns;
+   - their database types;
+   - the root cause;
+   - the files changed;
+   - the test results;
+   - whether any migration was required;
+   - confirmation that transcription was not rerun and no content was lost.
+
+Do not republish or deploy unless I separately approve it.

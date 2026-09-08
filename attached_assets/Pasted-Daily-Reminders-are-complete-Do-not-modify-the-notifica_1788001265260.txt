@@ -1,0 +1,167 @@
+Daily Reminders are complete. Do not modify the notification, Cloudflare scheduler, service-worker push handling, reminder database tables or reminder security.
+
+Now repair only Dark Mode and Text Size.
+
+FIRST AUDIT
+
+Before changing code, identify:
+
+1. Why the Text Size buttons change selection but do not visibly change the app.
+2. Where the text-size preference is currently stored.
+3. Which components use hard-coded font sizes instead of shared typography tokens.
+4. Which light and dark colours are hard-coded rather than using theme variables.
+5. Why dark mode currently combines pale outer section cards with harsh near-black inner cards.
+
+Then implement the following.
+
+DARK MODE
+
+The dark page background is good, but the cards do not feel like a cohesive dark theme.
+
+Design intention:
+- Calm
+- Warm
+- Gentle
+- Premium
+- Highly readable
+- Clearly recognisable as Emmaus
+
+Requirements:
+
+- Keep a deep charcoal/navy background rather than pure black.
+- Do not use nearly black inner cards against pale daytime outer cards.
+- Create dark-mode-specific versions of all section surfaces.
+- Use softer elevated charcoal inner cards.
+- Give each outer section card a muted dark tint that preserves its identity:
+  - Start Here: warm gold
+  - Sermon Companions: blue
+  - Daily Devotionals: violet
+  - Walks: green
+  - Journeys: its existing colour identity
+- Maintain clear visual separation between the page background, outer section card and inner content card.
+- Keep section headings and coloured indicators recognisable.
+- Use warm off-white for primary text rather than stark white.
+- Ensure secondary text remains clearly readable.
+- Improve the contrast of search fields, borders, disabled buttons, remove icons, completion indicators and empty-state controls.
+- Disabled controls must look disabled but must not become illegible.
+- Give the bottom navigation a stable dark surface. It must not look transparent, blurred or mismatched.
+- Apply the theme consistently across:
+  - Today’s Steps
+  - Daily Rhythm
+  - My Bible
+  - Bible reading
+  - Discover
+  - Walks
+  - Journeys
+  - Devotionals
+  - Sermon Companions
+  - Ask Emmaus
+  - Groups
+  - Settings and other modals
+  - Admin screens only where they already support the user theme
+- Do not alter layouts, content, navigation or functionality.
+- Do not remove the existing light theme.
+- Build shared semantic colour tokens rather than styling individual screens independently.
+- Check every component for hard-coded white, black and light-mode background values.
+
+TEXT SIZE
+
+The Standard, Large and Extra Large controls currently have no visible effect. Repair the feature completely.
+
+Requirements:
+
+- Apply the selected size immediately, without a refresh.
+- Persist the preference for the signed-in user.
+- Restore it when Emmaus is reopened or the user signs in again.
+- If account persistence temporarily fails, retain the setting locally and synchronise safely later.
+- Use a root attribute, CSS custom properties or shared typography tokens consumed by the full user-facing app.
+- Do not use browser zoom or transform: scale.
+- Do not enlarge every element indiscriminately.
+- Preserve the hierarchy between body text, captions, buttons, headings and display headings.
+
+Use these approximate scales:
+
+- Standard: 100%
+- Large: 112.5%
+- Extra Large: 125%
+
+Apply the preference throughout:
+
+- Daily Rhythm content
+- Bible text
+- Walk and Journey content
+- Devotionals
+- Sermon Companions
+- Ask Emmaus answers
+- Groups
+- Settings
+- Buttons and labels where appropriate
+- Navigation where larger text will not damage usability
+
+Mobile layout requirements:
+
+- Cards and buttons must grow vertically with their content.
+- Never clip or overlap text.
+- Avoid unnecessary title truncation.
+- Long titles must wrap where practical.
+- Bottom navigation must remain usable.
+- Modals must remain within the viewport and scroll correctly.
+- Controls must not disappear offscreen.
+- Bible reading must remain comfortable at Extra Large.
+- Minimum touch-target sizes must be preserved.
+
+SETTINGS UI
+
+- Clearly show the selected Text Size option.
+- Keep the label at the top in sync: Standard, Large or Extra Large.
+- Add a short live preview sentence beneath the options:
+
+“Jesus walks with you through every season.”
+
+The preview must immediately change when a size is selected.
+
+PERSISTENCE AND INITIAL LOAD
+
+- Prevent a flash of the wrong theme or text size when the app starts.
+- Apply saved appearance preferences before rendering the main interface where practical.
+- Do not reset preferences during ordinary deployments or service-worker updates.
+- Do not interfere with Daily Rhythm’s new-day opening rules.
+- Do not interfere with Admin access or authentication routing.
+
+TESTING
+
+Test all combinations:
+
+1. Light + Standard
+2. Light + Large
+3. Light + Extra Large
+4. Dark + Standard
+5. Dark + Large
+6. Dark + Extra Large
+
+Test on a narrow Android-sized viewport and desktop.
+
+Verify:
+
+- Each text-size option produces an obvious visible difference.
+- The live preview changes instantly.
+- Reading content changes throughout the app, not only inside Settings.
+- Preferences survive refresh and reopening.
+- Preferences survive sign-out and sign-in.
+- No text is clipped, hidden or overlapping.
+- Dark-mode cards feel intentionally designed rather than recoloured.
+- Contrast is accessible.
+- Daily Reminders and their service worker still work.
+- Existing Daily Rhythm, Bible, Ask Emmaus and navigation tests still pass.
+
+Do not publish automatically.
+
+When complete, report:
+
+1. The original cause of the broken Text Size control.
+2. The original cause of the mismatched dark-mode cards.
+3. Files changed.
+4. Screens tested.
+5. Automated test results.
+6. Any remaining component that does not yet consume the shared theme or typography tokens.
+7. Confirmation that reminder code and configuration were not changed.

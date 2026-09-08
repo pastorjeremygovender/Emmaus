@@ -12,12 +12,14 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  getSeriesWithEntries,
+  getSeriesWithEntriesForAdmin,
   saveEntry,
   deleteEntry,
   type SeriesWithEntries,
   type DevotionalEntry,
 } from '@/lib/devotionals-api';
+import { ShareImageField } from '@/components/ShareImageField';
+import { getDevotionalLabel } from '@/lib/step-label';
 import { DevotionalReading, PreviewDevotionalContinueButton } from '@/components/DevotionalReading';
 import { resolveDisplayName } from '@/components/DailyRhythmReading';
 import { Field, ContentStudioToolbar, ConfirmDialog } from '../shared';
@@ -49,6 +51,8 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
   const [prayer, setPrayer] = useState('');
   const [nextStep, setNextStep] = useState('');
   const [closing, setClosing] = useState('');
+  const [displayLabel, setDisplayLabel] = useState('');
+  const [shareImageUrl, setShareImageUrl] = useState<string | null>(null);
   const [status, setStatus] = useState('Draft');
 
   // Toolbar state
@@ -60,7 +64,7 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
 
   const load = useCallback(async () => {
     try {
-      const d = await getSeriesWithEntries(seriesId, auth);
+      const d = await getSeriesWithEntriesForAdmin(seriesId, auth);
       setSeriesData(d);
       const entry = d.entries.find(e => e.dayNumber === day);
       if (entry) {
@@ -71,6 +75,8 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
         setPrayer(entry.prayer ?? '');
         setNextStep(entry.nextStep ?? '');
         setClosing(entry.closing ?? '');
+        setDisplayLabel(entry.displayLabel ?? '');
+        setShareImageUrl(entry.shareImageUrl ?? null);
         setStatus(entry.status);
       }
     } catch {
@@ -99,7 +105,10 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
   }, [doSave]);
 
   const currentFields = (): Partial<DevotionalEntry> => ({
-    title, scriptureReference, greeting, considerThis, prayer, nextStep, closing, status,
+    title, scriptureReference, greeting, considerThis, prayer, nextStep, closing,
+    displayLabel: displayLabel || null,
+    shareImageUrl: shareImageUrl ?? null,
+    status,
   });
 
   function patch<T>(setter: (v: T) => void, key: keyof DevotionalEntry) {
@@ -275,12 +284,43 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
             />
             <p className="mt-1 text-[11px] text-gray-400">Optional send-off at the bottom of the reading.</p>
           </Field>
+
+          <Field label="Display Label">
+            <input
+              type="text"
+              value={displayLabel}
+              onChange={e => patch(setDisplayLabel, 'displayLabel')(e.target.value)}
+              placeholder="e.g. 1 January"
+              className={textareaCls}
+            />
+            <p className="mt-1 text-[11px] text-gray-400">Optional. Members see this instead of "Day N" when set.</p>
+          </Field>
+
+          <Field label="Share Image">
+            <ShareImageField
+              value={shareImageUrl}
+              onChange={(path) => {
+                setShareImageUrl(path);
+                doSave({ ...currentFields(), shareImageUrl: path });
+              }}
+
+              stepContent={[
+                scriptureReference,
+                greeting,
+                considerThis,
+                prayer,
+                nextStep,
+                closing,
+              ].filter(Boolean).join('\n\n')}
+            />
+          </Field>
         </div>
       }
       preview={
         <DevotionalReading
           seriesTitle={seriesTitle}
           dayNumber={day}
+          displayLabel={getDevotionalLabel({ dayNumber: day, displayLabel: displayLabel || null })}
           title={title}
           greeting={greeting}
           scripture={scriptureReference}

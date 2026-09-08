@@ -1,0 +1,298 @@
+Emmaus’s first real three-person voice/video meeting exposed serious reliability and usability problems. This is not a cosmetic task.
+
+Do not add unrelated features. Audit the existing implementation, determine the root cause of every issue below, implement the fixes, and test with at least three simultaneous independent clients.
+
+Preserve all working Daily Rhythm, Daily Reminders, Bible, authentication and admin behaviour unless explicitly changed below.
+
+PART 1 — THE BIBLE MUST ALWAYS BE AVAILABLE
+
+The Daily Rhythm completion gate must never block My Bible.
+
+Required rule:
+
+- My Bible is always available to every signed-in user.
+- Users may open and use the Bible without completing that day’s 10 Minutes with Jesus.
+- Bible deep links must also bypass the Daily Rhythm gate.
+- Bible links opened from Ask Emmaus, Groups, sermons, Walks, Journeys, notifications or shared URLs must open directly to the correct Bible location.
+- Previous Bible-reading position may be restored normally.
+- Do not redirect Bible routes into Daily Rhythm.
+- Do not weaken the Daily Rhythm gate for other gated content.
+- Today’s Steps, Walks, Journeys and other existing gate rules must remain as intended.
+
+Create an explicit central route-access policy instead of scattered exceptions:
+
+Always available:
+- My Bible
+- Bible book/chapter/verse routes
+- Settings
+- Account
+- Help and permission recovery
+- Active meeting re-entry where appropriate
+
+Daily Rhythm gated:
+- Only the content already intentionally gated by the product rules
+
+Test Bible access before and after Daily Rhythm completion, on a new day, through direct URLs and from inside a meeting.
+
+PART 2 — PERMISSION PREFLIGHT BEFORE JOINING A MEETING
+
+A participant joined without receiving a working microphone/camera permission prompt. The meeting was delayed while device settings were repaired.
+
+Build a mandatory pre-join device check before entering an audio or video meeting.
+
+The pre-join screen must:
+
+- Detect whether microphone and camera APIs are supported.
+- Show the current state separately:
+  - Microphone ready
+  - Microphone permission needed
+  - Microphone blocked in device settings
+  - No microphone detected
+  - Camera ready
+  - Camera permission needed
+  - Camera blocked in device settings
+  - No camera detected
+- Request permissions only from a clear user action such as “Check microphone and camera.”
+- Let the participant hear or see a microphone-level indicator.
+- Show a local camera preview for video meetings.
+- Let the participant choose audio-only even when the meeting supports video.
+- Let the participant choose the correct microphone, speaker and camera where the browser supports device selection.
+- Explain, in simple device-specific language, how to repair blocked permissions.
+- Provide “Open device/browser settings” where the platform allows it.
+- Never leave the user waiting without explaining what is wrong.
+- Do not claim permission is ready merely because an API exists.
+- Recheck immediately when the user returns from device settings.
+- Permit joining a voice meeting without camera permission.
+- Prevent joining an audio meeting without a usable microphone unless the participant deliberately chooses listen-only.
+- Store no permission result as permanently valid; verify the real device state for each meeting.
+
+Add an accessible Help option inside the meeting:
+
+“Microphone or camera not working?”
+
+It must reopen the device check without forcing the participant out of the meeting.
+
+PART 3 — UNIVERSAL MEETING CONTROL DOCK
+
+Microphone, camera and hand controls must remain available throughout the complete meeting.
+
+Create one persistent meeting control dock that is part of the meeting shell, not an individual meeting page.
+
+It must remain visible and functional across:
+
+- Main meeting view
+- Chat
+- Shared Bible
+- Presented PDF
+- Images and other media
+- Meeting notes
+- Participant list
+- Any leader presentation screen
+
+Controls:
+
+- Mute/unmute microphone
+- Hide/show camera
+- Raise/lower hand
+- Leave meeting
+- Clear current microphone and camera state
+- Compact active-speaker/connection indicator where appropriate
+
+Requirements:
+
+- Controls must reflect the actual LiveKit track state, not a separate UI boolean.
+- If the track fails to publish, show the real failure and recovery option.
+- Do not show the microphone as active when it is not transmitting.
+- Raised-hand state must synchronise reliably for leader and participants.
+- Controls must remain reachable on narrow mobile screens without covering essential content.
+- Respect safe areas and the mobile keyboard.
+- Opening chat or shared content must not remount or destroy the meeting controls.
+- The participant must never need to navigate back to one special screen to mute.
+
+PART 4 — RELIABLE LEADER-CONTROLLED CHAT
+
+The leader’s “Open Chat for everyone” control was unreliable. With three people, different combinations of participants had chat open or closed. Repeated toggling was required.
+
+Audit the exact state model. Do not repair this with extra client-side toggle events.
+
+Implement authoritative meeting presentation state:
+
+- Store the current shared panel state on the server or meeting state authority:
+  - none
+  - chat
+  - Bible
+  - PDF/document
+  - image/media
+  - other supported presentation
+- Include a monotonically increasing version or timestamp.
+- When the leader changes the shared panel, publish one authoritative state update.
+- Every connected participant applies the newest version idempotently.
+- A participant joining late receives the current state immediately.
+- A reconnecting participant receives the current state immediately.
+- Duplicate or out-of-order events must not reverse the interface.
+- Never implement this as “toggle chat.” Send explicit commands:
+  - set shared panel to chat/open
+  - set shared panel to none/closed
+- The leader control must accurately display the current authoritative state.
+- If a client fails to apply the state, retry or resynchronise automatically.
+- Participants may be allowed to minimise a leader-opened panel locally only if the product explicitly supports that. Clearly separate local minimisation from the leader’s shared state.
+- Do not repeatedly force-open a panel after a participant deliberately minimises it unless the leader issues a new presentation action.
+
+Test:
+
+- Three clients already connected
+- Late join
+- Temporary network interruption
+- Reconnect
+- Rapid open/close
+- Switching chat → Bible → PDF → chat
+- Duplicate and delayed events
+
+PART 5 — PRESENTING PDFS AND MEDIA MUST NOT REMOVE USERS
+
+Opening the presented PDF caused participants to leave or disconnect from the meeting.
+
+This is a critical defect.
+
+Required architecture:
+
+- The meeting connection must live in a persistent meeting shell above the changing content views.
+- Opening chat, Bible, a PDF, an image or media must not navigate away from or unmount the LiveKit room/provider.
+- Do not use normal external-page navigation for presented content.
+- Display PDFs inside an in-app viewer, panel, drawer, modal or nested meeting route that preserves the active connection.
+- Opening or closing shared content must not call disconnect, leave, cleanup or unpublish tracks.
+- Browser Back must return to the meeting view without ending the meeting.
+- External files must open safely without replacing the Emmaus PWA unless the user explicitly chooses “Open externally.”
+- If “Open externally” is used, clearly warn that the external application may obscure or interrupt the meeting.
+- Prefer an embedded viewer with page navigation, zoom and download where permitted.
+- The leader may present a document without forcing every participant’s browser to navigate to a new URL.
+- Participants must be able to follow the presented document while retaining universal microphone, camera, hand and leave controls.
+- Audio must continue uninterrupted while PDFs and images are viewed.
+- Camera tracks must remain published if enabled.
+- Rejoining must not be required after closing a document.
+
+Audit component lifecycle and report precisely which navigation/unmount behaviour caused the disconnections.
+
+PART 6 — PARTICIPANT CHAT MEDIA UPLOADS
+
+Participants could not upload media in meeting chat.
+
+First inspect the intended permission model.
+
+Required behaviour:
+
+- Ordinary meeting participants may send text and upload the allowed meeting-chat media unless the leader or group policy has deliberately disabled uploads.
+- Leader-only presentation privileges must not accidentally block ordinary chat attachments.
+- Separate permissions:
+  - send text
+  - upload chat attachment
+  - present content to everyone
+  - control shared meeting panel
+- Participants may upload attachments to chat.
+- Only authorised leaders may force-present content to everyone.
+- Show a clear explanation when an upload is unavailable or rejected.
+- Never silently fail.
+- Display upload progress, success and failure.
+- Allow safe file types appropriate to Emmaus:
+  - images
+  - PDF documents
+  - short audio/voice notes where already supported
+  - other currently approved media
+- Enforce safe server-side MIME validation, file-size limits and access control.
+- Do not trust only file extensions.
+- Attachments must remain private to the correct group/meeting.
+- Members must not access another group’s files by guessing a URL.
+- Uploaded content must not contain executable HTML or scripts.
+- Avoid loading full large files into browser memory.
+- A failed upload must not affect the LiveKit connection.
+- Uploading and opening an attachment must not disconnect anyone.
+
+PART 7 — CONNECTION RESILIENCE
+
+Audit why three participants could fall into inconsistent states.
+
+Add clear connection states:
+
+- Connecting
+- Connected
+- Reconnecting
+- Connection degraded
+- Disconnected
+- Permission blocked
+
+Requirements:
+
+- Temporary network interruption should trigger LiveKit reconnection rather than immediately removing the participant.
+- UI panels and meeting state must survive reconnect.
+- Restore local microphone/camera intentions after reconnect where permission remains valid.
+- Restore the authoritative shared panel after reconnect.
+- Do not create duplicate participant sessions.
+- Do not mark a participant absent during a brief reconnect.
+- Provide a clear Rejoin action only when automatic recovery truly fails.
+- Log useful technical diagnostics without recording private meeting content or exposing credentials.
+
+PART 8 — PERFORMANCE AND SCALE
+
+The failed test involved only three participants and was predominantly voice. Do not attribute these problems to scale without evidence.
+
+Run a reliability test with:
+
+- Three independent authenticated clients
+- Six simulated or real clients where the environment permits
+- Audio-only meeting
+- Mixed audio/video meeting
+- Chat opened and closed repeatedly
+- Bible presentation
+- PDF presentation
+- Participant image/PDF upload
+- Microphone mute/unmute from every panel
+- Camera hide/show from every panel
+- Hand raise from every panel
+- One late join
+- One temporary disconnect and reconnect
+
+Measure and report:
+
+- Join success
+- Permission-preflight behaviour
+- Media-track publication success
+- State synchronisation
+- Unexpected disconnections
+- Duplicate participants
+- Chat delivery
+- Attachment upload
+- PDF presentation
+- Reconnection time
+- Relevant client/server errors
+
+Do not claim a successful multi-client test by opening three tabs that share one session if that prevents genuine independent participant identities. Use isolated browser contexts or appropriate integration tests.
+
+PART 9 — RELEASE SAFETY
+
+Before changing code:
+
+- Create a checkpoint.
+- Map the persistent meeting provider/component hierarchy.
+- Identify every route or state transition that can unmount or disconnect the room.
+- Identify the authority for chat/presentation state.
+- Identify participant-versus-leader upload permissions.
+- Identify how meeting permission failures are currently surfaced.
+
+Do not rewrite the complete meeting system unless the audit proves it necessary.
+
+Do not publish automatically.
+
+At completion report:
+
+1. Root cause of every reported problem.
+2. Files changed.
+3. Database changes.
+4. Permission changes.
+5. Why the PDF previously disconnected participants.
+6. Why chat state diverged.
+7. Why participant uploads were blocked.
+8. How the meeting provider now survives every content view.
+9. Results from three-client and six-client tests.
+10. Confirmation that My Bible always bypasses the Daily Rhythm gate.
+11. Confirmation that reminder code, scheduler and secrets were not changed.
+12. Remaining risks or tests requiring real physical devices.

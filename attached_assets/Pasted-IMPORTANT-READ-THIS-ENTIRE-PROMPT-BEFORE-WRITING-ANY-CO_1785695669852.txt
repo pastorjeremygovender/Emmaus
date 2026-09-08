@@ -1,0 +1,311 @@
+IMPORTANT: READ THIS ENTIRE PROMPT BEFORE WRITING ANY CODE.
+
+This is an enhancement to the EXISTING Emmaus admin panel. It is NOT a rewrite.
+
+FIRST COMPLETE AN AUDIT.
+
+Before making any changes:
+
+• Audit the existing Sermon Companion implementation.
+• Audit the existing admin panel.
+• Audit Ask Emmaus retrieval.
+• Audit Bible Links.
+• Audit the database.
+• Audit storage.
+• Audit authentication.
+• Reuse existing code wherever possible.
+• DO NOT create duplicate tables, duplicate pages, duplicate retrieval systems or duplicate admin tools.
+• Report your findings before implementing.
+
+OBJECTIVE
+
+Replace the existing Sermon Companion workflow with a unified Sermons workflow.
+
+Every sermon should become ONE master record.
+
+Everything sermon-related must be generated from that single record.
+
+There must never be duplicate sermon content.
+
+--------------------------------------------------
+
+ADMIN MENU
+
+Rename:
+
+Sermon Companion
+
+to
+
+Sermons
+
+Do NOT lose any existing data.
+
+Automatically migrate existing Sermon Companions into Sermons.
+
+Existing Companion content must continue working.
+
+--------------------------------------------------
+
+NEW SERMON
+
+Create one workflow.
+
+Fields
+
+Title
+
+Speaker
+
+Date
+
+Main Scripture
+
+Series (optional)
+
+Upload Audio (optional)
+
+YouTube URL (optional)
+
+Notes
+
+Buttons
+
+Process Sermon
+
+Save Draft
+
+Cancel
+
+--------------------------------------------------
+
+PROCESS SERMON
+
+When Process Sermon is clicked:
+
+If audio exists:
+
+• Transcribe audio.
+• Clean punctuation.
+• Generate transcript.
+
+Always:
+
+• Detect Scripture references.
+• Generate summary.
+• Generate themes.
+• Generate timestamped sections where possible.
+• Generate the existing 5-Day Sermon Companion.
+• Generate Bible Links.
+• Prepare Ask Emmaus indexing.
+
+DO NOT publish automatically.
+
+--------------------------------------------------
+
+REVIEW PAGE
+
+After processing, display ONE review page.
+
+Use collapsible sections.
+
+▼ Sermon Details
+
+▼ Summary
+
+▼ Transcript
+
+▼ Companion
+
+▼ Bible Links
+
+▼ Ask Emmaus Preview
+
+Every section must have
+
+Edit
+
+Save
+
+Regenerate
+
+The user should never need to jump between multiple admin pages.
+
+--------------------------------------------------
+
+PUBLISH
+
+When Publish is clicked:
+
+Automatically:
+
+✓ Publish Sermon
+
+✓ Publish Sermon Home
+
+✓ Publish Companion
+
+✓ Publish Bible Links
+
+✓ Index into Ask Emmaus
+
+✓ Make searchable immediately
+
+No further admin work.
+
+--------------------------------------------------
+
+USER EXPERIENCE
+
+Today's Steps
+
+Replace the current Sermon Companion card with
+
+THIS WEEK'S SERMON
+
+Title
+
+Speaker
+
+Continue
+
+The ENTIRE card should be clickable.
+
+Remove
+
+View Previous Reflections
+
+--------------------------------------------------
+
+SERMON HOME
+
+Automatically generate.
+
+Display ONLY sections that exist.
+
+Title
+
+Speaker
+
+Date
+
+Summary
+
+🎧 Listen
+(if audio exists)
+
+📺 Watch
+(if YouTube URL exists)
+
+📖 Read
+(if transcript exists)
+
+📚 Continue 5-Day Companion
+
+📖 Related Bible Passages
+
+🤖 Ask Emmaus About This Sermon
+
+Everything must come from ONE sermon record.
+
+--------------------------------------------------
+
+ASK EMMAUS
+
+Do NOT replace the existing retrieval system.
+
+Improve it.
+
+When a sermon is published:
+
+Add it into the EXISTING Ask Emmaus knowledge base.
+
+Ask Emmaus should search:
+
+1 Scripture
+
+2 Bible Study Notes
+
+3 Walks
+
+4 Daily Devotionals
+
+5 Published Sermons
+
+Scripture always remains the primary authority.
+
+When referencing a sermon include:
+
+Title
+
+Speaker
+
+Timestamp (if available)
+
+Link back to Sermon Home
+
+--------------------------------------------------
+
+BIBLE
+
+If a sermon references Joshua 24, Romans 8 etc.
+
+Automatically create Related Sermons links.
+
+When viewing those Bible passages users should see:
+
+Related Sermons
+
+Only published sermons.
+
+--------------------------------------------------
+
+MIGRATION
+
+Every existing Sermon Companion must become a Sermon.
+
+Transcript may be blank.
+
+Audio may be blank.
+
+Watch may be blank.
+
+Nothing should break.
+
+--------------------------------------------------
+
+ARCHITECTURE
+
+One sermon.
+
+One database record.
+
+One upload.
+
+One review.
+
+One publish.
+
+Everything else generated automatically.
+
+Reuse the existing Sermon Companion wherever possible.
+
+Do NOT rebuild functionality that already exists.
+
+--------------------------------------------------
+
+IMPORTANT
+
+At the end provide:
+
+1. Audit findings.
+
+2. Components reused.
+
+3. Components changed.
+
+4. Database changes.
+
+5. Any risks before deployment.
+
+Do not begin coding until the audit is complete.

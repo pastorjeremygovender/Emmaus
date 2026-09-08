@@ -1,0 +1,265 @@
+The new Daily Rhythm Opening Gate is working in its primary purpose: opening Emmaus correctly takes the user into today’s Daily Rhythm. Do not remove, weaken, bypass, or redesign that successful behaviour.
+
+However, production testing has identified four regressions that must now be corrected.
+
+OBSERVED RESULTS
+
+1. Opening Emmaus correctly loads today’s Daily Rhythm. This is successful and must be preserved.
+
+2. After tapping Complete at the bottom of 10 Minutes with Jesus:
+
+- the completion screen does not remain available normally
+- 10 Minutes with Jesus reloads
+- attempting to navigate elsewhere reloads Daily Rhythm again
+- this forced loop happens once
+- afterward the app functions normally
+
+3. Initial loading and subsequent reloads are extremely slow—long enough to appear broken.
+
+4. The branded splash screen showing:
+
+Emmaus
+Isipingo Community Church
+
+no longer appears.
+
+5. The Admin panel is no longer accessible through the normal interface. Signing out and signing back in correctly returns to Today’s Steps, but there is no working intentional path into Admin.
+
+Do not make speculative patches yet.
+
+First inspect the implementation and identify the exact cause of each regression. Then implement the focused corrections below without undoing the Opening Gate.
+
+A. FIX THE POST-COMPLETION LOOP
+
+The most likely issue is stale Opening Gate state after the completion mutation, but verify it from the code and logs.
+
+Trace this exact sequence:
+
+1. User enters DAILY_RHYTHM_REQUIRED.
+2. User completes today’s Daily Rhythm.
+3. Completion is committed on the server.
+4. Client progress is refreshed.
+5. Opening decision is invalidated or refreshed.
+6. Gate transitions to DAILY_RHYTHM_COMPLETE.
+7. Completion screen remains visible.
+8. User chooses the next destination.
+9. Navigation occurs without the gate sending the user back.
+
+Required behaviour:
+
+- The completion request must finish successfully before the UI treats the day as complete.
+- The server completion response should return the authoritative updated Daily Rhythm state, including completedToday, assignedDay, localDate, journeyId and stepId.
+- Immediately after successful completion, update or invalidate the Opening Gate decision.
+- The gate must transition from DAILY_RHYTHM_REQUIRED to DAILY_RHYTHM_COMPLETE without waiting for a later reload, visibility event, timer, retry or second startup.
+- Clear or replace any cached REQUIRED decision for that user, local date and launch session.
+- A replayed opening decision must not continue returning REQUIRED after completion has been committed.
+- Refetch the authoritative decision if necessary, but do not create a visible redirect loop.
+- Do not let stale JourneyContext progress or stale step arrays overwrite the server-confirmed completion.
+- Do not call window.location.reload() as the solution.
+- Do not temporarily bypass the Opening Gate.
+- Do not mark completion optimistically before the server confirms it.
+
+COMPLETION SCREEN REQUIREMENT
+
+After successful completion, the user must remain on the completion screen.
+
+Do not automatically send the user to Today’s Steps.
+
+The completion screen must wait for the user to choose:
+
+- Back to Today’s Steps
+- Review Previous Days
+- Continue to a preserved pending destination, when applicable
+
+While the completion screen is displayed, the Opening Gate must recognise the successful completion and must not reopen Daily Rhythm.
+
+Add an automated regression test proving:
+
+- the user completes today’s Daily Rhythm
+- the completion screen remains visible
+- the gate changes to DAILY_RHYTHM_COMPLETE
+- pressing Back to Today’s Steps works on the first attempt
+- opening another permitted route works on the first attempt
+- Daily Rhythm does not reload
+- no repeated navigation occurs
+
+B. FIX THE VERY SLOW STARTUP
+
+Instrument the startup before changing it.
+
+Measure and report separate timings for:
+
+- authentication restoration
+- profile retrieval
+- timezone resolution
+- opening-decision endpoint
+- assignment lookup/creation
+- Daily Rhythm progress lookup
+- target-step lookup
+- JourneyContext loading
+- route rendering
+- total time to interactive
+
+Check specifically for:
+
+- duplicate opening-decision requests
+- React effects rerunning unnecessarily
+- serial requests that can safely run in parallel
+- the Opening Gate waiting for the complete Journey catalogue
+- the Opening Gate waiting for all Journey steps
+- the Opening Gate waiting for reflections, sermons, devotionals or unrelated Today’s Steps data
+- repeated authentication validation
+- exponential retry delays
+- completion causing full application reinitialisation
+- database queries missing useful indexes
+- a request waiting for another request that is itself waiting for the gate
+- development-only double execution being reproduced in production
+- unnecessary hard reloads
+- stale request cancellation and immediate replacement
+- the one-second splash delay being combined with slow context loading
+
+The Opening Gate should load only the minimum information required to decide:
+
+- authenticated identity
+- role and onboarding status
+- timezone
+- local date
+- canonical Daily Rhythm assignment
+- current target step
+- actual completion state
+- validated pending destination
+
+It must not wait for every Journey, every step, every reflection or the full Today’s Steps screen before making the opening decision.
+
+When DAILY_RHYTHM_REQUIRED is returned, render the server-selected Daily Rhythm step using the opening payload or a focused target-step request. Load unrelated app content afterward.
+
+When DAILY_RHYTHM_COMPLETE is returned, allow Today’s Steps to render its shell and load secondary cards progressively.
+
+Performance requirements:
+
+- Show immediate visual feedback rather than a blank screen.
+- Do not weaken the authoritative server decision for speed.
+- Do not use stale local completion data as a shortcut.
+- Avoid duplicate calls for the same user and launch session.
+- Report measured before-and-after timings.
+- If an external service or database query remains slow, identify it explicitly.
+
+C. RESTORE THE BRANDED SPLASH SCREEN
+
+Restore the existing branded splash experience:
+
+Emmaus
+Isipingo Community Church
+
+The splash screen is presentation, not routing authority.
+
+Required behaviour:
+
+- It appears immediately on a genuine cold app/PWA launch.
+- It may remain visible while AUTH_LOADING and OPENING_CONTEXT_LOADING are resolved.
+- It must not independently choose a destination.
+- It must not use sessionStorage or localStorage to decide whether Daily Rhythm is required.
+- It must not add a mandatory fixed delay after the Opening Gate is already ready.
+- It should fade smoothly into the server-selected destination.
+- It must not flash repeatedly during ordinary internal navigation.
+- It must not disappear merely because the new Opening Gate replaced Welcome.tsx routing.
+
+Separate the branded visual splash from the old Welcome routing logic. Preserve the visual experience while permanently retiring its former authority over navigation.
+
+Add tests proving:
+
+- cold PWA launch shows the branded splash
+- the splash displays while opening is being resolved
+- the gate remains the sole routing authority
+- internal route changes do not replay the splash
+- a startup error replaces the splash with OPENING_ERROR rather than leaving it indefinitely
+
+D. RESTORE INTENTIONAL ADMIN ACCESS
+
+The correct policy is:
+
+- Being an admin must not automatically send a normal Emmaus login to /admin.
+- Normal sign-in should continue through the Opening Gate and into Daily Rhythm or Today’s Steps.
+- An authenticated admin must still have an intentional, visible way to open the Admin panel.
+- A normal member must not see or access that control.
+- Direct intentional access to /admin must work for authorised admins.
+- Back to App from Admin must pass through the normal Opening Gate.
+
+Inspect the previous Admin entry mechanism and determine why it disappeared or is now intercepted.
+
+Restore a clear Admin control for users with the appropriate role. Use the most suitable existing location, such as the profile/account menu or an existing admin-only control. Do not clutter the main member navigation.
+
+Required route behaviour:
+
+1. Admin signs in normally:
+   - unfinished Daily Rhythm → Daily Rhythm
+   - completed Daily Rhythm → Today’s Steps
+
+2. Admin deliberately selects Admin:
+   - server verifies the admin role
+   - Admin panel opens
+   - the Opening Gate recognises explicit authorised Admin intent and does not redirect back to Today’s Steps
+
+3. Admin deliberately opens /admin:
+   - server verifies the role
+   - Admin opens
+
+4. Normal member opens /admin:
+   - access is denied safely
+   - member is returned through the normal Opening Gate
+
+5. Admin selects Back to App:
+   - return through the Opening Gate
+   - incomplete Daily Rhythm opens
+   - otherwise Today’s Steps opens
+
+6. Signing out from Admin:
+   - completes the sign-out operation before navigation
+   - clears account-scoped gate and admin-intent state
+   - does not leak the previous route or decision into the next account
+
+Admin intent must be explicit and short-lived. Do not store a permanent bypass flag.
+
+E. PRESERVE THE SUCCESSFUL FOUNDATION
+
+The following must remain true after these corrections:
+
+- New user receives Day 1.
+- Existing user with incomplete Daily Rhythm opens the correct current day.
+- Reopening while incomplete returns to that same day.
+- Actual completion releases the user immediately.
+- Completion screen waits for the user.
+- Completed-today user is not forced back into Daily Rhythm.
+- The next local date opens exactly the next published day.
+- Missed calendar days do not skip content days.
+- Different accounts cannot reuse each other’s state.
+- Missing content produces OPENING_ERROR, not /walk.
+- Stale client steps cannot reject a valid server-selected day.
+- No other feature becomes a competing opening authority.
+
+IMPLEMENTATION PROCESS
+
+Before changing code:
+
+1. Create a restore point.
+2. Reproduce and log all four regressions.
+3. Report the confirmed cause of each.
+4. List the files that will change.
+
+Then implement the focused corrections.
+
+Do not publish automatically.
+
+Before reporting completion, provide:
+
+- confirmed cause of each regression
+- files changed
+- database changes, if any
+- before-and-after performance timings
+- automated test results
+- any failed or skipped tests
+- evidence that the original Opening Gate tests still pass
+- a concise manual test sequence for me
+- rollback instructions
+
+Do not call this fixed merely because it compiles. Prove the completion transition, splash display, performance improvement and intentional Admin access independently.

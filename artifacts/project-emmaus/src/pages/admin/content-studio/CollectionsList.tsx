@@ -13,8 +13,9 @@ import type { Collection } from '@/lib/collections-api';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmDialog } from '../shared';
 import ContentStudioListItem from './ContentStudioListItem';
-import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls } from './ContentStudioListPage';
+import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls, ReorderButtons } from './ContentStudioListPage';
 import NewCollectionModal from './NewCollectionModal';
+import { moveVisibleOrder, reorderContent } from '@/lib/content-reorder-api';
 
 const STATUS_TABS = ['All', 'Draft', 'Published', 'Archived'] as const;
 
@@ -55,6 +56,27 @@ export default function CollectionsList({ onNew: _onNew, onEdit, onViewJourneys 
     c => statusTab === 'All' || c.status === statusTab,
   );
 
+  const ordered = [...filtered].sort((a, b) => a.displayOrder - b.displayOrder || a.createdAt.localeCompare(b.createdAt));
+  const reorderable = [...collections]
+    .filter(collection => collection.status !== 'Archived')
+    .sort((a, b) => a.displayOrder - b.displayOrder || a.createdAt.localeCompare(b.createdAt));
+  const moveCollection = async (id: string, direction: -1 | 1) => {
+    const visible = ordered.filter(collection => collection.status !== 'Archived');
+    const nextIds = moveVisibleOrder(
+      reorderable.map(collection => collection.id),
+      visible.map(collection => collection.id),
+      id,
+      direction,
+    );
+    if (nextIds.join(',') === reorderable.map(collection => collection.id).join(',')) return;
+    try {
+      await reorderContent('collection', nextIds);
+      await load();
+    } catch {
+      // The list remains unchanged until the server confirms the transaction.
+    }
+  };
+
   return (
     <>
       <ContentStudioListPage
@@ -93,7 +115,7 @@ export default function CollectionsList({ onNew: _onNew, onEdit, onViewJourneys 
           </div>
         }
       >
-        {filtered.map(c => {
+        {ordered.map((c, index) => {
           const isMenuOpen = openMenu === c.id;
           const metaText = [
             `${c.journeyCount} walk${c.journeyCount !== 1 ? 's' : ''}`,
@@ -119,6 +141,12 @@ export default function CollectionsList({ onNew: _onNew, onEdit, onViewJourneys 
               onClick={() => onEdit(c.id)}
               actions={
                 <>
+                  {c.status !== 'Archived' && (() => {
+                    const visible = ordered.filter(collection => collection.status !== 'Archived');
+                    const reorderIndex = visible.findIndex(collection => collection.id === c.id);
+                    return <ReorderButtons canMoveUp={reorderIndex > 0} canMoveDown={reorderIndex >= 0 && reorderIndex < visible.length - 1}
+                      onMoveUp={() => void moveCollection(c.id, -1)} onMoveDown={() => void moveCollection(c.id, 1)} label={c.title} />;
+                  })()}
                   <button onClick={() => onEdit(c.id)} className={actionBtnCls}>
                     Edit
                   </button>

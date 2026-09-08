@@ -1,0 +1,226 @@
+Fix the mobile PDF presentation experience and simplify joining an active meeting to one action.
+
+A. FIX PRESENTED PDFs ON MOBILE
+
+Current confirmed behaviour:
+1. The leader presents a PDF.
+2. The participant sees a presentation card.
+3. The participant taps Open PDF.
+4. Emmaus launches another browser/PWA context.
+5. A splash/loading screen appears.
+6. The PDF eventually opens in an external browser-style viewer.
+7. The participant is taken away from the Emmaus meeting and has difficulty returning.
+
+This is not acceptable meeting behaviour.
+
+Required behaviour:
+- Display presented PDFs inside Emmaus.
+- Do not open a new browser tab.
+- Do not launch a second PWA instance.
+- Do not navigate to a raw storage URL.
+- Do not replace the current meeting route.
+- Do not disconnect or recreate the LiveKit meeting connection.
+- Do not show the Emmaus splash screen when opening a presented PDF.
+
+Use an in-app PDF presentation viewer.
+
+For mobile, do not depend on a raw PDF inside an iframe because Android browsers and PWAs handle this inconsistently.
+
+Use PDF.js or an equivalent reliable in-app renderer to:
+- load the PDF from its authenticated URL
+- render pages within the Emmaus presentation surface
+- fit each page to the phone width
+- preserve the page aspect ratio
+- allow vertical page scrolling
+- allow zoom where practical
+- show the current page and total page count
+- provide Previous and Next page controls
+- provide a clear Close or Back to group control
+
+While viewing the PDF:
+- Keep Mute/Unmute visible.
+- Keep Raise/Lower hand visible.
+- Keep Camera on/off visible for video meetings.
+- Keep Leave visible.
+- Do not cover the PDF with the controls.
+- Keep the participant connected to the live meeting.
+- Continue receiving audio.
+- Continue receiving presentation and meeting-state updates.
+
+The participant should be able to close the PDF viewer and return to the exact Group screen without reconnecting.
+
+If the PDF cannot be rendered:
+- Show a helpful error.
+- Offer Download PDF or Open externally as a secondary fallback only.
+- Clearly warn that Open externally will leave Emmaus.
+- Never make external opening the primary action.
+
+Use a signed or authenticated file URL that PDF.js can fetch. Fix storage CORS or authorization correctly if necessary. Do not expose a private permanent URL.
+
+B. OPTIONAL SYNCHRONIZED PDF PAGES
+
+If the leader changes the presented PDF page:
+- Broadcast the current page number in real time.
+- Participants following the presentation move to that page immediately.
+- A participant may turn off “Follow presenter” and browse independently.
+- They can resume following without refreshing.
+
+This must use the existing authoritative presentation state and real-time meeting channel.
+
+C. REMOVE THE THREE-STAGE JOIN PROCESS
+
+Current process:
+1. Tap Join Meeting.
+2. Tap Join Live Audio.
+3. Choose an option and tap Join gathering.
+
+This is too much and contains duplicate join actions.
+
+For an active audio meeting, show one primary button:
+
+“Join Meeting”
+
+When tapped:
+1. Request microphone permission if it has not already been decided.
+2. Connect to the active LiveKit audio meeting.
+3. Publish the microphone using the user’s last known choice or the default state.
+4. Update the participant as joined.
+5. Display the live meeting controls.
+
+Do not show a second “Join Live Audio” button.
+Do not require a third “Join gathering” tap.
+Do not render duplicate meeting-entry cards.
+
+The “Meeting in Progress” card must be the single source of entry.
+
+D. DEFAULT AUDIO JOIN BEHAVIOUR
+
+For an audio meeting:
+- Join with the microphone on by default unless the user previously chose muted or listen-only.
+- The browser’s own first-time microphone permission prompt is unavoidable and may appear after tapping Join Meeting.
+- Once permission is granted, complete the connection automatically.
+- Do not make the user tap Join again after granting permission.
+
+If microphone permission is denied:
+- Do not leave the user stuck.
+- Automatically offer:
+  - Join listen-only
+  - Instructions to restore microphone permission
+- Joining listen-only must not require camera or microphone permission.
+
+E. VIDEO MEETING JOIN
+
+For a video meeting:
+- Use the same single Join Meeting action.
+- Default to microphone on and camera off unless the user’s saved preference says otherwise.
+- Request only the permissions needed for the chosen state.
+- Allow camera activation after joining.
+- Do not require a separate Join Live Video button followed by Join gathering.
+
+F. DEVICE CHECK IS OPTIONAL
+
+Remove “Check your devices” as a compulsory stage.
+
+Device check should be available only as a secondary option such as:
+“Check audio before joining”
+
+It must not sit between the user and the normal Join Meeting action.
+
+For audio meetings, it checks audio only.
+For video meetings, it may check microphone and camera separately.
+
+After an optional check:
+- provide one Join Meeting button
+- do not return the user to another join stage
+
+G. FIX CONTRADICTORY MEETING STATE
+
+The screenshot shows “You are in this meeting” while the device-check/join panel is still visible.
+
+This must never happen.
+
+Use one explicit connection state:
+- not_joined
+- requesting_permission
+- connecting
+- joined
+- reconnecting
+- failed
+- left
+
+UI rules:
+- `not_joined`: show Join Meeting
+- `requesting_permission`: show Allow microphone
+- `connecting`: show Joining…
+- `joined`: show live controls and Leave
+- `reconnecting`: show Reconnecting…
+- `failed`: show a clear Retry or Listen only option
+- `left`: return to Join Meeting state
+
+Never show the pre-join device panel after the participant is joined.
+Never mark the participant as joined before the LiveKit connection succeeds.
+
+H. PREVENT DUPLICATE CONNECTIONS
+
+The one-tap join action must be idempotent:
+- Disable it while connecting.
+- Ignore rapid duplicate taps.
+- Do not create multiple tokens.
+- Do not create duplicate LiveKit participants.
+- Do not publish duplicate microphone tracks.
+- Reuse the shared room instance across Group, Discussion, Bible and PDF screens.
+
+I. MOBILE LAYOUT
+
+On mobile:
+- Show one clear Join Meeting button in the Meeting in Progress card.
+- Remove the separate “Live Audio is active / Join Live Audio” card.
+- Avoid another large device-check card in the main Group page.
+- Keep the meeting page calm and compact.
+- Ask Emmaus must not overlap meeting actions.
+- All actions must remain inside the viewport.
+
+ACCEPTANCE TESTS
+
+One-action audio join:
+- Open a Group with an active audio meeting.
+- Tap Join Meeting once.
+- Grant microphone permission.
+- Participant connects automatically without another Emmaus button tap.
+- No Join Live Audio or Join gathering step appears.
+- Mute, hand raise and Leave controls appear.
+
+Returning participant:
+- Open an audio meeting with microphone permission already granted.
+- Tap Join Meeting once.
+- Connect directly.
+
+Permission denied:
+- Tap Join Meeting and deny microphone permission.
+- Emmaus clearly offers Join listen-only.
+- Joining listen-only requires only one additional deliberate choice.
+- Camera permission is never requested.
+
+Presented PDF on mobile:
+- Leader presents a PDF.
+- Participant sees it immediately without refreshing.
+- Participant opens it inside Emmaus.
+- No new browser tab, second PWA, splash screen or raw PDF URL appears.
+- Participant continues hearing live audio.
+- Meeting controls remain visible.
+- Participant closes the viewer and returns to the Group without reconnecting.
+
+PDF failure:
+- Simulate an unavailable PDF.
+- Show a useful error and secondary external/download fallback.
+- Do not silently open another app.
+
+Meeting state:
+- At no point show “You are in this meeting” together with pre-join controls.
+- Rapidly tapping Join does not create duplicate connections.
+
+Before finishing:
+- Identify why PDFs were routed to an external browser context.
+- Identify why three separate join actions existed.
+- Consolidate all joining into one shared `joinMeeting()` action.
+- Report the files changed and the result of every acceptance test.

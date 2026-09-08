@@ -1,8 +1,8 @@
 /**
  * admin-reset-api.ts — Frontend client for admin progress reset endpoints.
  *
- * All functions send X-User-Id and X-User-Role headers so the backend
- * can authenticate the caller and verify admin access.
+ * Identity and admin access are derived server-side from the secure session
+ * cookie; requests send credentials so the backend can authenticate the caller.
  */
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -16,15 +16,13 @@ interface AuthHeaders {
   userRole: string;
 }
 
-async function post(path: string, auth: AuthHeaders): Promise<void> {
+async function post(path: string, _auth: AuthHeaders): Promise<void> {
   const res = await fetch(apiUrl(path), {
     method: "POST",
     credentials: "include",
     cache: "no-store",
     headers: {
       "Content-Type": "application/json",
-      "X-User-Id": auth.userId,
-      "X-User-Role": auth.userRole,
     },
   });
   if (!res.ok) {
@@ -45,14 +43,10 @@ export interface ResetContentList {
   companions: { id: string; title: string }[];
 }
 
-export async function fetchContentList(auth: AuthHeaders): Promise<ResetContentList> {
+export async function fetchContentList(_auth: AuthHeaders): Promise<ResetContentList> {
   const res = await fetch(apiUrl("/content-list"), {
     credentials: "include",
     cache: "no-store",
-    headers: {
-      "X-User-Id": auth.userId,
-      "X-User-Role": auth.userRole,
-    },
   });
   if (!res.ok) {
     const body = await res.text().catch(() => res.statusText);
@@ -93,22 +87,39 @@ export function resetEverything(auth: AuthHeaders): Promise<void> {
 // ─── Local cache clear ────────────────────────────────────────────────────────
 // After a reset, progress-related emmaus_* keys in localStorage are cleared so
 // the UI reflects the new state without a stale optimistic layer on top.
-//
-// emmaus_demo_user is intentionally preserved — it holds the auth session and
-// the user's preferred name. Removing it would sign the user out entirely,
-// which violates the "do not delete user account / login" contract.
 
-const PRESERVED_CACHE_KEYS = new Set([
-  'emmaus_demo_user', // auth session + preferred name — must never be cleared
-]);
-
-export function clearLocalProgressCache(): void {
+export function clearLocalProgressCache(subject: string): void {
   const keysToRemove: string[] = [];
+  const accountPrefix = `emmaus_account:${subject}:`;
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key && key.startsWith("emmaus_") && !PRESERVED_CACHE_KEYS.has(key)) {
+    if (
+      key &&
+      (key.startsWith(accountPrefix) || key === `emmaus_member_state:${subject}`)
+    ) {
       keysToRemove.push(key);
     }
   }
   keysToRemove.forEach(k => localStorage.removeItem(k));
+}
+
+/**
+ * Clear obsolete browser launch state for older builds. The current opening
+ * decision is server-authoritative, so this does not and cannot change whether
+ * today's opening is due.
+ */
+export function clearDailyOpenMarkers(): void {
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (
+      key?.endsWith(':emmaus_last_opened_v2') ||
+      key?.endsWith(':emmaus_last_opened_v3') ||
+      key?.endsWith(':emmaus_opening_resolved_v1')
+    ) keysToRemove.push(key);
+  }
+  keysToRemove.forEach(key => localStorage.removeItem(key));
+
+  // Force the next root launch through the Welcome resolver in this browser.
+  sessionStorage.removeItem('emmaus_splash_shown');
 }

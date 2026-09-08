@@ -1,0 +1,156 @@
+Pilot regression fix — Standardize all Walk/Journey completion panels
+
+The published app is inconsistent.
+
+Observed problem:
+
+On a Walk/Journey day screen, the bottom currently shows only:
+
+“Back to Next Steps”
+
+This is wrong.
+
+It must use the same standardized completion panel already used by Daily Devotionals, with content-type-appropriate wording.
+
+Do not fix only the single “Who is God?” screen.
+
+Audit and standardize the completion/footer treatment across:
+
+- Walks
+- Journeys
+- Daily Devotionals
+- Daily Rhythm
+- Sermon Companions
+- Bible Studies
+
+LOCKED COMPLETION PATTERN
+
+For any multi-day Walk or Journey day that is not the final day, show:
+
+✓ Day complete
+
+Continue when you’re ready.
+
+[ Continue to Next Day ]
+
+Back to Next Steps
+
+For the final day of a Walk:
+
+✓ Walk complete
+
+You’ve completed this Walk.
+
+[ View Walk Summary ]
+
+Back to Next Steps
+
+For the final day of a Journey:
+
+✓ Journey complete
+
+You’ve completed this Journey.
+
+[ View Journey Summary ]
+
+Back to Next Steps
+
+For Daily Devotionals, preserve the current working pattern:
+
+✓ Devotional complete
+
+Continue when you’re ready.
+
+[ Continue to Next Devotional ]
+
+Back to Next Steps
+
+For Daily Rhythm:
+
+- Do not allow advancing beyond the current day.
+- Preserve its existing locked completion behaviour.
+- Do not copy the “Continue to Next Day” behaviour into Daily Rhythm.
+
+For Sermon Companions:
+
+- Use the same visual completion component.
+- Button label must be content-appropriate:
+  “Continue to Next Day” when another published day exists.
+- On the final day, show the companion completion state and return action.
+
+For Bible Studies:
+
+- Use the same visual component where a study step/day is completed.
+- Use content-appropriate labels.
+- Do not invent a next button where no valid next published item exists.
+
+IMPLEMENTATION REQUIREMENTS
+
+1. Find the shared completion component or create one reusable shared component if completion UI is currently duplicated.
+2. Replace one-off footer implementations with the shared component.
+3. Do not redesign typography, colours, spacing or navigation beyond matching the existing Daily Devotional completion card.
+4. Preserve source-aware back navigation.
+5. Never show a Continue button unless a valid next published item exists.
+6. The next page must open at the top.
+7. Completing a day must save progress before navigation.
+8. Do not modify unrelated Ask Emmaus, Rooms, Bible or Today’s Steps logic.
+
+AUDIT REQUIREMENT
+
+Search the full codebase for:
+
+- “Back to Next Steps”
+- “Continue to Next”
+- “Day complete”
+- “Walk complete”
+- “Journey complete”
+- completion card/footer implementations
+
+List every screen using a separate or inconsistent implementation and convert it to the shared standard.
+
+ACCEPTANCE TESTS
+
+Published mobile app:
+
+1. Complete Day 1 of “Who is God?”
+   - standardized completion card appears;
+   - “Continue to Next Day” appears;
+   - “Back to Next Steps” appears;
+   - Continue opens Day 2 at the top.
+
+2. Complete the final day:
+   - no invalid “Continue to Next Day” button;
+   - correct Walk/Journey completion panel appears;
+   - summary/review route works.
+
+3. Test one Daily Devotional:
+   - existing working design remains unchanged.
+
+4. Test Daily Rhythm:
+   - completion does not advance into a future day.
+
+5. Test one Sermon Companion day and one Bible Study step.
+
+REGRESSION TESTS
+
+Add automated tests proving:
+
+- every eligible content reader uses the shared completion component;
+- Continue appears only when a valid next published item exists;
+- final items show completion rather than an invalid next action;
+- navigation opens the next item at the top;
+- Daily Rhythm cannot advance beyond today.
+
+DELIVERY
+
+- Fix this across the application, not only the screenshot.
+- Commit the smallest coherent shared-component change.
+- Republish.
+- Report:
+  1. all screens audited;
+  2. inconsistent implementations found;
+  3. files changed;
+  4. published mobile test results;
+  5. regression tests added.
+
+Stop after this standardization is verified.

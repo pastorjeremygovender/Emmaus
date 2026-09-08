@@ -1,0 +1,337 @@
+CONTINUE THE ASK EMMAUS VOICE REBUILD
+
+The first safe phase passed 48/48 focused tests, but the task is not yet production-ready.
+
+Complete the three proposed follow-up tasks as one controlled continuation, in this order:
+
+1. Validate every Voice action before it can navigate or play.
+2. Let users resume reading exactly where they stopped.
+3. Complete technical screen-off playback support and provide precise manual device verification.
+
+Create a checkpoint before continuing.
+
+Do not republish automatically.
+
+==================================================
+1. VALIDATE EVERY VOICE ACTION
+==================================================
+
+No transcription, language-model response or raw Voice command may directly:
+
+- navigate
+- open a resource
+- retrieve restricted content
+- begin playback
+- seek within audio
+- construct a route
+- construct an audio URL
+- execute a player command
+
+All Voice actions must pass through the validated intent contract and canonical resource resolver.
+
+Validate:
+
+- intent type
+- action
+- canonical resource type
+- canonical resource ID
+- Bible book
+- chapter
+- verse or range
+- publication status
+- tenant
+- user access
+- Daily Rhythm eligibility
+- route
+- audio-source authorization
+- autoplay permission
+
+Clear, safe commands should execute immediately after validation.
+
+Example:
+
+“Please read John 3:16.”
+
+Required:
+
+transcription
+→ structured READ_RESOURCE intent
+→ canonical Bible validation
+→ canonical text retrieval
+→ authorised audio-source resolution
+→ Read to Me player opens
+→ autoplay begins
+
+No additional user tap is required.
+
+Reject or clarify:
+
+- invalid Bible references
+- invented resource IDs
+- mismatched resource type and ID
+- unpublished resources
+- another tenant’s resources
+- future Daily Rhythm content
+- ambiguous resource requests
+- model-generated application URLs
+- model-generated audio URLs
+- low-confidence navigation or playback actions
+
+Ensure Voice uses the same permission and Daily Rhythm eligibility services as text Ask Emmaus.
+
+Add tests proving restricted or invented actions cannot navigate or play.
+
+==================================================
+2. SAVE EXACT READING POSITION
+==================================================
+
+Implement structured Read to Me progress.
+
+Do not save only elapsed audio seconds.
+
+For Bible reading, save:
+
+- user ID
+- translation
+- canonical book
+- chapter
+- current verse
+- verse range where applicable
+- current segment ID
+- optional text offset
+- provider type
+- provider-specific playback time where useful
+- updated timestamp
+- completed status
+
+For other resources, save:
+
+- user ID
+- resource type
+- canonical resource ID
+- parent resource ID where applicable
+- Step/day/chapter
+- section ID
+- paragraph or segment ID
+- provider type
+- provider-specific playback time where useful
+- updated timestamp
+- completed status
+
+Progress must update at safe intervals and on:
+
+- pause
+- stop
+- close
+- navigation away
+- app backgrounding where supported
+- playback completion
+- provider change
+
+Do not generate excessive database writes every few milliseconds.
+
+“Continue reading where I stopped” must:
+
+1. Load the current user’s most recent unfinished Read to Me session.
+2. Validate that the resource still exists and remains accessible.
+3. Apply Daily Rhythm eligibility again.
+4. Restore the logical text position.
+5. Resolve the currently available audio provider.
+6. Resume from the matching verse, paragraph or segment.
+
+This must continue to work if the source later changes between:
+
+- ElevenLabs TTS
+- recorded audio
+- future dramatized Bible audio
+
+If several recent unfinished sessions are equally plausible, ask one brief clarification.
+
+Add visible options where appropriate:
+
+- Resume reading
+- Start again
+
+Do not mark a Bible chapter, Daily Rhythm, Walk Step or devotional complete merely because audio started.
+
+Use the existing completion rules for each resource.
+
+==================================================
+3. SCREEN-OFF AND BACKGROUND PLAYBACK
+==================================================
+
+Complete the PWA’s technical background playback implementation using supported browser capabilities.
+
+Use the existing audio player with Media Session integration where supported.
+
+When a reading session is active:
+
+- set the correct title
+- set resource/chapter/verse information
+- set artwork only where valid
+- expose play
+- expose pause
+- expose previous
+- expose next
+- expose seek where supported
+- keep player state synchronized with lock-screen controls
+
+Audio should continue when:
+
+- the installed PWA is backgrounded
+- the screen locks
+
+where the operating system and browser permit it.
+
+The microphone must not remain active during ordinary screen-off playback.
+
+Screen-off playback is not permission to implement continuous background listening.
+
+Handle:
+
+- incoming call interruption
+- another app taking audio focus
+- Bluetooth disconnection
+- network interruption
+- PWA returning to foreground
+- page/component remount
+- TTS segment boundary
+- expired authorised audio URL
+- playback-provider failure
+
+When playback is interrupted:
+
+- preserve logical reading position
+- display Paused
+- allow reliable resume
+- do not unexpectedly restart from the beginning
+- do not unexpectedly resume much later without user action
+
+Ensure TTS is delivered through actual playable audio segments/streams compatible with background playback. Do not rely on a foreground-only browser speech-synthesis mechanism if it stops when the screen locks.
+
+==================================================
+4. VERIFY THE CENTRAL USER JOURNEY
+==================================================
+
+Verify the complete flow:
+
+A. IMMEDIATE BIBLE READING
+
+Tap Ask Emmaus microphone
+→ say “Please read John 3:16”
+→ transcription succeeds
+→ intent validates
+→ John is correctly capitalized
+→ John 3:16 is retrieved
+→ Read to Me opens
+→ reading begins automatically
+→ correct text appears
+→ no further user step is required
+
+B. PAUSE AND RESUME
+
+While reading:
+→ tap Pause
+→ position saves
+→ close or leave Ask Emmaus
+→ return
+→ say “Continue reading where I stopped”
+→ correct resource and logical position resume
+
+C. INTERRUPTION BY MICROPHONE TAP
+
+While Emmaus is reading:
+→ tap microphone
+→ audio stops immediately
+→ queued speech is flushed
+→ position saves
+→ first words of the new request are captured
+→ new intent validates before execution
+
+D. DAILY RHYTHM
+
+Say “Read today’s Daily Rhythm”
+→ today’s eligible content reads
+
+Request future Daily Rhythm content
+→ content never reaches playback or model context
+
+E. BACKGROUND PLAYBACK
+
+Start Psalm 23
+→ background the installed PWA
+→ lock screen
+→ playback continues where supported
+→ lock-screen pause works
+→ lock-screen resume works
+→ returning to Emmaus restores the correct state
+
+==================================================
+5. DEVICE LIMITATIONS MUST BE REPORTED HONESTLY
+==================================================
+
+The current environment may not be able to prove real screen-off behaviour.
+
+Implement the supported technical requirements and automated tests, then provide a short manual test checklist for:
+
+- Android installed PWA
+- Android Chrome
+- desktop Chrome
+- iPhone/Safari if available
+- iPhone installed web app if available
+
+Clearly distinguish:
+
+- automated verification passed
+- browser preview passed
+- real-device testing still required
+- unsupported platform behaviour
+
+Do not state that screen-off playback works merely because Media Session code exists.
+
+==================================================
+6. REGRESSION REQUIREMENTS
+==================================================
+
+Confirm these remain correct:
+
+- typed Ask Emmaus does not initialize Voice services
+- text Ask Emmaus remains functional when Voice fails
+- Scripture-first retrieval remains intact
+- Local Church resources remain available
+- inline Scripture links remain clickable
+- resource links remain validated
+- Bible Study cards capitalize Bible book names
+- Bible Study links open the exact chapter and passage
+- Daily Rhythm remains user-scoped
+- normal Voice is not always listening
+- ambient noise does not trigger a new turn
+- experimental hands-free mode remains disabled
+- no raw or model-invented URLs are rendered
+
+==================================================
+7. COMPLETION REPORT
+==================================================
+
+After implementation, report:
+
+1. Files changed.
+2. Database/schema changes.
+3. How Voice actions are validated.
+4. How invalid and ambiguous actions are handled.
+5. How logical reading position is stored.
+6. How “Continue reading” resolves the correct session.
+7. How provider changes preserve progress.
+8. How screen-off playback is implemented.
+9. Media Session controls supported.
+10. Exact automated test results.
+11. Exact browser-preview test results.
+12. Manual real-device tests still required.
+13. Any remaining limitations.
+14. Whether the complete John 3:16 Voice-to-autoplay flow was actually verified.
+
+Create a new checkpoint after automated tests pass.
+
+Do not republish.
+
+Do not describe the rebuild as production-ready until the real-device Voice and screen-off tests have been completed.

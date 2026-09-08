@@ -13,7 +13,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useAdmin } from '@/contexts/AdminContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Sermon } from '@/lib/admin-demo-data';
+import { Sermon } from '@/lib/admin-types';
 import { DevotionalReading, PreviewDevotionalContinueButton } from '@/components/DevotionalReading';
 import {
   generateSermonDraft,
@@ -26,8 +26,10 @@ import {
   publishSermonCompanion,
   unpublishSermonCompanion,
   setCurrentWeekCompanion,
+  getCompanionBySermon,
   suggestAlternativeTheme,
   regenerateSermonTheme,
+  getServerSermon,
 
   ApiError,
   type SermonDraftResult,
@@ -41,10 +43,14 @@ import {
   Field, TextInput, TextArea, Select, AdminBtn, StatusBadge,
   ContentStudioToolbar,
 } from './shared';
+import { ShareImageField } from '@/components/ShareImageField';
 import {
   Loader2, RefreshCw, Check, X, ChevronRight,
   AlertCircle, CheckCircle2, Trash2,
 } from 'lucide-react';
+import SermonAudioUpload from './SermonAudioUpload';
+import SermonProcessingView from './SermonProcessingView';
+import { processSermon as processSermonApi, getAdminSermon } from '@/lib/canonical-sermon-api';
 
 type Props = {
   sermonId: string | null;
@@ -70,6 +76,7 @@ const EMPTY_SERMON: Omit<Sermon, 'id'> = {
   series: '',
   scriptureReference: '',
   youtubeUrl: '',
+  audioPath: '',
   summary: '',
   topics: [],
   keywords: [],
@@ -90,31 +97,110 @@ const EMPTY_SERMON: Omit<Sermon, 'id'> = {
 function CompanionDayEditor({
   companionId,
   companionTitle,
+  companionDescription: initialDescription,
   entries,
   auth,
   companionStatus,
+  notifyMembers,
+  onNotifyMembersChange,
   onCompanionPublish,
   onCompanionUnpublish,
   onBack,
 }: {
   companionId: string;
   companionTitle: string;
+  companionDescription: string;
   entries: CompanionEntry[];
   auth: { userId: string; userRole: string };
   companionStatus: string;
+  /** Smart Content Indicator — show to members as new/updated when published */
+  notifyMembers: boolean;
+  onNotifyMembersChange: (v: boolean) => void;
   onCompanionPublish: () => Promise<void>;
   onCompanionUnpublish: () => Promise<void>;
   onBack: () => void;
 }) {
   const [selectedDay, setSelectedDay] = useState(1);
   const [localEntries, setLocalEntries] = useState<CompanionEntry[]>(entries);
-  const [savingAs, setSavingAs] = useState<'draft' | 'publish' | 'unpublish' | null>(null);
+  const [savingAs, setSavingAs] = useState<'draft' | 'publish' | 'unpublish' | 'back' | null>(null);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const autosaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingSaveRef = useRef<Partial<CompanionEntry> | null>(null);
+  const pendingSaveRef = useRef<{ dayNumber: number; fields: Partial<CompanionEntry> } | null>(null);
+  const mountedRef = useRef(true);
+
+  // Companion-level description (intro shown on the member overview page)
+  const [description, setDescription] = useState(initialDescription);
+  const descAutosaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingDescriptionRef = useRef<string | null>(null);
+
+  const saveDescription = useCallback(async (value: string) => {
+    const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+    const response = await fetch(`${BASE}/api/sermon-companions/${companionId}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: value }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error((body as { error?: string }).error ?? `Description save failed (${response.status})`);
+    }
+  }, [companionId]);
+
+  const flushDescriptionSave = useCallback(async () => {
+    if (descAutosaveRef.current) {
+      clearTimeout(descAutosaveRef.current);
+      descAutosaveRef.current = null;
+    }
+    const value = pendingDescriptionRef.current;
+    if (value === null) return;
+    await saveDescription(value);
+    if (pendingDescriptionRef.current === value) pendingDescriptionRef.current = null;
+  }, [saveDescription]);
+
+  const handleDescriptionChange = (val: string) => {
+    setDescription(val);
+    pendingDescriptionRef.current = val;
+    if (descAutosaveRef.current) clearTimeout(descAutosaveRef.current);
+    descAutosaveRef.current = setTimeout(async () => {
+      descAutosaveRef.current = null;
+      const pending = pendingDescriptionRef.current;
+      if (pending === null) return;
+      try {
+        await saveDescription(pending);
+        if (pendingDescriptionRef.current === pending) pendingDescriptionRef.current = null;
+      } catch (err) {
+        if (mountedRef.current) {
+          setErrorMsg(err instanceof Error ? err.message : 'Description save failed — please try again.');
+        }
+      }
+    }, 1200);
+  };
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+    if (autosaveRef.current) clearTimeout(autosaveRef.current);
+    if (descAutosaveRef.current) clearTimeout(descAutosaveRef.current);
+  }, []);
 
   const current = localEntries.find(e => e.dayNumber === selectedDay);
+
+  /** Immediately persist a share image path (upload/remove are discrete — no debounce needed). */
+  const handleShareImageChange = useCallback(async (path: string | null) => {
+    const previous = localEntries.find(e => e.dayNumber === selectedDay)?.shareImageUrl ?? null;
+    setLocalEntries(prev =>
+      prev.map(e => e.dayNumber === selectedDay ? { ...e, shareImageUrl: path } : e)
+    );
+    try {
+      await saveCompanionEntry(companionId, selectedDay, { shareImageUrl: path }, auth);
+    } catch (err) {
+      setLocalEntries(prev =>
+        prev.map(e => e.dayNumber === selectedDay ? { ...e, shareImageUrl: previous } : e)
+      );
+      setErrorMsg(err instanceof Error ? err.message : 'Share image save failed — please try again.');
+    }
+  }, [companionId, selectedDay, auth, localEntries]);
 
   const patchEntry = useCallback((field: keyof CompanionEntry, value: string) => {
     setLocalEntries(prev => {
@@ -124,14 +210,17 @@ function CompanionDayEditor({
       const entry = updated.find(e => e.dayNumber === selectedDay);
       if (entry) {
         pendingSaveRef.current = {
-          title: entry.title,
-          scriptureReference: entry.scriptureReference,
-          greeting: entry.greeting,
-          reflection: entry.reflection,
-          prayer: entry.prayer,
-          nextStep: entry.nextStep,
-          closing: entry.closing,
-          sermonLink: entry.sermonLink,
+          dayNumber: selectedDay,
+          fields: {
+            title: entry.title,
+            scriptureReference: entry.scriptureReference,
+            greeting: entry.greeting,
+            reflection: entry.reflection,
+            prayer: entry.prayer,
+            nextStep: entry.nextStep,
+            closing: entry.closing,
+            sermonLink: entry.sermonLink,
+          },
         };
       }
       return updated;
@@ -141,11 +230,13 @@ function CompanionDayEditor({
     autosaveRef.current = setTimeout(async () => {
       const toSave = pendingSaveRef.current;
       if (!toSave) return;
-      pendingSaveRef.current = null;
       try {
-        await saveCompanionEntry(companionId, selectedDay, toSave, auth);
-      } catch {
-        // Autosave failure is silent; the pastor can retry with Save Draft
+        await saveCompanionEntry(companionId, toSave.dayNumber, toSave.fields, auth);
+        if (pendingSaveRef.current === toSave) pendingSaveRef.current = null;
+      } catch (err) {
+        if (mountedRef.current) {
+          setErrorMsg(err instanceof Error ? err.message : 'Autosave failed — please try again.');
+        }
       }
     }, 1200);
   }, [companionId, selectedDay, auth]);
@@ -155,9 +246,23 @@ function CompanionDayEditor({
     if (autosaveRef.current) { clearTimeout(autosaveRef.current); autosaveRef.current = null; }
     const toSave = pendingSaveRef.current;
     if (!toSave) return;
-    pendingSaveRef.current = null;
-    await saveCompanionEntry(companionId, selectedDay, toSave, auth);
+    await saveCompanionEntry(companionId, toSave.dayNumber, toSave.fields, auth);
+    if (pendingSaveRef.current === toSave) pendingSaveRef.current = null;
   }, [companionId, selectedDay, auth]);
+
+  const handleBack = async () => {
+    setSavingAs('back');
+    setErrorMsg('');
+    try {
+      await flushSave();
+      await flushDescriptionSave();
+      onBack();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Could not save your changes — please try again.');
+    } finally {
+      if (mountedRef.current) setSavingAs(null);
+    }
+  };
 
   const handleSaveDraft = async () => {
     setSavingAs('draft');
@@ -165,6 +270,7 @@ function CompanionDayEditor({
     setErrorMsg('');
     try {
       await flushSave();
+      await flushDescriptionSave();
       // Also save the full current entry to ensure nothing is missed
       const entry = localEntries.find(e => e.dayNumber === selectedDay);
       if (entry) {
@@ -181,8 +287,8 @@ function CompanionDayEditor({
       }
       setSuccessMsg('Draft saved successfully.');
       setTimeout(() => setSuccessMsg(''), 3000);
-    } catch {
-      setErrorMsg('Save failed — please try again.');
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Save failed — please try again.');
       setTimeout(() => setErrorMsg(''), 4000);
     } finally {
       setSavingAs(null);
@@ -195,12 +301,13 @@ function CompanionDayEditor({
     setErrorMsg('');
     try {
       await flushSave();
+      await flushDescriptionSave();
       await onCompanionPublish();
       setSavingAs(null);
       toast.success('Sermon Companion published successfully.');
       onBack();
-    } catch {
-      setErrorMsg('Publish failed — please try again.');
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Publish failed — please try again.');
       setTimeout(() => setErrorMsg(''), 4000);
       setSavingAs(null);
     }
@@ -253,17 +360,30 @@ function CompanionDayEditor({
     <EmmausContentEditor
       toolbar={
         <ContentStudioToolbar
-          onBack={onBack}
+          onBack={handleBack}
           title={companionTitle}
           subtitle={`Day ${selectedDay}`}
           status={companionStatus}
-          isSaving={savingAs === 'draft'}
+          isSaving={savingAs === 'draft' || savingAs === 'back'}
           isPublishing={savingAs === 'publish' || savingAs === 'unpublish'}
           successMessage={successMsg}
           errorMessage={errorMsg}
           onSaveDraft={handleSaveDraft}
           onPublish={handlePublish}
           onUnpublish={handleUnpublish}
+          extraActions={
+            companionStatus !== 'Published' ? (
+              <label className="flex items-center gap-1.5 text-[12px] text-gray-500 cursor-pointer select-none whitespace-nowrap">
+                <input
+                  type="checkbox"
+                  checked={notifyMembers}
+                  onChange={e => onNotifyMembersChange(e.target.checked)}
+                  className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                />
+                Notify members
+              </label>
+            ) : undefined
+          }
         />
       }
       aboveSplit={daySelector}
@@ -273,6 +393,17 @@ function CompanionDayEditor({
             <AlertCircle size={12} className="text-amber-500 flex-shrink-0" />
             All companion days are saved as Draft. Pastoral review required before publishing.
           </div>
+
+          <Field label="Companion Introduction">
+            <textarea
+              value={description}
+              onChange={e => handleDescriptionChange(e.target.value)}
+              rows={4}
+              placeholder="Write a brief introduction for this companion — what the sermon was about and why this companion will help members go deeper…"
+              className={TextareaCls}
+            />
+            <p className="mt-1 text-[11px] text-gray-400">Shown at the top of the member overview. Auto-saved. Falls back to the sermon summary if left empty.</p>
+          </Field>
 
           <Field label="Title">
             <input value={current.title} onChange={e => patchEntry('title', e.target.value)}
@@ -322,6 +453,13 @@ function CompanionDayEditor({
               </a>
             )}
             <p className="mt-1 text-[11px] text-gray-400">Auto-generated timestamped link to the relevant sermon segment.</p>
+          </Field>
+
+          <Field label="Share Image">
+            <ShareImageField
+              value={current.shareImageUrl}
+              onChange={handleShareImageChange}
+            />
           </Field>
         </div>
       }
@@ -1130,12 +1268,17 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
   // shows the correct Published/Draft state and Publish/Unpublish buttons.
   const [companionStatusLocal, setCompanionStatusLocal] = useState<string>('Draft');
   const [companionPublishing, setCompanionPublishing] = useState(false);
+  // Smart Content Indicators: notify members on companion publish. Defaults ON.
+  const [companionNotifyMembers, setCompanionNotifyMembers] = useState(true);
 
   // Sermon form state
   const [form, setForm] = useState<Omit<Sermon, 'id'>>(() =>
     existing ? { ...existing } : { ...EMPTY_SERMON }
   );
   const [sermonId_, setSermonId_] = useState<string | null>(sermonId);
+  // Track whether we are mid-fetch for a canonical-DB sermon not yet in AdminContext
+  const [loadingFromDb, setLoadingFromDb] = useState(false);
+  const [loadFromDbError, setLoadFromDbError] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -1146,6 +1289,12 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
   const [publishing, setPublishing] = useState(false);
   const [publishSuccess, setPublishSuccess] = useState('');
   const [publishError, setPublishError] = useState('');
+  // Tracks the background processing pipeline stage so the editor can show
+  // SermonProcessingView when audio-first processing is active.
+  const [processingStage, setProcessingStage] = useState<string>(() =>
+    (existing as Record<string, unknown> | undefined)?.processingStage as string ?? 'idle'
+  );
+  const [processingPersistenceError, setProcessingPersistenceError] = useState('');
 
   // Per-field regen state
   type RegenField = 'title' | 'speaker' | 'scriptureReference' | 'summary' | 'topics' | 'keywords';
@@ -1154,18 +1303,43 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
 
   const auth = user ? { userId: user.id, userRole: user.role } : null;
 
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  // ── Load from canonical DB when not in AdminContext ──────────────────────────
+  // Sermons created via the generator now live only in the canonical DB. If a
+  // admin navigates to one whose UUID isn't in the in-memory sermon list (e.g.
+  // after a page reload), fetch it from the server and hydrate the form.
+  useEffect(() => {
+    if (!sermonId || !auth || existing) return;  // already have it
+    setLoadingFromDb(true);
+    getServerSermon(sermonId, auth).then(record => {
+      if (!record) { setLoadFromDbError(true); return; }
+      // Hydrate form and add to AdminContext so subsequent saves work
+      setForm({ ...EMPTY_SERMON, ...record });
+      setProcessingStage((record as unknown as Record<string, unknown>).processingStage as string ?? 'idle');
+      // skipServerPersist: true — sermon already lives in the canonical DB
+      addSermon({ ...record, id: sermonId } as Sermon, { skipServerPersist: true });
+    }).catch(() => {
+      setLoadFromDbError(true);
+    }).finally(() => setLoadingFromDb(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sermonId, user?.id]);
+
   // ── Companion hydration for existing sermons ─────────────────────────────────
   // When opening an existing sermon whose companionJourneyId is a UUID (new-style
   // companion saved in DB), fetch the full companion so the Companion tab works.
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   useEffect(() => {
-    const cid = existing?.companionJourneyId;
-    if (!cid || !UUID_RE.test(cid) || !auth) return;
+    if (!sermonId || !auth) return;
     // Only fetch if we don't already have data (avoids duplicate fetches when
     // either sermonId or user?.id change independently).
     if (companionData) return;
 
-    getCompanion(cid, auth).then(c => {
+    const cid = existing?.companionJourneyId || form.companionJourneyId;
+    const loadCompanion = cid && UUID_RE.test(cid)
+      ? getCompanion(cid, auth)
+      : getCompanionBySermon(sermonId, auth);
+
+    loadCompanion.then(c => {
       setCompanionData({
         id: c.id,
         title: c.title,
@@ -1178,7 +1352,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
       // without breaking the sermon editing flow.
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sermonId, user?.id]);  // re-runs when auth hydrates (null → userId) after mount
+  }, [sermonId, user?.id, form.companionJourneyId]);  // re-runs after DB form hydration/auth
 
   // Keep companionStatusLocal in sync when companionData arrives from generation result
   useEffect(() => {
@@ -1188,18 +1362,97 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
     }
   }, [companionData?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Poll processingStage while pipeline is active ──────────────────────────
+  //
+  // isActiveProcessingStage returns true for any stage that is not yet terminal.
+  // Terminal stages: '' | 'idle' | 'complete' | 'READY_FOR_REVIEW' | 'failed:*'
+  // Active stages include all granular pipeline values:
+  //   preparing → compressing → chunking:N → transcribing:N:X → combining →
+  //   detecting → drafting → companion
+  //   (legacy aliases: transcribing, generating)
+  //
+  // The function is defined at component scope so it can be used in both the
+  // polling effect and the render condition below.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const isActiveProcessingStage = (stage: string): boolean => {
+    if (!stage || stage === 'idle' || stage === 'complete' || stage === 'READY_FOR_REVIEW') return false;
+    if (stage.startsWith('failed:')) return false;
+    return true;
+  };
+
+  const refreshCompletedSermon = useCallback(async () => {
+    if (!sermonId_ || !auth) throw new Error('Your session has expired. Please sign in again.');
+    const record = await getServerSermon(sermonId_, auth);
+    if (!record) {
+      throw new Error('The sermon finished processing but could not be reloaded from storage.');
+    }
+    const companion = record.companionJourneyId && UUID_RE.test(record.companionJourneyId)
+      ? await getCompanion(record.companionJourneyId, auth)
+      : await getCompanionBySermon(sermonId_, auth);
+    const entries = companion.entries ?? [];
+    const dayNumbers = entries.map(entry => entry.dayNumber).sort((a, b) => a - b);
+    if (entries.length !== 5 || dayNumbers.some((day, index) => day !== index + 1)) {
+      throw new Error('The sermon finished processing but its five Companion days were not fully saved. Please retry.');
+    }
+    setForm({ ...EMPTY_SERMON, ...record });
+    setCompanionData({
+      id: companion.id,
+      title: companion.title,
+      isCurrentWeek: companion.isCurrentWeek ?? false,
+      entries,
+    });
+    setCompanionStatusLocal(companion.status ?? 'Draft');
+  }, [sermonId_, auth]);
+
+  const handleProcessingComplete = useCallback(async () => {
+    try {
+      await refreshCompletedSermon();
+      setProcessingPersistenceError('');
+      setProcessingStage('READY_FOR_REVIEW');
+    } catch (err) {
+      setProcessingPersistenceError(
+        err instanceof Error
+          ? err.message
+          : 'The Companion could not be verified after processing. Please retry.',
+      );
+      // Keep the editor on the processing/retry screen. A terminal server
+      // stage must never make an unverified companion look ready.
+      setProcessingStage('failed:companion');
+    }
+  }, [refreshCompletedSermon]);
+
+  useEffect(() => {
+    if (!sermonId_) return;
+    if (!isActiveProcessingStage(processingStage)) return;
+    const poll = async () => {
+      try {
+        const updated = await getAdminSermon(sermonId_);
+        const s = updated.processingStage ?? 'idle';
+        if ((s === 'complete' || s === 'READY_FOR_REVIEW') && auth) {
+          // Re-read the canonical sermon and companion before leaving the
+          // processing screen. A terminal stage alone is not enough.
+          void handleProcessingComplete();
+        } else if (s !== processingStage) {
+          setProcessingStage(s);
+        }
+      } catch { /* non-fatal, keep polling */ }
+    };
+    const timer = setInterval(poll, 3000);
+    return () => clearInterval(timer);
+  }, [sermonId_, processingStage, handleProcessingComplete]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleCompanionPublish = useCallback(async () => {
     if (!companionData?.id || !auth) return;
     setCompanionPublishing(true);
     try {
       // publishSermonCompanion calls POST /api/sermon-companions/:id/publish which
       // atomically sets the companion status to Published AND publishes all entries.
-      await publishSermonCompanion(companionData.id, auth);
+      await publishSermonCompanion(companionData.id, auth, companionNotifyMembers);
       setCompanionStatusLocal('Published');
     } finally {
       setCompanionPublishing(false);
     }
-  }, [companionData?.id, auth]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [companionData?.id, auth, companionNotifyMembers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCompanionUnpublish = useCallback(async () => {
     if (!companionData?.id || !auth) return;
@@ -1221,6 +1474,21 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
       console.error('Failed to set current week companion', err);
     }
   }, [companionData?.id, auth]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Trigger the audio-first processing pipeline from within the editor
+  // (used by the unprocessed-sermon banner and the retry button).
+  const handleProcessSermon = useCallback(async () => {
+    if (!sermonId_ || !auth) return;
+    setPublishError('');
+    setProcessingPersistenceError('');
+    try {
+      await processSermonApi(sermonId_);
+      setProcessingStage('preparing');
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : 'Failed to start processing');
+      setTimeout(() => setPublishError(''), 5000);
+    }
+  }, [sermonId_, auth]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const patch = (k: keyof typeof form, v: unknown) => {
     setForm(f => ({ ...f, [k]: v }));
@@ -1270,6 +1538,17 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
         await patchServerSermon(id, { status: 'published', updatedAt: now }, auth);
         updateSermon(updated);
       }
+      // Atomic: also publish the companion when it's still in Draft
+      if (companionData?.id && companionStatusLocal !== 'Published') {
+        try {
+          await publishSermonCompanion(companionData.id, auth, companionNotifyMembers);
+          setCompanionStatusLocal('Published');
+        } catch (err) {
+          // The sermon and companion are separate records. Do not report an
+          // apparently successful publish when the companion failed.
+          setPublishError(err instanceof Error ? err.message : 'The sermon published, but the companion could not be published.');
+        }
+      }
       setForm(f => ({ ...f, status: 'published' }));
       setIsDirty(false);
       setSaveState('saved');
@@ -1281,7 +1560,17 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
     } finally {
       setPublishing(false);
     }
-  }, [form, sermonId_, auth, validate, addSermon, updateSermon]);
+  }, [
+    form,
+    sermonId_,
+    auth,
+    validate,
+    addSermon,
+    updateSermon,
+    companionData?.id,
+    companionStatusLocal,
+    companionNotifyMembers,
+  ]);
 
   const handleUnpublishConfirm = useCallback(async () => {
     if (!auth || !sermonId_) return;
@@ -1315,49 +1604,78 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
         case 'VIDEO_UNAVAILABLE':      return "We couldn't access this YouTube video. Check that it is public and try again.";
         case 'AI_NOT_CONFIGURED':      return 'Sermon generation is not configured yet.';
         case 'GENERATION_TIMEOUT':     return 'Emmaus took too long to prepare this draft. Please try again.';
-        case 'GENERATION_FAILED':      return "We couldn't prepare the sermon draft. Your sermon has not been saved.";
+        case 'GENERATION_FAILED':      return err.message || "We couldn't prepare the sermon draft. Your sermon has not been saved.";
         default:                       return err.message || 'Generation failed. Please try again.';
       }
     }
     return err instanceof Error ? err.message : 'Generation failed. Please try again.';
   }
 
-  const applyGenerationResult = useCallback((result: SermonDraftResult) => {
+  const applyGenerationResult = useCallback(async (result: SermonDraftResult) => {
+    if (!auth) throw new Error('Your session has expired. Please sign in again.');
+
+    // Never hydrate the editor from the generation response alone. Re-read both
+    // canonical records so the review screen only opens after the committed
+    // sermon and all five companion entries are visible through the normal API.
+    const [durableSermon, durableCompanion] = await Promise.all([
+      getServerSermon(result.sermon.id, auth),
+      getCompanionBySermon(result.sermon.id, auth),
+    ]);
+    if (!durableSermon) {
+      throw new Error('The sermon was generated but could not be reloaded from storage. Nothing was reported as saved.');
+    }
+    const durableEntries = durableCompanion.entries ?? [];
+    const dayNumbers = durableEntries.map(entry => entry.dayNumber).sort((a, b) => a - b);
+    if (
+      durableEntries.length !== 5 ||
+      dayNumbers.some((day, index) => day !== index + 1)
+    ) {
+      throw new Error('The sermon was generated but its five Companion days were not fully saved. Please retry.');
+    }
+
+    const persistedSermon = { ...result.sermon, ...durableSermon };
     setForm({
-      title: result.sermon.title,
-      speaker: result.sermon.speaker,
-      sermonDate: result.sermon.sermonDate,
-      series: result.sermon.series,
-      scriptureReference: result.sermon.scriptureReference,
-      youtubeUrl: result.sermon.youtubeUrl,
-      summary: result.sermon.summary,
-      topics: result.sermon.topics,
-      keywords: result.sermon.keywords,
-      transcript: result.sermon.transcript,
-      sermonTranscript: result.sermon.sermonTranscript,
-      sermonStartTime: result.sermon.sermonStartTime,
-      sermonEndTime: result.sermon.sermonEndTime,
-      detectionConfidence: result.sermon.detectionConfidence,
-      detectionMethod: result.sermon.detectionMethod,
-      transcriptStatus: result.sermon.transcriptStatus,
-      aiIndexStatus: result.sermon.aiIndexStatus,
-      companionJourneyId: result.companion.id,
-      mainTheme: result.sermon.mainTheme ?? '',
+      title: persistedSermon.title,
+      speaker: persistedSermon.speaker,
+      sermonDate: persistedSermon.sermonDate,
+      series: persistedSermon.series ?? '',
+      scriptureReference: persistedSermon.scriptureReference,
+      youtubeUrl: persistedSermon.youtubeUrl,
+      summary: persistedSermon.summary ?? '',
+      topics: persistedSermon.topics ?? [],
+      keywords: persistedSermon.keywords ?? [],
+      transcript: persistedSermon.transcript ?? '',
+      sermonTranscript: persistedSermon.sermonTranscript,
+      sermonStartTime: persistedSermon.sermonStartTime,
+      sermonEndTime: persistedSermon.sermonEndTime,
+      detectionConfidence: persistedSermon.detectionConfidence,
+      detectionMethod: persistedSermon.detectionMethod,
+      transcriptStatus: persistedSermon.transcriptStatus,
+      aiIndexStatus: persistedSermon.aiIndexStatus,
+      companionJourneyId: durableCompanion.id,
+      mainTheme: persistedSermon.mainTheme ?? '',
       status: 'draft',
       pastorEdited: false,
-      updatedAt: new Date().toISOString(),
+      updatedAt: persistedSermon.updatedAt,
     });
     const sermonRecord: Sermon = {
-      ...result.sermon,
-      companionJourneyId: result.companion.id,
+      ...persistedSermon,
+      companionJourneyId: durableCompanion.id,
       status: 'draft',
     };
-    addSermon(sermonRecord);
-    setSermonId_(result.sermon.id);
-    setCompanionData(result.companion);
+    // skipServerPersist: true — generator already saved to canonical DB
+    addSermon(sermonRecord, { skipServerPersist: true });
+    setSermonId_(persistedSermon.id);
+    setCompanionData({
+      id: durableCompanion.id,
+      title: durableCompanion.title,
+      isCurrentWeek: durableCompanion.isCurrentWeek ?? false,
+      entries: durableEntries,
+    });
+    setCompanionStatusLocal((durableCompanion as { status?: string }).status ?? 'Draft');
     setIsDirty(false);
     setPhase('review');
-  }, [addSermon]);
+  }, [addSermon, auth]);
 
   const handleGenerate = useCallback(async (
     url: string,
@@ -1377,7 +1695,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
 
     try {
       const result = await generateSermonDraft(url, auth, opts);
-      applyGenerationResult(result);
+      await applyGenerationResult(result);
     } catch (err) {
       if (err instanceof ApiError && err.code === 'TRANSCRIPT_REQUIRED') {
         const src = err.source as TranscriptSource | null;
@@ -1416,7 +1734,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
         transcript,
         videoId: transcriptSource.videoId,
       });
-      applyGenerationResult(result);
+      await applyGenerationResult(result);
     } catch (err) {
       if (err instanceof ApiError && err.code === 'SERMON_CONFIRMATION_REQUIRED') {
         setDetectionSource(err.source as unknown as SermonDetectionSource);
@@ -1641,6 +1959,72 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
 
   // ── Review / edit phase ──────────────────────────────────────────────────────
 
+  // While fetching a canonical-DB sermon that isn't in AdminContext yet, block
+  // the editor so the user can't save an empty form over the stored content.
+  if (loadingFromDb) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-400">
+        <svg className="animate-spin h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+        </svg>
+        <span className="text-sm">Loading sermon…</span>
+      </div>
+    );
+  }
+
+  if (loadFromDbError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-500 p-8 text-center">
+        <p className="text-sm font-medium">Couldn't load this sermon.</p>
+        <p className="text-xs text-gray-400">Please go back and try again.</p>
+        <button
+          onClick={onBack}
+          className="mt-2 px-4 py-2 text-sm rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
+        >
+          Back to Sermons
+        </button>
+      </div>
+    );
+  }
+
+  // ── Show processing progress while background pipeline is running ──────────
+  // Show the processing view for any non-terminal stage, including 'preparing',
+  // all granular stages (compressing, chunking:N, transcribing:N:X, combining,
+  // detecting, drafting, companion), legacy stages (transcribing, generating),
+  // and failure states (failed:*). Terminal stages (idle, complete,
+  // READY_FOR_REVIEW) fall through to the editor below.
+  if (sermonId_ && (isActiveProcessingStage(processingStage) || processingStage.startsWith('failed:'))) {
+    return (
+      <div className="flex flex-col h-full min-h-0">
+        <div className="flex-shrink-0 flex items-center gap-3 px-6 py-4 border-b border-gray-200 bg-white">
+          <button
+            onClick={onBack}
+            className="text-sm text-gray-500 hover:text-gray-900 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            ← Back
+          </button>
+          <span className="text-[15px] font-semibold text-gray-900 truncate flex-1">
+            {form.title || 'Processing Sermon…'}
+          </span>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <SermonProcessingView
+            sermonId={sermonId_}
+            initialStage={processingStage}
+            onComplete={handleProcessingComplete}
+            onRetry={handleProcessSermon}
+          />
+          {processingPersistenceError && (
+            <div className="mx-auto mb-6 max-w-sm rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {processingPersistenceError}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   const showCompanionTab = !!companionData || !!form.companionJourneyId;
 
   return (
@@ -1673,7 +2057,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
                   : 'border-transparent text-gray-500 hover:text-gray-800'
               }`}
             >
-              {tab === 'companion' ? 'Companion' : 'Sermon'}
+              {tab === 'companion' ? '5-Day Companion' : 'Sermon'}
             </button>
           ))}
         </div>
@@ -1691,6 +2075,21 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
               <div className="flex items-start gap-2 p-3 bg-teal-50 border border-teal-200 rounded-xl text-sm text-teal-700">
                 <CheckCircle2 size={15} className="shrink-0 mt-0.5" />
                 <span>AI draft generated. Review all fields carefully — use Regenerate to get a new suggestion for any field.</span>
+              </div>
+            )}
+
+            {/* Unprocessed sermon banner — audio uploaded but AI content not yet generated */}
+            {processingStage === 'idle' && !form.summary && !!form.audioPath && !!sermonId_ && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+                <span className="text-sm text-amber-800 flex-1">
+                  Audio is uploaded. Run the pipeline to generate sermon content and the 5-Day Companion automatically.
+                </span>
+                <button
+                  onClick={handleProcessSermon}
+                  className="shrink-0 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-medium hover:bg-teal-700 transition-colors"
+                >
+                  Process Sermon
+                </button>
               </div>
             )}
 
@@ -1753,9 +2152,29 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
                 </Field>
               </div>
 
-              <Field label="YouTube URL">
-                <TextInput value={form.youtubeUrl} onChange={e => patch('youtubeUrl', e.target.value)} placeholder="https://www.youtube.com/watch?v=…" />
-              </Field>
+              {/* ── Audio & Video ─────────────────────────────────────────────── */}
+              <div className="pt-1 border-t border-gray-100 space-y-4">
+                <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider pt-1">
+                  Audio &amp; Video
+                </h3>
+
+                <Field label="Upload Sermon Audio">
+                  <SermonAudioUpload
+                    sermonId={sermonId_ ?? null}
+                    currentPath={form.audioPath ?? ''}
+                    transcriptStatus={(form.transcriptStatus as 'none' | 'pending' | 'complete') ?? 'none'}
+                    onAudioSaved={path => patch('audioPath', path)}
+                    onTranscribed={transcript => {
+                      patch('transcript', transcript);
+                      patch('transcriptStatus', 'complete');
+                    }}
+                  />
+                </Field>
+
+                <Field label="YouTube URL">
+                  <TextInput value={form.youtubeUrl} onChange={e => patch('youtubeUrl', e.target.value)} placeholder="https://www.youtube.com/watch?v=…" />
+                </Field>
+              </div>
 
               {/* Summary */}
               <Field label="Summary">
@@ -1801,25 +2220,16 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
                 )}
               </Field>
 
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Status">
-                  <div className="flex items-center gap-2 h-[38px] px-1">
-                    <StatusBadge status={form.status} />
-                    <span className="text-xs text-gray-400">
-                      {form.status === 'published'
-                        ? 'Use Unpublish in the toolbar to change.'
-                        : 'Use Publish in the toolbar to publish.'}
-                    </span>
-                  </div>
-                </Field>
-                <Field label="Transcript status">
-                  <Select value={form.transcriptStatus} onChange={e => patch('transcriptStatus', e.target.value)}>
-                    <option value="none">None</option>
-                    <option value="pending">Pending</option>
-                    <option value="complete">Complete</option>
-                  </Select>
-                </Field>
-              </div>
+              <Field label="Status">
+                <div className="flex items-center gap-2 h-[38px] px-1">
+                  <StatusBadge status={form.status} />
+                  <span className="text-xs text-gray-400">
+                    {form.status === 'published'
+                      ? 'Use Unpublish in the toolbar to change.'
+                      : 'Use Publish in the toolbar to publish.'}
+                  </span>
+                </div>
+              </Field>
 
               <Field label="Transcript">
                 <TextArea rows={6} value={form.transcript ?? ''} onChange={e => patch('transcript', e.target.value)} placeholder="Full sermon transcript (optional)." />
@@ -1905,9 +2315,12 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
             <CompanionDayEditor
               companionId={companionData.id}
               companionTitle={companionData.title}
+              companionDescription={(companionData as any).description ?? ''}
               entries={companionData.entries}
               auth={auth!}
               companionStatus={companionStatusLocal}
+              notifyMembers={companionNotifyMembers}
+              onNotifyMembersChange={setCompanionNotifyMembers}
               onCompanionPublish={handleCompanionPublish}
               onCompanionUnpublish={handleCompanionUnpublish}
               onBack={() => setActiveTab('sermon')}

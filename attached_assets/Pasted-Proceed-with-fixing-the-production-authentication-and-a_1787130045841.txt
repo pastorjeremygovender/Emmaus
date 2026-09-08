@@ -1,0 +1,35 @@
+Proceed with fixing the production authentication and administrator access properly based on your investigation.
+
+This is now a production-safety task. Preserve all existing Emmaus functionality, content and production data.
+
+Implement the proper solution you identified:
+
+Replace the current demo-user-1 fallback for normal production authentication with genuine unique, persistent, server-verified user identities.
+Each real account must have its own stable identity. Two different users must never resolve to the same server identity.
+Passwords/credentials must be verified server-side. Do not trust a browser-supplied email, user ID, role, header or other client-controlled value for authentication or authorization.
+Make the existing user / admin / superAdmin role architecture durable by associating the application role with the verified user identity in the existing production database. Prefer extending the existing user_profiles architecture rather than creating a second parallel admin system.
+Preserve existing user data, progress, Walks, Journeys, Daily Rhythm, devotionals, sermons, Bible data, Groups, pastoral data and all other production content. Do NOT reset, replace or repopulate the production database.
+Existing ordinary users must default to user. Do not grant administrative privileges to existing or future users automatically.
+My genuine production account must ultimately be assigned superAdmin, but ONLY after it can be uniquely identified through the new verified authentication system.
+/admin must continue to require admin or superAdmin. Existing super-admin-only functionality must remain superAdmin only.
+Demo Admin and Super Admin shortcuts must remain unavailable on the public production login screen. They may remain available only in a genuinely non-production development environment if required for development.
+Harden /api/auth/session and every existing privileged API route so authorization is derived from the verified server-side session identity and persisted role, never caller-supplied identity or role information.
+Existing normal member login, signup, logout, session persistence and PWA behaviour must continue working.
+Do not publish automatically.
+
+Before making any destructive database/schema operation, stop and tell me exactly what it intends to change. Additive migrations required to establish secure authentication and durable roles are permitted, but existing production data must not be deleted or overwritten.
+
+After implementation, test at minimum:
+
+User A and User B receive different persistent identities.
+A normal user cannot access /admin.
+A user cannot manipulate a request to make themselves admin or superAdmin.
+My verified account with superAdmin can access /admin.
+Existing admin functionality still works.
+Normal users can still use Emmaus normally.
+Sessions survive refresh/restart appropriately.
+Existing production data remains intact.
+
+Create a checkpoint before making these changes.
+
+When finished, do NOT publish. Report exactly what was changed, what database migration was performed, how my genuine account will be identified and provisioned as superAdmin, and the results of the security tests.

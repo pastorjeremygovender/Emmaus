@@ -259,6 +259,84 @@ engagementsRouter.post("/:contentType/:contentId/resume", async (req: Request, r
   }
 });
 
+// ─── POST /api/engagements/:type/:id/hide ────────────────────────────────────
+// Non-destructive hide: removes the card from Today's Steps WITHOUT deleting
+// progress, completed history, or position. The member can restore it by
+// opening the content from Next Steps (which calls /unhide automatically).
+
+engagementsRouter.post("/:contentType/:contentId/hide", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  const contentType = String(req.params.contentType) as EngagementContentType;
+  const contentId   = String(req.params.contentId);
+
+  try {
+    if (contentType === "journey") {
+      await pool.query(
+        `UPDATE user_journey_progress SET hidden_from_today = TRUE WHERE user_id = $1 AND journey_id = $2`,
+        [userId, contentId],
+      );
+    } else if (contentType === "devotional") {
+      await pool.query(
+        `UPDATE devotional_progress SET hidden_from_today = TRUE WHERE user_id = $1 AND series_id = $2`,
+        [userId, contentId],
+      );
+    } else if (contentType === "sermon-companion") {
+      await pool.query(
+        `UPDATE sermon_companion_progress SET hidden_from_today = TRUE WHERE user_id = $1 AND companion_id = $2`,
+        [userId, contentId],
+      );
+    } else {
+      res.status(400).json({ error: `hide is not supported for content type: ${contentType}` });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err, contentType, contentId }, "engagements: hide failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── POST /api/engagements/:type/:id/unhide ──────────────────────────────────
+// Restores hidden content to Today's Steps. Called automatically when the
+// member opens the content from Next Steps. Idempotent — safe to call even
+// when the content is not currently hidden.
+
+engagementsRouter.post("/:contentType/:contentId/unhide", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  const contentType = String(req.params.contentType) as EngagementContentType;
+  const contentId   = String(req.params.contentId);
+
+  try {
+    if (contentType === "journey") {
+      await pool.query(
+        `UPDATE user_journey_progress SET hidden_from_today = FALSE WHERE user_id = $1 AND journey_id = $2`,
+        [userId, contentId],
+      );
+    } else if (contentType === "devotional") {
+      await pool.query(
+        `UPDATE devotional_progress SET hidden_from_today = FALSE WHERE user_id = $1 AND series_id = $2`,
+        [userId, contentId],
+      );
+    } else if (contentType === "sermon-companion") {
+      await pool.query(
+        `UPDATE sermon_companion_progress SET hidden_from_today = FALSE WHERE user_id = $1 AND companion_id = $2`,
+        [userId, contentId],
+      );
+    } else {
+      res.status(400).json({ error: `unhide is not supported for content type: ${contentType}` });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err, contentType, contentId }, "engagements: unhide failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ─── POST /api/engagements/:type/:id/remove ───────────────────────────────────
 
 engagementsRouter.post("/:contentType/:contentId/remove", async (req: Request, res: Response) => {

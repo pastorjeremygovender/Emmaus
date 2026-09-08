@@ -54,7 +54,7 @@ export function DevModeBanner({ hidePicker = false }: Props) {
     : [];
 
   return (
-    <div className="relative z-50 bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center gap-3 text-amber-800 select-none">
+    <div className="dev-mode-banner relative z-50 bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center gap-3 text-amber-800 select-none">
       <FlaskConical size={14} className="shrink-0 text-amber-600" />
       <span className="text-[12px] font-semibold tracking-wide uppercase">Development Mode</span>
 

@@ -72,6 +72,7 @@ interface InvertedIndex {
 export interface SermonSearchResult {
   sermonId: string;         // internal video record ID
   segmentId: string;
+  youtubeVideoId: string;   // public YouTube ID; distinct from internal video record ID
   title: string;
   speaker: string;
   sermonDate: string;
@@ -202,7 +203,14 @@ async function buildIndex(): Promise<InvertedIndex> {
     // Only index approved segments from approved sermons
     const approvedVideoIds = new Set(
       videos
-        .filter((v) => v.reviewStatus === "approved" || v.reviewStatus === "auto-approved")
+        .filter((v) =>
+          (v.reviewStatus === "approved" || v.reviewStatus === "auto-approved") &&
+          v.contentType === "sermon" &&
+          v.speaker?.trim() &&
+          v.speaker.trim().toLowerCase() !== "unknown speaker" &&
+          !/\bshorts?\b/i.test(v.title) &&
+          !/\bshorts?\b/i.test(v.youtubeUrl)
+        )
         .map((v) => v.id)
     );
 
@@ -462,6 +470,7 @@ export async function searchSermons(
       results.push({
         sermonId: seg.videoId,
         segmentId: seg.segmentId,
+        youtubeVideoId: seg.youtubeVideoId,
         title: seg.videoTitle,
         speaker: seg.speaker,
         sermonDate: seg.sermonDate,
@@ -697,6 +706,7 @@ export async function searchByScripture(
     return {
       sermonId: seg.videoId,
       segmentId: seg.segmentId,
+      youtubeVideoId: seg.youtubeVideoId,
       title: seg.videoTitle,
       speaker: seg.speaker,
       sermonDate: seg.sermonDate,

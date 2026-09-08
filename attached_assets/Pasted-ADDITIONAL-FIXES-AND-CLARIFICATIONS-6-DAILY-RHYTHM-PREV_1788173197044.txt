@@ -1,0 +1,109 @@
+ADDITIONAL FIXES AND CLARIFICATIONS
+
+6. DAILY RHYTHM PREVIOUS DAYS
+
+The new “opened/acknowledged” Daily Rhythm behaviour must also control which Previous Days the user may review.
+
+Required behaviour:
+
+- A user may review every Daily Rhythm day previously assigned/opened for them.
+- This includes days they opened but did not press Finished on.
+- Pressing Finished must not determine whether a day appears under Previous Days.
+- The current assigned day should remain available throughout the current day.
+- Never expose future Daily Rhythm days.
+- Never unlock content days beyond the user’s current position in the sequence.
+- A user must not gain access to content from before they joined Emmaus.
+- Existing legitimate Daily Rhythm history must be preserved.
+- If older opened days are missing from Previous Days because they lack completedAt, repair the history using assignment/open records and reliable existing activity data.
+- Do not invent historical activity where no reliable record exists.
+
+The Previous Days query should therefore use the user’s assigned/opened Daily Rhythm records, not only completed records.
+
+Example:
+
+- Monday: Day 1 opens automatically; user does not press Finished.
+- Tuesday: Day 2 opens automatically.
+- Under Previous Days, the user can review Day 1.
+- Wednesday: Day 3 opens automatically.
+- Previous Days contains Day 1 and Day 2, regardless of whether Finished was pressed.
+- Day 4 and later remain unavailable.
+
+Keep opened/acknowledged and Finished as separate reporting states.
+
+7. REMOVE DEFAULT GROUP NAME
+
+The Create Group form currently contains “The Govender Family” as the example/default group name.
+
+Remove this permanently.
+
+Required behaviour:
+
+- The Group name field must open blank.
+- Do not prepopulate “The Govender Family” or any other real family/person name.
+- If guidance is necessary, use a neutral placeholder such as “Group name”.
+- A placeholder must not be submitted or saved as the actual group name.
+- Require the user to enter a valid group name before creating the group.
+- Remove the old value from frontend defaults, form schemas, templates, fixtures and production seed data where applicable.
+- Do not rename any existing group that a user intentionally created with that name.
+
+8. EMMAUS IMAGE GENERATOR PROMPT MUST START BLANK
+
+When “Emmaus Generate” is selected, the image prompt field currently contains existing text which must first be deleted.
+
+Remove this prefilled text permanently.
+
+Required behaviour:
+
+- Every new Emmaus Generate action must open with a completely blank prompt input.
+- Do not insert sample text, the previous prompt, devotional text or generated instructions into the editable prompt field.
+- A subtle neutral placeholder such as “Describe the image you want to create” is acceptable, but it must disappear when the user types and must never be submitted as prompt content.
+- The user must be able to paste a new prompt immediately.
+- Disable Generate until the user has entered non-whitespace prompt text.
+- Clear the prompt after a successful generation or when beginning a new generation.
+- Do not clear text unexpectedly while the user is actively editing.
+- Remove the current default from component state, form default values, templates, local storage restoration and server-provided defaults.
+
+This applies specifically to the visible user-editable prompt field. Preserve any secure internal system instructions used to improve image quality; do not show those internal instructions in the field.
+
+9. PREVIOUS GROUP CHAT FLASHES BRIEFLY
+
+When opening a group chat or a new meeting session, messages from an old chat/session briefly appear before the correct messages load. This must never happen.
+
+This is both a UX problem and a potential privacy/data-isolation problem.
+
+Required behaviour:
+
+- Never render messages from a different group or meeting session, even briefly.
+- Scope every chat query/cache key by tenant/church, group ID and meeting/session ID where applicable.
+- When the active group or session changes, immediately clear the rendered message list before fetching the new chat.
+- Show a calm loading state or empty chat area until the correct session’s messages are available.
+- Do not initialize the new chat screen using the previous chat component’s local state.
+- Cancel or ignore stale in-flight requests from the previous group/session.
+- Verify that a late response from the old request cannot overwrite the current chat.
+- Only apply a response if its group ID and session ID still match the active screen.
+- Reset pagination cursors, unread state, reply targets, attachments and draft/session-specific state when switching chats.
+- Ensure real-time subscriptions unsubscribe from the old channel before subscribing to the new one.
+- Deduplicate subscriptions and messages.
+- Apply database authorization so users can only retrieve chat messages for groups they are permitted to access.
+
+Do not solve the flash with CSS hiding or an arbitrary timeout. Correct the cache, state and subscription lifecycle.
+
+Clarify the intended history rules:
+
+- If group chat is intentionally continuous across meetings, previous messages belonging to that same group may remain available normally.
+- If each meeting has a separate discussion session, load only that session’s messages.
+- In either case, messages from a different group or incorrectly cached session must never appear.
+
+TESTS
+
+Add and run tests proving:
+
+- An opened but unfinished Daily Rhythm day appears under Previous Days after the next day begins.
+- Future Daily Rhythm days remain inaccessible.
+- New users cannot access days from before their account began.
+- Create Group opens with a blank Group name.
+- Emmaus Generate opens with a blank prompt.
+- Switching rapidly between two groups never displays Group A’s messages in Group B.
+- Switching between meeting sessions never flashes the previous session’s messages.
+- A delayed response or real-time event from an old chat is ignored after navigation.
+- Refreshing and signing out/in do not reintroduce any of these bugs.

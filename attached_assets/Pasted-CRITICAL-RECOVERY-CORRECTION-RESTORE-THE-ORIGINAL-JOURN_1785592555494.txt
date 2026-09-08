@@ -1,0 +1,171 @@
+CRITICAL RECOVERY CORRECTION — RESTORE THE ORIGINAL JOURNEY STRUCTURE
+
+The recovery restored the wrong content structure.
+
+CURRENT WRONG STATE
+
+Next Steps → Journeys shows:
+
+Journey:
+Coming to Jesus
+
+Inside it, the only Walk is also incorrectly called:
+Coming to Jesus
+
+That Walk contains:
+Step 1
+Step 2
+Step 3
+...
+Step 7
+
+This is wrong.
+
+The restored startup scaffold is not the Journey we previously built.
+
+==================================================
+CORRECT LOCKED STRUCTURE
+==================================================
+
+The Journey is:
+
+Coming to Jesus
+
+Inside that Journey, the Walk must be:
+
+Who Is God?
+
+The Walk must contain the original 5 steps:
+
+1. In the Beginning
+2. The Master Designer
+3. The Lord of Creation
+4. God Knows You
+5. God Wants You to Know Him
+
+Do not create a 7-step Walk.
+
+Do not create a Walk called “Coming to Jesus.”
+
+Do not leave generic titles such as “Step 1”, “Step 2”, etc.
+
+==================================================
+IMPORTANT RECOVERY RULES
+==================================================
+
+1. First inspect all available sources for the original content:
+   - production database backups
+   - development database
+   - Git history
+   - earlier commits
+   - checkpoints
+   - seed scripts
+   - exported JSON
+   - audit logs
+   - content snapshots
+
+2. Recover the exact original “Who Is God?” Walk content wherever possible.
+
+3. Do not overwrite recovered content with the generic scaffold.
+
+4. Remove the incorrect restored Walk named “Coming to Jesus” from inside the Journey.
+
+5. Restore the existing Journey-to-Walk relationship:
+
+Coming to Jesus
+→ Who Is God?
+
+6. Preserve:
+   - Journey ID where possible
+   - original Walk ID where recoverable
+   - publication status
+   - user progress
+   - completion history
+   - Room links
+
+7. Do not duplicate the Journey or Walk.
+
+==================================================
+CONTENT RECOVERY
+==================================================
+
+Recover the original content for all 5 steps, including where available:
+
+- title
+- Scripture
+- greeting
+- reflection
+- prayer
+- next step
+- closing
+- looking ahead
+- published status
+- order
+
+If the original content genuinely cannot be recovered, stop and report exactly what sources were checked and what is missing.
+
+Do not silently replace lost content with placeholders.
+
+==================================================
+STARTUP MIGRATION SAFETY
+==================================================
+
+Remove any startup logic that automatically recreates the incorrect generic 7-step scaffold.
+
+Startup migrations must never:
+
+- delete authored content
+- replace authored Walks
+- rename Walks
+- insert placeholder steps over real content
+- recreate obsolete seed structures on every boot
+
+Any recovery insert must be idempotent and must only restore the correct locked structure when records are genuinely missing.
+
+==================================================
+ACCEPTANCE TEST — PUBLISHED BUILD
+==================================================
+
+Verify:
+
+1. Next Steps → Journeys shows:
+   Coming to Jesus
+
+2. Opening it shows exactly one Walk:
+   Who Is God?
+
+3. The Walk card says:
+   5 Days
+   Self-paced
+
+4. Opening the Walk shows these exact titles:
+   - In the Beginning
+   - The Master Designer
+   - The Lord of Creation
+   - God Knows You
+   - God Wants You to Know Him
+
+5. No generic “Step 1–7” placeholders remain.
+
+6. No duplicate Walk called “Coming to Jesus” remains inside the Journey.
+
+7. Existing progress is preserved wherever recovery is possible.
+
+==================================================
+DELIVERY
+==================================================
+
+Report:
+
+1. exact root cause;
+2. where the original content was recovered from;
+3. incorrect records removed;
+4. correct records restored;
+5. startup migration corrected;
+6. published mobile verification.
+
+Do not mark complete until the published app shows:
+
+Coming to Jesus
+→ Who Is God?
+→ the original 5-step Walk.

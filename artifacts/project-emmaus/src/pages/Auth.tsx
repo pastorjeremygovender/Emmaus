@@ -1,86 +1,119 @@
-import { useState, useEffect } from 'react';
-import { useLocation } from 'wouter';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { motion } from 'framer-motion';
-import { ArrowLeft } from 'lucide-react';
+import { FormEvent, useEffect, useState } from "react";
+import { useLocation } from "wouter";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
+import { ArrowLeft, KeyRound, Mail, ShieldCheck } from "lucide-react";
+import { safeOpeningDestination } from "@/lib/opening-destination";
+import { goBackOrFallback } from "@/lib/return-context";
+
+type AuthMode = "signin" | "register" | "forgot";
+
+function getMode(): AuthMode {
+  const mode = new URLSearchParams(window.location.search).get("mode");
+  if (mode === "register" || mode === "forgot") return mode;
+  return "signin";
+}
+
+function getInitialError(): string {
+  return new URLSearchParams(window.location.search).get("error") ===
+    "legacy-account-migration"
+    ? "This Emmaus profile needs a secure migration before email and password can be used. Please contact your Emmaus administrator."
+    : "";
+}
+
+function getReturnTo(): string | null {
+  return safeOpeningDestination(new URLSearchParams(window.location.search).get("returnTo"));
+}
 
 export default function Auth() {
   const [, setLocation] = useLocation();
-  const { signIn, signUp, signInDemo, isDemoMode, user } = useAuth();
+  const {
+    signIn,
+    signUp,
+    resendConfirmationEmail,
+    sendPasswordReset,
+    user,
+    loading,
+  } = useAuth();
+  const [mode, setMode] = useState<AuthMode>(getMode);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState(getInitialError);
+  const [notice, setNotice] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [resending, setResending] = useState(false);
+  const returnTo = getReturnTo();
 
-  const searchParams = new URLSearchParams(window.location.search);
-  const initialMode = searchParams.get('mode') === 'register' ? 'register' : 'login';
-
-  const [mode, setMode] = useState<'login' | 'register'>(initialMode);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  // Redirect if already authed
   useEffect(() => {
-    if (user) {
-      if (user.role === 'admin' || user.role === 'superAdmin') setLocation('/admin');
-      else setLocation('/walk');
-    }
-  }, [user]);
+    if (!user) return;
+    // Every authenticated account returns through the application Opening
+    // Gate. Admins may still intentionally choose /admin from inside Emmaus.
+    setLocation(returnTo ?? "/");
+  }, [returnTo, setLocation, user]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  const changeMode = (next: AuthMode) => {
+    setError("");
+    setNotice("");
+    setPassword("");
+    setMode(next);
+    const params = new URLSearchParams();
+    if (next !== "signin") params.set("mode", next);
+    if (returnTo) params.set("returnTo", returnTo);
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    window.history.replaceState(null, "", `${window.location.pathname}${suffix}`);
+  };
 
-    if (!email.includes('@')) {
-      setError('Please enter a valid email address.');
-      return;
-    }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
-      return;
-    }
-    if (mode === 'register' && !name.trim()) {
-      setError('Please tell us your preferred name.');
-      return;
-    }
-
-    setLoading(true);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+    setNotice("");
+    setSubmitting(true);
     try {
-      if (mode === 'login') {
-        const role = await signIn(email, password);
-        setLocation(role === 'admin' || role === 'superAdmin' ? '/admin' : '/walk');
+      if (mode === "signin") {
+        await signIn(email, password);
+      } else if (mode === "register") {
+         await signUp(email, password, returnTo ?? undefined);
+        setNotice(
+          "Check your inbox to verify your email, then return here to sign in.",
+        );
       } else {
-        await signUp(email, password, name);
-        setLocation('/walk');
+         await sendPasswordReset(email, returnTo ?? undefined);
+        setNotice(
+          "If an Emmaus account uses this email, password reset instructions are on the way.",
+        );
       }
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong. Please try again.');
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "We could not complete that account request.",
+      );
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
-  const handleDemo = () => {
-    signInDemo(false);
-    setLocation('/walk');
-  };
-
-  const handleDemoAdmin = () => {
-    signInDemo(true);
-    setLocation('/admin');
-  };
-
-  const handleDemoSuperAdmin = () => {
-    signInDemo('superAdmin');
-    setLocation('/admin');
-  };
+  const title =
+    mode === "register"
+      ? "Begin your journey"
+      : mode === "forgot"
+        ? "Reset your password"
+        : "Welcome back";
+  const description =
+    mode === "register"
+      ? "Create an Emmaus account to save your progress."
+      : mode === "forgot"
+        ? "We will send a secure link to reset your password."
+        : "Sign in to continue walking.";
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background px-6 py-6 relative">
       <button
-        onClick={() => setLocation('/')}
+        onClick={() => {
+          if (mode !== "signin") changeMode("signin");
+          else goBackOrFallback("/", setLocation);
+        }}
         className="absolute top-6 left-6 p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
         aria-label="Back to welcome"
         data-testid="button-back"
@@ -94,128 +127,155 @@ export default function Auth() {
         className="flex-1 flex items-center justify-center"
       >
         <div className="w-full max-w-[400px]">
-          <div className="space-y-2 text-center mb-10">
+          <div className="space-y-3 text-center mb-8">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+              {mode === "forgot" ? (
+                <KeyRound size={27} aria-hidden="true" />
+              ) : (
+                <ShieldCheck size={28} aria-hidden="true" />
+              )}
+            </div>
             <h1 className="text-[32px] font-sans font-medium tracking-tight leading-tight">
-              {mode === 'login' ? 'Welcome back' : 'Begin your journey'}
+              {title}
             </h1>
-            <p className="text-base text-muted-foreground">
-              {mode === 'login'
-                ? 'Sign in to continue walking.'
-                : 'Create an account to save your progress.'}
-            </p>
+            <p className="text-base text-muted-foreground">{description}</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-            {error && (
-              <div
-                role="alert"
-                className="p-4 bg-destructive/10 text-destructive text-sm rounded-xl border border-destructive/20"
-              >
-                {error}
-              </div>
-            )}
+          {error && (
+            <div
+              role="alert"
+              className="mb-5 p-4 bg-destructive/10 text-destructive text-sm rounded-xl border border-destructive/20"
+            >
+              {error}
+            </div>
+          )}
+          {notice && (
+            <div
+              role="status"
+              className="mb-5 p-4 bg-primary/10 text-foreground text-sm rounded-xl border border-primary/20"
+            >
+              {notice}
+            </div>
+          )}
 
-            {mode === 'register' && (
-              <div className="space-y-2">
-                <Label htmlFor="name" className="text-sm font-medium">
-                  Preferred Name
-                </Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="How should we address you?"
-                  className="h-12 text-base rounded-xl"
-                  autoComplete="given-name"
-                  data-testid="input-name"
+          {mode === "register" && notice && (
+            <button
+              type="button"
+              disabled={resending || submitting}
+              onClick={async () => {
+                setError("");
+                setResending(true);
+                try {
+                   await resendConfirmationEmail(email, returnTo ?? undefined);
+                  setNotice("A new verification email was requested. If it does not arrive, the email provider may be blocking delivery.");
+                } catch (reason) {
+                  setError(
+                    reason instanceof Error
+                      ? reason.message
+                      : "We could not request another verification email.",
+                  );
+                } finally {
+                  setResending(false);
+                }
+              }}
+              className="mt-3 w-full text-sm text-foreground/70 hover:text-foreground underline underline-offset-2 min-h-[44px] disabled:opacity-50"
+              data-testid="button-resend-confirmation"
+            >
+              {resending ? "Requesting another email…" : "Resend confirmation email"}
+            </button>
+          )}
+
+          <form className="space-y-4" onSubmit={submit}>
+            <div className="space-y-2">
+              <label htmlFor="auth-email" className="text-sm font-medium">
+                Email address
+              </label>
+              <div className="relative">
+                <Mail
+                  size={18}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <input
+                  id="auth-email"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  className="w-full h-12 rounded-xl border border-input bg-background pl-10 pr-3 text-base outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+                  placeholder="you@example.com"
+                  required
+                  data-testid="input-auth-email"
                 />
               </div>
+            </div>
+
+            {mode !== "forgot" && (
+              <div className="space-y-2">
+                <label htmlFor="auth-password" className="text-sm font-medium">
+                  Password
+                </label>
+                <input
+                  id="auth-password"
+                  type="password"
+                  autoComplete={mode === "register" ? "new-password" : "current-password"}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className="w-full h-12 rounded-xl border border-input bg-background px-3 text-base outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+                  minLength={8}
+                  maxLength={128}
+                  required
+                  data-testid="input-auth-password"
+                />
+                {mode === "register" && (
+                  <p className="text-xs text-muted-foreground">
+                    Use at least 8 characters.
+                  </p>
+                )}
+              </div>
             )}
-
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium">
-                Email
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="hello@example.com"
-                className="h-12 text-base rounded-xl"
-                autoComplete="email"
-                data-testid="input-email"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium">
-                Password
-              </Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="h-12 text-base rounded-xl"
-                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                data-testid="input-password"
-              />
-            </div>
 
             <Button
               type="submit"
-              className="w-full h-12 text-base rounded-xl mt-2"
-              disabled={loading}
-              data-testid="button-submit"
+              className="w-full h-12 text-base rounded-xl"
+              disabled={loading || submitting}
+              data-testid="button-auth-submit"
             >
-              {loading ? 'Please wait…' : mode === 'login' ? 'Sign In' : 'Create Account'}
+              {submitting
+                ? "Please wait…"
+                : mode === "register"
+                  ? "Create account"
+                  : mode === "forgot"
+                    ? "Send reset link"
+                    : "Sign in"}
             </Button>
           </form>
 
-          <div className="text-center mt-6">
+          {mode === "signin" && (
             <button
               type="button"
-              onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+              onClick={() => changeMode("forgot")}
+              className="mt-4 w-full text-sm text-muted-foreground hover:text-foreground underline underline-offset-2 min-h-[44px]"
+              data-testid="button-forgot-password"
+            >
+              Forgot your password?
+            </button>
+          )}
+
+          <div className="text-center mt-4">
+            <button
+              type="button"
+              onClick={() =>
+                changeMode(mode === "register" ? "signin" : "register")
+              }
               className="text-sm text-foreground/60 hover:text-foreground transition-colors underline underline-offset-2 min-h-[44px] px-4"
               data-testid="button-toggle-mode"
             >
-              {mode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+              {mode === "register"
+                ? "Already have an account? Sign in"
+                : "Don't have an account? Create one"}
             </button>
           </div>
-
-          {isDemoMode && (
-            <div className="pt-8 mt-6 border-t border-border">
-              <div className="text-center space-y-3">
-                <p className="text-sm text-muted-foreground">Or explore without an account</p>
-                <Button
-                  variant="secondary"
-                  onClick={handleDemo}
-                  className="w-full h-12 text-base rounded-xl"
-                  data-testid="button-demo"
-                >
-                  Continue with Demo
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleDemoAdmin}
-                  className="w-full h-12 text-base rounded-xl"
-                  data-testid="button-demo-admin"
-                >
-                  Continue as Demo Admin
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleDemoSuperAdmin}
-                  className="w-full h-12 text-base rounded-xl border-red-200 text-red-700 hover:bg-red-50"
-                  data-testid="button-demo-super-admin"
-                >
-                  Continue as Super Admin
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
       </motion.div>
     </div>

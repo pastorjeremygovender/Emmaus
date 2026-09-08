@@ -96,7 +96,8 @@ export class OpenAIProvider implements LLMProvider {
     // reasoning_effort is only valid for o1/o3/o4 reasoning models.
     // Spread it as an unknown extra field — the SDK ignores unknown params at
     // runtime and TypeScript isn't aware of this field on standard models.
-    if (opts.reasoningEffort && isReasoningModel(this.model)) {
+    const effectiveModel = opts.model ?? this.model;
+    if (opts.reasoningEffort && isReasoningModel(effectiveModel)) {
       (streamParams as unknown as Record<string, unknown>).reasoning_effort =
         opts.reasoningEffort;
     }

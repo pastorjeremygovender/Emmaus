@@ -15,6 +15,8 @@
  * No startup errors are thrown.
  */
 
+import type { JarvisIntent, JarvisResponseContract } from "./jarvis-contract.js";
+
 // ─── Firestore Collection Paths ───────────────────────────────────────────────
 
 export const COLLECTIONS = {
@@ -50,6 +52,8 @@ export interface ScriptureRef {
   reference: string;   // e.g. "John 3:16"
   book: string;        // e.g. "john"
   chapter: number;
+  verseStart?: number;
+  verseEnd?: number;
   displayText?: string;
 }
 
@@ -81,10 +85,12 @@ export interface NextStepItem {
 }
 
 export interface Recommendation {
-  type: RecommendationType;
+  type: RecommendationType | EmmausResourceType;
   title: string;
   description?: string;
   path?: string;
+  resourceId?: string;
+  parentId?: string;
   sermonId?: string;
   timestampSeconds?: number;
   /** Custom badge label shown on the card (e.g. "Preached Here"). */
@@ -93,7 +99,44 @@ export interface Recommendation {
   speakerName?: string;
 }
 
+/** Verified sermon search result shown directly in Ask Emmaus and Voice. */
+export interface SermonRecommendation {
+  sermonId: string;
+  segmentId?: string;
+  source: "canonical" | "archive";
+  title: string;
+  speaker: string;
+  sermonDate: string;
+  excerpt: string;
+  reason: string;
+  /** Present only for a published canonical sermon. */
+  openPath?: string;
+  /** Present only when a verified YouTube URL exists. */
+  watchUrl?: string;
+  watchTimestampSeconds?: number;
+  listenAvailable: boolean;
+  listenPath?: string;
+  audioUrl?: string;
+  relativeStartSeconds?: number;
+}
+
+/** Resource types accepted by the validated Ask Emmaus contract. */
+export type EmmausResourceType =
+  | "sermon"
+  | "sermon_companion"
+  | "devotional"
+  | "walk"
+  | "walk_step"
+  | "journey"
+  | "bible_study"
+  | "daily_rhythm";
+
 export interface EmmausResponseMetadata {
+  answer?: string;
+  /** Final server-normalized answer used by typed Ask Emmaus rendering. */
+  displayAnswer?: string;
+  /** Plain-language form reserved for future non-visual clients. */
+  speakableAnswer?: string;
   scripture: ScriptureRef | null;
   nextStep: NextStep | null;
   /** Practical next-steps footer rendered with emoji icons (📖 🙏 🎧 🚶).
@@ -101,8 +144,60 @@ export interface EmmausResponseMetadata {
    *  The conversation service appends the "listen" item from verified sermon data. */
   nextSteps: NextStepItem[];
   recommendations: Recommendation[];
+  sermonRecommendations?: SermonRecommendation[];
   followUpPrompts: string[];
   handoffType: HandoffType;
+  /** Canonical contract fields. Kept optional for persisted pre-contract messages. */
+  scriptureReferences?: ScriptureRef[];
+  resourceRecommendations?: Array<{
+    resourceType: EmmausResourceType;
+    resourceId: string;
+    parentId?: string;
+    reason: string;
+    relevanceReasons?: string[];
+  }>;
+  prayer?: string | null;
+  /** Shared pre-action intent classification used by typed Ask Emmaus and Voice. */
+  requestedIntent?: "ASK" | "READ" | "OPEN" | "FIND";
+  /** Retrieval sources that were unavailable; callers should offer a retry. */
+  retrievalFailures?: string[];
+  /** Server-generated executable actions for catalogue-backed resources. */
+  resourceActions?: Array<{
+    kind: "OPEN" | "READ" | "CONTINUE";
+    resourceType: EmmausResourceType;
+    resourceId: string;
+    parentId?: string;
+    route: string;
+  }>;
+  /** Server-owned actions for application capabilities that are not content records. */
+  capabilityActions?: Array<{
+    kind: "OPEN" | "READ" | "CONTINUE";
+    capabilityId: string;
+    label: string;
+    route: string;
+  }>;
+  /** Versioned Jarvis foundation response; legacy fields remain for compatibility. */
+  jarvis?: JarvisResponseContract;
+  /** More specific typed intent used by the versioned Jarvis contract. */
+  jarvisIntent?: JarvisIntent;
+  /** Correlates the SSE response with the server's structured request log. */
+  requestId?: string;
+  /** Structured stage timings used for release acceptance comparisons. */
+  pipelineTimings?: {
+    authMs: number | null;
+    contextMs: number;
+    routingMs: number;
+    retrievalScriptureMs: number;
+    retrievalSermonsMs: number;
+    retrievalResourcesMs: number;
+    retrievalMemoriesMs: number;
+    retrievalRoomsMs: number;
+    modelTtftMs: number | null;
+    firstValidatedVisibleMs: number | null;
+    modelGenerationMs: number;
+    validationMs: number;
+    totalMs: number;
+  };
 }
 
 // ─── Firestore Document Interfaces ───────────────────────────────────────────

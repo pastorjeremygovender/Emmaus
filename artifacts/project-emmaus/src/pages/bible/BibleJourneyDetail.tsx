@@ -3,6 +3,7 @@ import { ArrowLeft, CheckCircle2, BookOpen, ChevronRight, Clock } from 'lucide-r
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { getBibleJourney } from '@/lib/bible-data';
+import { goBackOrFallback } from '@/lib/return-context';
 import { LUKE_CHAPTER_HEADINGS } from '@/lib/bible-provider';
 import { LUKE_READING_MINUTES } from '@/data/kjv-luke';
 import { useBible } from '@/contexts/BibleContext';
@@ -43,7 +44,7 @@ export default function BibleJourneyDetail() {
       <div className="min-h-[100dvh] flex items-center justify-center p-8 bg-background">
         <div className="text-center space-y-4">
           <p className="text-[17px] text-muted-foreground">Journey not found.</p>
-          <Button variant="outline" onClick={() => setLocation('/bible')}>Back to Bible</Button>
+          <Button variant="outline" onClick={() => goBackOrFallback('/bible', setLocation)}>Back to Bible</Button>
         </div>
       </div>
     );
@@ -56,7 +57,7 @@ export default function BibleJourneyDetail() {
           <h2 className="text-[22px] font-sans font-semibold">{journey.title}</h2>
           <p className="text-[15px] text-muted-foreground">{journey.description}</p>
           <p className="text-[14px] text-primary font-medium">Coming soon</p>
-          <Button variant="outline" onClick={() => setLocation('/bible')}>Back to Bible</Button>
+          <Button variant="outline" onClick={() => goBackOrFallback('/bible', setLocation)}>Back to Bible</Button>
         </div>
       </div>
     );
@@ -83,7 +84,7 @@ export default function BibleJourneyDetail() {
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[520px] mx-auto">
           <button
-            onClick={() => setLocation('/bible')}
+            onClick={() => goBackOrFallback('/bible', setLocation)}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             <ArrowLeft size={22} />
@@ -145,7 +146,7 @@ export default function BibleJourneyDetail() {
               const completedStandalone = isChapterComplete(journey.bookId, ch);
               const done = completedViaJourney || completedStandalone;
               const isCurrent = progress?.currentChapter === ch && !done;
-              const isLocked = progress ? ch > (progress.currentChapter) && !done : ch > 1;
+              const isLocked = false; // all chapters freely accessible
               const heading = getHeadingForJourney(journey.bookId, ch);
               const mins = getMinutesForJourney(journey.bookId, ch);
 

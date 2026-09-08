@@ -1,0 +1,180 @@
+PILOT UX REFINEMENT — SIMPLIFY TODAY'S STEPS AND PRESERVE PROGRESS
+
+We have identified a UX problem.
+
+Today's Steps is trying to be both:
+- mandatory daily rhythm
+- optional discipleship dashboard
+
+This creates confusion and has resulted in progress being reset when content is removed.
+
+We are simplifying the behaviour.
+
+==================================================
+LOCKED DESIGN
+==================================================
+
+Today's Steps should represent:
+
+"Things I am actively doing."
+
+NOT
+
+"Everything Emmaus offers."
+
+==================================================
+1. DAILY RHYTHM
+==================================================
+
+10 Minutes with Jesus remains permanently pinned.
+
+It can never be removed.
+
+It behaves exactly as it does today.
+
+No changes.
+
+==================================================
+2. OPTIONAL CONTENT
+==================================================
+
+The following are OPTIONAL:
+
+• Daily Devotionals
+• Sermon Companions
+• Walks
+• Bible Studies
+• Rooms
+
+These should NOT automatically appear on Today's Steps for new users.
+
+Instead they begin life in Next Steps.
+
+They only appear on Today's Steps after the member intentionally starts them.
+
+This follows the Active Engagement rule already agreed.
+
+==================================================
+3. ACTIVE ENGAGEMENT RULE
+==================================================
+
+When a member intentionally starts ANY optional content from Next Steps:
+
+• add it to Today's Steps
+• retain its exact progress
+• keep it there until:
+    - completed
+    - paused
+    - hidden
+
+Do NOT reset progress.
+
+==================================================
+4. REMOVE MENU
+==================================================
+
+Replace:
+
+Remove
+
+with
+
+Hide from Today's Steps
+
+This action MUST:
+
+• remove the card from Today's Steps
+• NEVER delete progress
+• NEVER delete completion history
+• NEVER restart at Day 1
+
+It simply hides the active card.
+
+==================================================
+5. RESTORE
+==================================================
+
+If hidden content is opened again from Next Steps:
+
+restore it to Today's Steps
+
+AND
+
+resume at the exact saved position.
+
+Examples:
+
+Psalm Day 5
+→ hide
+→ reopen
+→ returns on Day 5
+
+Walk Step 3
+→ hide
+→ reopen
+→ returns on Step 3
+
+Sermon Companion Day 2
+→ hide
+→ reopen
+→ returns on Day 2
+
+Never restart unless the member explicitly chooses:
+
+Reset Progress
+
+==================================================
+6. NEW USER EXPERIENCE
+==================================================
+
+A brand-new user should initially see:
+
+Today's Steps
+
+• 10 Minutes with Jesus
+
+Nothing else.
+
+After completing Daily Rhythm they naturally discover Next Steps.
+
+==================================================
+7. NEXT STEPS
+==================================================
+
+Add this helper text immediately beneath the heading:
+
+Choose something to continue walking with Jesus.
+
+Anything you start will appear on Today's Steps until you finish, pause or hide it.
+
+No redesign required.
+
+==================================================
+8. REGRESSION TESTS
+==================================================
+
+Verify:
+
+✓ Daily Rhythm unchanged
+✓ Progress survives hide/show
+✓ No optional content appears automatically for new users
+✓ Starting optional content adds it to Today's Steps
+✓ Completion history retained
+✓ Active Engagement rule preserved
+✓ Existing completed users keep their progress
+✓ No database migration loses user progress
+
+==================================================
+9. REPORT
+==================================================
+
+Do not simply mark complete.
+
+Demonstrate:
+
+1. New user flow.
+2. Existing user flow.
+3. Hide → reopen → resume same progress.
+4. Completion → review still works.
+5. Files changed.
+6. Confirmation that no progress is ever lost except via an explicit Reset Progress action.

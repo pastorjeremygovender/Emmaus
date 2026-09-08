@@ -1,0 +1,869 @@
+IMPORTANT: READ THIS ENTIRE PROMPT BEFORE MAKING CHANGES.
+
+Build Phase 1 of the Emmaus Discipleship and Pastoral Care Dashboard inside the EXISTING Emmaus Admin system.
+
+This is not a separate app, not a Wix build, and not a replacement for the existing admin panel.
+
+The purpose is to help pastors and authorised leaders see:
+
+- who is attending church;
+- who is actively engaging with Emmaus;
+- who is progressing through Walks and Journeys;
+- who may need encouragement or pastoral follow-up;
+- who may be ready for baptism, serving or another discipleship step.
+
+This must be a pastoral-care tool, not a surveillance system or spiritual scoring system.
+
+==================================================
+FIRST: AUDIT THE EXISTING SYSTEM
+==================================================
+
+Before changing anything, inspect and report:
+
+1. Existing user/member tables.
+2. Existing authentication and admin roles.
+3. Existing church or tenant structure.
+4. Existing Walk and Journey enrolment tables.
+5. Existing Step progress and completion records.
+6. Existing Daily Rhythm activity.
+7. Existing Daily Devotional activity.
+8. Existing Sermon Companion activity.
+9. Existing Rooms membership and activity.
+10. Existing People section in Admin.
+11. Existing dashboard structure.
+12. Existing activity or audit logs.
+13. Existing notification system.
+14. Existing database naming conventions.
+
+Reuse existing data and components.
+
+Do not create:
+
+- a second member database;
+- duplicate user accounts;
+- duplicate Walk progress;
+- a separate admin application;
+- a parallel authentication system;
+- a disconnected attendance system.
+
+The Emmaus user account must remain the canonical person record whenever one exists.
+
+Create reversible database migrations and preserve all existing data.
+
+==================================================
+CORE PRINCIPLE
+==================================================
+
+Attendance is one part of discipleship.
+
+Emmaus must combine:
+
+- church attendance;
+- Walk and Journey activity;
+- Emmaus engagement;
+- pastoral follow-up;
+- serving preparation;
+- positive discipleship milestones.
+
+Do not create:
+
+- spiritual scores;
+- public rankings;
+- labels such as faithful, unfaithful or backslidden;
+- automatic reprimands;
+- automatic messages to absent members;
+- conclusions about someone’s relationship with Jesus.
+
+Emmaus identifies patterns.
+
+A human pastor or leader decides whether and how to respond.
+
+==================================================
+ADMIN NAVIGATION
+==================================================
+
+Use the existing Admin shell.
+
+Add or expand these areas:
+
+DASHBOARD
+
+PEOPLE
+- People
+- Attendance
+- Follow-up
+- Care Signals
+
+Do not create excessive navigation levels.
+
+On desktop, these may appear as sidebar items or tabs.
+
+On mobile, ensure all sections remain accessible and usable.
+
+==================================================
+1. DISCIPLESHIP DASHBOARD
+==================================================
+
+Create a new dashboard focused on pastoral awareness.
+
+The dashboard should answer:
+
+- Who may need attention?
+- Who is actively growing?
+- Who has completed an important next step?
+- Who has stopped attending or engaging unexpectedly?
+- What follow-ups are still outstanding?
+
+Create the following dashboard sections.
+
+--------------------------------------------------
+A. OVERVIEW
+--------------------------------------------------
+
+Show simple summary cards:
+
+- Attendance at latest Sunday meeting
+- First-time visitors
+- People currently active in Walks
+- Walks completed this week
+- People needing follow-up
+- Follow-ups overdue
+- People with recent positive milestones
+
+Do not overcrowd the dashboard.
+
+Each summary card should open the relevant filtered list.
+
+--------------------------------------------------
+B. NEEDS ATTENTION
+--------------------------------------------------
+
+Display rule-based care signals such as:
+
+“Jeremy has missed 3 consecutive Sunday services.”
+
+“Sarah was regularly active in Emmaus but has not engaged for 14 days.”
+
+“David stopped attending and also stopped progressing through his active Walk.”
+
+“Michael began the Volunteer Walk but has not continued recently.”
+
+“Thandi missed two Made Free meetings.”
+
+Each card must show:
+
+- person’s name;
+- reason for the signal;
+- date the signal was created;
+- priority;
+- assigned leader, if any;
+- current follow-up status.
+
+Actions:
+
+- View Person
+- Assign Leader
+- Add Note
+- Mark Contacted
+- Snooze
+- Mark Resolved
+
+Do not automatically contact the person.
+
+--------------------------------------------------
+C. POSITIVE NEXT STEPS
+--------------------------------------------------
+
+Show positive pastoral opportunities such as:
+
+“Jason completed the Volunteer Walk.”
+
+“Sarah completed Beginning Your New Life.”
+
+“David completed the Baptism Journey.”
+
+“Nomsa has attended regularly since joining.”
+
+“Peter completed Core Foundations.”
+
+Actions may include:
+
+- View Person
+- Assign Follow-up
+- Mark Ready for Serving
+- Mark Ready for Baptism Conversation
+- Recommend Next Walk
+- Dismiss
+
+These are suggestions, not automatic decisions.
+
+--------------------------------------------------
+D. RECENT ACTIVITY
+--------------------------------------------------
+
+Show a compact timeline of meaningful events:
+
+- attended a meeting;
+- started a Walk;
+- completed a Step;
+- completed a Walk;
+- joined a Room;
+- received a pastoral follow-up;
+- marked ready to serve;
+- baptism status updated.
+
+Do not include every page view or meaningless click.
+
+==================================================
+2. PEOPLE
+==================================================
+
+Use the existing Emmaus users as the foundation.
+
+Allow attendance-only people to be added when they do not yet have an Emmaus account.
+
+Later, an attendance-only person must be linkable to an Emmaus account without losing history.
+
+Create a searchable People list showing:
+
+- name;
+- phone/email where authorised;
+- membership or relationship status;
+- latest attendance;
+- current active Walks;
+- last Emmaus activity;
+- open care signals;
+- assigned leader.
+
+Filters:
+
+- All People
+- Visitors
+- Regular Attenders
+- Emmaus Users
+- No Emmaus Account
+- Active Walks
+- Needs Follow-up
+- Ready for Serving
+- Ready for Baptism
+- Inactive
+
+Avoid labelling someone “inactive” based on one missed meeting.
+
+==================================================
+3. PERSON DISCIPLESHIP PROFILE
+==================================================
+
+Create one integrated profile per person.
+
+Sections:
+
+--------------------------------------------------
+A. PROFILE SUMMARY
+--------------------------------------------------
+
+Show:
+
+- name;
+- contact details;
+- photograph, optional;
+- relationship to church;
+- usual meeting attendance;
+- assigned pastoral leader;
+- Room membership;
+- serving status;
+- baptism status;
+- last pastoral contact.
+
+--------------------------------------------------
+B. DISCIPLESHIP OVERVIEW
+--------------------------------------------------
+
+Show:
+
+- active Walks;
+- completed Walks;
+- current Step;
+- Walk completion dates;
+- Daily Rhythm recent engagement;
+- Daily Devotional engagement;
+- Sermon Companion engagement;
+- Bible Study progress;
+- Room participation where appropriate;
+- last Emmaus activity.
+
+Do not duplicate progress data.
+
+Read from the existing canonical progress records.
+
+--------------------------------------------------
+C. ATTENDANCE TIMELINE
+--------------------------------------------------
+
+Show chronological attendance:
+
+- meeting;
+- date;
+- status;
+- recorded by;
+- optional note.
+
+Statuses:
+
+- Present
+- Visitor
+- Apology
+- Absent
+- Not Expected
+
+“Not Expected” is essential.
+
+A person must not be considered absent from meetings they do not normally attend.
+
+--------------------------------------------------
+D. DISCIPLESHIP TIMELINE
+--------------------------------------------------
+
+Combine meaningful events:
+
+- first visit;
+- attendance;
+- Walk started;
+- Step completed;
+- Walk completed;
+- Room joined;
+- serving conversation;
+- baptism conversation;
+- pastoral follow-up;
+- follow-up resolved.
+
+--------------------------------------------------
+E. FOLLOW-UP
+--------------------------------------------------
+
+Show:
+
+- current care signals;
+- assigned leader;
+- follow-up status;
+- due date;
+- notes;
+- contact history.
+
+Private pastoral notes must have stronger permissions than general profile information.
+
+==================================================
+4. MEETINGS AND ATTENDANCE
+==================================================
+
+Create reusable meeting types.
+
+Examples:
+
+- Sunday Morning
+- Sunday Evening
+- Prayer Meeting
+- Bible Study
+- Youth
+- Men’s Meeting
+- Ladies’ Meeting
+- Made Free
+- Volunteer Training
+- Special Event
+
+Each meeting type should include:
+
+- name;
+- category;
+- usual day/time, optional;
+- active/inactive;
+- responsible ministry;
+- who is normally expected;
+- care-signal rules.
+
+Create dated meeting sessions from these meeting types.
+
+Example:
+
+Sunday Morning
+4 August 2026
+09:00
+
+--------------------------------------------------
+ATTENDANCE REGISTER
+--------------------------------------------------
+
+For Phase 1, build a fast manual attendance register.
+
+Requirements:
+
+- search people;
+- alphabetic list;
+- recent attenders;
+- mark multiple people quickly;
+- default status should not incorrectly mark everyone absent;
+- save progress continuously;
+- clear “Attendance saved” confirmation;
+- prevent duplicate attendance records;
+- allow corrections;
+- add visitor quickly;
+- link visitor to an existing person if found;
+- show totals.
+
+Statuses:
+
+- Present
+- Visitor
+- Apology
+- Absent
+- Not Expected
+
+Include bulk actions carefully:
+
+- Mark selected Present
+- Mark selected Apology
+- Mark selected Not Expected
+
+Do not build QR check-in yet.
+
+Design the data model so QR and self-check-in can be added later.
+
+==================================================
+5. FOLLOW-UP WORKFLOW
+==================================================
+
+Create a central Follow-up queue.
+
+Statuses:
+
+NEW
+ASSIGNED
+CONTACTED
+FURTHER_FOLLOW_UP
+RESOLVED
+SNOOZED
+
+Each follow-up should contain:
+
+- person;
+- reason;
+- source signal;
+- assigned leader;
+- date created;
+- due date;
+- priority;
+- latest note;
+- status;
+- resolved date;
+- resolved by.
+
+Actions:
+
+- Assign Leader
+- Mark Contacted
+- Add Note
+- Set Follow-up Date
+- Snooze
+- Resolve
+- Reopen
+
+Ensure multiple leaders do not unknowingly contact the same person.
+
+Show existing active follow-up before creating another.
+
+==================================================
+6. CARE SIGNAL RULES
+==================================================
+
+Phase 1 must use transparent, editable rules.
+
+Do not use predictive AI yet.
+
+Create Care Rules under:
+
+Settings → Discipleship and Care Rules
+
+Initial rules:
+
+--------------------------------------------------
+A. MISSED ATTENDANCE
+--------------------------------------------------
+
+Create a signal when someone misses 3 consecutive sessions of a meeting they normally attend.
+
+Do not count:
+
+- Not Expected;
+- Apology;
+- cancelled meetings;
+- meetings before the person began attending.
+
+Suggested message:
+
+“Jeremy has missed 3 consecutive Sunday Morning services.”
+
+--------------------------------------------------
+B. CHANGE FROM NORMAL PATTERN
+--------------------------------------------------
+
+Create a signal when someone who normally attends regularly suddenly stops.
+
+The system should consider their personal attendance pattern, not only a universal threshold.
+
+Suggested message:
+
+“Sarah usually attends Sunday Morning but has missed the last 3 services.”
+
+--------------------------------------------------
+C. EMMAUS DISENGAGEMENT
+--------------------------------------------------
+
+Create a signal when someone who was recently active in Emmaus has no meaningful engagement for 14 days.
+
+Meaningful engagement includes:
+
+- Daily Rhythm;
+- devotional completion;
+- Walk Step completion;
+- Bible Study progress;
+- Sermon Companion progress;
+- Room participation where appropriate.
+
+Do not create this signal for a person who has never used Emmaus meaningfully.
+
+--------------------------------------------------
+D. COMBINED DISENGAGEMENT
+--------------------------------------------------
+
+Create a higher-priority signal when:
+
+- church attendance has stopped; and
+- Emmaus engagement has also stopped.
+
+Suggested message:
+
+“David has recently stopped attending and has also stopped engaging with Emmaus.”
+
+--------------------------------------------------
+E. WALK INTERRUPTION
+--------------------------------------------------
+
+Create a signal when someone was progressing through a Walk and then stops for a configurable period.
+
+Do not trigger this for every casual or newly started Walk.
+
+Suggested message:
+
+“Michael was progressing through the Volunteer Walk but has not continued recently.”
+
+--------------------------------------------------
+F. POSITIVE WALK COMPLETION
+--------------------------------------------------
+
+Create a positive signal when someone completes a selected Walk.
+
+Examples:
+
+- Volunteer Walk
+- Baptism Journey
+- Beginning Your New Life
+- Core Foundations
+- Made Free
+
+Suggested message:
+
+“Jason completed the Volunteer Walk. Consider a serving conversation.”
+
+--------------------------------------------------
+G. SENSITIVE WALK RULES
+--------------------------------------------------
+
+Sensitive programmes such as Made Free must use restricted visibility.
+
+Only explicitly authorised leaders may see:
+
+- participation;
+- progress;
+- attendance;
+- care signals;
+- notes.
+
+General administrators must not automatically have access.
+
+==================================================
+7. CARE RULE SETTINGS
+==================================================
+
+Allow authorised administrators to configure:
+
+- number of missed meetings;
+- number of inactivity days;
+- which meetings generate alerts;
+- which Walks generate positive milestones;
+- which Walks are sensitive;
+- signal priority;
+- snooze duration;
+- responsible ministry or leader.
+
+Every care signal must state exactly why it was created.
+
+Do not show a mysterious risk score.
+
+==================================================
+8. PERMISSIONS
+==================================================
+
+Use the existing role system.
+
+Add or extend permissions carefully.
+
+Suggested access:
+
+ADMINISTRATOR
+- system configuration;
+- general access;
+- permissions management.
+
+PASTOR
+- people;
+- attendance;
+- care signals;
+- follow-up;
+- pastoral notes.
+
+MINISTRY LEADER
+- only people, meetings and follow-ups assigned to their ministry.
+
+ATTENDANCE RECORDER
+- meeting register only;
+- no pastoral notes;
+- no sensitive Walk progress.
+
+CONTENT ADMIN
+- Walk and content management;
+- no pastoral-care access by default.
+
+MADE FREE AUTHORISED LEADER
+- restricted Made Free attendance, progress and care information.
+
+Enforce all permissions server-side.
+
+Do not rely only on hidden frontend buttons.
+
+==================================================
+9. PRIVACY AND PASTORAL SAFEGUARDS
+==================================================
+
+Lock in these principles:
+
+1. Care, not surveillance.
+2. Patterns, not judgment.
+3. Human review before contact.
+4. No spiritual scoring.
+5. No public attendance rankings.
+6. No automatic reprimands.
+7. No analysing private Ask Emmaus conversations for care alerts in Phase 1.
+8. Sensitive programme data requires explicit access.
+9. People can have inaccurate attendance corrected.
+10. Record who viewed or changed sensitive pastoral information where appropriate.
+
+Do not expose private notes to ordinary users or unrelated leaders.
+
+==================================================
+10. DATABASE
+==================================================
+
+Inspect existing schema before naming or creating tables.
+
+Add compatible models for concepts such as:
+
+meeting_types
+meeting_sessions
+attendance_records
+person_attendance_expectations
+care_rules
+care_signals
+follow_ups
+follow_up_notes
+leader_assignments
+discipleship_events
+person_ministry_status
+
+Reference existing:
+
+users
+profiles
+walk_enrolments
+step_progress
+journey_progress
+rooms
+activity data
+admin roles
+
+Do not copy Walk progress into new tables.
+
+Create indexes for:
+
+- person;
+- meeting date;
+- signal status;
+- assigned leader;
+- follow-up due date;
+- church/tenant;
+- ministry;
+- attendance status.
+
+Ensure church/tenant isolation in every query.
+
+==================================================
+11. DASHBOARD UX
+==================================================
+
+Follow the existing Emmaus Admin design.
+
+Requirements:
+
+- clean;
+- uncluttered;
+- responsive;
+- mobile-friendly;
+- clear empty states;
+- no horizontal overflow;
+- no tiny action targets;
+- no Times New Roman;
+- consistent Emmaus colours and components.
+
+Prioritise:
+
+1. Needs Attention
+2. Positive Next Steps
+3. Follow-ups Due
+4. Attendance Summary
+5. Walk Activity
+
+Do not lead with graphs.
+
+Use simple cards and lists first.
+
+Reports and advanced charts can come later.
+
+==================================================
+12. PHASE 1 SCOPE
+==================================================
+
+BUILD NOW:
+
+- dashboard;
+- People list;
+- integrated person profile;
+- meeting types;
+- meeting sessions;
+- manual attendance register;
+- attendance history;
+- rule-based care signals;
+- positive milestone signals;
+- follow-up workflow;
+- role permissions;
+- Care Rule settings.
+
+DO NOT BUILD YET:
+
+- QR check-in;
+- location tracking;
+- facial recognition;
+- predictive AI;
+- analysis of private Ask Emmaus conversations;
+- automated WhatsApp messages;
+- automatic emails to absent people;
+- advanced reporting;
+- external church-management integrations;
+- Wix integration;
+- complex serving-team scheduling.
+
+==================================================
+13. TESTING
+==================================================
+
+Test all of the following:
+
+1. Create Sunday Morning meeting type.
+2. Create a dated meeting session.
+3. Record attendance.
+4. Correct attendance.
+5. Add a visitor.
+6. Add an attendance-only person.
+7. Link an attendance-only person to an Emmaus user.
+8. Confirm no duplicate person is created.
+9. Confirm existing Walk progress appears on the person profile.
+10. Confirm completing a selected Walk generates a positive signal.
+11. Confirm 3 missed expected services generates a care signal.
+12. Confirm Apology does not count as absence.
+13. Confirm Not Expected does not count as absence.
+14. Confirm a combined attendance and Emmaus disengagement signal.
+15. Assign a follow-up to a leader.
+16. Add a note.
+17. Mark contacted.
+18. Resolve the follow-up.
+19. Confirm sensitive Made Free data is hidden from unauthorised roles.
+20. Confirm attendance recorder cannot see pastoral notes.
+21. Confirm church/tenant isolation.
+22. Confirm mobile attendance entry works.
+23. Confirm existing Admin, Walks, Rooms, Bible and Sermons still work.
+24. Test the published deployment, not only development preview.
+
+==================================================
+14. IMPLEMENTATION ORDER
+==================================================
+
+Implement in this order:
+
+1. Audit and report.
+2. Database migrations.
+3. Meeting types and sessions.
+4. Attendance register.
+5. People integration.
+6. Person discipleship profile.
+7. Follow-up workflow.
+8. Rule-based care signals.
+9. Dashboard.
+10. Permissions and privacy verification.
+11. Production testing.
+
+Do not attempt to generate advanced AI insights before the foundational data and workflows are reliable.
+
+==================================================
+15. REPORT BACK
+==================================================
+
+Before implementation, report:
+
+- existing data structures to be reused;
+- migrations proposed;
+- routes and components to change;
+- permission model;
+- duplication risks;
+- privacy risks.
+
+After implementation, report:
+
+- files changed;
+- database migrations;
+- existing components reused;
+- test results;
+- production URL tested;
+- known limitations;
+- Phase 2 recommendations.
+
+The goal of Phase 1 is:
+
+ONE PEOPLE RECORD
+
+ONE DISCIPLESHIP TIMELINE
+
+ONE ATTENDANCE SYSTEM
+
+ONE CARE-SIGNAL SYSTEM
+
+ONE FOLLOW-UP WORKFLOW
+
+Emmaus should help leaders notice people who may need care and people who may be ready for their next step with Jesus.

@@ -20,8 +20,10 @@
 
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import http from "node:http";
 import https from "node:https";
+import { authHeader, cleanupTestAuth } from "../../test-utils/test-auth.ts";
 
 const BASE_URL = process.env.TEST_SERVER_URL ?? "http://localhost:8080";
 const url = new URL(BASE_URL);
@@ -34,18 +36,23 @@ type ReqOpts = {
   method?: string;
   path: string;
   userId?: string;
-  role?: string;
+  role?: "user" | "admin" | "superAdmin";
   body?: object;
 };
 
-function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
+async function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
+  // Resolve a REAL opaque session (Authorization: Bearer <sid>) for the caller's
+  // logical userId. Members default to app_role "user"; admin setup identities
+  // pass an explicit role. No X-User-* headers are ever sent.
+  const authHeaders = opts.userId
+    ? await authHeader(opts.userId, { role: opts.role ?? "user" })
+    : {};
   return new Promise((resolve, reject) => {
     const payload = opts.body ? JSON.stringify(opts.body) : undefined;
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      ...authHeaders,
     };
-    if (opts.userId) headers["X-User-Id"] = opts.userId;
-    if (opts.role) headers["X-User-Role"] = opts.role;
     if (payload) headers["Content-Length"] = String(Buffer.byteLength(payload));
 
     const req = transport.request(
@@ -73,7 +80,7 @@ function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
 // ─── Test fixtures ────────────────────────────────────────────────────────────
 
 // Stable unique IDs scoped to this test run — avoids collision with real data.
-const RUN_TAG = Date.now();
+const RUN_TAG = `${Date.now()}-${process.pid}-${randomBytes(8).toString("hex")}`;
 const ADMIN_USER_ID = `test-admin-${RUN_TAG}`;
 const MEMBER_USER_ID = `test-member-${RUN_TAG}`;
 // Deliberately verbose generic description — the test asserts this string never
@@ -249,24 +256,30 @@ before(async () => {
 // ─── After: permanent-delete the test series ─────────────────────────────────
 
 after(async () => {
-  await Promise.all([
-    testSeriesId
-      ? request({
-          method: "DELETE",
-          path: `/api/devotionals/${testSeriesId}/permanent`,
-          userId: ADMIN_USER_ID,
-          role: "superAdmin",
-        })
-      : Promise.resolve(),
-    sparseSeriesId
-      ? request({
-          method: "DELETE",
-          path: `/api/devotionals/${sparseSeriesId}/permanent`,
-          userId: ADMIN_USER_ID,
-          role: "superAdmin",
-        })
-      : Promise.resolve(),
-  ]);
+  try {
+    await Promise.all([
+      testSeriesId
+        ? request({
+            method: "DELETE",
+            path: `/api/devotionals/${testSeriesId}/permanent`,
+            userId: ADMIN_USER_ID,
+            role: "superAdmin",
+          })
+        : Promise.resolve(),
+      sparseSeriesId
+        ? request({
+            method: "DELETE",
+            path: `/api/devotionals/${sparseSeriesId}/permanent`,
+            userId: ADMIN_USER_ID,
+            role: "superAdmin",
+          })
+        : Promise.resolve(),
+    ]);
+  } finally {
+    // Remove helper-created auth rows + any server-persisted residue keyed by
+    // our verified ids (progress, created_by). Always runs.
+    await cleanupTestAuth();
+  }
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -284,6 +297,7 @@ type NextStepsItem = {
   };
   route: string;
   primaryActionLabel: string | null;
+  badge?: 'NEW' | 'UPDATED' | null;
 };
 
 type NextStepsResponse = {
@@ -295,7 +309,9 @@ type NextStepsResponse = {
 };
 
 async function fetchNextSteps(userId: string): Promise<NextStepsResponse> {
-  const res = await request({ path: `/api/next-steps?userId=${encodeURIComponent(userId)}` });
+  // Identity is resolved from the real opaque session (Authorization: Bearer).
+  // The legacy ?userId query param is no longer trusted by the server.
+  const res = await request({ path: `/api/next-steps`, userId });
   assert.equal(res.status, 200, `GET /next-steps failed (${res.status}): ${res.body}`);
   return JSON.parse(res.body) as NextStepsResponse;
 }
@@ -479,12 +495,13 @@ describe("F — Non-contiguous published entries: cap uses maxPublishedDay not c
     const data = await fetchNextSteps(SPARSE_MEMBER_USER_ID);
     const item = data.dailyDevotionals.find(d => d.id === sparseSeriesId);
     assert.ok(item, "Sparse series not found");
-    // Description: completedCount=1, not allComplete (1 < 2); currentDay=3 (maxDay cap).
+    // Description uses the positional display index within published entries:
+    // day 3 is the second published entry, so it displays as Day 2 of 2.
     // Entry at day 3 = SPARSE_ENTRY_TITLES[1] = "Sparse Conclusion".
     assert.equal(
       item.description,
-      `Day 3 of 2 · ${SPARSE_ENTRY_TITLES[1]}`,
-      `expected "Day 3 of 2 · ${SPARSE_ENTRY_TITLES[1]}", got: "${item.description}"`
+      `Day 2 of 2 · ${SPARSE_ENTRY_TITLES[1]}`,
+      `expected "Day 2 of 2 · ${SPARSE_ENTRY_TITLES[1]}", got: "${item.description}"`
     );
   });
 
@@ -562,13 +579,14 @@ describe("G — Sermon companion description matches Today's Steps formula", () 
 
     // Step 5: assert description format.
     // After completing day 1, currentDay = 2 (companion.markDayComplete increments it).
-    // Walk.tsx formula: allComplete ? "N of N completed" : completedCount > 0 ? "Day N of M · Title" : "Day 1 of M"
+    // Current card contract: allComplete ? "N of N completed" :
+    // completedCount > 0 ? "Step N of M · Title" : "Step 1 of M".
     // completedCount = 1, allComplete = (1 >= numberOfDays)? only if 1-day companion.
-    const expectedDay = companion.numberOfDays === 1 ? "completed" : "Day 2";
+    const expectedStep = companion.numberOfDays === 1 ? "completed" : "Step 2";
     assert.ok(
-      item.description?.startsWith(expectedDay) ||
+      item.description?.startsWith(expectedStep) ||
         (companion.numberOfDays === 1 && item.description?.endsWith("completed")),
-      `description "${item.description}" should start with "${expectedDay}" ` +
+      `description "${item.description}" should start with "${expectedStep}" ` +
         `for a ${companion.numberOfDays}-day companion after completing day 1`
     );
 
@@ -582,12 +600,13 @@ describe("G — Sermon companion description matches Today's Steps formula", () 
       `description is suspiciously long (${item.description?.length} chars): "${item.description}"`
     );
 
-    // Route must point to day 2 (in-progress) or /previous (if 1-day complete).
+    // Companion cards always open the overview; the overview owns the next-step
+    // decision instead of coupling the card to a specific day route.
     if (companion.numberOfDays > 1) {
       assert.equal(
         item.route,
-        `/sermon-companion/${companion.id}/day/2`,
-        `route should be /day/2 after completing day 1`
+        `/sermon-companion/${companion.id}/overview`,
+        `route should be /overview after completing day 1`
       );
     }
   });
@@ -628,5 +647,160 @@ describe("E — GET /next-steps response shape", () => {
     assert.equal(res.status, 200, `anonymous request failed: ${res.body}`);
     const data = JSON.parse(res.body) as NextStepsResponse;
     assert.ok(Array.isArray(data.dailyDevotionals));
+  });
+});
+
+// ─── H — Badge lifecycle (NEW / UPDATED / dismiss) ────────────────────────────
+// Verifies the Smart Content Indicators feature end-to-end:
+//   1. Admin publishes with notifyMembers=true → non-started member sees NEW
+//   2. Started member (progress exists) sees UPDATED
+//   3. POST /badges/dismiss clears the badge (lastOpenedAt → now)
+//   4. Admin publishes with notifyMembers=false → no badge for either member
+
+describe("H — Badge lifecycle: NEW, UPDATED, dismiss, and opt-out", () => {
+  let badgeSeriesId = "";
+  const BADGE_NEW_USER = `test-badge-new-${RUN_TAG}`;
+  const BADGE_UPDATED_USER = `test-badge-updated-${RUN_TAG}`;
+  const BADGE_NO_USER = `test-badge-no-${RUN_TAG}`;
+
+  before(async () => {
+    // 1. Create a devotional series for badge testing.
+    const createRes = await request({
+      method: "POST",
+      path: "/api/devotionals",
+      userId: ADMIN_USER_ID,
+      role: "superAdmin",
+      body: {
+        title: `__TEST__ Badge Lifecycle [${RUN_TAG}]`,
+        description: "Badge test series",
+        seriesType: "general",
+      },
+    });
+    assert.equal(createRes.status, 201, `Create badge series failed: ${createRes.body}`);
+    const created = JSON.parse(createRes.body) as { id: string };
+    badgeSeriesId = created.id;
+
+    // 2. Add one published entry (PUT upsert matches the existing test pattern).
+    const entryRes = await request({
+      method: "PUT",
+      path: `/api/devotionals/${badgeSeriesId}/entries/1`,
+      userId: ADMIN_USER_ID,
+      role: "superAdmin",
+      body: { title: "Badge Day 1", scriptureReference: "John 1:1", status: "Published" },
+    });
+    assert.equal(entryRes.status, 200, `Create badge entry failed: ${entryRes.body}`);
+
+    // 3. BADGE_UPDATED_USER starts the series BEFORE the notify-publish.
+    const startRes = await request({
+      method: "POST",
+      path: `/api/devotionals/${badgeSeriesId}/start`,
+      userId: BADGE_UPDATED_USER,
+    });
+    assert.equal(startRes.status, 200, `Start for UPDATED user failed: ${startRes.body}`);
+
+    // 4. Publish with notifyMembers=true.
+    const publishRes = await request({
+      method: "PATCH",
+      path: `/api/devotionals/${badgeSeriesId}`,
+      userId: ADMIN_USER_ID,
+      role: "superAdmin",
+      body: { status: "Published", notifyMembers: true },
+    });
+    assert.equal(publishRes.status, 200, `Publish with notify failed: ${publishRes.body}`);
+  });
+
+  after(async () => {
+    // Permanent-delete the badge series so its created_by row and any member
+    // progress rows (cascade) do not linger in the dev database.
+    if (badgeSeriesId) {
+      await request({
+        method: "DELETE",
+        path: `/api/devotionals/${badgeSeriesId}/permanent`,
+        userId: ADMIN_USER_ID,
+        role: "superAdmin",
+      });
+    }
+  });
+
+  it("non-started member sees NEW badge", async () => {
+    const data = await fetchNextSteps(BADGE_NEW_USER);
+    const item = data.dailyDevotionals.find(d => d.id === badgeSeriesId);
+    assert.ok(item, "badge series should appear in dailyDevotionals");
+    assert.equal(item!.badge, "NEW", `Expected NEW badge, got ${String(item!.badge)}`);
+  });
+
+  it("started member who enrolled before publish sees UPDATED badge", async () => {
+    const data = await fetchNextSteps(BADGE_UPDATED_USER);
+    const item = data.dailyDevotionals.find(d => d.id === badgeSeriesId);
+    assert.ok(item, "badge series should appear in dailyDevotionals");
+    assert.equal(item!.badge, "UPDATED", `Expected UPDATED badge, got ${String(item!.badge)}`);
+  });
+
+  it("POST /badges/dismiss clears the UPDATED badge for the started member", async () => {
+    // Dismiss the badge.
+    const dismissRes = await request({
+      method: "POST",
+      path: "/api/badges/dismiss",
+      userId: BADGE_UPDATED_USER,
+      body: { contentType: "devotional", contentId: badgeSeriesId },
+    });
+    assert.equal(dismissRes.status, 200, `Dismiss failed: ${dismissRes.body}`);
+
+    // Refetch and confirm the badge is gone.
+    const data = await fetchNextSteps(BADGE_UPDATED_USER);
+    const item = data.dailyDevotionals.find(d => d.id === badgeSeriesId);
+    assert.ok(item, "badge series should still appear");
+    assert.equal(
+      item!.badge ?? null,
+      null,
+      `Badge should be null after dismiss, got ${String(item!.badge)}`
+    );
+  });
+
+  it("POST /badges/dismiss is a no-op for a member with no progress (NEW badge persists)", async () => {
+    const dismissRes = await request({
+      method: "POST",
+      path: "/api/badges/dismiss",
+      userId: BADGE_NO_USER,
+      body: { contentType: "devotional", contentId: badgeSeriesId },
+    });
+    // Server returns 200 even for no-op (no progress row to update).
+    assert.equal(dismissRes.status, 200, `Dismiss no-op failed: ${dismissRes.body}`);
+
+    // The NEW badge is still present because no progress row exists.
+    const data = await fetchNextSteps(BADGE_NO_USER);
+    const item = data.dailyDevotionals.find(d => d.id === badgeSeriesId);
+    assert.ok(item, "badge series should appear");
+    assert.equal(item!.badge, "NEW", `NEW badge should persist after no-op dismiss, got ${String(item!.badge)}`);
+  });
+
+  it("publish with notifyMembers=false produces no badge for a new member", async () => {
+    // Re-publish with notify=false to reset notify_published_at.
+    const unpubRes = await request({
+      method: "PATCH",
+      path: `/api/devotionals/${badgeSeriesId}`,
+      userId: ADMIN_USER_ID,
+      role: "superAdmin",
+      body: { status: "Draft" },
+    });
+    assert.equal(unpubRes.status, 200, `Unpublish failed: ${unpubRes.body}`);
+
+    const repubRes = await request({
+      method: "PATCH",
+      path: `/api/devotionals/${badgeSeriesId}`,
+      userId: ADMIN_USER_ID,
+      role: "superAdmin",
+      body: { status: "Published", notifyMembers: false },
+    });
+    assert.equal(repubRes.status, 200, `Re-publish without notify failed: ${repubRes.body}`);
+
+    const data = await fetchNextSteps(BADGE_NO_USER);
+    const item = data.dailyDevotionals.find(d => d.id === badgeSeriesId);
+    assert.ok(item, "badge series should appear");
+    assert.equal(
+      item!.badge ?? null,
+      null,
+      `No badge expected when notifyMembers=false, got ${String(item!.badge)}`
+    );
   });
 });

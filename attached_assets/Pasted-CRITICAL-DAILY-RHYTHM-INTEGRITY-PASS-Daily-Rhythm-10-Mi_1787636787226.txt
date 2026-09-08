@@ -1,0 +1,470 @@
+CRITICAL — DAILY RHYTHM INTEGRITY PASS
+
+Daily Rhythm / 10 Minutes with Jesus is the foundational first interaction in Emmaus.
+
+We have fixed several individual problems, but issues keep reappearing because different parts of the application are clearly deriving or caching Daily Rhythm state differently.
+
+STOP making isolated UI patches.
+
+I need a complete audit of Daily Rhythm as ONE coherent feature with ONE authoritative state model.
+
+We have now confirmed:
+
+New user signup works.
+Email verification works.
+Sign-in works.
+New user's first opening correctly enters Daily Rhythm.
+The previous aggressive repeated Daily Rhythm redirect has been fixed.
+
+However TWO critical problems remain.
+
+PROBLEM 1 — COMPLETION SCREEN AUTO-DISMISSES
+
+When the user completes today's Daily Rhythm Step, the completion screen appears.
+
+It contains something equivalent to:
+
+Day 1 Complete
+
+Review Previous Days
+
+Back to Today's Steps
+
+This screen flashes briefly and then Emmaus automatically redirects to Today's Steps before the user can make a decision.
+
+THIS IS WRONG.
+
+The completion screen is a USER DECISION SCREEN.
+
+Once it is displayed:
+
+NO automatic navigation may occur.
+
+NO timer may redirect it.
+
+NO completion callback may redirect it.
+
+NO startup-routing logic may redirect it.
+
+NO Today refresh may redirect it.
+
+NO route effect may redirect it.
+
+NO state synchronization event may redirect it.
+
+The screen must remain visible indefinitely until the USER chooses what to do.
+
+Required behaviour:
+
+Complete today's Step
+→ save completion successfully
+→ show completion screen
+→ WAIT
+
+User may then choose:
+
+Review Previous Days
+OR
+Back to Today's Steps
+
+Only an explicit user action should leave this screen.
+
+Audit exactly what currently causes this screen to disappear.
+
+Report the precise function/effect/navigation call responsible before fixing it.
+
+PROBLEM 2 — DAILY RHYTHM STATE IS OUT OF SYNC ACROSS EMMAUS
+
+I have attached production screenshots showing an unacceptable contradiction.
+
+Today's Steps says:
+
+10 Minutes with Jesus
+Day 2 — you're up to date
+
+But when I open the 10 Minutes with Jesus Days screen, it shows ONLY:
+
+Day 1 — Come and See — Review
+
+Day 2 is missing completely.
+
+This is not merely a visual bug.
+
+It demonstrates that different screens are using different versions or interpretations of the same user's progress.
+
+We have discussed synchronization repeatedly across Emmaus.
+
+I need this fixed at the architectural level.
+
+For a user, Daily Rhythm must have ONE canonical state.
+
+Every surface must derive from that same authoritative state.
+
+That includes:
+
+first-opening Daily Rhythm
+Today's Steps card
+Daily Rhythm Days list
+current Step
+completed Steps
+Previous Days
+review state
+progress indicators
+My Journey if relevant
+any Discover references
+admin-visible user progress if applicable
+phone
+tablet
+desktop
+browser
+installed PWA
+multiple sessions/devices
+
+There must NEVER be a situation where one screen says Day 2 and another screen only knows about Day 1.
+
+ONE AUTHORITATIVE DAILY RHYTHM MODEL
+
+Audit the implementation and identify every source currently used to determine Daily Rhythm state.
+
+Look for:
+
+separate API endpoints
+duplicated progress queries
+local React state
+cached server data
+localStorage
+sessionStorage
+stale TanStack/React Query cache
+optimistic UI state
+arrays derived locally
+separate "current day" calculations
+historical completion queries
+Today's Steps-specific calculations
+Daily Rhythm list-specific calculations
+startup state
+user profile fields
+progress tables
+completion tables
+
+I want ONE canonical server-side Daily Rhythm state response.
+
+Conceptually, something like:
+
+getDailyRhythmState(user)
+
+returning a coherent snapshot such as:
+
+currentStepId
+currentDayNumber
+currentStepTitle
+currentStepUnlockedDate
+currentStepCompleted
+completedStepIds
+availableSteps
+reviewableSteps
+nextStepLocked
+nextEligibleUnlockDate
+firstOpenStatus
+
+The exact implementation is your decision, but ALL Daily Rhythm surfaces must derive their state from the same canonical persisted data.
+
+Do not independently calculate "Day 2" in Today's Steps while separately calculating the Days list somewhere else.
+
+COMPLETION MUST BE TRANSACTIONAL
+
+When a Daily Rhythm Step is completed:
+
+Server validates that this is the user's currently accessible Step.
+Server writes completion.
+Transaction completes successfully.
+Server returns the complete UPDATED Daily Rhythm state.
+Client replaces/invalidate-refetches all Daily Rhythm state from the authoritative server result.
+Every screen then reflects exactly the same state.
+
+Do not allow:
+
+Today's Steps cache = new state
+
+while
+
+Daily Rhythm list cache = old state.
+
+After completion, any cached queries representing Daily Rhythm must be invalidated/refetched consistently.
+
+NO CLIENT-SIDE FAKE PROGRESSION
+
+The UI must not decide:
+
+"Day 1 completed, therefore display Day 2."
+
+Only the server-authoritative Daily Rhythm state may say what the current Step is.
+
+Remember the permanent progression rule:
+
+Completing today's Step does NOT immediately unlock the next Step.
+
+The next Step can only unlock on a later Johannesburg calendar date if the previous Step was completed.
+
+Therefore if today's Step is Day 2 and is completed, every surface should consistently show Day 2 as today's completed Step until the next eligible day.
+
+THE DAYS LIST MUST REFLECT REAL USER HISTORY
+
+The Daily Rhythm Days screen must correctly show all Steps that the user is entitled to see.
+
+For example, if the current state is Day 2:
+
+The screen should normally contain:
+
+Day 1 — Review
+
+Day 2 — current/today/completed or available as appropriate
+
+It is impossible for Today's Steps to legitimately say "Day 2 — you're up to date" while the Days screen only contains Day 1.
+
+Find why Day 2 is being filtered, omitted, stale, or calculated differently.
+
+Check specifically:
+
+whether the Days list uses completion records only
+whether current Step is excluded until another condition occurs
+whether query cache is stale
+whether availableSteps differs from completedSteps
+whether the list only renders previous days
+whether a Day 2 progress row exists in the database
+whether Today's Steps is deriving Day 2 from a different field
+
+Report the exact cause.
+
+CROSS-DEVICE SYNCHRONIZATION IS A PRODUCT REQUIREMENT
+
+The same authenticated user must see the same Daily Rhythm state everywhere.
+
+Example:
+
+User completes Day 2 on phone.
+
+Then opens Emmaus on tablet.
+
+Tablet must show Day 2 completed.
+
+Then opens laptop.
+
+Laptop must show Day 2 completed.
+
+If the user reviews Day 1 on another device, that must not alter current progression.
+
+No device may have its own independent Daily Rhythm progression.
+
+The server/database is authoritative.
+
+Device storage may assist performance but must never become the source of truth.
+
+NAVIGATION MUST NEVER MODIFY CONTENT STATE
+
+Reconfirm this permanently:
+
+Opening:
+
+Today's Steps
+Daily Rhythm
+Previous Days
+My Bible
+Discover
+My Journey
+
+must NEVER modify Daily Rhythm progression.
+
+Back buttons must NEVER modify it.
+
+Tab changes must NEVER modify it.
+
+Page refresh must NEVER modify it.
+
+Only an explicit valid completion operation and the server's later-calendar-day unlock logic may alter progression state.
+
+COMPLETION SCREEN TESTS
+
+TEST A
+
+Complete Day 1.
+
+Expected:
+
+Completion screen appears.
+
+Wait 30 seconds.
+
+Result:
+
+Still on completion screen.
+
+PASS only if no automatic redirect occurs.
+
+TEST B
+
+Completion screen appears.
+
+Tap Review Previous Days.
+
+Expected:
+
+Previous Days opens.
+
+TEST C
+
+Completion screen appears.
+
+Tap Back to Today's Steps.
+
+Expected:
+
+Today's Steps opens.
+
+TEST D
+
+Completion screen appears.
+
+No interaction.
+
+Background refetch happens.
+
+Expected:
+
+Completion screen remains.
+
+TEST E
+
+Completion screen appears.
+
+Auth/session refresh occurs.
+
+Expected:
+
+Completion screen remains.
+
+STATE SYNCHRONIZATION TESTS
+
+TEST F
+
+Current user is on Day 2.
+
+Today's Steps displays Day 2.
+
+Open Days list.
+
+Expected:
+
+Day 1 and Day 2 are represented consistently.
+
+TEST G
+
+Complete current Step.
+
+Immediately check:
+
+completion screen
+Today's Steps
+Days list
+Previous Days
+
+All must agree.
+
+TEST H
+
+Refresh each screen individually.
+
+All must still agree.
+
+TEST I
+
+Close PWA and reopen same day.
+
+All must agree.
+
+TEST J
+
+Login on second device.
+
+All must agree.
+
+TEST K
+
+Login on third independent browser session.
+
+All must agree.
+
+TEST L
+
+Review Day 1.
+
+Current Day must remain unchanged everywhere.
+
+TEST M
+
+Incomplete current Step.
+
+Move to next calendar date.
+
+All surfaces must still show same incomplete Step.
+
+TEST N
+
+Completed current Step.
+
+Move to next eligible calendar date.
+
+Exactly one next Step unlocks.
+
+Every surface must simultaneously represent that new state.
+
+ADD A DAILY RHYTHM CONSISTENCY INVARIANT
+
+Where practical, add automated protection asserting that:
+
+Today's Steps currentDailyRhythmStep
+
+must equal
+
+Daily Rhythm state currentStep
+
+must equal
+
+the Step represented by the authoritative progress service.
+
+If different parts of the application derive conflicting current Steps, fail loudly during development/testing rather than silently presenting contradictory UI to users.
+
+DO NOT BREAK THE FIRST-OPENING FIX
+
+Preserve:
+
+FIRST OPENING EACH NEW CALENDAR DAY
+→ Daily Rhythm
+
+SUBSEQUENT OPENING THAT DAY
+→ Today's Steps
+
+But once Daily Rhythm has opened, normal navigation remains under the user's control.
+
+Do not reintroduce the previous navigation trap.
+
+DO NOT CLOSE THIS TASK UNTIL YOU REPORT
+Exact cause of completion screen auto-redirect.
+Exact cause of Today's Steps showing Day 2 while Days list only showed Day 1.
+Every separate Daily Rhythm data source/query that existed before this fix.
+Which one is now authoritative.
+How all Daily Rhythm caches are synchronized after mutation.
+How second-device synchronization works.
+How you prevent stale local state becoming authoritative.
+Results of Tests A–N.
+Existing Daily Rhythm authority/regression test results after this change.
+Confirmation that the original first-open behaviour still works.
+
+Most importantly:
+
+DO NOT fix these screenshots individually.
+
+Fix the reason contradictory Daily Rhythm state can exist at all.
+
+Daily Rhythm must behave like ONE feature backed by ONE user state, regardless of which page, card, tab, browser or device is displaying it.
+
+A user should never be able to discover that Emmaus disagrees with itself.

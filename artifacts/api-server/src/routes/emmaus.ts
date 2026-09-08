@@ -1,8 +1,7 @@
 /**
  * Emmaus API Routes
  *
- * Identity is derived server-side from a signed session cookie (emmaus_uid)
- * or the X-User-Id header in dev/demo mode — never from request body or query.
+ * Identity is derived server-side from a verified OIDC session.
  *
  * POST   /api/emmaus/conversation               — start or continue; streams SSE
  * POST   /api/emmaus/conversation/:id/message   — append to existing; streams SSE
@@ -22,9 +21,13 @@ import {
   deleteMemory,
   setSseHeaders,
 } from "../emmaus/conversation-service.js";
-import type { EmmausContextInput, BibleContext, JourneyContext, SermonContext } from "../emmaus/context-builder.js";
+import {
+  toEmmausContextInput,
+  type EmmausContextInput,
+  type FlatEmmausContext,
+} from "../emmaus/context-builder.js";
 import type { EntryPoint } from "../emmaus/firestore-model.js";
-import { requireAuth, isOwner, setUserCookie } from "../emmaus/auth.js";
+import { requireAuth, isOwner } from "../emmaus/auth.js";
 
 const router: IRouter = Router();
 
@@ -34,29 +37,9 @@ const router: IRouter = Router();
  * The flat context shape clients send.
  * Mapped to the nested EmmausContextInput expected by conversation-service.
  */
-interface FlatContext {
-  entryPoint?: string;
-  conversationId?: string;
-  userName?: string;
-  // Bible
-  bookId?: string;
-  bookName?: string;
-  chapter?: number;
-  chapterHeading?: string;
-  verseText?: string;
-  // Journey
-  journeyId?: string;
-  journeyTitle?: string;
-  currentDay?: number;
-  // Sermon
-  sermonId?: string;
-  sermonTitle?: string;
-  scriptureReference?: string;
-}
-
 interface EmmausConversationBody {
   message?: unknown;
-  context?: FlatContext;
+  context?: FlatEmmausContext;
   history?: Array<{ role: string; content: string }>;
 }
 
@@ -64,54 +47,6 @@ interface EmmausConversationBody {
  * Map the flat client context into the nested EmmausContextInput.
  * userId is always taken from the server-derived identity, never from the body.
  */
-function toContextInput(flat: FlatContext | undefined, userId: string): EmmausContextInput {
-  const entryPoint = (flat?.entryPoint ?? "standalone") as EntryPoint;
-
-  const ctx: EmmausContextInput = {
-    entryPoint,
-    userId,
-    conversationId: flat?.conversationId,
-    userName: flat?.userName,
-  };
-
-  // Bible context (used by bible entry point)
-  if (flat?.bookId || flat?.bookName || flat?.chapter) {
-    const bible: BibleContext = {
-      bookId: flat.bookId ?? "",
-      bookName: flat.bookName ?? "",
-      chapter: flat.chapter ?? 1,
-      chapterHeading: flat.chapterHeading,
-      verseText: flat.verseText,
-      // Journey linkage within a Bible reading
-      journeyId: flat.journeyId,
-      journeyTitle: flat.journeyTitle,
-    };
-    ctx.bibleContext = bible;
-  }
-
-  // Journey context (used by journeys entry point, no bookId)
-  if (flat?.journeyId && !flat?.bookId) {
-    const journey: JourneyContext = {
-      journeyId: flat.journeyId,
-      journeyTitle: flat.journeyTitle ?? flat.journeyId,
-      currentDay: flat.currentDay ?? 1,
-    };
-    ctx.journeyContext = journey;
-  }
-
-  // Sermon context
-  if (flat?.sermonId) {
-    const sermon: SermonContext = {
-      sermonId: flat.sermonId,
-      sermonTitle: flat.sermonTitle ?? flat.sermonId,
-      scriptureReference: flat.scriptureReference,
-    };
-    ctx.sermonContext = sermon;
-  }
-
-  return ctx;
-}
-
 function parseHistory(raw: unknown): Array<{ role: "user" | "assistant"; content: string }> | undefined {
   if (!Array.isArray(raw)) return undefined;
   return raw
@@ -127,27 +62,28 @@ function parseHistory(raw: unknown): Array<{ role: "user" | "assistant"; content
 /**
  * POST /api/emmaus/conversation
  * Starts a new Ask Emmaus conversation (or continues one via context.conversationId).
- * Requires authenticated identity; issues a session cookie for subsequent requests.
+ * Requires an authenticated identity.
  */
 router.post("/emmaus/conversation", async (req: Request, res: Response) => {
   const body = req.body as EmmausConversationBody;
+  const authStarted = Date.now();
   const userId = requireAuth(req, res);
   if (!userId) return;
+  const authMs = Date.now() - authStarted;
 
   if (!body.message || typeof body.message !== "string" || !body.message.trim()) {
     res.status(400).json({ error: "message is required" });
     return;
   }
 
-  // Issue a signed session cookie so subsequent requests use it instead of the header
-  setUserCookie(res, userId);
   setSseHeaders(res);
 
   await handleConversation(
     {
       message: body.message.trim(),
-      context: toContextInput(body.context, userId),
+       context: toEmmausContextInput(body.context, userId),
       history: parseHistory(body.history),
+      authMs,
     },
     res
   );
@@ -160,8 +96,10 @@ router.post("/emmaus/conversation", async (req: Request, res: Response) => {
  */
 router.post("/emmaus/conversation/:id/message", async (req: Request, res: Response) => {
   const body = req.body as EmmausConversationBody;
+  const authStarted = Date.now();
   const userId = requireAuth(req, res);
   if (!userId) return;
+  const authMs = Date.now() - authStarted;
 
   const conversationId = String(req.params.id);
 
@@ -180,17 +118,17 @@ router.post("/emmaus/conversation/:id/message", async (req: Request, res: Respon
     return;
   }
 
-  setUserCookie(res, userId);
   setSseHeaders(res);
 
   await handleConversation(
     {
       message: body.message.trim(),
       context: {
-        ...toContextInput(body.context, userId),
+         ...toEmmausContextInput(body.context, userId),
         conversationId,
       },
       history: parseHistory(body.history),
+      authMs,
     },
     res
   );

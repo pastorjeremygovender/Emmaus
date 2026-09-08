@@ -1,0 +1,105 @@
+Add a simple temporary voice test to Emmaus.
+
+PURPOSE:
+We want to confirm quickly that Emmaus can speak aloud through the published mobile web app.
+
+Do not build the complete voice conversation system yet.
+
+==================================================
+1. ADD A VOICE TEST BUTTON
+==================================================
+
+Add a temporary button to the Ask Emmaus screen:
+
+🔊 Hear Emmaus
+
+When tapped, Emmaus must speak this exact text aloud:
+
+“Hello, Pastor Jeremy. I’m Emmaus. I’m here to help you walk with Jesus through Scripture, prayer, sermons, and the life of your church.”
+
+Use the browser’s built-in Web Speech API:
+
+window.speechSynthesis
+SpeechSynthesisUtterance
+
+Do not require ElevenLabs, OpenAI voice, an external API, or uploaded audio for this first test.
+
+==================================================
+2. VOICE SETTINGS
+==================================================
+
+Use an available natural-sounding English voice.
+
+Preferred settings:
+
+- language: en-ZA if available
+- otherwise en-GB
+- otherwise use the device’s default English voice
+- rate: approximately 0.92
+- pitch: approximately 1
+- volume: 1
+
+Search the available device voices and select the best matching English voice.
+
+Do not depend on a specific voice name because available voices differ between phones and browsers.
+
+==================================================
+3. MOBILE REQUIREMENT
+==================================================
+
+Speech must begin only after the user taps the button.
+
+This is required because mobile browsers may block automatic audio.
+
+Test this on the published mobile version, not only in desktop preview.
+
+==================================================
+4. BUTTON STATES
+==================================================
+
+Before speaking:
+
+🔊 Hear Emmaus
+
+While speaking:
+
+■ Stop Emmaus
+
+If the user taps Stop Emmaus:
+
+- stop speech immediately
+- return the button to Hear Emmaus
+
+When speech finishes naturally, return the button to Hear Emmaus.
+
+Do not allow multiple speech instances to overlap.
+
+Before starting new speech, call:
+
+window.speechSynthesis.cancel()
+
+==================================================
+5. ERROR HANDLING
+==================================================
+
+If browser speech is unavailable, show:
+
+“Voice playback is not supported on this device yet.”
+
+Do not break the Ask Emmaus screen.
+
+==================================================
+6. ACCEPTANCE TEST
+==================================================
+
+On the published mobile app:
+
+1. Open Ask Emmaus.
+2. Tap Hear Emmaus.
+3. The introduction is spoken aloud.
+4. Tap Stop Emmaus while it is speaking.
+5. Speech stops immediately.
+6. Tap Hear Emmaus again.
+7. It starts correctly from the beginning.
+
+Do not redesign Ask Emmaus or build the full voice assistant as part of this test.

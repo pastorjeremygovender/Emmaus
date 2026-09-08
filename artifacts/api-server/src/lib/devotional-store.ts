@@ -6,17 +6,20 @@
  * it is loaded dynamically by the client from the member's chosen translation.
  */
 
-import { eq, and, asc, desc } from "drizzle-orm";
+import { eq, and, asc, desc, sql, isNotNull, inArray } from "drizzle-orm";
 import { db, pool } from "@workspace/db";
 import {
   devotionalSeriesTable,
   devotionalEntriesTable,
   devotionalProgressTable,
+  devotionalEntryGroupsTable,
+  devotionalEntryGroupItemsTable,
 } from "@workspace/db/schema";
 import type {
   DevotionalSeries,
   DevotionalEntry,
   DevotionalProgress,
+  DevotionalEntryGroup,
 } from "@workspace/db/schema";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -31,6 +34,10 @@ export interface SeriesWithProgress extends DevotionalSeries {
   progress: DevotionalProgress | null;
 }
 
+export interface DevotionalEntryGroupWithItems extends DevotionalEntryGroup {
+  items: DevotionalEntry[];
+}
+
 // ─── Series CRUD ─────────────────────────────────────────────────────────────
 
 export async function listSeries(): Promise<DevotionalSeries[]> {
@@ -38,7 +45,7 @@ export async function listSeries(): Promise<DevotionalSeries[]> {
     .select()
     .from(devotionalSeriesTable)
     .where(and())
-    .orderBy(desc(devotionalSeriesTable.createdAt));
+    .orderBy(asc(devotionalSeriesTable.displayOrder), asc(devotionalSeriesTable.createdAt));
 }
 
 export async function listPublishedSeries(): Promise<DevotionalSeries[]> {
@@ -46,7 +53,7 @@ export async function listPublishedSeries(): Promise<DevotionalSeries[]> {
     .select()
     .from(devotionalSeriesTable)
     .where(eq(devotionalSeriesTable.status, "Published"))
-    .orderBy(asc(devotionalSeriesTable.title));
+    .orderBy(asc(devotionalSeriesTable.displayOrder), asc(devotionalSeriesTable.title), asc(devotionalSeriesTable.createdAt));
 }
 
 export async function getSeriesById(id: string): Promise<SeriesWithEntries | null> {
@@ -60,9 +67,150 @@ export async function getSeriesById(id: string): Promise<SeriesWithEntries | nul
     .select()
     .from(devotionalEntriesTable)
     .where(eq(devotionalEntriesTable.seriesId, id))
-    .orderBy(asc(devotionalEntriesTable.dayNumber));
+    .orderBy(asc(devotionalEntriesTable.displayOrder), asc(devotionalEntriesTable.dayNumber));
 
   return { ...series, entries };
+}
+
+export async function getEntryGroupsForSeries(
+  seriesId: string,
+  publishedOnly = false,
+): Promise<DevotionalEntryGroupWithItems[]> {
+  const groups = await db
+    .select()
+    .from(devotionalEntryGroupsTable)
+    .where(and(
+      eq(devotionalEntryGroupsTable.seriesId, seriesId),
+      ...(publishedOnly ? [eq(devotionalEntryGroupsTable.status, "Published")] : []),
+    ))
+    .orderBy(asc(devotionalEntryGroupsTable.displayOrder), asc(devotionalEntryGroupsTable.title));
+
+  if (groups.length === 0) return [];
+  const groupIds = groups.map(group => group.id);
+  const rows = await db
+    .select({
+      groupId: devotionalEntryGroupItemsTable.groupId,
+      entry: devotionalEntriesTable,
+      itemOrder: devotionalEntryGroupItemsTable.displayOrder,
+    })
+    .from(devotionalEntryGroupItemsTable)
+    .innerJoin(
+      devotionalEntriesTable,
+      eq(devotionalEntriesTable.id, devotionalEntryGroupItemsTable.entryId),
+    )
+    .where(and(
+      inArray(devotionalEntryGroupItemsTable.groupId, groupIds),
+      ...(publishedOnly ? [eq(devotionalEntriesTable.status, "Published")] : []),
+    ))
+    .orderBy(
+      asc(devotionalEntryGroupItemsTable.displayOrder),
+      asc(devotionalEntriesTable.dayNumber),
+    );
+
+  const byGroup = new Map<string, DevotionalEntry[]>();
+  for (const row of rows) {
+    const items = byGroup.get(row.groupId) ?? [];
+    items.push(row.entry);
+    byGroup.set(row.groupId, items);
+  }
+  return groups.map(group => ({ ...group, items: byGroup.get(group.id) ?? [] }));
+}
+
+export async function createEntryGroup(
+  seriesId: string,
+  data: { title: string; description?: string; status?: string; displayOrder?: number },
+): Promise<DevotionalEntryGroup> {
+  const [row] = await db
+    .insert(devotionalEntryGroupsTable)
+    .values({
+      seriesId,
+      title: data.title,
+      description: data.description ?? "",
+      status: data.status ?? "Draft",
+      displayOrder: data.displayOrder ?? 0,
+    })
+    .returning();
+  return row;
+}
+
+export async function updateEntryGroup(
+  seriesId: string,
+  groupId: string,
+  data: Partial<Pick<DevotionalEntryGroup, "title" | "description" | "status" | "displayOrder">>,
+): Promise<DevotionalEntryGroup | null> {
+  const [row] = await db
+    .update(devotionalEntryGroupsTable)
+    .set({ ...data, updatedAt: new Date() })
+    .where(and(
+      eq(devotionalEntryGroupsTable.id, groupId),
+      eq(devotionalEntryGroupsTable.seriesId, seriesId),
+    ))
+    .returning();
+  return row ?? null;
+}
+
+export async function deleteEntryGroup(seriesId: string, groupId: string): Promise<boolean> {
+  const deleted = await db
+    .delete(devotionalEntryGroupsTable)
+    .where(and(
+      eq(devotionalEntryGroupsTable.id, groupId),
+      eq(devotionalEntryGroupsTable.seriesId, seriesId),
+    ))
+    .returning({ id: devotionalEntryGroupsTable.id });
+  return deleted.length > 0;
+}
+
+export async function replaceEntryGroupItems(
+  seriesId: string,
+  groupId: string,
+  entryIds: string[],
+): Promise<DevotionalEntryGroupWithItems | null> {
+  const [group] = await db
+    .select()
+    .from(devotionalEntryGroupsTable)
+    .where(and(
+      eq(devotionalEntryGroupsTable.id, groupId),
+      eq(devotionalEntryGroupsTable.seriesId, seriesId),
+    ));
+  if (!group) return null;
+
+  if (new Set(entryIds).size !== entryIds.length) {
+    throw new Error("An entry may appear only once in a group");
+  }
+  const uniqueEntryIds = [...entryIds];
+  if (uniqueEntryIds.length > 0) {
+    const valid = await db
+      .select({ id: devotionalEntriesTable.id, status: devotionalEntriesTable.status })
+      .from(devotionalEntriesTable)
+      .where(and(
+        eq(devotionalEntriesTable.seriesId, seriesId),
+        inArray(devotionalEntriesTable.id, uniqueEntryIds),
+      ));
+    if (valid.length !== uniqueEntryIds.length) {
+      throw new Error("Every grouped entry must belong to the selected series");
+    }
+    if (valid.some(entry => entry.status === "Archived")) {
+      throw new Error("Archived entries cannot be added to a group");
+    }
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(devotionalEntryGroupItemsTable)
+      .where(eq(devotionalEntryGroupItemsTable.groupId, groupId));
+    if (uniqueEntryIds.length > 0) {
+      await tx.insert(devotionalEntryGroupItemsTable).values(
+        uniqueEntryIds.map((entryId, index) => ({
+          groupId,
+          entryId,
+          displayOrder: index,
+        })),
+      );
+    }
+  });
+
+  const [updated] = await getEntryGroupsForSeries(seriesId);
+  return updated?.id === groupId ? updated : null;
 }
 
 export async function createSeries(
@@ -84,7 +232,7 @@ export async function createSeries(
 
 export async function updateSeries(
   id: string,
-  data: Partial<Pick<DevotionalSeries, "title" | "description" | "seriesType" | "status">>,
+  data: Partial<Pick<DevotionalSeries, "title" | "description" | "seriesType" | "status">> & { notifyMembers?: boolean },
   updatedBy?: string
 ): Promise<DevotionalSeries | null> {
   const now = new Date();
@@ -95,11 +243,22 @@ export async function updateSeries(
         ? null
         : undefined;
 
+  // notifyMembers=true  → set notify_published_at = now() (opt-in)
+  // notifyMembers=false → clear notify_published_at = null (explicit opt-out)
+  // notifyMembers absent → leave unchanged (undefined = no change in .set())
+  const notifyPublishedAt =
+    data.notifyMembers === true && data.status === "Published" ? now
+    : data.notifyMembers === false && data.status === "Published" ? null
+    : undefined;
+
+  const { notifyMembers: _omit, ...rest } = data;
+
   const [row] = await db
     .update(devotionalSeriesTable)
     .set({
-      ...data,
+      ...rest,
       ...(publishedAt !== undefined ? { publishedAt } : {}),
+      ...(notifyPublishedAt !== undefined ? { notifyPublishedAt } : {}),
       updatedAt: now,
     })
     .where(eq(devotionalSeriesTable.id, id))
@@ -114,10 +273,80 @@ export async function deleteSeries(id: string): Promise<void> {
     .where(eq(devotionalSeriesTable.id, id));
 }
 
-export async function permanentDeleteSeries(id: string): Promise<void> {
-  await db
-    .delete(devotionalSeriesTable)
-    .where(eq(devotionalSeriesTable.id, id));
+export async function permanentDeleteSeries(id: string, deletedBy: string): Promise<void> {
+  // Atomically record the tombstone and delete the series in one transaction.
+  // If either step fails the whole operation rolls back — the series is not
+  // deleted without a tombstone, and no tombstone is written without deletion.
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO reseed_devotional_tombstones (series_id, deleted_by)
+       VALUES ($1, $2)
+       ON CONFLICT (series_id) DO UPDATE SET deleted_by = EXCLUDED.deleted_by`,
+      [id, deletedBy],
+    );
+    await client.query(
+      "DELETE FROM devotional_series WHERE id = $1",
+      [id],
+    );
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// ─── Date-label inference ─────────────────────────────────────────────────────
+
+const MONTHS = [
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December',
+];
+
+/** Parse "D Month" (e.g. "16 January") into a Date. Returns null if unrecognised. */
+function parseDateLabel(label: string): Date | null {
+  const parts = label.trim().split(/\s+/);
+  if (parts.length < 2) return null;
+  const day  = parseInt(parts[0], 10);
+  const mIdx = MONTHS.indexOf(parts[1]);
+  if (isNaN(day) || mIdx === -1) return null;
+  // Use a non-leap year so date labels always treat February as 28 days.
+  return new Date(2001, mIdx, day);
+}
+
+/** Format a Date as "D Month" (e.g. "16 January"). */
+function formatDateLabel(d: Date): string {
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}
+
+/**
+ * If the series already has entries with date-format display labels, compute
+ * and return the label for `dayNumber` by extrapolating from a reference entry.
+ * Returns null when the series doesn't use date labels or the pattern is unrecognised.
+ */
+async function inferDisplayLabel(seriesId: string, dayNumber: number): Promise<string | null> {
+  const [ref] = await db
+    .select({
+      dayNumber:    devotionalEntriesTable.dayNumber,
+      displayLabel: devotionalEntriesTable.displayLabel,
+    })
+    .from(devotionalEntriesTable)
+    .where(and(
+      eq(devotionalEntriesTable.seriesId, seriesId),
+      isNotNull(devotionalEntriesTable.displayLabel),
+    ))
+    .limit(1);
+
+  if (!ref?.displayLabel) return null;
+  const refDate = parseDateLabel(ref.displayLabel);
+  if (!refDate) return null;
+
+  const newDate = new Date(refDate);
+  newDate.setDate(refDate.getDate() + (dayNumber - ref.dayNumber));
+  return formatDateLabel(newDate);
 }
 
 // ─── Entry CRUD ───────────────────────────────────────────────────────────────
@@ -135,10 +364,20 @@ export async function upsertEntry(
       | "prayer"
       | "nextStep"
       | "closing"
+      | "displayLabel"
+      | "shareImageUrl"
       | "status"
+       | "displayOrder"
     >
   >
 ): Promise<DevotionalEntry> {
+  // Auto-infer a date label when the caller hasn't set one explicitly and the
+  // series already uses date labels on other entries.
+  if (data.displayLabel === undefined) {
+    const inferred = await inferDisplayLabel(seriesId, dayNumber);
+    if (inferred) data = { ...data, displayLabel: inferred };
+  }
+
   const now = new Date();
   const publishedAt =
     data.status === "Published"
@@ -159,7 +398,10 @@ export async function upsertEntry(
       prayer: data.prayer ?? "",
       nextStep: data.nextStep ?? "",
       closing: data.closing ?? "",
+      ...(data.displayLabel !== undefined ? { displayLabel: data.displayLabel || null } : {}),
+      ...(data.shareImageUrl !== undefined ? { shareImageUrl: data.shareImageUrl || null } : {}),
       status: data.status ?? "Draft",
+      ...(data.displayOrder !== undefined ? { displayOrder: data.displayOrder } : {}),
       ...(publishedAt !== undefined ? { publishedAt } : {}),
     })
     .onConflictDoUpdate({
@@ -172,6 +414,36 @@ export async function upsertEntry(
     })
     .returning();
   return row;
+}
+
+/**
+ * Bulk-set display_label on multiple entries in one series.
+ * Each entry in `labels` is { dayNumber, displayLabel } — pass null to clear.
+ * Returns the number of entries that were actually updated.
+ */
+export async function bulkSetEntryDisplayLabels(
+  seriesId: string,
+  labels: Array<{ dayNumber: number; displayLabel: string | null }>
+): Promise<number> {
+  if (labels.length === 0) return 0;
+  const now = new Date();
+  let count = 0;
+  for (const { dayNumber, displayLabel } of labels) {
+    await db
+      .update(devotionalEntriesTable)
+      .set({ displayLabel: displayLabel ?? null, updatedAt: now })
+      .where(
+        and(
+          eq(devotionalEntriesTable.seriesId, seriesId),
+          eq(devotionalEntriesTable.dayNumber, dayNumber),
+        )
+      );
+    count++;
+  }
+  if (count > 0) {
+    await db.update(devotionalSeriesTable).set({ updatedAt: now }).where(eq(devotionalSeriesTable.id, seriesId));
+  }
+  return count;
 }
 
 export async function deleteEntry(seriesId: string, dayNumber: number): Promise<void> {
@@ -204,16 +476,37 @@ export async function getProgress(
 }
 
 export async function getAllProgressForUser(userId: string): Promise<DevotionalProgress[]> {
-  return db
-    .select()
-    .from(devotionalProgressTable)
-    .where(eq(devotionalProgressTable.userId, userId));
+  // Use raw SQL so hidden_from_today (added via startup migration) is included
+  // in the result. Drizzle select() only returns schema-defined columns, and
+  // hidden_from_today is not in the Drizzle schema yet to avoid a camelCase
+  // vs snake_case naming conflict with the existing API contract.
+  const res = await pool.query(
+    `SELECT * FROM devotional_progress WHERE user_id = $1`,
+    [userId],
+  );
+  // Map DB snake_case columns to the DevotionalProgress shape.
+  // hidden_from_today passes through as-is (snake_case) because the client
+  // and Walk.tsx both access it as progress.hidden_from_today.
+  return res.rows.map((row) => ({
+    id: String(row.id),
+    userId: String(row.user_id),
+    seriesId: String(row.series_id),
+    currentDay: Number(row.current_day ?? 1),
+    completedDays: Array.isArray(row.completed_days) ? row.completed_days : [],
+    status: String(row.status ?? "active"),
+    startedAt: row.started_at ? new Date(row.started_at) : new Date(),
+    updatedAt: row.updated_at ? new Date(row.updated_at) : new Date(),
+    lastOpenedAt: row.last_opened_at ? new Date(row.last_opened_at) : null,
+    // Include the startup-migration column so Walk.tsx can filter hidden cards.
+    hidden_from_today: row.hidden_from_today ?? false,
+  })) as unknown as DevotionalProgress[];
 }
 
 export async function startSeries(
   userId: string,
   seriesId: string
 ): Promise<DevotionalProgress> {
+  const now = new Date();
   const [row] = await db
     .insert(devotionalProgressTable)
     .values({
@@ -221,15 +514,19 @@ export async function startSeries(
       seriesId,
       currentDay: 1,
       completedDays: [],
+      // Set lastOpenedAt on creation so the badge is immediately cleared —
+      // a member who begins a devotional should not see UPDATED on reload.
+      lastOpenedAt: now,
     })
-    .onConflictDoNothing()
+    // On conflict: update lastOpenedAt atomically so any UPDATED badge clears
+    // when the reader opens, even for returning members.
+    .onConflictDoUpdate({
+      target: [devotionalProgressTable.userId, devotionalProgressTable.seriesId],
+      set: { lastOpenedAt: now, updatedAt: now },
+    })
     .returning();
 
-  if (row) return row;
-
-  // Already started — return existing progress
-  const existing = await getProgress(userId, seriesId);
-  return existing!;
+  return row;
 }
 
 // ─── Engagement lifecycle ─────────────────────────────────────────────────────
@@ -265,29 +562,94 @@ export async function markDayComplete(
   seriesId: string,
   day: number
 ): Promise<DevotionalProgress> {
-  const existing = await getProgress(userId, seriesId);
-  const completed = existing?.completedDays ?? [];
-  // Idempotent: adding the same day twice has no effect.
-  const newCompleted = completed.includes(day) ? completed : [...completed, day];
-
-  // currentDay is intentionally NOT incremented here.
-  // The day that is available to the member is derived on the client from the
-  // member's local calendar date and startedAt — not from a stored counter.
-  const [row] = await db
+  // P2-2: atomic upsert — avoids the read-then-write race where two concurrent
+  // device completions of different days overwrite each other.  The SQL CASE
+  // expression appends the day only when it is not already present, keeping the
+  // operation idempotent.
+  await db
     .insert(devotionalProgressTable)
     .values({
       userId,
       seriesId,
-      currentDay: 1,          // seed value; never incremented on completion
-      completedDays: newCompleted,
+      currentDay: day,
+      completedDays: [day],
     })
     .onConflictDoUpdate({
       target: [devotionalProgressTable.userId, devotionalProgressTable.seriesId],
       set: {
-        completedDays: newCompleted,
+        // completed_days is JSONB — use @> (contains) and || (concat) instead of
+        // ANY/array_append which only work on native PostgreSQL array types.
+        completedDays: sql`
+          CASE WHEN NOT (${devotionalProgressTable.completedDays} @> to_jsonb(${day}::int))
+          THEN ${devotionalProgressTable.completedDays} || to_jsonb(${day}::int)
+          ELSE ${devotionalProgressTable.completedDays}
+          END
+        `,
         updatedAt: new Date(),
       },
-    })
-    .returning();
-  return row;
+    });
+
+  // After completing a day, advance current_day to the next uncompleted
+  // published entry so that server-side reads (analytics, pastoral signals,
+  // admin views) always reflect the member's true position.
+  // The subquery picks the lowest published day_number not already in
+  // completed_days; COALESCE keeps the existing value when all days are done.
+  const result = await pool.query<{
+    id: string;
+    user_id: string;
+    series_id: string;
+    current_day: number;
+    completed_days: number[];
+    status: string;
+    started_at: Date;
+    updated_at: Date;
+    last_opened_at: Date | null;
+  }>(
+    `UPDATE devotional_progress dp
+     SET current_day = COALESCE(
+       (
+         SELECT de.day_number
+         FROM devotional_entries de
+         WHERE de.series_id = $1
+           AND de.status = 'Published'
+           AND NOT (dp.completed_days @> to_jsonb(de.day_number::int))
+         ORDER BY de.day_number ASC
+         LIMIT 1
+       ),
+       (
+         SELECT MAX(de.day_number)
+         FROM devotional_entries de
+         WHERE de.series_id = $1
+           AND de.status = 'Published'
+       )
+     ),
+     status = CASE
+       WHEN NOT EXISTS (
+         SELECT 1
+         FROM devotional_entries de
+         WHERE de.series_id = $1
+           AND de.status = 'Published'
+           AND NOT (dp.completed_days @> to_jsonb(de.day_number::int))
+       ) THEN 'completed'
+       ELSE dp.status
+     END,
+     updated_at = NOW()
+     WHERE dp.user_id = $2 AND dp.series_id = $1
+     RETURNING *`,
+    [seriesId, userId],
+  );
+
+  const r = result.rows[0];
+  // Map raw DB columns back to the DevotionalProgress shape.
+  return {
+    id: String(r.id),
+    userId: String(r.user_id),
+    seriesId: String(r.series_id),
+    currentDay: Number(r.current_day),
+    completedDays: Array.isArray(r.completed_days) ? r.completed_days : [],
+    status: String(r.status ?? "active"),
+    startedAt: r.started_at ? new Date(r.started_at) : new Date(),
+    updatedAt: r.updated_at ? new Date(r.updated_at) : new Date(),
+    lastOpenedAt: r.last_opened_at ? new Date(r.last_opened_at) : null,
+  } as DevotionalProgress;
 }

@@ -9,13 +9,6 @@
   50% { transform: scale(1.08); box-shadow: 0 6px 20px rgba(0,0,0,0.22); }
 }
 
-/* Ask Emmaus button — animated border trace (translate must be included so
-   the animation does not override the centering transform) */
-@keyframes border-trace {
-  from { transform: translate(-50%, -50%) rotate(0deg); }
-  to   { transform: translate(-50%, -50%) rotate(360deg); }
-}
-
 /* ── Daily Rhythm heartbeat ──────────────────────────────────────────────────
    Gentle double-pulse: slight scale + soft primary-green glow.
    Applied only when today's reading is still actionable (not done).
@@ -37,16 +30,78 @@
   border-radius: 1rem; /* matches rounded-2xl so the glow follows card corners */
 }
 
+/* ── "10 Minutes with Jesus" button pulse ────────────────────────────────────
+   Applied to every CTA that asks the member to complete their daily time.
+   2 s gentle scale + outward ring — noticeable but never jarring.
+   Use .btn-daily-pulse on any <button> or <a> that surfaces this action. */
+@keyframes btn-daily-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0px hsl(var(--primary) / 0.45);
+  }
+  50% {
+    transform: scale(1.022);
+    box-shadow: 0 0 0 6px hsl(var(--primary) / 0);
+  }
+}
+
+.btn-daily-pulse {
+  animation: btn-daily-pulse 2s ease-in-out infinite;
+  /* Prevent the button from clipping its own ring on rounded corners */
+  overflow: visible !important;
+}
+
+/* ── Actionable Daily Rhythm card ───────────────────────────────────────────
+   The Start Here card is the only Today’s Steps card that uses this treatment.
+   The completed state does not receive the class, so it remains unchanged. */
+@keyframes daily-rhythm-actionable-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgb(185 28 28 / 0);
+  }
+  16% {
+    box-shadow: 0 0 0 3px rgb(185 28 28 / 0.14);
+  }
+  32% {
+    box-shadow: 0 0 0 0 rgb(185 28 28 / 0);
+  }
+}
+
+.daily-rhythm-actionable-card {
+  background-color: rgb(254 242 242 / 0.85);
+  border-color: rgb(254 202 202 / 0.9);
+  animation: daily-rhythm-actionable-pulse 6.5s ease-in-out infinite;
+}
+
+.dark .daily-rhythm-actionable-card {
+  background-color: rgb(69 10 10 / 0.42);
+  border-color: rgb(127 29 29 / 0.65);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .daily-rhythm-actionable-card {
+    animation: none;
+  }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /* ── Global page-bottom clearance ───────────────────────────────────────────
    Every scrollable page should use pb-page-safe instead of a hard-coded pb-N.
-   Accounts for: bottom nav (h-16 = 4rem) + Ask Emmaus FAB bottom offset (5rem)
-   + FAB height (44px ≈ 2.75rem) + comfortable touch margin (1rem)
-   + device safe-area (gesture navigation bar).
-   When FloatingEmmausButton.tsx changes its bottom offset, update this too. */
+   Guarantees the final line of content can scroll completely above the floating
+   Ask Emmaus button on any standard page (i.e. pages whose BottomNav is the
+   only fixed bar at the bottom).
+
+   Formula for standard pages (BottomNav only):
+     FAB bottom offset (5rem) + FAB height (48px = 3rem) + breathing room (1rem)
+     = 9rem + safe-area.
+
+   ⚠ Bible chapter reader is a special case: it stacks a chapter nav (h-14 =
+   3.5rem) below the BottomNav, so FloatingEmmausButton raises its bottom to
+   8.5rem on that route. ChapterReader.tsx uses its own inline paddingBottom:
+     BottomNav (4rem) + chapter navigation (3.5rem) = 7.5rem
+   Update ChapterReader.tsx if FloatingEmmausButton changes the Bible offset. */
 :root {
-  --page-safe-bottom: calc(5rem + 2.75rem + 1rem + env(safe-area-inset-bottom, 0px));
+  --page-safe-bottom: calc(5rem + 3rem + 1rem + env(safe-area-inset-bottom, 0px));
 }
 
 @utility pb-page-safe {
@@ -159,6 +214,13 @@
   --destructive-foreground: 35 25% 97%;
   --input: 35 15% 85%;
   --ring: 168 38% 35%;
+  --surface-raised: 35 24% 98%;
+  --surface-inset: 35 18% 91%;
+  --section-gold: 44 62% 93%;
+  --section-blue: 210 55% 94%;
+  --section-violet: 266 48% 94%;
+  --section-green: 151 36% 93%;
+  --section-journey: 188 34% 93%;
 
   --chart-1: 168 38% 35%;
   --chart-2: 44 40% 42%;
@@ -244,39 +306,55 @@
   --elevate-1: rgba(255, 255, 255, 0.04);
   --elevate-2: rgba(255, 255, 255, 0.09);
 
-  /* Dark mode is disabled by design for this app. We'll use light mode values for now to avoid accidental red flashing */
-  --background: 35 25% 97%;
-  --foreground: 222 20% 18%;
-  --border: 35 15% 85%;
-  --card: 35 20% 94%;
-  --card-foreground: 222 20% 18%;
-  --card-border: 35 15% 85%;
+  --background: 222 20% 10%;
+  --foreground: 35 20% 92%;
+  --border: 222 14% 27%;
+  --card: 222 18% 15%;
+  --card-foreground: 35 20% 92%;
+  --card-border: 222 14% 27%;
   
-  --sidebar: 35 25% 97%;
-  --sidebar-foreground: 222 20% 18%;
-  --sidebar-border: 35 15% 85%;
-  --sidebar-primary: 168 38% 35%;
-  --sidebar-primary-foreground: 35 25% 97%;
-  --sidebar-accent: 35 15% 85%;
-  --sidebar-accent-foreground: 222 20% 18%;
+  --sidebar: 222 20% 10%;
+  --sidebar-foreground: 35 20% 92%;
+  --sidebar-border: 222 14% 27%;
+  --sidebar-primary: 168 42% 50%;
+  --sidebar-primary-foreground: 222 20% 10%;
+  --sidebar-accent: 222 14% 27%;
+  --sidebar-accent-foreground: 35 20% 92%;
   --sidebar-ring: 168 38% 35%;
   
-  --popover: 35 20% 94%;
-  --popover-foreground: 222 20% 18%;
-  --popover-border: 35 15% 85%;
+  --popover: 222 18% 15%;
+  --popover-foreground: 35 20% 92%;
+  --popover-border: 222 14% 27%;
   
-  --primary: 168 38% 35%; /* Muted Teal */
-  --primary-foreground: 35 25% 97%;
-  --secondary: 35 15% 85%;
-  --secondary-foreground: 222 20% 18%;
-  --muted: 35 15% 85%;
-  --muted-foreground: 222 10% 48%;
-  --accent: 44 40% 42%; /* Warm amber-gold accent */
-  --accent-foreground: 35 25% 97%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 35 25% 97%;
-  --input: 35 15% 85%;
-  --ring: 168 38% 35%;
+  --primary: 168 42% 50%;
+  --primary-foreground: 222 20% 10%;
+  --secondary: 222 14% 27%;
+  --secondary-foreground: 35 20% 92%;
+  --muted: 222 14% 27%;
+  --muted-foreground: 35 13% 73%;
+  --accent: 44 50% 55%;
+  --accent-foreground: 222 20% 10%;
+  --destructive: 0 70% 65%;
+  --destructive-foreground: 222 20% 10%;
+  --input: 222 14% 27%;
+  --ring: 168 42% 50%;
+  --surface-raised: 222 16% 19%;
+  --surface-inset: 222 16% 13%;
+  --section-gold: 40 27% 18%;
+  --section-blue: 215 27% 18%;
+  --section-violet: 268 22% 19%;
+  --section-green: 156 21% 17%;
+  --section-journey: 188 20% 17%;
+  --section-indigo: 232 24% 19%;
+  --section-gold-border: 40 34% 35%;
+  --section-blue-border: 213 34% 34%;
+  --section-violet-border: 268 28% 35%;
+  --section-green-border: 155 27% 31%;
+  --section-journey-border: 188 27% 31%;
+  --section-indigo-border: 232 29% 36%;
+  --admin-mode-surface: 174 24% 16%;
+  --admin-mode-border: 173 28% 27%;
+  --admin-mode-foreground: 164 24% 76%;
 
   --chart-1: 168 38% 35%;
   --chart-2: 44 40% 42%;
@@ -304,6 +382,10 @@
   --shadow-2xl: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0);
 }
 
+:root { --font-scale: 1; }
+html[data-font-size="large"] { --font-scale: 1.125; }
+html[data-font-size="extra-large"] { --font-scale: 1.25; }
+
 @layer base {
   * {
     @apply border-border;
@@ -315,6 +397,87 @@
 }
 
 @layer utilities {
+  /* Scale typography without browser zooming or inflating non-text dimensions. */
+  .text-xs { font-size: calc(0.75rem * var(--font-scale)); }
+  .text-sm { font-size: calc(0.875rem * var(--font-scale)); }
+  .text-base { font-size: calc(1rem * var(--font-scale)); }
+  .text-lg { font-size: calc(1.125rem * var(--font-scale)); }
+  .text-xl { font-size: calc(1.25rem * var(--font-scale)); }
+  .text-2xl { font-size: calc(1.5rem * var(--font-scale)); }
+  .text-3xl { font-size: calc(1.875rem * var(--font-scale)); }
+  .text-4xl { font-size: calc(2.25rem * var(--font-scale)); }
+  .text-\[10px\] { font-size: calc(10px * var(--font-scale)); }
+  .text-\[11px\] { font-size: calc(11px * var(--font-scale)); }
+  .text-\[12px\] { font-size: calc(12px * var(--font-scale)); }
+  .text-\[13px\] { font-size: calc(13px * var(--font-scale)); }
+  .text-\[14px\] { font-size: calc(14px * var(--font-scale)); }
+  .text-\[15px\] { font-size: calc(15px * var(--font-scale)); }
+  .text-\[16px\] { font-size: calc(16px * var(--font-scale)); }
+  .text-\[17px\] { font-size: calc(17px * var(--font-scale)); }
+  .text-\[18px\] { font-size: calc(18px * var(--font-scale)); }
+  .text-\[20px\] { font-size: calc(20px * var(--font-scale)); }
+  .text-\[22px\] { font-size: calc(22px * var(--font-scale)); }
+  .text-\[24px\] { font-size: calc(24px * var(--font-scale)); }
+  .text-\[26px\] { font-size: calc(26px * var(--font-scale)); }
+  .text-\[28px\] { font-size: calc(28px * var(--font-scale)); }
+  .text-\[30px\] { font-size: calc(30px * var(--font-scale)); }
+  .text-\[32px\] { font-size: calc(32px * var(--font-scale)); }
+
+  .bg-surface-raised { background-color: hsl(var(--surface-raised)); }
+  .bg-surface-inset { background-color: hsl(var(--surface-inset)); }
+  .bg-section-gold { background-color: hsl(var(--section-gold)); }
+  .bg-section-blue { background-color: hsl(var(--section-blue)); }
+  .bg-section-violet { background-color: hsl(var(--section-violet)); }
+  .bg-section-green { background-color: hsl(var(--section-green)); }
+  .bg-section-journey { background-color: hsl(var(--section-journey)); }
+
+  /* Legacy light utilities inherit calm semantic dark surfaces until migrated. */
+  .dark .bg-white { background-color: hsl(var(--surface-raised)); }
+  .dark .bg-gray-50, .dark .bg-gray-100 { background-color: hsl(var(--surface-inset)); }
+  .dark .bg-amber-50, .dark .bg-amber-50\/60, .dark .bg-amber-50\/90 { background-color: hsl(var(--section-gold)); }
+  .dark .bg-sky-50, .dark .bg-sky-50\/60,
+  .dark .bg-blue-50, .dark .bg-blue-50\/60, .dark .bg-blue-50\/90 { background-color: hsl(var(--section-blue)); }
+  .dark .bg-violet-50, .dark .bg-violet-50\/60, .dark .bg-violet-50\/90,
+  .dark .bg-purple-50 { background-color: hsl(var(--section-violet)); }
+  .dark .bg-emerald-50, .dark .bg-emerald-50\/60, .dark .bg-emerald-50\/90,
+  .dark .bg-green-50 { background-color: hsl(var(--section-green)); }
+  .dark .bg-orange-50, .dark .bg-orange-50\/60,
+  .dark .bg-teal-50, .dark .bg-teal-50\/60 { background-color: hsl(var(--section-journey)); }
+  .dark .bg-indigo-50, .dark .bg-indigo-50\/60, .dark .bg-indigo-50\/90 { background-color: hsl(var(--section-indigo)); }
+  .dark .border-gray-100, .dark .border-gray-200, .dark .border-gray-300 { border-color: hsl(var(--border)); }
+  .dark .border-amber-100, .dark .border-amber-200, .dark .border-amber-200\/60 { border-color: hsl(var(--section-gold-border)); }
+  .dark .border-sky-100, .dark .border-sky-200,
+  .dark .border-blue-100, .dark .border-blue-200, .dark .border-blue-200\/60 { border-color: hsl(var(--section-blue-border)); }
+  .dark .border-violet-100, .dark .border-violet-200, .dark .border-violet-200\/60,
+  .dark .border-purple-100, .dark .border-purple-200 { border-color: hsl(var(--section-violet-border)); }
+  .dark .border-emerald-100, .dark .border-emerald-200, .dark .border-emerald-200\/60,
+  .dark .border-green-100, .dark .border-green-200 { border-color: hsl(var(--section-green-border)); }
+  .dark .border-orange-100, .dark .border-orange-200,
+  .dark .border-teal-100, .dark .border-teal-200, .dark .border-teal-200\/60 { border-color: hsl(var(--section-journey-border)); }
+  .dark .border-indigo-100, .dark .border-indigo-200, .dark .border-indigo-200\/60 { border-color: hsl(var(--section-indigo-border)); }
+  .dark .text-amber-700 { color: hsl(40 60% 68%); }
+  .dark .text-blue-700, .dark .text-sky-700 { color: hsl(211 58% 72%); }
+  .dark .text-violet-700 { color: hsl(268 48% 76%); }
+  .dark .text-emerald-700 { color: hsl(155 39% 68%); }
+  .dark .text-indigo-700 { color: hsl(232 49% 76%); }
+  .dark .text-muted-foreground\/40 { color: hsl(var(--muted-foreground) / 0.72); }
+  .dark .text-muted-foreground\/50 { color: hsl(var(--muted-foreground) / 0.9); }
+  .dark .disabled\:opacity-40:disabled { opacity: 0.58; }
+  .dark .disabled\:opacity-50:disabled { opacity: 0.64; }
+  .dark .disabled\:opacity-60:disabled { opacity: 0.7; }
+  .dark .dev-mode-banner {
+    background-color: hsl(var(--admin-mode-surface));
+    border-color: hsl(var(--admin-mode-border));
+    color: hsl(var(--admin-mode-foreground));
+  }
+  .dark .dev-mode-banner .text-amber-600,
+  .dark .dev-mode-banner .text-amber-800 { color: hsl(var(--admin-mode-foreground)); }
+  .dark .dev-mode-banner .bg-amber-100 { background-color: hsl(174 22% 21%); }
+  .dark .dev-mode-banner .hover\:bg-amber-200:hover { background-color: hsl(174 22% 24%); }
+  .dark .text-gray-900, .dark .text-gray-800, .dark .text-gray-700, .dark .text-gray-600 { color: hsl(var(--foreground)); }
+  .dark .text-gray-500, .dark .text-gray-400, .dark .text-gray-300 { color: hsl(var(--muted-foreground)); }
+  .dark .hover\:bg-gray-50:hover, .dark .hover\:bg-gray-100:hover { background-color: hsl(var(--muted)); }
+
   input[type='search']::-webkit-search-cancel-button {
     @apply hidden;
   }
@@ -364,4 +527,15 @@
   .active-elevate-2:active:not(.no-default-active-elevate)::after {
     background-color: var(--elevate-2);
   }
+}
+
+/* ── Emmaus Voice orb animations ─────────────────────────────────────────── */
+
+@keyframes voice-breathe {
+  0%, 100% { transform: scale(1);    opacity: 0.75; }
+  50%       { transform: scale(1.07); opacity: 1;    }
+}
+
+.animate-voice-breathe {
+  animation: voice-breathe 3s ease-in-out infinite;
 }

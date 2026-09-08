@@ -1,0 +1,475 @@
+FIX ASK EMMAUS INLINE LINKS, CAPITALIZATION AND PRECISE DEEP-LINK DESTINATIONS
+
+Ask Emmaus is working better, but the published interface still has link and formatting regressions visible in real user testing.
+
+Create a checkpoint before making changes.
+
+Do not rebuild Ask Emmaus or replace its current retrieval system.
+
+Preserve:
+
+- Scripture-first behaviour
+- Local Church retrieval
+- tenant isolation
+- Daily Rhythm eligibility
+- canonical resource validation
+- existing resource cards
+- current working links
+
+Correct the specific issues below.
+
+==================================================
+1. EVERY VALID SCRIPTURE REFERENCE MUST BE CLICKABLE
+==================================================
+
+Some Scripture references in Ask Emmaus answers are clickable, while others remain plain text.
+
+Examples currently appearing as plain text include:
+
+- Hebrews 11:1
+- John 4:43–54
+
+Audit why only some references are included in structured scriptureReferences data or converted into clickable inline references.
+
+Every valid Scripture reference appearing in the final visible answer must be detected, normalized, validated and rendered as a clickable link.
+
+This includes references written as:
+
+- John 3
+- John 3:16
+- John 3:16–18
+- John 3:16-18
+- John 3:16, 18
+- Hebrews 11:1
+- Psalm 23
+- Psalms 23
+- 1 Corinthians 13
+- First Corinthians 13
+- 2 Corinthians 5:17
+- 1 Thessalonians 5:16–18
+- 1 John 1:9
+- John 4:43–54
+
+Do not rely exclusively on the model remembering to place every reference in the structured scriptureReferences array.
+
+After receiving the structured model response:
+
+1. Parse the final answer for Scripture-reference candidates.
+2. Normalize each candidate.
+3. Validate it against the canonical Bible structure.
+4. Merge it with the model’s structured Scripture references.
+5. Remove duplicates.
+6. Generate canonical links in trusted application code.
+7. Render every validated occurrence inline as clickable.
+8. Leave invalid or uncertain text unlinked.
+9. Log any valid reference found in the prose but missing from the model’s structured list.
+
+The parser must avoid false positives such as:
+
+- ordinary numbers
+- dates
+- sermon timestamps
+- resource Step numbers
+- chapter numbers that do not include a Bible book
+
+Do not allow the model to generate URLs.
+
+Do not inject raw HTML into model content.
+
+Use a safe tokenized rich-text renderer.
+
+==================================================
+2. INLINE SCRIPTURE LINKS AND CARDS MUST COEXIST
+==================================================
+
+Keep Scripture references inside the natural paragraph.
+
+Example:
+
+“In Hebrews 11:1, faith is described as…”
+
+The visible text “Hebrews 11:1” must itself be clickable.
+
+A Scripture card may also appear below the answer when the passage is central or useful, but the card must not be the only clickable location.
+
+Do not generate unnecessary duplicate cards for every incidental reference.
+
+Use:
+
+- inline links for every valid Scripture reference
+- a card for the primary Scripture passage or a particularly useful passage
+
+==================================================
+3. INLINE RESOURCE REFERENCES MUST BE CLICKABLE
+==================================================
+
+When the answer explicitly mentions a retrieved and validated Emmaus resource, the actual resource title or natural reference in the paragraph must be clickable.
+
+Examples:
+
+- “In What’s the Point, Pastor Jeremy explained…”
+- “The Bible Study on John 4:43–54 explores…”
+- “ICC’s Walk on Prayer develops this further…”
+- “This week’s Sermon Companion considers…”
+
+The clickable inline text should be:
+
+- the exact sermon title
+- the named Walk or Journey title
+- “Bible Study on John 4:43–54”
+- the named devotional or Sermon Companion
+
+Keep the larger validated card below the paragraph.
+
+The inline link and card must resolve from the same validated canonical resource ID and destination.
+
+Do not create a link merely because text looks like a resource title.
+
+Only create an inline resource link when:
+
+- the resource was retrieved
+- a canonical resource ID is present
+- resource type is known
+- it is published
+- tenant matches
+- user has access
+- the resource destination has been validated
+
+Do not allow the model to invent resource URLs.
+
+==================================================
+4. LINK BIBLE STUDY REFERENCES TO THE EXACT PASSAGE
+==================================================
+
+The current Bible Study card for John 4:43–54 opens the Bible at the beginning of John.
+
+This is incorrect.
+
+A Bible Study resource referring to John 4:43–54 must open:
+
+- Book: John
+- Chapter: 4
+- Starting verse: 43
+- Ending verse: 54
+- Bible Study context/panel where supported
+
+It must not open:
+
+- John 1
+- the general beginning of the Book of John
+- the generic Bible home
+- a generic Bible Study listing
+
+Use a structured Bible Study destination:
+
+{
+  "resourceType": "bible_study",
+  "resourceId": "canonical Bible Study ID",
+  "book": "John",
+  "chapter": 4,
+  "verseStart": 43,
+  "verseEnd": 54,
+  "openStudy": true
+}
+
+The canonical resolver must generate the real My Bible route supported by Emmaus.
+
+On opening:
+
+1. Load John 4.
+2. Scroll to verse 43.
+3. Highlight verses 43 through 54.
+4. Open or make immediately available the relevant Bible Study content.
+5. Preserve the destination after authentication.
+6. Preserve the destination after page refresh.
+7. Browser Back must return to the Ask Emmaus conversation.
+
+If the Bible Study contains only a chapter reference:
+
+- open the correct chapter at its beginning.
+
+If it contains a verse or range:
+
+- open the exact verse/range.
+
+If resource metadata currently stores only the Bible book, correct the indexing and metadata pipeline so Bible Study resources also store:
+
+- canonical book
+- chapter
+- verseStart
+- verseEnd
+
+Do not attempt to infer the destination from only the resource title when structured metadata exists.
+
+==================================================
+5. PRECISE DESTINATIONS FOR EVERY RESOURCE TYPE
+==================================================
+
+Audit the canonical link resolver for:
+
+- Scripture
+- Bible Study
+- sermon
+- timestamped sermon reference
+- Sermon Companion
+- Daily Devotional
+- Walk
+- Walk Step
+- Journey
+- eligible Daily Rhythm
+
+Each link must open the exact intended resource.
+
+Examples:
+
+SERMON TIMESTAMP
+
+“What’s the Point” at 46:56 must:
+
+- open the correct sermon
+- open the Watch or Listen view appropriate to the source
+- seek to 46:56
+- not merely open the general sermon page
+
+WALK STEP
+
+Must open the exact Walk and Step.
+
+SERMON COMPANION
+
+Must open the exact Companion and Step.
+
+DAILY RHYTHM
+
+Must open only the eligible exact day/Step.
+
+BIBLE STUDY
+
+Must open the exact chapter and verse/range.
+
+==================================================
+6. CAPITALIZE ALL CANONICAL BIBLE BOOK NAMES
+==================================================
+
+The cards currently display:
+
+- john 3
+- Bible Study — john 21:20–23
+
+This is incorrect.
+
+All Bible book names must use canonical capitalization everywhere in Emmaus.
+
+Correct examples:
+
+- John 3
+- John 21:20–23
+- Genesis 1
+- Psalm 23
+- 1 Samuel 16
+- 2 Corinthians 5:17
+- 1 Thessalonians 5:16–18
+- 1 John 1:9
+- Song of Songs 2
+
+Apply capitalization in:
+
+- Ask Emmaus answer text where safely normalized
+- Scripture cards
+- Bible Study cards
+- resource recommendation cards
+- My Bible headings
+- deep-link labels
+- Search results
+- Voice intent display
+- administrative metadata displays where applicable
+
+Do not apply a simple CSS text-transform rule.
+
+Do not use generic title case, because it can damage numbered book names and other titles.
+
+Use one canonical Bible-book display-name formatter.
+
+Normalize aliases internally, but always render the canonical display name.
+
+Examples:
+
+- john → John
+- psalms → Psalms or Psalm depending on existing Emmaus display convention
+- 1 john → 1 John
+- first john → 1 John
+- song of solomon → use Emmaus’s canonical configured name
+
+==================================================
+7. CORRECT USER FORM OF ADDRESS
+==================================================
+
+The screenshot shows:
+
+“Jeremy, you might consider…”
+
+For my authenticated account, this must be:
+
+“Pastor Jeremy, you might consider…”
+
+Use the stored preferred display name or pastoral title rules already established.
+
+Do not hard-code “Pastor Jeremy” for every user.
+
+Confirm:
+
+- my account → Pastor Jeremy
+- normal user with preferred name → preferred name
+- no preferred name → natural answer without forcing a name
+- follow-up messages → do not repeat the name unnecessarily
+
+==================================================
+8. FIX MOBILE INPUT OVERLAP
+==================================================
+
+The screenshots also show the fixed “Continue…” input covering content and cards near the bottom of the Ask Emmaus response.
+
+Audit the response container’s bottom spacing.
+
+Ensure the user can scroll every answer, Scripture card and resource card fully above:
+
+- the fixed Ask Emmaus input
+- bottom navigation
+- Android safe area
+- installed PWA safe area
+
+Do not solve this with an excessive permanent blank area.
+
+Calculate spacing from the actual composer height, bottom navigation height and safe-area inset.
+
+Test with:
+
+- short answer
+- long answer
+- Scripture card
+- sermon card
+- Bible Study card
+- multiple cards
+- keyboard open
+- keyboard closed
+
+==================================================
+9. AUTOMATED TESTS
+==================================================
+
+Add tests proving that all references become validated inline links:
+
+- Hebrews 11:1
+- John 4:43–54
+- John 3
+- Psalm 23
+- 1 Corinthians 13
+- 2 Corinthians 5:17
+- 1 Thessalonians 5:16–18
+- 1 John 1:9
+
+Test multiple references in one paragraph.
+
+Test a valid reference missing from the model’s scriptureReferences array.
+
+Expected result:
+
+- post-processing detects it
+- validation succeeds
+- structured citation is added
+- visible prose becomes clickable
+
+Test invalid candidates:
+
+- John 99:500
+- 29 March 2026
+- 46:56 sermon timestamp
+- Day 3
+- Step 5
+
+These must not become Scripture links.
+
+Test canonical capitalization for every Bible book currently supported by My Bible.
+
+Test inline resource linking:
+
+- exact sermon title
+- timestamped sermon
+- Bible Study passage
+- Walk
+- Walk Step
+- Sermon Companion
+
+Test that unvalidated text resembling a title does not become clickable.
+
+==================================================
+10. BROWSER-LEVEL VERIFICATION
+==================================================
+
+Using actual Ask Emmaus responses, verify:
+
+TEST A — INLINE SCRIPTURE
+
+Ask:
+
+“What is faith?”
+
+Confirm:
+
+- Hebrews 11:1 is clickable inside the paragraph
+- clicking opens Hebrews 11
+- verse 1 scrolls into view
+- verse 1 is highlighted
+- Back returns to the same answer
+
+TEST B — BIBLE STUDY DEEP LINK
+
+Generate an answer referencing the Bible Study on John 4:43–54.
+
+Confirm:
+
+- “Bible Study on John 4:43–54” is clickable in the paragraph
+- the card shows “Bible Study — John 4:43–54”
+- John is capitalized
+- both inline link and card open the same destination
+- John chapter 4 opens
+- verses 43–54 scroll into view and are highlighted
+- the relevant Bible Study is available/opened
+- it does not open John chapter 1
+
+TEST C — SERMON INLINE LINK
+
+Generate an answer referencing “What’s the Point.”
+
+Confirm:
+
+- the sermon title in the paragraph is clickable
+- the Preached Here card remains below
+- both use the same canonical sermon ID
+- the timestamped link opens at 46:56
+
+TEST D — MOBILE LAYOUT
+
+Confirm all cards can scroll above the fixed input and navigation without being obscured.
+
+==================================================
+11. ROOT-CAUSE REPORT
+==================================================
+
+Before marking complete, report:
+
+1. Why some Scripture references were linked and others were not.
+2. Whether the model omitted them from structured scriptureReferences.
+3. Whether the inline parser failed to recognize them.
+4. Why Bible book names were rendered in lowercase.
+5. Why the Bible Study route lost its chapter and verse range.
+6. Whether the problem was missing indexed metadata or route construction.
+7. How inline sermon/resource links are now validated.
+8. Files changed.
+9. Exact automated test results.
+10. Exact browser test results.
+11. Any remaining manual PWA tests.
+
+Do not republish.
+
+Create a checkpoint and wait for my review.

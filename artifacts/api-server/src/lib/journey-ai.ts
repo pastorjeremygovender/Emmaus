@@ -154,8 +154,7 @@ export async function generateJourney(prompt: string): Promise<{
       { role: "user", content: prompt },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.7,
-    max_tokens: 16000,
+    max_completion_tokens: 16000,
   });
 
   const raw = completion.choices[0]?.message?.content ?? "{}";
@@ -330,8 +329,7 @@ Generate all ${payload.length} steps now. Ensure each step advances toward the d
       { role: "user", content: userMessage },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.72,
-    max_tokens: 20000,
+    max_completion_tokens: 20000,
   });
 
   const raw = completion.choices[0]?.message?.content ?? "{}";
@@ -347,10 +345,15 @@ Generate all ${payload.length} steps now. Ensure each step advances toward the d
     throw new Error("We couldn't create the Journey draft. Your setup has been saved. Please try again.");
   }
 
-  // Validate step count
+  // Validate step count — a mismatch means the model stopped early or hallucinated
+  // extra steps. Either way the content would be incomplete or wrong. Fail hard so
+  // the orphan-cleanup in the route deletes any partial journey and the user sees
+  // a clear retry prompt instead of a truncated walk they might not notice.
   if (parsed.steps.length !== payload.length) {
-    // Trim or warn but don't fail
-    parsed.steps = parsed.steps.slice(0, payload.length);
+    throw new Error(
+      `The AI produced ${parsed.steps.length} step${parsed.steps.length !== 1 ? "s" : ""} but ${payload.length} were requested. ` +
+      "Please try generating again — this occasionally happens with longer journeys."
+    );
   }
 
   // Build source summary
@@ -395,6 +398,43 @@ function extractText(blocks: GeneratedBlock[], type: string, field: string): str
 function extractParagraph(blocks: GeneratedBlock[], index: number): string {
   const paras = blocks.filter(b => b.type === "paragraph");
   return (paras[index]?.content?.["text"] as string) ?? "";
+}
+
+// ─── Walk Introduction generator ─────────────────────────────────────────────
+
+/**
+ * Generates the Walk Introduction — the plain-text welcome passage shown to
+ * members before they start Day 1.  Stored as journey.introductionContent.
+ */
+export async function generateWalkIntroduction(payload: BuilderPayload, journeyTitle: string): Promise<string> {
+  const audienceLabel = [...payload.audience, payload.customAudience].filter(Boolean).join(", ");
+  const completion = await openai.chat.completions.create({
+    model: MODEL,
+    messages: [
+      {
+        role: "system",
+        content: `You are a pastoral writer for Emmaus, a church discipleship app.
+Write a warm Walk Introduction — 2 to 3 short paragraphs — that welcomes the reader to the journey.
+Tone: personal, pastoral, inviting. First person ("you") directed at the reader.
+Do NOT use headings, bullet points, or markdown formatting.
+Do NOT be generic — tie the welcome directly to the journey's purpose and theme.
+End by giving the reader permission to begin at their own pace.`,
+      },
+      {
+        role: "user",
+        content: `Journey title: "${journeyTitle}"
+Purpose: ${payload.purpose}
+Desired outcome: ${payload.desiredOutcome}
+Audience: ${audienceLabel}
+${payload.specialInstructions ? `Special instructions: ${payload.specialInstructions}` : ""}
+
+Write the Walk Introduction now (plain text, 2-3 paragraphs).`,
+      },
+    ],
+    max_completion_tokens: 600,
+  });
+
+  return (completion.choices[0]?.message?.content ?? "").trim();
 }
 
 // ─── Block AI action ──────────────────────────────────────────────────────────
@@ -446,8 +486,7 @@ Return the updated content object only (same structure, no extra wrapper).`;
       { role: "user", content: userMessage },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.65,
-    max_tokens: 1200,
+    max_completion_tokens: 1200,
   });
 
   const raw = completion.choices[0]?.message?.content ?? "{}";

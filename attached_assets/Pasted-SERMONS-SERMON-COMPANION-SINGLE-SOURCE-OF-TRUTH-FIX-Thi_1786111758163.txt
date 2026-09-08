@@ -1,0 +1,287 @@
+SERMONS + SERMON COMPANION — SINGLE SOURCE OF TRUTH FIX
+
+This is a structural fix. Do not patch the UI by hiding individual sermon titles.
+
+The Emmaus Content Studio must become the single source of truth for all sermons and sermon companions shown anywhere in the member app.
+
+Before changing anything, inspect the existing sermon/companion data model and identify why the member app currently displays Sermon Companions that no longer appear in Content Studio.
+
+Current incorrect behaviour:
+
+Content Studio → Sermons currently shows only one sermon: New Sermon
+The member app still shows:
+Jesus at the Center
+God Uses the Unlikely
+These were deleted from Content Studio and must therefore not remain available as independent member-facing content.
+The remaining sermon also appears to have an old Companion relationship/content titled God Uses the Unlikely.
+
+Do not simply hard-code these titles out of the UI.
+
+1. ONE AUTHORITATIVE SERMON DATA SOURCE
+
+Audit all places from which the member app retrieves:
+
+sermons
+sermon companions
+current week's sermon
+previous sermon companions
+Today's Steps sermon content
+Next Steps → Sermon Companions
+
+There must be one authoritative relationship:
+
+Sermon → Sermon Companion
+
+A Sermon Companion cannot exist as unrelated member-facing seeded/demo content.
+
+The member app must derive available Sermon Companions from the sermons managed in:
+
+Admin → Content Studio → Sermons
+
+Remove any runtime fallback arrays, seed/demo companion lists, legacy hard-coded sermon companions, or alternate queries currently supplying member-facing content.
+
+Do not delete unrelated database infrastructure until you have established what it is used for.
+
+2. PUBLISHING RULE
+
+A Sermon Companion should appear to members only when its parent sermon/companion has been published.
+
+Rules:
+
+Draft
+
+Admin only.
+Never visible in member app.
+
+Published
+
+Available in member app.
+
+Unpublished
+
+Immediately stops appearing as available member content.
+
+Deleted
+
+Immediately stops appearing from all member discovery lists.
+
+If historical user-progress records reference deleted/unpublished content, preserve those records internally for audit/history purposes, but do not continue presenting the deleted content as an available Sermon Companion.
+
+Do not allow orphan Sermon Companion records to appear in the member UI.
+
+3. FIX EXISTING DATA
+
+Audit the current records for:
+
+New Sermon
+Jesus at the Center
+God Uses the Unlikely
+
+Determine which records are:
+
+current
+deleted
+legacy
+seeded/demo
+orphaned
+
+Reconcile them with Content Studio.
+
+After this fix, the member app must reflect exactly the currently valid published sermons/companions in Content Studio.
+
+Do not recreate deleted sermons.
+
+Do not lose the content belonging to the legitimate current sermon.
+
+Also verify that editing a sermon opens that sermon's actual Companion, not a Companion left over from a previously deleted sermon.
+
+4. PERMANENT THIS WEEK'S SERMON CARD ON TODAY'S STEPS
+
+Add a permanent Sermon Companion card to:
+
+Today's Steps
+
+Position it immediately under Daily Rhythm.
+
+This card itself is permanent. It should not disappear just because a user has not started the Companion.
+
+Title/eyebrow:
+
+This Week's Sermon
+
+When a current week's published sermon companion exists, display:
+
+Sermon title
+Short description/subtitle if available
+Current progress
+Start Companion if not started
+Continue Companion if already started
+Review Companion if completed
+
+Tapping the card opens the current week's Companion.
+
+The card must derive its content from the sermon explicitly marked:
+
+This Week's Sermon
+
+Do not guess based solely on newest database ID.
+
+Only one sermon can be marked as the current week's sermon at a time.
+
+When a new sermon becomes This Week's Sermon, the permanent Today's Steps card automatically updates to that sermon.
+
+Previous completed/in-progress companions must retain user progress and remain accessible through Sermon Companions/history where appropriate.
+
+If no current published Sermon Companion exists, keep the card in place but show a quiet empty state such as:
+
+This week's Sermon Companion will appear here when it is published.
+
+Do not route the user to an error page.
+
+5. FIVE-DAY COMPANION MUST ALWAYS CREATE FIVE DAYS
+
+The admin editor currently displays only:
+
+1 2 3 4
+
+for a 5-Day Companion.
+
+Fix this.
+
+Every newly generated 5-Day Sermon Companion must contain exactly:
+
+Day 1
+Day 2
+Day 3
+Day 4
+Day 5
+
+The editor must display:
+
+1 2 3 4 5
+
+Day 5 must contain the same complete content structure as Days 1–4.
+
+Do not generate four days and merely display a fifth button.
+
+Audit whether this is:
+
+generation logic
+array indexing
+UI rendering
+database creation
+
+and fix the underlying cause.
+
+Also repair the current Companion so it contains a genuine Day 5.
+
+6. REMOVE "THE PASTOR" FROM GENERATED CONTENT
+
+Sermon Companion generation must never refer to the speaker impersonally as:
+
+"the pastor"
+
+This currently creates unnatural sentences such as:
+
+"The pastor retells..."
+"The pastor said..."
+
+Update the Sermon Companion generation instructions globally.
+
+If the sermon has a speakerName, use the speaker naturally where appropriate.
+
+For ICC content where the speaker is Jeremy Govender, the reader-facing wording may use:
+
+Pastor Jeremy
+
+Examples:
+
+Instead of:
+
+"The pastor retells how God reduced Gideon's army..."
+
+use:
+
+"Pastor Jeremy retells how God reduced Gideon's army..."
+
+Or, where it sounds warmer and more natural:
+
+"We spoke about how God reduced Gideon's army..."
+
+Instead of:
+
+"Quoting Hebrews 11:1, the pastor said..."
+
+use:
+
+"Reflecting on Hebrews 11:1, Pastor Jeremy explained..."
+
+or:
+
+"We reflected on Hebrews 11:1..."
+
+Do not mechanically insert Pastor Jeremy into every paragraph. The Companion should remain warm, natural and devotional rather than repeatedly talking about the preacher.
+
+Preferred hierarchy:
+
+Speak directly about Jesus/Scripture whenever possible.
+Use we reflected / we spoke about / we saw where natural.
+Use the actual speaker name where attribution genuinely matters.
+Never use generic the pastor.
+
+This must be driven by the sermon speakerName field so Emmaus remains usable by other churches and speakers later.
+
+If speakerName is unavailable, use neutral wording such as:
+
+we reflected on
+
+rather than inventing a pastor's identity.
+
+Update the generator prompt/template so all future companions follow this rule.
+
+Also correct the currently generated Companion wherever "the pastor" is already rendered, while preserving the meaning of the existing devotional content.
+
+7. DO NOT BREAK EXISTING SERMON FEATURES
+
+Preserve:
+
+Sermon transcript
+Sermon audio/video fields
+Ask Emmaus indexing
+Bible links
+Companion editing
+Save Draft
+Publish/Unpublish
+This Week's Sermon designation
+Existing legitimate member progress
+
+Do not rebuild the Sermon module from scratch.
+
+8. TEST THE COMPLETE FLOW
+
+Before marking this task complete, test:
+
+Admin
+
+Create Sermon.
+Generate Companion.
+Confirm Days 1–5 exist.
+Confirm no generated copy says "the pastor".
+Save Draft.
+Confirm it is NOT visible to members.
+Publish.
+Mark as This Week's Sermon.
+
+Member app
+
+Confirm it now appears in Sermon Companions.
+Confirm the permanent Today's Steps card immediately displays it.
+Start it and confirm Today's Steps shows progress.
+Unpublish it and confirm it disappears from discovery/current-week delivery without corrupting user progress.
+
+Deletion/sync
+
+Verify that deleted sermons cannot continue appearing from legacy or seeded data.
+Confirm Jesus at the Center and God Uses the Unlikely are not being served independently unless a valid currently published Content Studio sermon record actually exists for them.
+
+Finally report the root cause of the duplicate/stale sermon companions and identify which member-app data source was removed or corrected.

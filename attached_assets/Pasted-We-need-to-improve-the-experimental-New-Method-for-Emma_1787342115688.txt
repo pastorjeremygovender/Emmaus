@@ -1,0 +1,428 @@
+We need to improve the experimental "New Method" for Emmaus shareable image generation so its results are much closer in quality, creativity, composition and typography to images generated directly inside ChatGPT.
+
+IMPORTANT:
+
+Do not remove the Existing Method.
+
+Keep the A/B comparison interface so we can continue comparing:
+
+1. Existing Method
+2. New Method
+
+Do not change unrelated Emmaus functionality.
+
+The goal of this task is specifically to improve the New Method.
+
+CURRENT PROBLEM
+
+The New Method is better than the Existing Method, but images generated directly in ChatGPT are still noticeably better.
+
+ChatGPT's images show:
+
+* stronger visual storytelling
+* more meaningful visual metaphors
+* better typography
+* better text hierarchy
+* better use of negative space
+* more sophisticated composition
+* more cinematic atmosphere
+* less of a generic inspirational-poster appearance
+* better understanding of which words deserve emphasis
+* a stronger relationship between the devotional meaning and the visual scene
+
+We want to reproduce as much of that behaviour as possible inside Emmaus.
+
+NEW ARCHITECTURE
+
+Change the experimental New Method to:
+
+DEVOTIONAL TEXT
+→ GPT-5.6 Sol visual reasoning
+→ concise visual concept
+→ GPT Image 2
+→ high-quality square image
+→ existing Emmaus footer overlay
+
+Do NOT ask GPT-5.6 Sol to write a huge detailed image prompt.
+
+Its job is to think like an excellent art director before image generation.
+
+STEP 1 — VISUAL REASONING
+
+Send the exact devotional quote to GPT-5.6 Sol.
+
+Ask it to determine:
+
+1. Emotional centre
+   What is the deepest emotional/spiritual idea being communicated?
+
+2. Visual metaphor
+   Choose ONE strong visual metaphor or scene that communicates that idea visually.
+
+The image should add meaning rather than merely decorate the words.
+
+3. Composition
+   Determine the best relationship between:
+
+* imagery
+* negative space
+* typography
+* focal point
+* light
+* visual balance
+
+4. Text hierarchy
+   Determine which part of the exact supplied quote should receive the greatest visual emphasis.
+
+Do not automatically make the first sentence largest.
+
+5. Mood
+   Determine the emotional atmosphere appropriate to this particular devotional.
+
+6. Avoid
+   Identify obvious clichés or visual choices that would make this particular image generic.
+
+The reasoning response should be structured data that the application can reliably parse.
+
+For example:
+
+{
+"emotionalCentre": "...",
+"visualMetaphor": "...",
+"composition": "...",
+"heroText": "...",
+"mood": "...",
+"avoid": ["...", "..."]
+}
+
+This reasoning is internal.
+
+Do NOT display it on the generated artwork.
+
+STEP 2 — BUILD A SHORT IMAGE PROMPT
+
+Using the visual reasoning result, construct a concise natural-language prompt for GPT Image 2.
+
+Do not create an enormous specification.
+
+Aim for approximately 1–3 substantial sentences.
+
+The final prompt should communicate:
+
+* purpose: premium Christian devotional share image
+* visual metaphor
+* scene
+* emotional atmosphere
+* composition
+* typography intention
+* exact devotional text
+* hero text emphasis
+* square format
+* premium editorial quality
+
+Give GPT Image 2 meaningful creative freedom.
+
+Do NOT prescribe every font size, line break, position or decorative element.
+
+STEP 3 — IMAGE GENERATION
+
+Use:
+
+Model:
+gpt-image-2
+
+Size:
+1024x1024
+
+Quality:
+high
+
+Confirm from the current OpenAI API documentation that these are the correct supported parameters for the API endpoint currently used by Emmaus.
+
+Do not silently fall back to another model or quality level.
+
+If gpt-image-2 or quality=high fails, return the real error during this test rather than silently generating through another model.
+
+TYPOGRAPHY
+
+The supplied devotional quote must appear accurately in the image.
+
+The wording must not be rewritten, summarized or expanded.
+
+However, allow the model to make intelligent visual decisions about:
+
+* line breaks
+* scale
+* emphasis
+* serif/sans/script combinations where appropriate
+* placement
+* contrast
+* hierarchy
+* negative space
+
+The reasoning stage should identify the most important phrase.
+
+GPT Image 2 should then make that phrase visually dominant where appropriate.
+
+Do not automatically use decorative script typography.
+
+Do not automatically italicize spiritual words.
+
+Do not make every image look like the same template.
+
+VISUAL STORYTELLING
+
+This is extremely important.
+
+Do not simply:
+
+DEVOTIONAL TEXT + PRETTY BACKGROUND
+
+Instead think:
+
+DEVOTIONAL MEANING + VISUAL METAPHOR + TYPOGRAPHY
+
+For example:
+
+If the message is about continuing to follow Jesus through confusion, a difficult path leading toward light may communicate the meaning.
+
+If the message is about trust during uncertainty, a steady light in darkness may communicate the meaning.
+
+If the message is about grace, an unexpected gift may communicate the meaning.
+
+These are examples only.
+
+DO NOT hard-code these metaphors.
+
+The reasoning model must interpret every devotional independently.
+
+VARIETY
+
+Emmaus must avoid developing another repetitive visual style.
+
+Do not automatically generate:
+
+* sunsets
+* mountains
+* Crosses
+* forest paths
+* lanterns
+* open Bibles
+* praying hands
+* people looking at horizons
+* golden-hour landscapes
+
+Any of these may be used when genuinely appropriate.
+
+But the reasoning stage should deliberately choose the visual language that best communicates each individual devotional.
+
+Allow:
+
+* intimate interiors
+* landscapes
+* symbolic objects
+* architecture
+* abstract imagery
+* darkness and light
+* minimal compositions
+* human-scale moments
+* atmospheric scenes
+* conceptual imagery
+* still life
+* restrained Christian symbolism
+
+The collection should feel like it has one premium creative standard without every image looking the same.
+
+STYLE TARGET
+
+Aim for:
+
+premium editorial Christian design
+
+rather than:
+
+social-media motivational quote template
+
+The image should feel as though a talented designer, photographer and Christian art director collaborated on it.
+
+Prioritise:
+
+* restraint
+* sophistication
+* emotional resonance
+* visual storytelling
+* beautiful typography
+* excellent hierarchy
+* cinematic lighting where appropriate
+* natural depth
+* strong composition
+* readability on mobile
+* generous negative space
+* meaningful imagery
+
+Avoid:
+
+* clutter
+* excessive decorative flourishes
+* cheap inspirational-poster aesthetics
+* excessive text effects
+* unnecessary borders
+* random ornaments
+* stock-photo appearance
+* repetitive layouts
+* over-saturated colours
+* forced Christian symbolism
+
+BRANDING
+
+Do not ask GPT Image 2 to generate:
+
+* Emmaus logo
+* ICC logo
+* "Shared from Emmaus"
+* church name
+* signatures
+* attribution
+
+Continue applying the existing Emmaus attribution/footer after the image has been generated.
+
+Do not change the current attribution system during this task.
+
+A/B TEST
+
+Keep the current comparison interface.
+
+For each test quote generate:
+
+LEFT:
+Existing Method
+
+RIGHT:
+New Method using:
+
+GPT-5.6 Sol reasoning
+→ concise prompt
+→ GPT Image 2
+→ quality high
+→ 1024×1024
+
+Do not automatically save either image.
+
+Let the admin compare them first.
+
+TEST QUOTE
+
+Use this exact text for the first test:
+
+There will be moments when you don't understand everything.
+
+Questions will arise.
+
+Difficulties will come.
+
+Yet faith continues to say,
+
+"I trust Jesus."
+
+Not because every question has been answered.
+
+But because He has proven Himself faithful.
+
+EXPECTED BEHAVIOUR
+
+The New Method should first interpret the meaning of this quote.
+
+It should not automatically choose a sunset, Cross, path or lantern.
+
+It should decide what visual metaphor best communicates:
+
+trusting Jesus even when answers are incomplete.
+
+The phrase:
+
+"I trust Jesus."
+
+is likely the emotional centre and should probably receive strong visual emphasis, but allow the reasoning model to make the final determination.
+
+DIAGNOSTIC INFORMATION
+
+For testing, add a collapsible admin-only section underneath the New Method result called:
+
+Generation Details
+
+Show:
+
+Reasoning Model:
+GPT-5.6 Sol
+
+Image Model:
+gpt-image-2
+
+Image Quality:
+high
+
+Image Size:
+1024x1024
+
+Then show:
+
+Emotional Centre
+
+Visual Metaphor
+
+Composition
+
+Hero Text
+
+Mood
+
+Avoid
+
+Final Image Prompt
+
+This information is for admin testing only.
+
+Never expose it to normal Emmaus users.
+
+REFERENCE IMAGE SUPPORT — PREPARE ONLY
+
+Prepare the New Method architecture so that in a later task we can provide a small collection of approved Emmaus images as visual quality references.
+
+Do NOT implement reference-image matching yet unless the existing OpenAI integration makes this trivial and completely isolated.
+
+We first want to determine how close the reasoning + GPT Image 2 high-quality pipeline gets on its own.
+
+SAFETY
+
+Do not:
+
+* alter existing generated images
+* delete the Existing Method
+* change published devotional content
+* change Content Studio fields
+* change user-facing Daily Rhythm
+* change authentication
+* change database content unrelated to image generation
+* change attribution
+* make the New Method production default
+
+This remains an A/B experiment.
+
+AFTER IMPLEMENTATION
+
+Report exactly:
+
+1. Files changed.
+2. Reasoning model actually used.
+3. Image model actually used.
+4. Image API endpoint used.
+5. Size parameter actually sent.
+6. Quality parameter actually sent.
+7. Structured reasoning result for the test quote.
+8. Exact final prompt sent to GPT Image 2.
+9. Whether any fallback model was used.
+10. Any API limitations encountered.
+
+Do not make additional improvements after completing this test.
+
+We want to see the resulting image before deciding what to change next.

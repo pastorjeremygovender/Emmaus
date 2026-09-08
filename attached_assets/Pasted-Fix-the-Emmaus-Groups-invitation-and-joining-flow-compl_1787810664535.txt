@@ -1,0 +1,202 @@
+Fix the Emmaus Groups invitation and joining flow completely.
+
+CURRENT PROBLEMS
+
+1. WhatsApp Group invitations contain a temporary Replit development URL such as:
+   https://[temporary-name].janeway.replit.dev/join-room/[group-id]
+
+This opens a Replit “Run this app to see the results here” page and prevents the recipient from joining.
+
+2. On Today’s Steps, tapping “Add a Group” goes directly to “Create a Group.” Users are not given an option to join an existing Group.
+
+3. A person receiving an invitation needs a clear login or sign-up path before joining, without losing the invitation.
+
+REQUIRED CHANGES
+
+1. USE THE LIVE EMMAUS DOMAIN
+
+All Group invitations must use the live production domain:
+
+https://emmaus.co.za
+
+The invitation URL must never use:
+
+- janeway.replit.dev
+- replit.dev
+- repl.co
+- localhost
+- a dynamically detected development hostname
+
+Generate invitations in this format:
+
+https://emmaus.co.za/groups/join/[secure-invite-token]
+
+Use a secure invitation token rather than exposing only the Group database ID.
+
+The WhatsApp message should be:
+
+You’ve been invited to join [Group Name].
+
+Tap the link below to join the Group:
+[production invitation URL]
+
+Access code: [access code]
+
+The URL must be tappable in WhatsApp and work whether Emmaus is opened in Chrome or as the installed PWA.
+
+2. CREATE A GROUP ENTRY SCREEN
+
+Change the “Add a Group” button on Today’s Steps.
+
+It must open a new screen titled:
+
+Groups
+
+Display two clear options:
+
+Join a Group
+“Enter an invitation code or open a Group invitation.”
+
+Create a Group
+“Start a Group for family, friends, discipleship, or church.”
+
+The “Join a Group” option must be first and visually prominent.
+
+Do not take users directly to “Create a Group.”
+
+3. JOIN A GROUP SCREEN
+
+When “Join a Group” is selected, open a screen containing:
+
+Title:
+Join a Group
+
+Instruction:
+Enter the access code from your invitation.
+
+Field:
+Access Code
+
+Primary button:
+Find Group
+
+Secondary option:
+Paste Invitation Link
+
+After a valid code or link is submitted, display:
+
+- Group name
+- Group type
+- Group description, if available
+- Group leader’s name
+- Join Group button
+
+Do not add the user until they tap “Join Group.”
+
+After joining successfully:
+
+- Add the user as a Group member only once.
+- Prevent duplicate memberships.
+- Show a confirmation message.
+- Open the Group directly.
+- Display the Group under “My Groups” on Today’s Steps.
+
+For an invalid, expired, revoked, or already-used invitation, show a clear helpful message. Do not display a blank page or generic server error.
+
+4. INVITATION DEEP-LINK FLOW
+
+When a recipient taps the WhatsApp invitation:
+
+If already signed in:
+
+- Open the Group invitation preview.
+- Show the Group details.
+- Show the “Join Group” button.
+- After joining, open that Group.
+
+If not signed in:
+
+- Open an Emmaus invitation landing page showing the Group name and:
+  “You’ve been invited to join this Emmaus Group.”
+- Show:
+  “Log In to Join”
+  “Create an Account to Join”
+- Preserve the complete invitation token through login, registration, email verification, and app reopening.
+- After authentication is completed, return the person automatically to the original invitation preview.
+- Do not send them to Today’s Steps and lose the invitation.
+
+If the person already belongs to the Group:
+
+- Do not create another membership.
+- Display “You are already a member of this Group.”
+- Provide an “Open Group” button.
+
+5. ROUTING AND PWA SUPPORT
+
+Ensure "/groups/join/:token" is a valid client-side and server-side route.
+
+Directly opening or refreshing this route must not cause:
+
+- a 404 page
+- a blank screen
+- the Replit “Run this app” page
+- a redirect that loses the token
+
+Configure production routing so this deep link loads the Emmaus application correctly.
+
+If Emmaus is installed as a PWA, the production URL should open in the installed app when supported. Otherwise, it must open the same working page in the browser.
+
+Keep backward compatibility for existing "/join-room/:id" invitation links where safely possible. Redirect them into the new Group joining flow, but generate only the new production URLs from now on.
+
+6. TERMINOLOGY
+
+Use “Group” throughout the user interface and invitation messages.
+
+Do not show the old term “Room” to users.
+
+Internal legacy route or database names may remain temporarily if changing them would risk existing data, but user-facing wording must always say “Group.”
+
+7. PRESERVE EXISTING GROUPS
+
+Do not delete or reset:
+
+- existing Groups
+- Group memberships
+- access codes
+- selected Walks or Journeys
+- messages
+- meeting information
+- leader permissions
+
+Make the smallest safe changes required to repair invitations and joining.
+
+8. TEST BEFORE MARKING COMPLETE
+
+Test all of these:
+
+A. Tap “Add a Group” and confirm both “Join a Group” and “Create a Group” appear.
+
+B. Join using a valid access code.
+
+C. Join by pasting an invitation link.
+
+D. Share an invitation through WhatsApp and confirm the link begins with:
+https://emmaus.co.za/groups/join/
+
+E. Open the link while logged in.
+
+F. Open the link while logged out, log in, and confirm the invitation resumes automatically.
+
+G. Create a new account from the invitation, verify the email, and confirm the invitation resumes automatically.
+
+H. Refresh the invitation page and confirm it still loads.
+
+I. Open the link from the installed Emmaus PWA.
+
+J. Confirm an existing member is not added twice.
+
+K. Confirm invalid and expired invitations show helpful messages.
+
+L. Confirm newly joined Groups appear under “My Groups.”
+
+Do not report this as fixed merely because the route or screen was created. Complete and verify the full WhatsApp-link-to-joined-Group journey on the published production version.

@@ -125,7 +125,8 @@ describe('DevotionalDay — completion card next-entry CTA visibility', () => {
     });
 
     // Return link is rendered as a secondary text link (not the primary button)
-    expect(screen.getByText(/back to next steps/i)).toBeInTheDocument();
+    // (no ?source= in tests → resolveReturn falls back to 'Back to Discover')
+    expect(screen.getByText(/back to discover/i)).toBeInTheDocument();
   });
 
   it('hides the CTA and shows only the return button when the next entry is Draft', async () => {
@@ -145,7 +146,7 @@ describe('DevotionalDay — completion card next-entry CTA visibility', () => {
     });
 
     // Only the primary return button
-    expect(screen.getByRole('button', { name: /back to next steps/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^back to discover$/i })).toBeInTheDocument();
   });
 
   it('hides the CTA and shows only the return button when there is no next entry', async () => {
@@ -163,6 +164,6 @@ describe('DevotionalDay — completion card next-entry CTA visibility', () => {
       expect(screen.queryByRole('button', { name: /continue/i })).not.toBeInTheDocument();
     });
 
-    expect(screen.getByRole('button', { name: /back to next steps/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^back to discover$/i })).toBeInTheDocument();
   });
 });

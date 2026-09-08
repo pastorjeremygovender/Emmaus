@@ -8,9 +8,10 @@
  *   - Book Introductions (list + editor)
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getApiUrl } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { BIBLE_BOOKS } from '@/lib/bible-data';
 import {
   TrendingUp, Sparkles, BookOpen, Plus, Edit2, Trash2,
   Loader2, ChevronDown, ChevronUp, Check, X, AlertCircle,
@@ -19,6 +20,7 @@ import {
 import { Button } from '@/components/ui/button';
 import BibleProgressDashboard from './BibleProgressDashboard';
 import BibleContentGenerator from './BibleContentGenerator';
+import IllustrationPicker from './IllustrationPicker';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,8 +47,6 @@ type BookIntro = {
   status: 'Draft' | 'In Review' | 'Published' | 'Archived';
   updated_at: string;
 };
-
-const BOOK_IDS = ['luke', 'acts', 'romans', '1corinthians', '2corinthians', 'psalms'];
 
 const STATUS_COLOURS: Record<string, string> = {
   Draft:       'bg-gray-100 text-gray-600',
@@ -131,6 +131,10 @@ function BookIntroEditor({
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between rounded-xl border border-teal-100 bg-teal-50/60 px-3 py-2.5">
+        <div><p className="text-xs font-semibold text-teal-800">Book illustration</p><p className="text-[11px] text-teal-700/70">Suggest an approved visual for this Bible Study content.</p></div>
+        <IllustrationPicker contentType="bible-study" contentId={form.book_id} compact />
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-[12px] font-medium text-gray-600 mb-1">Book ID</label>
@@ -140,7 +144,7 @@ function BookIntroEditor({
             className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/30"
           >
             <option value="">Select book…</option>
-            {BOOK_IDS.map(id => <option key={id} value={id}>{id}</option>)}
+            {BIBLE_BOOKS.map(book => <option key={book.id} value={book.id}>{book.name}</option>)}
           </select>
         </div>
         <div>
@@ -197,8 +201,6 @@ function BookIntrosList() {
   const [error, setError] = useState<string | null>(null);
 
   const headers = {
-    'x-user-id': user?.id ?? '',
-    'x-user-role': (user as { role?: string })?.role ?? '',
     'Content-Type': 'application/json',
   };
 
@@ -212,7 +214,7 @@ function BookIntrosList() {
     }
   }
 
-  useState(() => { load(); });
+  useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function save(data: Partial<BookIntro>) {
     setSaving(true);

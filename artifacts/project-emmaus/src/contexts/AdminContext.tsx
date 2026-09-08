@@ -2,13 +2,9 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import {
   Sermon,
   PrayerRequest,
-  AdminUser,
   ChurchSettings,
-  DEMO_SERMON_RECORD,
-  DEMO_PRAYER_REQUESTS,
-  DEMO_ADMIN_USERS,
-  DEMO_CHURCH_SETTINGS,
-} from '../lib/admin-demo-data';
+  DEFAULT_CHURCH_SETTINGS,
+} from '../lib/admin-types';
 import {
   listServerSermons,
   saveServerSermon,
@@ -17,15 +13,17 @@ import {
   type AdminSermonRecord,
 } from '../lib/sermon-generator-api';
 import { useAuth } from './AuthContext';
+import { accountStorageKey } from '@/lib/account-storage';
 
 type AdminContextType = {
   sermons: Sermon[];
-  addSermon: (sermon: Sermon) => void;
+  /** skipServerPersist: set true when the sermon is already saved in the canonical DB
+   *  (e.g. generator-created) to avoid writing a redundant JSON shadow record. */
+  addSermon: (sermon: Sermon, opts?: { skipServerPersist?: boolean }) => void;
   updateSermon: (sermon: Sermon) => void;
   removeSermon: (id: string) => void;
   prayerRequests: PrayerRequest[];
   updatePrayerRequest: (req: PrayerRequest) => void;
-  adminUsers: AdminUser[];
   settings: ChurchSettings;
   updateSettings: (s: ChurchSettings) => void;
 };
@@ -74,32 +72,76 @@ function mergeSermons(local: Sermon[], server: AdminSermonRecord[]): Sermon[] {
   );
 }
 
+const KNOWN_FIXTURE_SERMONS = new Map([
+  ['sermon-john-3', 'Born Again: The Night Nicodemus Met Jesus'],
+  ['sermon-2-samuel-9', "God's Kindness Restores the Broken"],
+]);
+const KNOWN_FIXTURE_PRAYERS = new Map([
+  ['prayer-1', 'demo-user-1'],
+  ['prayer-2', 'demo-user-2'],
+  ['prayer-3', 'demo-user-3'],
+]);
+
+function removeKnownSermonFixtures(sermons: Sermon[]): Sermon[] {
+  return sermons.filter((sermon) => {
+    const fixtureTitle = KNOWN_FIXTURE_SERMONS.get(sermon.id);
+    return !(
+      fixtureTitle === sermon.title &&
+      sermon.youtubeUrl.includes('PLACEHOLDER_VIDEO_ID')
+    );
+  });
+}
+
+function removeKnownPrayerFixtures(requests: PrayerRequest[]): PrayerRequest[] {
+  return requests.filter(
+    (request) => KNOWN_FIXTURE_PRAYERS.get(request.id) !== request.userId,
+  );
+}
+
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function AdminProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [sermons, setSermons] = useState<Sermon[]>([]);
   const [prayerRequests, setPrayerRequests] = useState<PrayerRequest[]>([]);
-  const [adminUsers] = useState<AdminUser[]>(DEMO_ADMIN_USERS);
-  const [settings, setSettings] = useState<ChurchSettings>(DEMO_CHURCH_SETTINGS);
+  const [settings, setSettings] = useState<ChurchSettings>(DEFAULT_CHURCH_SETTINGS);
+  const [loadedSubject, setLoadedSubject] = useState<string | null>(null);
 
   // Build auth headers from current user — used for API calls
   const authHeaders = user
     ? { userId: user.id, userRole: user.role }
     : null;
+  const storageKey = useCallback(
+    (baseKey: string) => user?.id ? accountStorageKey(baseKey, user.id) : null,
+    [user?.id],
+  );
 
-  // ── Effect 1: load from localStorage immediately on mount (synchronous) ──────
-  // Runs before auth hydrates — gives the UI data instantly from the local cache.
+  // Load only the current verified admin's owned browser cache.
   useEffect(() => {
-    const s = localStorage.getItem('emmaus_admin_sermons');
-    setSermons(s ? JSON.parse(s) : [DEMO_SERMON_RECORD]);
+    const sermonKey = storageKey('emmaus_admin_sermons');
+    const prayerKey = storageKey('emmaus_admin_prayers');
+    const settingsKey = storageKey('emmaus_admin_settings');
+    if (!sermonKey || !prayerKey || !settingsKey) {
+      setSermons([]);
+      setPrayerRequests([]);
+      setSettings(DEFAULT_CHURCH_SETTINGS);
+      setLoadedSubject(null);
+      return;
+    }
+    const s = localStorage.getItem(sermonKey);
+    const storedSermons = removeKnownSermonFixtures(s ? JSON.parse(s) : []);
+    setSermons(storedSermons);
+    if (s) localStorage.setItem(sermonKey, JSON.stringify(storedSermons));
 
-    const p = localStorage.getItem('emmaus_admin_prayers');
-    setPrayerRequests(p ? JSON.parse(p) : DEMO_PRAYER_REQUESTS);
+    const p = localStorage.getItem(prayerKey);
+    const storedPrayers = removeKnownPrayerFixtures(p ? JSON.parse(p) : []);
+    setPrayerRequests(storedPrayers);
+    if (p) localStorage.setItem(prayerKey, JSON.stringify(storedPrayers));
 
-    const cfg = localStorage.getItem('emmaus_admin_settings');
-    if (cfg) setSettings(JSON.parse(cfg));
-  }, []);
+    const cfg = localStorage.getItem(settingsKey);
+    setSettings(cfg ? JSON.parse(cfg) : DEFAULT_CHURCH_SETTINGS);
+    setLoadedSubject(user?.id ?? null);
+  }, [storageKey, user?.id]);
 
   // ── Effect 2: reconcile with server once authenticated identity is known ──────
   // Runs whenever the userId changes (including the initial auth-hydration from
@@ -107,46 +149,58 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   // any server-persisted generated draft that isn't in localStorage is merged in.
   useEffect(() => {
     if (!user?.id) return;
+    let cancelled = false;
+    const subject = user.id;
     const auth = { userId: user.id, userRole: user.role };
     listServerSermons(auth).then(serverSermons => {
-      if (serverSermons.length === 0) return;
+      if (cancelled || serverSermons.length === 0) return;
       setSermons(prev => {
         const merged = mergeSermons(prev, serverSermons);
-        localStorage.setItem('emmaus_admin_sermons', JSON.stringify(merged));
+        localStorage.setItem(
+          accountStorageKey('emmaus_admin_sermons', subject),
+          JSON.stringify(merged),
+        );
         return merged;
       });
     }).catch(() => {
       // Non-fatal — fall back to localStorage-only when server is unreachable
     });
-  }, [user?.id]); // re-runs when auth hydrates (null → userId) or user switches
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.role]);
 
-  const addSermon = useCallback((sermon: Sermon) => {
+  const addSermon = useCallback((sermon: Sermon, opts?: { skipServerPersist?: boolean }) => {
     setSermons(prev => {
       const next = [...prev, sermon];
-      localStorage.setItem('emmaus_admin_sermons', JSON.stringify(next));
+      const key = storageKey('emmaus_admin_sermons');
+      if (key) localStorage.setItem(key, JSON.stringify(next));
       return next;
     });
-    // Best-effort server persist (non-blocking)
-    if (authHeaders) {
+    // Best-effort server persist (non-blocking).
+    // Skip when the sermon is already in the canonical DB (e.g. generator-created)
+    // to avoid writing a redundant JSON shadow record.
+    if (authHeaders && !opts?.skipServerPersist) {
       const record: AdminSermonRecord = {
         ...sermon,
         createdAt: sermon.updatedAt,
       };
       saveServerSermon(record, authHeaders).catch(() => {});
     }
-  }, [authHeaders]);
+  }, [authHeaders, storageKey]);
 
   const updateSermon = useCallback((sermon: Sermon) => {
     setSermons(prev => {
       const next = prev.map(s => (s.id === sermon.id ? sermon : s));
-      localStorage.setItem('emmaus_admin_sermons', JSON.stringify(next));
+      const key = storageKey('emmaus_admin_sermons');
+      if (key) localStorage.setItem(key, JSON.stringify(next));
       return next;
     });
     // Best-effort server sync (non-blocking)
     if (authHeaders) {
       patchServerSermon(sermon.id, { ...sermon }, authHeaders).catch(() => {});
     }
-  }, [authHeaders]);
+  }, [authHeaders, storageKey]);
 
   /**
    * Remove a sermon from local state (and localStorage).
@@ -156,25 +210,39 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   const removeSermon = useCallback((id: string) => {
     setSermons(prev => {
       const next = prev.filter(s => s.id !== id);
-      localStorage.setItem('emmaus_admin_sermons', JSON.stringify(next));
+      const key = storageKey('emmaus_admin_sermons');
+      if (key) localStorage.setItem(key, JSON.stringify(next));
       return next;
     });
-  }, []);
+  }, [storageKey]);
 
   const updatePrayerRequest = (req: PrayerRequest) => {
     const next = prayerRequests.map(p => (p.id === req.id ? req : p));
     setPrayerRequests(next);
-    localStorage.setItem('emmaus_admin_prayers', JSON.stringify(next));
+    const key = storageKey('emmaus_admin_prayers');
+    if (key) localStorage.setItem(key, JSON.stringify(next));
   };
 
   const updateSettings = (s: ChurchSettings) => {
     setSettings(s);
-    localStorage.setItem('emmaus_admin_settings', JSON.stringify(s));
+    const key = storageKey('emmaus_admin_settings');
+    if (key) localStorage.setItem(key, JSON.stringify(s));
   };
+
+  const ownsVisibleState = Boolean(user?.id && loadedSubject === user.id);
 
   return (
     <AdminContext.Provider
-      value={{ sermons, addSermon, updateSermon, removeSermon, prayerRequests, updatePrayerRequest, adminUsers, settings, updateSettings }}
+      value={{
+        sermons: ownsVisibleState ? sermons : [],
+        addSermon,
+        updateSermon,
+        removeSermon,
+        prayerRequests: ownsVisibleState ? prayerRequests : [],
+        updatePrayerRequest,
+        settings: ownsVisibleState ? settings : DEFAULT_CHURCH_SETTINGS,
+        updateSettings,
+      }}
     >
       {children}
     </AdminContext.Provider>

@@ -176,3 +176,33 @@ export function searchBibleVerses(query: string, limit = 5): BiblePassage[] {
     return [];
   }
 }
+
+/**
+ * Read an exact passage from the same published BSB files used by the Bible
+ * route. This is deliberately separate from keyword search so a direct
+ * "Read John 3:16" request can never receive a merely related verse.
+ */
+export function readBiblePassage(
+  bookId: string,
+  chapter: number,
+  verseStart?: number,
+  verseEnd?: number,
+): BiblePassage[] {
+  try {
+    const verses = buildIndex().filter((verse) =>
+      verse.bookId === bookId &&
+      verse.chapter === chapter &&
+      (verseStart == null || verse.verse >= verseStart) &&
+      (verseEnd == null || verse.verse <= verseEnd),
+    );
+    return verses.map(({ reference, bookId: id, chapter: chapterNumber, verse, text }) => ({
+      reference,
+      bookId: id,
+      chapter: chapterNumber,
+      verse,
+      text,
+    }));
+  } catch {
+    return [];
+  }
+}

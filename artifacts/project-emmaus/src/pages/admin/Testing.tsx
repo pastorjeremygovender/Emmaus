@@ -18,6 +18,7 @@ import {
   resetJourney,
   resetEverything,
   clearLocalProgressCache,
+  clearDailyOpenMarkers,
   type ResetContentList,
 } from '@/lib/admin-reset-api';
 import {
@@ -140,6 +141,19 @@ export default function Testing() {
   const [rhythmState, setRhythmState] = useState<ActionState>('idle');
   const [rhythmError, setRhythmError] = useState<string | undefined>();
   const [rhythmConfirm, setRhythmConfirm] = useState(false);
+  const [dailyOpenState, setDailyOpenState] = useState<ActionState>('idle');
+  const [dailyOpenError, setDailyOpenError] = useState<string | undefined>();
+
+  const handleDailyOpenReset = () => {
+    try {
+      clearDailyOpenMarkers();
+      setDailyOpenError(undefined);
+      setDailyOpenState('done');
+    } catch (err) {
+      setDailyOpenError(err instanceof Error ? err.message : 'Reset failed');
+      setDailyOpenState('error');
+    }
+  };
 
   const handleRhythmReset = async () => {
     setRhythmConfirm(false);
@@ -147,7 +161,7 @@ export default function Testing() {
     setRhythmError(undefined);
     try {
       await resetDailyRhythm(auth);
-      clearLocalProgressCache();
+      clearLocalProgressCache(auth.userId);
       setRhythmState('done');
     } catch (err) {
       setRhythmError(err instanceof Error ? err.message : 'Reset failed');
@@ -173,7 +187,7 @@ export default function Testing() {
     setJourneyErrors(prev => { const n = { ...prev }; delete n[id]; return n; });
     try {
       await resetJourney(id, kind, auth);
-      clearLocalProgressCache();
+      clearLocalProgressCache(auth.userId);
       setJourneyState(id, 'done');
     } catch (err) {
       setJourneyError(id, err instanceof Error ? err.message : 'Reset failed');
@@ -193,7 +207,7 @@ export default function Testing() {
     setEverythingError(undefined);
     try {
       await resetEverything(auth);
-      clearLocalProgressCache();
+      clearLocalProgressCache(auth.userId);
       // Also reset section states so the page reflects the clean slate
       setRhythmState('idle');
       setJourneyStates({});
@@ -315,6 +329,26 @@ export default function Testing() {
                 </span>
               </ResetBtn>
               <StatusPill state={rhythmState} errorMsg={rhythmError} />
+            </div>
+          </SectionCard>
+
+          {/* ── Section 1b: Daily open marker ───────────────────────────────── */}
+          <SectionCard>
+            <SectionTitle
+              label="Prepare Next Member Launch"
+              sub="Clears automatic Daily Rhythm opening markers and the splash-session flag in this browser. Use this before switching to a member account to replay today's first-open route. Progress and completion history are not changed."
+            />
+            <div className="flex items-center gap-4 pt-1">
+              <ResetBtn
+                onClick={handleDailyOpenReset}
+                disabled={dailyOpenState === 'loading'}
+              >
+                <span className="flex items-center gap-1.5">
+                  <RotateCcw size={13} />
+                  Prepare First Open Test
+                </span>
+              </ResetBtn>
+              <StatusPill state={dailyOpenState} errorMsg={dailyOpenError} />
             </div>
           </SectionCard>
 

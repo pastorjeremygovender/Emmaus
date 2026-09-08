@@ -1,0 +1,144 @@
+Ticket #004 — Restore Ask Emmaus as the flagship discipleship guide
+
+We are working on branch:
+
+launch-13-august
+
+Objective:
+
+Restore and strengthen the existing Ask Emmaus behaviour that previously referenced ICC sermons with wording such as:
+
+“Pastor Jeremy preached about this…”
+
+Ask Emmaus must not behave like a generic Christian chatbot. It must guide a person using Scripture, ICC teaching and existing Emmaus content.
+
+IMPORTANT:
+
+- First inspect the existing Ask Emmaus implementation, sermon retrieval/indexing, ICC memory/context, recommendation logic and relevant database tables.
+- Recover and reuse existing working architecture wherever possible.
+- Do not build a second competing Ask Emmaus system.
+- Do not redesign the Ask Emmaus interface.
+- Do not modify unrelated navigation or content flows.
+- Fix only what is necessary for the pilot-quality Ask Emmaus experience described below.
+
+PILOT RESPONSE REQUIREMENTS
+
+For a suitable pastoral question such as:
+
+“I have been struggling with anger.”
+
+Ask Emmaus should produce a response with this hierarchy:
+
+1. A warm, empathetic opening.
+2. Relevant Scripture as the primary foundation.
+3. Relevant ICC teaching where available:
+   - Use wording such as:
+     “Pastor Jeremy preached about this in…”
+   - Include sermon title.
+   - Include a real timestamped YouTube link when timestamp data exists.
+   - Never invent a sermon, quotation, timestamp or URL.
+4. Recommend relevant existing Emmaus content where available:
+   - one Walk or Journey;
+   - one Bible Study or Bible passage with study content;
+   - one Daily Devotional or Psalm entry;
+   - one Sermon Companion if relevant.
+5. Include a short prayer.
+6. End with one clear “Your next step” section.
+7. If the user belongs to a Room, gently suggest sharing a prayer request with the Room. Do not require it.
+
+CONTENT RULES
+
+- Scripture is primary.
+- ICC sermons and approved ICC content are secondary.
+- General AI knowledge may connect the response but must not replace Scripture or fabricate ICC teaching.
+- Use only published member-visible Emmaus content for recommendations.
+- Never expose drafts, admin-only content or unpublished resources.
+- Never claim Pastor Jeremy preached on something unless a matching indexed sermon record exists.
+- Never fabricate timestamps.
+- If no relevant ICC sermon is found, omit the sermon section naturally rather than apologising or inventing one.
+- Recommendations must link to the correct existing member route.
+- Limit recommendations to the most relevant item of each type. Do not overwhelm the user.
+- Preserve the Emmaus voice: Christ-centred, gentle, pastoral and practical.
+
+INVESTIGATION REQUIREMENTS
+
+Before editing, identify and report internally:
+
+1. Where the previous “Pastor Jeremy preached…” behaviour was implemented.
+2. Whether sermon data still exists in the database, JSON files, YouTube archive or retrieval index.
+3. Why that behaviour stopped appearing.
+4. Whether Ask Emmaus currently receives:
+   - sermon context;
+   - ICC memory;
+   - Walks/Journeys;
+   - Bible Studies;
+   - Daily Devotionals;
+   - Sermon Companions;
+   - Room membership.
+5. Which existing APIs and components can be reused.
+
+IMPLEMENTATION REQUIREMENTS
+
+- Restore sermon retrieval in the main Ask Emmaus response pipeline.
+- Load the approved ICC/Emmaus memory before generating the answer.
+- Retrieve relevant published resources from existing data sources.
+- Return structured recommendation data rather than relying only on prose.
+- Render recommendations as existing Emmaus content cards or safe internal links where components already exist.
+- Preserve conversation history.
+- Preserve the recently added next-step and pastoral handoff behaviour.
+- Do not hard-code sample sermon titles or content.
+- Do not seed fake data merely to make tests pass.
+
+ACCEPTANCE TESTS
+
+Test with a clean authenticated account using at least these questions:
+
+1. “I have been struggling with anger.”
+2. “I am afraid about the future.”
+3. “How can I pray when I don’t know what to say?”
+4. “Why should I forgive someone who hurt me?”
+
+For each test verify:
+
+- response is not generic;
+- Scripture appears;
+- relevant ICC sermon appears when a genuine match exists;
+- sermon title and timestamp link are real;
+- relevant published Emmaus content is recommended where available;
+- prayer appears;
+- “Your next step” appears;
+- no draft or admin content is exposed;
+- no fabricated sermon or timestamp appears;
+- all internal links open correctly;
+- existing Ask Emmaus history and follow-up questions still work.
+
+REGRESSION TESTS
+
+Confirm that this change does not break:
+
+- Today’s Steps;
+- Daily Rhythm;
+- Daily Devotionals;
+- Walks and Journeys;
+- Bible reader and Bible Study panel;
+- Sermon Companions;
+- Rooms;
+- existing Ask Emmaus conversation history.
+
+DELIVERY
+
+- Fix only this ticket.
+- Run automated and API tests.
+- Perform an end-to-end authenticated test.
+- Commit the smallest necessary changes.
+- Update LAUNCH_BOARD.md.
+- Report:
+  1. root cause;
+  2. existing functionality recovered;
+  3. files changed;
+  4. data sources used;
+  5. test questions and results;
+  6. any remaining limitation before the two-person pilot.
+
+Do not proceed automatically to another ticket.
+Stop after Ticket #004 is complete.

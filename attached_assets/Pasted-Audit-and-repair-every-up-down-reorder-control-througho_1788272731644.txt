@@ -1,0 +1,294 @@
+Audit and repair every up/down reorder control throughout Emmaus Content Studio.
+
+The currently observed failure is on:
+
+Content Studio → Sermons
+
+The up/down arrows are visible, but clicking them does not reorder the sermons.
+
+Do not assume Sermons is the only affected area.
+
+SCOPE
+
+Inspect every Content Studio section and every nested editor for visible or intended reorder controls, including:
+
+* Daily Rhythm
+* Daily Devotionals
+* Walks
+* Steps within a Walk
+* Journeys
+* Walks/items within a Journey
+* Groupings
+* Items within a Grouping
+* Sermons
+* Sermon Companion days/steps
+* Media Studio
+* Illustrations
+* Any archive, review, draft or published list that exposes up/down arrows
+* Any shared list/reorder component used by Content Studio
+
+First create a complete inventory containing:
+
+* Page/component
+* Resource type
+* Reorder control present or absent
+* Intended ordering field
+* Client handler
+* Mutation/API route
+* Persistence destination
+* Whether the saved order affects the user-facing app
+* Current working/broken status
+
+REQUIRED RULE
+
+Every visible reorder control must work completely.
+
+A control must not remain visible if the resource has no legitimate manual ordering behaviour.
+
+For each Content Studio list:
+
+* If manual ordering is supported, make the controls functional and persistent.
+* If order is intentionally canonical, chronological or otherwise immutable, remove the misleading arrows and clearly retain the authoritative ordering rule.
+* Do not silently make canonical content manually reorderable.
+
+ORDERING RULES BY CONTENT TYPE
+
+Daily Rhythm:
+
+* Preserve canonical Day numbers.
+* Do not allow an arrow to detach a day from its canonical Day number.
+* If the arrows are intended to change canonical sequence, use the existing safe reorder contract and update the complete sequence consistently.
+* If canonical Day order is intentionally immutable, remove the arrows.
+* Never unlock future days or change user progress.
+
+Daily Devotionals:
+
+* Preserve the existing canonical/date-based rule where applicable.
+* Only allow manual reorder if the current data model explicitly supports it.
+
+Walks:
+
+* Allow safe ordering of Walk cards where an existing manual-order field exists.
+* Steps inside a Walk must persist their intended sequence.
+* Reordering must not mark a Step or Walk complete.
+
+Journeys:
+
+* Preserve Journey ordering.
+* Preserve the intended order of Walks/items inside each Journey.
+* Reordering must not change parent-child relationships.
+
+Groupings:
+
+* Preserve Grouping order and the order of assigned content inside a Grouping.
+* Reordering must not create, delete or duplicate assignments.
+
+Sermons:
+
+* Repair the observed up/down controls.
+* Reordering a sermon must persist after refresh, sign-out/sign-in and workflow restart.
+* Preserve `This Week`, publication status, transcript, companion content, indexing status and sermon identity.
+* Confirm whether saved manual order controls the user-facing sermon list.
+* If `This Week` has an independent priority rule, document and preserve it rather than corrupting manual order.
+
+Sermon Companions:
+
+* Preserve the correct day/step sequence.
+* Do not detach a companion from its sermon.
+
+Media Studio and Illustrations:
+
+* Verify every visible reorder control.
+* Preserve asset identity, URLs, captions, ownership and content links.
+
+FUNCTIONAL BEHAVIOUR
+
+For a manually ordered list:
+
+* Up moves the selected item exactly one valid position.
+* Down moves the selected item exactly one valid position.
+* The first item’s Up control is disabled.
+* The last item’s Down control is disabled.
+* Disabled controls are visibly and accessibly disabled.
+* Clicking once performs one move only.
+* Rapid repeated clicks cannot create duplicate order values or corrupt the sequence.
+* The interface updates immediately.
+* A failed save rolls the display back and shows a clear error.
+* The saved order survives:
+
+  * Refresh
+  * Route changes
+  * Sign-out/sign-in
+  * App/workflow restart
+* Other filters such as All, Draft, Review, Published and Archived must not corrupt the complete underlying order.
+* Reordering while viewing a filtered list must produce a deterministic full-list order.
+* Concurrent or stale updates must not generate duplicate ordering values.
+
+IMPLEMENTATION
+
+Find the shared root cause before applying individual patches.
+
+Inspect:
+
+* Button event handlers
+* Disabled-state logic
+* Event propagation
+* Form submission behaviour
+* Client mutation hooks
+* Query invalidation
+* API routes
+* Authorization
+* Ordering fields
+* Database transactions
+* Sort direction
+* Filtering and pagination
+* Optimistic updates
+* Cache keys
+* Admin integration changes that may have disconnected existing mutations
+
+Prefer repairing the existing shared reorder path rather than creating separate incompatible implementations.
+
+Do not classify or identify resources by their titles.
+
+Use stable resource IDs and authoritative resource types.
+
+SERVER ENFORCEMENT
+
+All reorder mutations must:
+
+* Require Church Administrator authorization.
+* Validate resource type and IDs.
+* Ensure both items belong to the same permitted parent/list.
+* Reject cross-church changes.
+* Reject archived/deleted resources where reordering is not allowed.
+* Update ordering atomically.
+* Prevent duplicate or missing sequence positions.
+* Return the authoritative updated order.
+
+Ordinary users and Group Leaders must not call admin reorder mutations successfully.
+
+DATA SAFETY
+
+Do not directly reorder production content during development or testing.
+
+Use test fixtures or an isolated development environment.
+
+Do not:
+
+* Create duplicate content
+* Change titles or body content
+* Publish or unpublish anything
+* Archive or delete anything
+* Change Daily Rhythm availability
+* Change user progress
+* Change Group membership
+* Change Ask Emmaus indexing eligibility
+* Modify production data
+* Perform broad schema redesign
+
+Add a migration only if the existing ordering model is demonstrably incapable of persisting a valid order. Prefer the existing ordering fields.
+
+AUDIT
+
+Use the existing admin audit system to record successful reorder operations:
+
+* Acting administrator
+* Resource type
+* Resource ID
+* Parent/list ID where applicable
+* Previous position
+* New position
+* Timestamp
+
+Do not create an audit entry for a failed or cancelled move.
+
+TESTS
+
+Add focused tests covering every Content Studio resource type that displays reorder controls.
+
+At minimum prove:
+
+1. Sermon Up and Down work.
+2. Sermon order persists after refetch.
+3. First/last boundaries are disabled.
+4. Rapid clicks do not corrupt order.
+5. Failed mutations roll back safely.
+6. Filtered-list reordering preserves deterministic full-list order.
+7. Publication status and content remain unchanged.
+8. `This Week` sermon behaviour remains correct.
+9. Walk Step order persists.
+10. Journey child order persists.
+11. Grouping child order persists.
+12. Sermon Companion order persists.
+13. Daily Rhythm canonical order remains safe.
+14. Immutable chronological lists do not show misleading arrows.
+15. Media/Illustration controls either work or are removed when ordering is unsupported.
+16. Unauthorized users receive permission denied.
+17. Cross-church and cross-parent reorder attempts are rejected.
+18. Audit entries are correct.
+19. User-facing lists reflect saved order where they are designed to do so.
+20. Existing Content Studio creation, editing, publication and bulk-import tests remain green.
+
+VALIDATION
+
+Run:
+
+* Complete reorder test suite
+* Content Studio focused tests
+* Admin permission tests
+* Daily Rhythm authority tests
+* Walk/Journey progress tests
+* Sermon and Ask Emmaus indexing tests
+* Frontend production build
+* API production build
+* Smoke tests
+* `git diff --check`
+
+Manually test every visible reorder control in Content Studio using safe development fixtures.
+
+Refresh each affected page and confirm persistence.
+
+PROTECTIONS
+
+Do not modify:
+
+* Daily Rhythm lifecycle/resume behaviour
+* Daily Rhythm content records while the integrity audit is unresolved
+* Resource classification
+* Group Leadership audio/video permissions
+* Pastoral Briefing Rules
+* Bible
+* User authentication
+* Church Register recovery
+* Production data
+* Secrets or environment variables
+* Unrelated type/test failures
+
+Before editing:
+
+* Confirm the current branch and commit.
+* Create a local safety branch at the exact current commit:
+  `safety/pre-content-reorder-fix-2026-09-01`
+* Do not switch to it.
+* Record its commit ID.
+
+Create one local commit only after all relevant checks pass.
+
+Do not publish automatically.
+
+REPORT
+
+Provide:
+
+* Complete inventory of every reorder control found
+* Root cause or causes
+* Which controls were repaired
+* Which misleading controls were removed and why
+* Ordering field and persistence path for each resource type
+* Server routes protected
+* Exact files changed
+* Tests/builds and totals
+* Confirmation that no content, publication status, progress, indexing or production data changed
+* Safety branch and commit
+* New commit ID
+* READY FOR MANUAL PUBLISH or NOT READY

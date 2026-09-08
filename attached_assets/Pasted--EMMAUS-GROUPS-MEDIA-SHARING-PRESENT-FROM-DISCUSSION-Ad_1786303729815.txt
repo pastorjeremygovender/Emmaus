@@ -1,0 +1,279 @@
+# EMMAUS GROUPS — MEDIA SHARING + PRESENT FROM DISCUSSION
+
+Add Group media sharing through the existing Group Discussion experience.
+
+Do NOT create a separate complicated media module.
+
+The goal is to make sharing feel familiar, like WhatsApp, while allowing Group Leaders to present shared material to everyone.
+
+====================================================
+WHO CAN SHARE
+====================================================
+
+ALL Group members may share content in Group Discussion.
+
+Supported initial types:
+
+- Images
+- PDFs / slide decks
+- Short videos
+- Documents
+- Voice notes
+- Links
+
+Do not require Authorized Group Leader permission just to upload/share content.
+
+====================================================
+DISCUSSION COMPOSER
+====================================================
+
+Update the Group Discussion message composer.
+
+Add an attachment button.
+
+Tapping it should offer:
+
+- Photo / Image
+- Document / Slides
+- Video
+- Voice Note
+- Link
+
+Keep this simple and mobile friendly.
+
+====================================================
+MESSAGE DISPLAY
+====================================================
+
+Shared media should appear inline in Group Discussion.
+
+Examples:
+
+IMAGE
+- thumbnail
+- filename/caption
+- tap to open
+
+PDF / SLIDES
+- document card
+- filename
+- page count if available
+- tap to preview
+
+VIDEO
+- video thumbnail/player
+- duration if available
+- tap to play
+
+VOICE NOTE
+- play/pause
+- progress bar
+- duration
+
+DOCUMENT
+- file icon
+- filename
+- file size
+- tap to open/download
+
+LINK
+- link preview where possible
+
+====================================================
+PRESENT TO GROUP
+====================================================
+
+Any shared media item should support a presentation action for an Authorized Group Leader.
+
+Example menu:
+
+Present to Group
+
+When selected:
+
+- make that media the active presented item for the Group meeting
+- all participants currently following the meeting should see the shared presentation
+- do not remove the item from Discussion
+- preserve the original message
+
+====================================================
+MEMBER PRESENTATION
+====================================================
+
+By default:
+
+All members may SHARE.
+
+Only Authorized Group Leaders / Pastors / Admins may PRESENT TO GROUP.
+
+Add an optional leader setting:
+
+Allow members to present their own shared content
+
+Default:
+
+OFF
+
+If enabled, a member may present media that they personally uploaded.
+
+They must not be able to present another person's content unless they are an authorized leader.
+
+====================================================
+PRESENTATION EXPERIENCE
+====================================================
+
+When something is being presented, show a simple presentation panel inside the active Group meeting.
+
+Examples:
+
+IMAGE
+- fit image responsively
+- zoom if useful
+
+PDF / SLIDES
+- page navigation
+- current page indicator
+- next/previous page
+- leader controls page changes for followers
+
+VIDEO
+- normal video playback
+- do NOT synchronize playback across devices yet
+- leader may open/play it for themselves
+- other members can open it from the presented panel
+
+Do NOT attempt synchronized media playback in this phase.
+
+====================================================
+PRESENTATION STATE
+====================================================
+
+Show:
+
+Presenting
+
+[ filename/title ]
+
+Presented by:
+[ name ]
+
+Leader controls:
+
+- Previous Page (PDF only)
+- Next Page (PDF only)
+- Stop Presenting
+
+Members:
+
+- View Presented Item
+- Follow Presentation
+
+====================================================
+DISCUSSION REMAINS PRIMARY STORAGE
+====================================================
+
+Shared media belongs to Group Discussion.
+
+Do not create duplicate upload locations in:
+
+- Meeting Tools
+- Group Notes
+- Prayer Requests
+- Today's Study
+
+Meeting Tools may later contain:
+
+Present Shared Media
+
+but do NOT duplicate the upload UI there.
+
+====================================================
+MEETING TOOLS
+====================================================
+
+Add ONE optional action:
+
+Present Shared Media
+
+This should open a picker of media already shared in Group Discussion.
+
+Do not upload from Meeting Tools.
+
+The actual upload/share happens through Discussion.
+
+====================================================
+STORAGE
+====================================================
+
+Use existing object/file storage.
+
+Persist:
+
+- groupId
+- messageId
+- userId
+- file type
+- filename
+- storage URL/reference
+- size
+- timestamp
+- optional caption
+
+Do not store large binary files directly in normal relational table fields.
+
+====================================================
+PERMISSIONS
+====================================================
+
+All authenticated Group members:
+- upload/share media
+- view Group media
+
+Authorized Group Leaders:
+- present any shared Group media
+- stop presentation
+
+Optional member-present setting:
+- allows member to present only their own upload
+
+Enforce presentation permissions server-side where relevant.
+
+====================================================
+SAFETY / LIMITS
+====================================================
+
+Add reasonable file-size limits.
+
+Reject unsupported or unsafe file types.
+
+Do not execute uploaded files.
+
+Use MIME/type validation server-side.
+
+====================================================
+QA
+====================================================
+
+Test with two Group members:
+
+1. Member opens Group Discussion.
+2. Member uploads an image.
+3. Both users see it.
+4. Member uploads a PDF.
+5. Both users can preview it.
+6. Member records/uploads a voice note.
+7. Both users can play it.
+8. Member uploads a short video.
+9. Both users can open/play it.
+10. Leader selects Present to Group on the PDF.
+11. Both users see the presented item.
+12. Leader changes PDF page.
+13. Follower sees the current presented page/state.
+14. Leader stops presentation.
+15. Media remains in Discussion history.
+16. Ordinary member cannot present by default.
+17. Enable "Allow members to present their own content."
+18. Member can now present their own upload.
+19. Member still cannot present another user's upload.
+
+Do not mark complete until the published Group Discussion flow works cleanly on desktop and mobile.

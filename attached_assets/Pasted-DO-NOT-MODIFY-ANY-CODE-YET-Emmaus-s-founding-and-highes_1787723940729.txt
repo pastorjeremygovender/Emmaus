@@ -1,0 +1,91 @@
+DO NOT MODIFY ANY CODE YET.
+
+Emmaus’s founding and highest-priority product rule is currently failing:
+
+An authenticated user must never have to decide “What should I do today?”
+
+Daily Rhythm — 10 Minutes with Jesus — is the mandatory guided starting point. Whenever a user opens Emmaus for the first time on a new local calendar day, if today’s Daily Rhythm is not complete, Emmaus must automatically open today’s Daily Rhythm before presenting the normal Today’s Steps experience.
+
+This has been patched numerous times. Each patch appeared successful but failed when tested with another account. I no longer want another isolated fix based on the latest test account.
+
+Perform a complete read-only architectural audit of the current first-opening and daily-opening flow.
+
+Trace every relevant path, including:
+
+1. New account registration
+2. Email verification callback
+3. First authenticated sign-in
+4. Existing-user sign-in
+5. Restoring an existing session
+6. Opening the installed PWA
+7. Refreshing an existing browser tab
+8. Opening an old saved route
+9. Returning from Admin or another Emmaus feature
+10. User with no Daily Rhythm assignment
+11. User with an incomplete Daily Rhythm
+12. User who completed Daily Rhythm today
+13. Date rollover into a new day
+14. User timezone versus server timezone
+15. Slow or failed loading of authentication, profile, assignment, or completion data
+
+Find and report:
+
+- Every file, component, hook, route guard, redirect, useEffect, initialization function, database query, local-storage value, cache, and service worker behavior involved
+- The precise current order in which auth, user profile, date, assignment, completion, and navigation are resolved
+- Every place capable of redirecting or choosing an opening screen
+- Race conditions where the home page renders before the Daily Rhythm decision is complete
+- Fail-open behavior caused by loading, timeout, missing data, query errors, or undefined values
+- Conflicting definitions of “today”
+- Whether Daily Rhythm assignment creation is reliable and idempotent
+- Whether old completion or test data can leak between users
+- Whether cached routes or PWA state can bypass the opening rule
+- Why the previous fixes worked for one account but failed for the next accounts
+
+Then propose a replacement architecture with ONE authoritative Opening Gate.
+
+The application must not render its normal authenticated routes until the Opening Gate reaches a definite decision.
+
+Required deterministic state model:
+
+AUTH_LOADING
+AUTHENTICATED
+OPENING_CONTEXT_LOADING
+DAILY_RHYTHM_REQUIRED
+DAILY_RHYTHM_COMPLETE
+OPENING_ERROR
+
+Rules:
+
+- Never interpret “still loading,” undefined, missing assignment, or query failure as Daily Rhythm complete.
+- Default safely toward establishing today’s Daily Rhythm, not bypassing it.
+- Creating or retrieving today’s assignment must be idempotent.
+- Determine “today” using the user’s local timezone and one shared date utility.
+- A new user must receive Day 1.
+- An existing user must receive the correct next Daily Rhythm day.
+- If today’s Daily Rhythm is incomplete, route directly into it.
+- If it is complete, allow Today’s Steps to open normally.
+- Do not repeatedly reopen Daily Rhythm after it has been completed that day.
+- Do not redirect away from the Daily Rhythm completion screen before the user chooses “Back to Today’s Steps” or reviews previous days.
+- No child page or later useEffect may override the Opening Gate’s decision.
+- Admin accounts must follow an explicitly documented rule rather than bypassing accidentally.
+- Preserve all other Emmaus content and functionality.
+
+Also propose:
+
+1. Database constraints needed to guarantee one Daily Rhythm assignment/completion state per user per local day
+2. A central server endpoint or function that returns the authoritative opening decision
+3. Logging that records user ID, timezone, local date, assignment, completion result, selected destination, and reason
+4. Automated tests covering every scenario above
+5. A temporary admin diagnostic screen where I can enter a user email and see exactly why that user was or was not directed into Daily Rhythm
+
+Do not implement anything yet.
+
+First return:
+- The actual current opening flow
+- The root causes
+- The files involved
+- The proposed replacement design
+- The tests that will prove it works across accounts and days
+- Any risks to existing user progress
+
+This is a foundational rebuild, not another redirect patch.

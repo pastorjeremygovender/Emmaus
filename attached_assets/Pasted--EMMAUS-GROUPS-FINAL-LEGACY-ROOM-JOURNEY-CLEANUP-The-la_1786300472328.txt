@@ -1,0 +1,308 @@
+# EMMAUS GROUPS — FINAL LEGACY ROOM / JOURNEY CLEANUP
+
+The latest published build still contains legacy Room and personal Journey behaviour.
+
+This must now be fixed across the entire user-facing Groups flow.
+
+Do NOT add new features.
+
+Do NOT redesign Groups again.
+
+This task is a cleanup of old terminology, navigation and gating logic.
+
+====================================================
+1. REMOVE "ROOM / ROOMS" FROM USER-FACING UI
+====================================================
+
+Groups has replaced Rooms.
+
+Search the entire user-facing codebase.
+
+Replace every remaining visible reference to:
+
+Room
+Rooms
+My Rooms
+Open Room
+Create Room
+Join Room
+Room Settings
+Room Members
+
+with the correct Groups terminology:
+
+Group
+Groups
+My Groups
+Open Group
+Create Group
+Join Group
+Group Settings
+Group Members
+
+IMPORTANT:
+
+Do not only change the Groups page.
+
+Check:
+
+- Discover
+- Walk pages
+- Journey pages
+- Daily Devotionals
+- Sermon Companions
+- My Journey
+- Today's Steps
+- Group invitation flows
+- Group picker sheets
+- content action menus
+- navigation labels
+
+The screenshot currently shows "My Rooms" on Discover and "Open Room" inside The Road to Emmaus.
+
+Both are wrong.
+
+====================================================
+2. DISCOVER CARD
+====================================================
+
+On Discover, change:
+
+My Rooms
+1 Room
+
+to:
+
+My Groups
+1 Group
+
+Pluralize correctly:
+
+0 Groups
+1 Group
+2 Groups
+
+Tapping this card should open My Groups.
+
+====================================================
+3. OPEN GROUP FROM CONTENT
+====================================================
+
+On Walk / Journey / Devotional pages:
+
+Replace:
+
+Open Room →
+
+with:
+
+Open Group →
+
+If the content is already linked to a Group, Open Group should open that Group.
+
+If multiple Groups contain the content, use the existing Group picker rather than assuming one.
+
+====================================================
+4. REMOVE PERSONAL DAILY RHYTHM GATING FROM GROUPS
+====================================================
+
+Critical:
+
+The Road to Emmaus page still shows:
+
+"Complete today's 10 Minutes with Jesus"
+
+and blocks access.
+
+This personal Daily Rhythm requirement must NOT apply when the user entered the content through a Group.
+
+Groups are independent of personal progression rules.
+
+If a Group assigns:
+
+The Road to Emmaus
+
+the member must be able to open and prepare that study immediately, regardless of whether they completed 10 Minutes with Jesus personally.
+
+====================================================
+5. PRESERVE PERSONAL GATING OUTSIDE GROUPS
+====================================================
+
+Do NOT globally remove the existing Daily Rhythm rule from personal discipleship if it is still intended there.
+
+The rule is:
+
+PERSONAL FLOW:
+Existing personal Daily Rhythm gating may continue.
+
+GROUP FLOW:
+Never enforce personal Daily Rhythm gating.
+
+The app must know the content was opened from a Group context.
+
+====================================================
+6. GROUP CONTEXT
+====================================================
+
+When content is opened from a Group, preserve Group context through navigation.
+
+For example:
+
+Group
+→ Today's Study
+→ The Road to Emmaus
+→ Step 3
+→ Back
+
+must return to:
+
+Group
+
+NOT:
+
+Next Steps
+Discover
+Today's Steps
+
+The Group remains the parent context.
+
+====================================================
+7. REMOVE "NEXT STEPS" BACK LABEL
+====================================================
+
+The Road to Emmaus screenshot currently shows:
+
+< Next Steps
+
+This is wrong when content was opened from a Group.
+
+Do not hardcode Back labels.
+
+When opened from Group, display:
+
+← Prayer Walk
+
+or simply:
+
+← Back
+
+and return to the Group.
+
+When opened from Discover, return to Discover.
+
+When opened from Today's Steps, return to Today's Steps.
+
+Use actual navigation origin/context.
+
+====================================================
+8. GLOBAL BACK NAVIGATION RULE
+====================================================
+
+Enforce this across Emmaus:
+
+Back returns to where the user actually came from.
+
+Examples:
+
+Discover
+→ Walk
+← Discover
+
+Group
+→ Walk
+← Group
+
+Today's Steps
+→ Walk
+← Today's Steps
+
+Journey
+→ Walk
+← Journey
+
+Do not use generic hardcoded "Next Steps" labels.
+
+====================================================
+9. GROUP CONTENT MUST NOT MODIFY PERSONAL PROGRESS
+====================================================
+
+Opening or preparing Group-assigned content must not accidentally:
+
+- force Daily Rhythm completion
+- reset personal progress
+- advance personal Daily Rhythm
+- add content to Today's Steps unless existing rules intentionally require it
+
+Group preparation and personal discipleship progress should remain logically separate.
+
+If shared progress intentionally reflects the same content completion, reuse content progress safely without applying personal gating.
+
+====================================================
+10. AUDIT LEGACY ROUTES / COMPONENTS
+====================================================
+
+Search for legacy strings and components including:
+
+"Room"
+"Rooms"
+"My Rooms"
+"Open Room"
+"Back to Next Steps"
+"Next Steps"
+"Complete today's 10 Minutes with Jesus"
+
+Identify where these are still being rendered inside Group-origin flows.
+
+Fix them at the source rather than hiding them with CSS.
+
+====================================================
+11. EXACT QA TEST
+====================================================
+
+Test this exact sequence in the PUBLISHED app:
+
+A. DISCOVER
+
+1. Open Discover.
+2. Confirm card says:
+   My Groups
+   1 Group
+3. Confirm no "My Rooms" remains.
+
+B. MY GROUPS
+
+4. Open My Groups.
+5. Open Prayer Walk.
+
+C. GROUP STUDY
+
+6. Open The Road to Emmaus from Prayer Walk.
+7. Confirm NO requirement appears asking the user to complete 10 Minutes with Jesus.
+8. Confirm study opens immediately.
+
+D. BACK NAVIGATION
+
+9. Press Back from The Road to Emmaus.
+10. Confirm it returns to Prayer Walk.
+11. Confirm the back label does NOT say Next Steps.
+
+E. CONTENT LABELS
+
+12. Confirm the content page says Open Group, never Open Room.
+
+F. PERSONAL FLOW
+
+13. Open The Road to Emmaus independently from the normal personal app flow.
+14. Confirm existing personal progression rules still behave as intended.
+
+====================================================
+SUCCESS CONDITION
+====================================================
+
+The user should no longer encounter any visible remnants of the old Rooms architecture while using Groups.
+
+Group content should behave like Group content.
+
+Personal Daily Rhythm rules should behave like personal Daily Rhythm rules.
+
+The two workflows must no longer interfere with each other.

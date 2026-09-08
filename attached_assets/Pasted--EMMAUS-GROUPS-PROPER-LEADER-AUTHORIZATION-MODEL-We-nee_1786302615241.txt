@@ -1,0 +1,269 @@
+# EMMAUS GROUPS — PROPER LEADER AUTHORIZATION MODEL
+
+We need to implement the real authorization model for restricted Group functionality.
+
+Do NOT use a developer override.
+
+Do NOT hardcode access for the Super Admin account.
+
+Do NOT grant Live Video based only on Group type.
+
+The authorization must be production-ready and administratively manageable.
+
+==================================================
+CORE PRINCIPLE
+==================================================
+
+EVERY authenticated Emmaus user may:
+
+- Create a Group
+- Join a Group
+- Invite people
+- Attach a Walk
+- Attach a Journey
+- Attach a Daily Devotional
+- Attach a Bible Study
+- Attach a Sermon Companion
+- Participate in Discussion
+- Add Prayer Requests
+- Use Group Notes
+- View preparation progress
+- Use Ask Emmaus in the Group
+
+These capabilities do NOT require church authorization.
+
+However, advanced/restricted Group tools require an Authorized Group Leader.
+
+==================================================
+AUTHORIZED GROUP LEADER
+==================================================
+
+Create or use a persistent permission:
+
+authorized_group_leader
+
+or equivalent.
+
+This permission must be attached to the USER, not automatically to the Group.
+
+An Authorized Group Leader may additionally:
+
+- Start Live Video
+- End Live Video
+- Use advanced Meeting Tools
+- Present Bible for everyone
+- Control shared navigation
+- Launch polls
+- Moderate Group participation
+- Access future restricted collaboration tools
+
+==================================================
+ADMIN MANAGEMENT
+==================================================
+
+Add leader authorization to:
+
+Admin → People
+
+Open a person's profile/detail view.
+
+Add a clear section:
+
+GROUP LEADERSHIP
+
+Authorized Group Leader
+
+[ ON / OFF ]
+
+Only users with appropriate Admin/Pastor permissions may change this setting.
+
+When ON:
+
+- persist authorization in the database
+- restricted leader tools become available in Groups the user leads
+
+When OFF:
+
+- restricted tools disappear
+- existing Groups remain intact
+- discussions remain intact
+- notes remain intact
+- prayer requests remain intact
+- assigned content remains intact
+
+==================================================
+PASTOR / ADMIN BEHAVIOUR
+==================================================
+
+Pastors and Admins should automatically satisfy the Authorized Group Leader permission check based on their existing role hierarchy.
+
+Do NOT create duplicate permission flags if the role already grants the capability.
+
+The authorization check should effectively be:
+
+authorized leader if:
+
+- appRole == superAdmin
+OR
+- appRole == admin
+OR
+- pastoral_role == pastor
+OR
+- authorized_group_leader == true
+
+Use the existing server-authoritative role model.
+
+==================================================
+ROOM/GROUP CREATOR IS NOT ENOUGH
+==================================================
+
+Being the Group creator or Group admin does NOT automatically grant Live Video.
+
+A normal user may:
+
+Create Group
+Invite Friends
+Run Discussion
+Use Prayer Requests
+
+but cannot start Live Video unless separately authorized.
+
+This distinction is essential.
+
+==================================================
+LIVE VIDEO PERMISSION
+==================================================
+
+Start Live Video should only be visible if ALL are true:
+
+1. User is authenticated.
+2. User belongs to the Group.
+3. User is the Group leader/admin.
+4. User passes Authorized Group Leader permission.
+5. Meeting is active.
+6. Live Video is enabled for the church/organization if that setting exists.
+
+If authorization fails:
+
+Do not show a dead disabled button.
+
+Do not show browser alerts.
+
+Simply hide Start Live Video.
+
+==================================================
+MEMBER EXPERIENCE
+==================================================
+
+Ordinary Group members may JOIN Live Video after an Authorized Group Leader starts it.
+
+They do not need to be Authorized Group Leaders themselves.
+
+==================================================
+ADMIN UI
+==================================================
+
+Admin → People should make this obvious.
+
+Example person detail:
+
+Jeremy Govender
+
+Role:
+Pastor
+
+Group Leadership:
+Authorized Group Leader   ON
+
+or
+
+Sarah Naidoo
+
+Role:
+Member
+
+Group Leadership:
+Authorized Group Leader   OFF
+
+[Authorize as Group Leader]
+
+Use clear language.
+
+Avoid technical words like:
+
+video permission
+LiveKit role
+host token permission
+
+Church leaders should understand this without technical knowledge.
+
+==================================================
+AUDIT
+==================================================
+
+Record changes to leader authorization in Audit Log.
+
+Example:
+
+Pastor Jeremy authorized Sarah Naidoo as Group Leader.
+
+or
+
+Pastor Jeremy removed Group Leader authorization from Sarah Naidoo.
+
+Store:
+
+- changed user
+- changed by
+- old state
+- new state
+- timestamp
+
+==================================================
+MULTI-CHURCH FUTURE
+==================================================
+
+Authorization must belong to the church/organization context.
+
+A user authorized as Group Leader in Church A must NOT automatically have leader authorization in Church B.
+
+Design this using the existing tenant/church model if available.
+
+==================================================
+SECURITY
+==================================================
+
+Permission checks must be enforced server-side.
+
+Do NOT trust:
+
+- client flags
+- hidden buttons
+- localStorage
+- query parameters
+
+LiveKit token generation must independently verify authorization server-side before issuing a host token.
+
+==================================================
+QA
+==================================================
+
+Test this exact sequence:
+
+1. Normal user creates a Group.
+2. User can use discussion, notes, prayer and assigned study.
+3. User cannot see Start Live Video.
+4. Admin opens Admin → People.
+5. Admin authorizes that user as Group Leader.
+6. User refreshes/reopens Group.
+7. Start Live Video now appears during active meeting.
+8. User successfully starts Live Video.
+9. Admin removes Group Leader authorization.
+10. User refreshes/reopens Group.
+11. Start Live Video disappears.
+12. Existing Group remains intact.
+13. Discussion, notes, prayer requests and content remain intact.
+14. Ordinary members can still join video when an authorized leader starts it.
+15. Confirm server refuses host token if unauthorized user manually calls the API.
+
+Do not mark complete until the Admin authorization control exists and the full permission cycle works in the published app.

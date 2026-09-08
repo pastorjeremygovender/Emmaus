@@ -1,250 +1,208 @@
 /**
  * Ask Emmaus — Home Screen
  *
- * Entry point from the floating Ask Emmaus button or the My Walk card.
+ * Single-screen layout when idle; transitions to a WhatsApp-style
+ * composer-focused view the moment the user starts typing.
  *
- * Back-button behaviour:
- *   - Reads the ReturnDestination from sessionStorage (written by FloatingEmmausButton).
- *   - Navigates directly to the source page and attempts scroll restoration.
- *   - Clears the stored destination after navigating so the nav highlighting
- *     returns to normal.
- *   - Safe fallback when no destination is stored: /walk (Today's Steps).
+ * "Talk to Emmaus" voice button is shown only when voice mode is enabled.
+ * The composer pill matches the UnifiedEmmausInput bar and includes an
+ * in-pill mic button for speech-to-text (Web Speech API).
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Clock, MessageCircle, ChevronRight } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { EmmausComposer } from '@/components/emmaus/EmmausComposer';
+import { ArrowLeft, Mic, MicOff, SendHorizontal } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { BottomNav } from '@/components/BottomNav';
-import { listConversations, type ConversationStub, type FlatContext } from '@/lib/emmaus-client';
+import { useVoiceEnabled } from '@/hooks/useVoiceEnabled';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import {
   setPendingMessage,
-  takePendingContext,
+  setPendingContext,
   getReturnDestination,
   clearReturnDestination,
 } from '@/lib/emmaus-pending';
+import { unlockVoiceAudio } from '@/lib/voice-audio-unlock';
+import { cn } from '@/lib/utils';
 
-const SUGGESTED_PROMPTS = [
-  'I feel far from God',
-  'Help me understand a passage',
-  "I'm struggling with something",
-  'What does the Bible say about this?',
-  'I want to grow in prayer',
-  'How do I find peace today?',
-];
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays} days ago`;
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-}
-
-const ENTRY_POINT_LABELS: Record<string, string> = {
-  bible: 'My Bible',
-  walk: "Today's Steps",
-  journeys: 'Next Steps',
-  sermons: 'Sermons',
-  personal: 'My Journey',
-  standalone: 'Ask Emmaus',
-};
-
-/** Build a short human-readable label from a FlatContext, or null if generic. */
-function buildContextLabel(ctx: FlatContext): string | null {
-  if (!ctx.entryPoint || ctx.entryPoint === 'personal' || ctx.entryPoint === 'standalone') {
-    return null;
-  }
-  if (ctx.bookName && ctx.chapter) return `${ctx.bookName} ${ctx.chapter}`;
-  if (ctx.journeyTitle && ctx.currentDay) return `${ctx.journeyTitle} — Day ${ctx.currentDay}`;
-  if (ctx.journeyTitle) return ctx.journeyTitle;
-  if (ctx.chapterHeading) return ctx.chapterHeading;
-  return null;
-}
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AskEmmausHome() {
   const { user } = useAuth();
+  const voiceEnabled = useVoiceEnabled(user?.id);
   const [, setLocation] = useLocation();
   const [message, setMessage] = useState('');
-  const [conversations, setConversations] = useState<ConversationStub[]>([]);
-  const [fabContext, setFabContext] = useState<FlatContext | null>(null);
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-    // Pick up the conversation context label set by FloatingEmmausButton.
-    const pending = takePendingContext();
-    if (pending) setFabContext(pending.context);
-    if (!user) return;
-    listConversations(user.id).then(setConversations);
-  }, [user]);
+  const isTyping = message.length > 0;
+
+  // ── Speech-to-text ──────────────────────────────────────────────────────────
+  const valueBeforeMicRef = useRef('');
+  const interimActiveRef  = useRef(false);
+
+  const { isSupported: micSupported, isListening, start: startListening, stop: stopListening } =
+    useSpeechRecognition({
+      onInterim: useCallback((transcript: string) => {
+        const base = valueBeforeMicRef.current;
+        setMessage(base + (base ? ' ' : '') + transcript);
+        interimActiveRef.current = true;
+      }, []),
+      onFinal: useCallback((transcript: string) => {
+        const base = valueBeforeMicRef.current;
+        setMessage(base + (base ? ' ' : '') + transcript);
+        interimActiveRef.current = false;
+      }, []),
+      onError: useCallback(() => {
+        setMessage(valueBeforeMicRef.current);
+        interimActiveRef.current = false;
+      }, []),
+    });
+
+  function handleMicToggle() {
+    if (isListening) {
+      stopListening();
+    } else {
+      valueBeforeMicRef.current = message;
+      interimActiveRef.current  = false;
+      startListening();
+    }
+  }
+
+  // ── Navigation ──────────────────────────────────────────────────────────────
 
   function handleBack() {
     const dest = getReturnDestination();
     clearReturnDestination();
-    const target = dest?.pathname ?? '/walk';
-    setLocation(target);
-    // Attempt scroll restoration after the new route mounts.
-    if (dest?.scrollY) {
-      requestAnimationFrame(() => {
-        setTimeout(() => window.scrollTo({ top: dest.scrollY, behavior: 'instant' }), 80);
-      });
-    }
+    setLocation(dest?.pathname ?? '/walk');
   }
 
-  function handleChipClick(prompt: string) {
-    setMessage(prompt);
-  }
-
-  function handleContinue() {
+  function handleSend() {
     const trimmed = message.trim();
     if (!trimmed || !user) return;
-    const context: FlatContext = fabContext
-      ? { ...fabContext, userName: user.preferredName }
-      : { entryPoint: 'personal', userName: user.preferredName };
-    setPendingMessage(trimmed, context);
+    if (isListening) stopListening();
+    setPendingMessage(trimmed, { entryPoint: 'personal', userName: user.preferredName });
     setLocation('/personal/ask-emmaus/conversation');
   }
 
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSend();
+    }
+  }
+
+  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (interimActiveRef.current) {
+      valueBeforeMicRef.current = e.target.value;
+      interimActiveRef.current  = false;
+    }
+    setMessage(e.target.value);
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+
   return (
-    <div className="min-h-[100dvh] bg-background pb-page-safe">
-      {/* Header */}
-      <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/50">
-        <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
-          <button
-            onClick={handleBack}
-            className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Back"
-          >
-            <ArrowLeft size={22} aria-hidden="true" />
-          </button>
-          <div className="flex-1" />
-        </div>
+    <div className="h-[100dvh] bg-background flex flex-col overflow-hidden">
+
+      {/* ── Header ───────────────────────────────────────────────────────── */}
+      <header className="shrink-0 h-12 flex items-center px-4">
+        <button
+          onClick={handleBack}
+          className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+          aria-label="Back"
+        >
+          <ArrowLeft size={22} aria-hidden="true" />
+        </button>
       </header>
 
-      <main className="px-5 pt-8 max-w-[480px] mx-auto space-y-8">
-
-        {/* Heading */}
-        <div className="space-y-2">
-          <h1 className="text-[28px] font-sans font-medium text-foreground leading-tight">
-            Ask Emmaus
-          </h1>
-          <p className="text-[15px] text-muted-foreground leading-relaxed">
-            Bring your questions, doubts, and moments — Emmaus walks alongside you.
-          </p>
-
-          {fabContext && buildContextLabel(fabContext) && (
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-[13px] text-primary/80 bg-primary/8 border border-primary/15 rounded-full px-3 py-1 leading-snug">
-                Discussing: {buildContextLabel(fabContext)}
-              </span>
+      {/* ── Content ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-col px-5 pt-10 gap-6">
+        {/* Talk to Emmaus voice button */}
+        {voiceEnabled === true && (
+          <div className="flex flex-col items-center gap-2.5">
+            <div className="relative inline-flex">
+              <span
+                className="absolute -inset-1.5 rounded-full border border-primary/20 animate-pulse"
+                aria-hidden="true"
+              />
               <button
-                onClick={() => setFabContext(null)}
-                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Clear context"
+                onClick={() => {
+                  if (!user) return;
+                  setPendingContext({ entryPoint: 'personal' as const, userName: user.preferredName });
+                  unlockVoiceAudio();
+                  setLocation('/personal/ask-emmaus/voice');
+                }}
+                className="relative flex items-center gap-2 px-6 py-3 rounded-full text-[15px] font-medium bg-primary/8 border border-primary/25 text-primary hover:bg-primary/12 active:scale-95 transition-all"
+                aria-label="Open voice mode"
               >
-                ✕
+                <Mic size={16} aria-hidden="true" />
+                Talk to Emmaus
               </button>
             </div>
-          )}
-        </div>
-
-        {/* Composer + chips */}
-        <div className="space-y-3">
-          <label htmlFor="emmaus-input" className="sr-only">
-            What's on your mind?
-          </label>
-          <EmmausComposer
-            id="emmaus-input"
-            value={message}
-            onChange={setMessage}
-            onSend={handleContinue}
-            placeholder="What's on your mind?"
-            autoFocus
-            aria-label="Your message to Emmaus"
-          />
-
-          <div
-            className="flex flex-wrap gap-2"
-            role="group"
-            aria-label="Suggested prompts"
-          >
-            {SUGGESTED_PROMPTS.map((prompt) => (
-              <button
-                key={prompt}
-                onClick={() => handleChipClick(prompt)}
-                className={[
-                  'px-3 py-1.5 rounded-full border text-[13px] leading-snug transition-all',
-                  message === prompt
-                    ? 'border-primary/40 bg-primary/10 text-primary font-medium'
-                    : 'border-border bg-card text-muted-foreground hover:border-primary/30 hover:text-foreground',
-                ].join(' ')}
-                aria-pressed={message === prompt}
-              >
-                {prompt}
-              </button>
-            ))}
+            <p className="text-[12px] text-muted-foreground text-center">
+              Speak your question and hear Emmaus respond.
+            </p>
           </div>
-        </div>
+        )}
 
         {/* Disclaimer */}
         <p className="text-[12px] text-muted-foreground leading-relaxed text-center">
-          Emmaus offers pastoral reflection, not professional advice.{' '}
-          If you are in crisis, please contact{' '}
-          <a href="tel:116123" className="underline underline-offset-2 hover:text-foreground">
-            Samaritans on 116 123
-          </a>.
+          Emmaus offers pastoral reflection, not counseling or professional advice.
         </p>
+      </div>
 
-        {/* Previous conversations */}
-        {conversations.length > 0 && (
-          <section className="space-y-3 pt-2 pb-6">
-            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
-              <Clock size={11} aria-hidden="true" />
-              Previous conversations
-            </h2>
-            <div className="space-y-2">
-              {conversations.slice(0, 8).map((conv) => (
-                <button
-                  key={conv.id}
-                  onClick={() => setLocation(`/personal/ask-emmaus/history/${conv.id}`)}
-                  className="w-full text-left"
-                >
-                  <Card className="border-border hover:border-primary/30 transition-all">
-                    <CardContent className="p-3.5 flex items-center gap-3">
-                      <div
-                        className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0"
-                        aria-hidden="true"
-                      >
-                        <MessageCircle size={15} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-medium text-foreground truncate">
-                          {conv.title}
-                        </p>
-                        <p className="text-[12px] text-muted-foreground mt-0.5">
-                          {ENTRY_POINT_LABELS[conv.entryPoint] ?? 'Ask Emmaus'} ·{' '}
-                          {formatDate(conv.updatedAt)}
-                        </p>
-                      </div>
-                      <ChevronRight
-                        size={15}
-                        className="text-muted-foreground shrink-0"
-                        aria-hidden="true"
-                      />
-                    </CardContent>
-                  </Card>
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
+      {/* ── Composer ─────────────────────────────────────────────────────── */}
+      <div className="shrink-0 px-5 py-3">
+        <div className="flex items-center gap-2.5 px-4 py-3 rounded-full border border-border bg-card shadow-sm hover:border-primary/25 hover:shadow-md focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/15 focus-within:shadow-md transition-all">
+          {/* Text input */}
+          <input
+            type="text"
+            placeholder="What's on your mind?"
+            value={message}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            aria-label="Your message to Emmaus"
+            className="flex-1 bg-transparent text-[14px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none min-w-0"
+          />
 
-      </main>
-      <BottomNav />
+          {/* Mic — speech-to-text */}
+          {micSupported && (
+            <button
+              type="button"
+              onClick={handleMicToggle}
+              aria-label={isListening ? 'Stop recording' : 'Speak your question'}
+              aria-pressed={isListening}
+              className={cn(
+                'shrink-0 w-8 h-8 flex items-center justify-center rounded-full transition-all',
+                isListening
+                  ? 'bg-red-50 text-red-500'
+                  : 'bg-primary/10 hover:bg-primary/20 text-primary',
+              )}
+            >
+              {isListening ? (
+                <span className="relative flex items-center justify-center">
+                  <span className="absolute inline-flex h-5 w-5 rounded-full bg-red-400/30 animate-ping" aria-hidden="true" />
+                  <MicOff size={15} strokeWidth={1.8} aria-hidden="true" />
+                </span>
+              ) : (
+                <Mic size={15} strokeWidth={1.8} aria-hidden="true" />
+              )}
+            </button>
+          )}
+
+          {/* Send — shown only when there is text */}
+          {isTyping && (
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={!message.trim()}
+              aria-label="Send message"
+              className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 active:scale-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <SendHorizontal size={15} strokeWidth={2} aria-hidden="true" />
+            </button>
+          )}
+        </div>
+      </div>
+
     </div>
   );
 }

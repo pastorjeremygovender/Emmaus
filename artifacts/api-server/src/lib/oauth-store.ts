@@ -11,9 +11,14 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { refreshAccessToken, getOAuthConfig } from "./youtube-client.js";
+import { readArchiveState, writeArchiveState } from "./archive-state-store.js";
 
-const DATA_DIR = join(process.cwd(), "data", "sermons");
+// Resolve beside the compiled server instead of process.cwd(). Autoscale
+// instances may start from different working directories.
+const DATA_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "data", "sermons");
 const OAUTH_FILE = join(DATA_DIR, "oauth.json");
 const STATES_FILE = join(DATA_DIR, "oauth-states.json");
 
@@ -31,9 +36,15 @@ async function ensureDir(): Promise<void> {
 }
 
 async function readOAuthData(): Promise<OAuthData | null> {
+  const durable = await readArchiveState<OAuthData>("oauth");
+  // A partially-written/legacy durable record must not mask a valid token file.
+  // This also lets an instance recover after a transient database write failure.
+  if (durable?.refreshToken) return durable;
   try {
     const raw = await readFile(OAUTH_FILE, "utf-8");
-    return JSON.parse(raw) as OAuthData;
+    const data = JSON.parse(raw) as OAuthData;
+    if (data?.refreshToken) await writeArchiveState("oauth", data);
+    return data;
   } catch {
     return null;
   }
@@ -45,6 +56,7 @@ async function writeOAuthData(data: OAuthData): Promise<void> {
   await writeFile(tmp, JSON.stringify(data, null, 2), "utf-8");
   const { rename } = await import("node:fs/promises");
   await rename(tmp, OAUTH_FILE);
+  await writeArchiveState("oauth", data);
 }
 
 // ─── Pending CSRF state persistence ──────────────────────────────────────────
@@ -106,9 +118,11 @@ export async function verifyAndConsumePendingState(state: string): Promise<boole
 // ─── Token storage ────────────────────────────────────────────────────────────
 
 export async function storeRefreshToken(refreshToken: string): Promise<void> {
+  const existing = await readOAuthData();
   await writeOAuthData({
+    ...existing,
     refreshToken,
-    authorizedAt: new Date().toISOString(),
+    authorizedAt: existing?.authorizedAt ?? new Date().toISOString(),
   });
 }
 
@@ -146,6 +160,7 @@ export async function clearOAuthCredentials(): Promise<void> {
   } catch {
     // Already gone
   }
+  await writeArchiveState("oauth", null);
 }
 
 export async function getOAuthStatus(): Promise<{

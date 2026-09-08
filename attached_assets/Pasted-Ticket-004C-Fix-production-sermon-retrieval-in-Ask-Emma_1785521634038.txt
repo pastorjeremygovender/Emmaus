@@ -1,0 +1,131 @@
+Ticket #004C — Fix production sermon retrieval in Ask Emmaus
+
+The published app still does not reference Pastor Jeremy’s sermons.
+
+This is not a data-availability problem. Media Studio shows:
+
+- 19 approved sermons
+- 19 transcripts ready
+- 2,179 indexed segments
+- 0 import failures
+
+Therefore Ticket #004 remains FAILED.
+
+Do not work on sermon-title formatting.
+Do not add Room prayer suggestions.
+Do not change any unrelated feature.
+Do not declare success from mocks, static tests, or development-database results.
+
+OBJECTIVE
+
+Make the published Ask Emmaus response actually retrieve and display relevant approved ICC sermon content.
+
+TRACE THIS EXACT PUBLISHED REQUEST
+
+“I have been struggling with anger.”
+
+Use the same production endpoint, authentication, database and runtime used by the published mobile app.
+
+For this request, log and report:
+
+1. Which Ask Emmaus endpoint the published client calls.
+2. Which database connection it uses.
+3. Whether the sermon retrieval function is called.
+4. The search query generated from the user’s question.
+5. The number of indexed sermon segments searched.
+6. The top 10 matching segments, including:
+   - sermon ID
+   - sermon title
+   - segment text
+   - start timestamp
+   - YouTube URL/video ID
+   - approval status
+   - relevance score
+7. Which candidates are passed into the AI prompt.
+8. The exact structured sermon field returned by the AI.
+9. Whether the server response still contains that sermon field.
+10. Whether the client discards or fails to render it.
+
+REQUIRED ROOT-CAUSE CHECKS
+
+Explicitly check for:
+
+- development database queried instead of production;
+- retrieval querying the wrong sermon tables or old JSON source;
+- approved-status casing mismatch;
+- wrong field names between indexed segments and Ask Emmaus;
+- embeddings missing or stored in an incompatible format;
+- similarity threshold set too high;
+- keyword search not running when vector search returns nothing;
+- YouTube archive records not joined to indexed segments;
+- results excluded because timing_verified or audio_ready is false;
+- retrieval results created but omitted from the system prompt;
+- AI response schema missing the sermon field;
+- server response serializer dropping sermon data;
+- client expecting a different property name;
+- published app calling an older Ask Emmaus endpoint.
+
+IMPLEMENTATION REQUIREMENTS
+
+1. Query the existing 2,179 indexed approved sermon segments.
+2. Search only genuinely approved/member-visible sermons.
+3. Use hybrid retrieval:
+   - semantic/vector retrieval when available;
+   - keyword/full-text fallback;
+   - Scripture/topic matching.
+4. Do not require timing_verified or audio_ready for Ask Emmaus retrieval if a valid transcript timestamp already exists.
+5. Pass the strongest genuine sermon matches into the AI context.
+6. Return structured sermon data:
+   - sermonId
+   - title
+   - relevantExcerpt
+   - startSeconds
+   - endSeconds if available
+   - timestampUrl
+7. Render a visible section:
+
+   From our church
+
+   Pastor Jeremy preached about this in “[real sermon title].”
+
+   Watch from [timestamp]
+
+8. Never invent sermon titles, excerpts, URLs or timestamps.
+9. If no match is above a reasonable relevance threshold, omit the section.
+10. Remove any Psalm 42 hard-coded fallback or first-record fallback.
+
+PRODUCTION ACCEPTANCE TESTS
+
+Run these against the production environment:
+
+1. “I have been struggling with anger.”
+2. “I am afraid about the future.”
+3. “How can I pray when I don’t know what to say?”
+4. “Why should I forgive someone who hurt me?”
+
+For each, provide:
+
+- top retrieved sermon candidates;
+- relevance scores;
+- chosen sermon or reason none was chosen;
+- exact production API response;
+- confirmation that the client rendered the sermon card/link.
+
+PASS CONDITIONS
+
+- At least one query displays a genuine approved Pastor Jeremy sermon where the index contains a relevant match.
+- Different questions produce different ranked sermon results.
+- The visible title, excerpt and timestamp come from stored data.
+- The timestamp link opens the correct YouTube moment.
+- Psalm 42 is not repeatedly returned as a generic fallback.
+- The active Walk/Journey remains visible on Today’s Steps.
+
+Do not republish automatically and assume success.
+
+After the code change:
+1. commit;
+2. republish;
+3. use the published endpoint to run the four tests;
+4. show the actual returned JSON and retrieval evidence.
+
+Stop after Ticket #004C.

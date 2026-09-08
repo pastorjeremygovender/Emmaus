@@ -2,8 +2,7 @@
  * Bible Data API Client
  *
  * Typed fetch helpers for reading/writing Bible progress data to the API server.
- * Identity: signed session cookie (production) with X-User-Id header fallback
- * for dev/demo mode — mirrors the pattern used by rooms-api, devotionals-api, etc.
+ * Identity: derived server-side from the secure session cookie.
  *
  * When the API is unreachable, functions fail silently so localStorage
  * remains the last-resort fallback in BibleContext.
@@ -23,6 +22,8 @@ import type {
 const API_BASE = (import.meta.env.VITE_API_URL ?? '') as string;
 
 export type UserBibleData = {
+  /** Optional for backwards compatibility with pre-preference cloud records. */
+  translationId?: string;
   history: ReadingHistoryEntry[];        // ordered newest-first, max 20
   completed: string[];
   journeyProgress: Record<string, BibleJourneyProgress>;
@@ -34,12 +35,14 @@ export type UserBibleData = {
   prayers: PersonalPrayer[];
 };
 
-function authHeaders(userId: string): Record<string, string> {
+export type BibleDataLoadResult = {
+  data: UserBibleData | null;
+  status: 'found' | 'missing' | 'unavailable';
+};
+
+function authHeaders(_userId: string): Record<string, string> {
   return {
     'Content-Type': 'application/json',
-    // Dev/demo: identify the caller via header; in production the signed
-    // session cookie (emmaus_uid) takes precedence — see auth.ts extractUserId.
-    'X-User-Id': userId,
   };
 }
 
@@ -49,15 +52,26 @@ function authHeaders(userId: string): Record<string, string> {
  * falls back to localStorage rather than clobbering it with empty data.
  */
 export async function loadBibleData(userId: string): Promise<UserBibleData | null> {
+  const result = await loadBibleDataWithStatus(userId);
+  return result.data;
+}
+
+/**
+ * The status matters during preference migration: a temporary GET failure must
+ * never look like an empty account and overwrite cloud data with local cache.
+ */
+export async function loadBibleDataWithStatus(userId: string): Promise<BibleDataLoadResult> {
   try {
     const res = await fetch(`${API_BASE}/api/bible/data`, {
       credentials: 'include',        // send signed session cookie in production
       headers: authHeaders(userId),
+      cache: 'no-store',
     });
-    if (!res.ok) return null;
-    return (await res.json()) as UserBibleData;
+    if (res.status === 404) return { data: null, status: 'missing' };
+    if (!res.ok) return { data: null, status: 'unavailable' };
+    return { data: (await res.json()) as UserBibleData, status: 'found' };
   } catch {
-    return null;
+    return { data: null, status: 'unavailable' };
   }
 }
 
@@ -75,6 +89,7 @@ export async function patchBibleData(
       method: 'PATCH',
       credentials: 'include',        // send signed session cookie in production
       headers: authHeaders(userId),
+      cache: 'no-store',
       body: JSON.stringify(patch),
     });
   } catch {

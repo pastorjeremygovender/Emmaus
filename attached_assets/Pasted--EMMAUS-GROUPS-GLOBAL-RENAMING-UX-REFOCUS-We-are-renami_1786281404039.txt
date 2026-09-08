@@ -1,0 +1,372 @@
+# EMMAUS GROUPS
+# GLOBAL RENAMING + UX REFOCUS
+
+We are renaming "Rooms" throughout Emmaus.
+
+This is more than a label change.
+
+The feature is evolving from a technical meeting room into a discipleship group.
+
+==================================================
+GLOBAL RENAME
+==================================================
+
+Replace all user-facing references to:
+
+Room
+Rooms
+
+with
+
+Group
+Groups
+
+Examples:
+
+Create Room
+→ Create Group
+
+Join Room
+→ Join Group
+
+My Rooms
+→ My Groups
+
+Room Members
+→ Group Members
+
+Room Settings
+→ Group Settings
+
+Room Details
+→ Group Details
+
+Room Leader
+→ Group Leader
+
+Room Invitation
+→ Group Invitation
+
+Room Chat
+→ Group Discussion
+
+Room Activity
+→ Group Activity
+
+Do NOT rename backend classes, APIs or database tables unless necessary.
+
+This is primarily a user experience change.
+
+==================================================
+CORE PHILOSOPHY
+==================================================
+
+Emmaus Groups are not chat rooms.
+
+Emmaus Groups are not video meetings.
+
+Emmaus Groups exist to help people grow together around Emmaus content.
+
+Communication exists to support discipleship.
+
+Content always comes first.
+
+==================================================
+GROUP LIFECYCLE
+==================================================
+
+Groups now have four natural phases.
+
+----------------------------------
+1. CREATE GROUP
+----------------------------------
+
+The current Create Room flow is good.
+
+Keep it.
+
+Rename to:
+
+Create Group
+
+Fields:
+
+Group Name
+
+Content
+
+Meeting Date (optional)
+
+Meeting Time (optional)
+
+Leader Welcome (optional)
+
+Create Group
+
+----------------------------------
+2. PREPARE
+----------------------------------
+
+After creation, the Group automatically opens.
+
+Display:
+
+Today's Study
+
+Leader's Welcome
+
+Group Members
+
+Preparation Progress
+
+Meeting Date
+
+Meeting Time
+
+Members should be encouraged to complete the assigned Walk, Journey or Devotional before the meeting.
+
+Leader should have the option:
+
+☑ Make content available immediately
+
+or
+
+☐ Reveal content at meeting
+
+This setting applies only to the assigned study.
+
+----------------------------------
+3. MEET
+----------------------------------
+
+The leader starts the meeting.
+
+Rename:
+
+Start Guided Session
+
+to
+
+Start Meeting
+
+This should become the primary action.
+
+The meeting may occur:
+
+• inside Emmaus
+• by text discussion
+• by voice notes
+• by live video (authorised groups only)
+• physically in person
+
+Emmaus simply becomes the discipleship hub.
+
+Do NOT force video.
+
+----------------------------------
+4. CONTINUE
+----------------------------------
+
+After the meeting:
+
+Discussion remains
+
+Prayer Requests remain
+
+Shared notes remain
+
+Progress remains
+
+Leader can post follow-up notes.
+
+Emmaus prepares the next meeting.
+
+==================================================
+GROUP HOME
+==================================================
+
+Redesign the Group home screen around preparation.
+
+Example:
+
+Prayer Walk
+
+Tuesday 19:00
+
+Today's Study
+
+10 Minutes with Jesus
+
+Day 3
+
+Leader's Welcome
+
+Group Members
+
+Preparation Progress
+
+Start Meeting
+
+The Group should feel calm and simple.
+
+==================================================
+GROUP MEMBERS
+==================================================
+
+Display:
+
+Name
+
+Online / Offline
+
+Preparation Status
+
+Completed
+
+Reading
+
+Not Started
+
+Do not display unnecessary technical information.
+
+==================================================
+DISCUSSION
+==================================================
+
+Rename:
+
+Chat
+
+to
+
+Discussion
+
+Support:
+
+Text
+
+Voice Notes
+
+Images
+
+Bible verses
+
+Documents
+
+Slides
+
+Videos
+
+Make Discussion feel familiar, similar to modern messaging apps.
+
+==================================================
+PRESENT
+==================================================
+
+Replace technical language like:
+
+Share Screen
+
+with
+
+Present
+
+Supported:
+
+Present Bible
+
+Present Slides
+
+Present Image
+
+Present Video
+
+Future:
+
+Present Website
+
+Present Whiteboard
+
+==================================================
+LIVE VIDEO
+==================================================
+
+Video is NOT the default experience.
+
+Only authorised church leaders should see:
+
+Start Live Meeting
+
+Everyone else simply joins the meeting through discussion or in person.
+
+The same Group works whether the meeting is:
+
+Physical
+
+Text only
+
+Voice notes
+
+Video
+
+Do not tie the Group to one communication method.
+
+==================================================
+ASK EMMAUS
+==================================================
+
+Ask Emmaus remains available.
+
+When opened inside a Group, it automatically understands:
+
+Current Group
+
+Current Study
+
+Current Scripture
+
+Current Discussion
+
+Current Prayer Requests
+
+==================================================
+DESIGN GOAL
+==================================================
+
+A first-time user should immediately understand:
+
+I created a Group.
+
+I invited people.
+
+We prepare before meeting.
+
+We meet together.
+
+We continue growing together afterwards.
+
+There should be no learning curve.
+
+The technology should disappear.
+
+The discipleship should remain.
+
+==================================================
+IMPORTANT
+==================================================
+
+Do not rewrite the backend.
+
+Do not rewrite LiveKit.
+
+Do not rewrite permissions.
+
+Do not rewrite invitations.
+
+Do not rewrite the database.
+
+Adapt the existing architecture to support this new user experience.
+
+The backend is already strong.
+
+Now make the experience simple.

@@ -6,16 +6,16 @@
  * Thin page: loads companion data from the API and renders the shared
  * PreviousDaysScreen component.
  *
- * Back navigation:
- *   ?from=walk  → /walk     (Today's Steps)
- *   default     → /journeys (Next Steps)
+ * Back navigation uses ?source= (standard return-context convention).
+ * Steps opened from this screen receive ?source=sermonCompanionPrevious&sourceId=<id>
+ * so the completion card shows "Back to Previous Steps".
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { PreviousDaysScreen, type PreviousDayEntry } from '@/components/PreviousDaysScreen';
-import { resolveReturn } from '@/lib/return-context';
+import { goBackOrFallback, resolveReturn } from '@/lib/return-context';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -46,8 +46,11 @@ export default function SermonCompanionPreviousDays() {
   const { user } = useAuth();
   const companionId = params.id ?? '';
 
-  const from = new URLSearchParams(window.location.search).get('from');
-  const { path: backPath, label: backLabel } = resolveReturn(from, null, '/journeys?tab=sermons');
+  const qs       = new URLSearchParams(window.location.search);
+  // Accept both ?source= (current) and legacy ?from= so old links and bookmarks keep working.
+  const source   = qs.get('source') ?? qs.get('from');
+  const sourceId = qs.get('sourceId');
+  const { path: backPath, label: backLabel } = resolveReturn(source, sourceId, '/journeys?tab=sermons');
 
   const [companion, setCompanion] = useState<MemberCompanion | null>(null);
   const [loading, setLoading]     = useState(true);
@@ -68,32 +71,35 @@ export default function SermonCompanionPreviousDays() {
 
   useEffect(() => { load(); }, [load]);
 
-  const completedSet  = new Set(companion?.progress?.completedDays ?? []);
-  const currentDay    = companion?.progress?.currentDay ?? 1;
+  const completedSet = new Set(companion?.progress?.completedDays ?? []);
 
+  // All published entries are accessible — members can open any step freely.
+  const currentDay = companion?.progress?.currentDay ?? 1;
   const entries: PreviousDayEntry[] = (companion?.entries ?? [])
     .filter(e => e.status === 'Published' && e.dayNumber < currentDay)
     .sort((a, b) => b.dayNumber - a.dayNumber)
     .map(e => ({
       dayNumber: e.dayNumber,
-      title: e.title || `Day ${e.dayNumber}`,
+      label: `Step ${e.dayNumber}`,
+      title: e.title || `Step ${e.dayNumber}`,
       subtitle: e.scriptureReference || undefined,
       status: completedSet.has(e.dayNumber) ? 'completed' : 'current',
     }));
 
-  const sourceParam = `?source=${from ?? 'nextStepsSermons'}`;
+  const openDay = (day: number) =>
+    setLocation(`/sermon-companion/${companionId}/day/${day}?source=sermonCompanionPrevious&sourceId=${companionId}`);
 
   return (
     <PreviousDaysScreen
       contentTitle={companion?.title ?? 'Sermon Companion'}
       entries={entries}
       loading={loading}
-      onBack={() => setLocation(backPath)}
-      onReviewDay={(day) =>
-        setLocation(`/sermon-companion/${companionId}/day/${day}${sourceParam}`)
-      }
+      onBack={() => goBackOrFallback(backPath, setLocation)}
+      onReviewDay={openDay}
+      onContinueDay={openDay}
       backLabel={backLabel}
-      emptyMessage="No previous companion days are available yet."
+      screenTitle="All Steps"
+      emptyMessage="No previous companion steps are available yet."
     />
   );
 }

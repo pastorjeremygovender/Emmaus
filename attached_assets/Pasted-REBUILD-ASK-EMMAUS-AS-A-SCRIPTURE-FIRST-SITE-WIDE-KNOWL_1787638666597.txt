@@ -1,0 +1,540 @@
+REBUILD ASK EMMAUS AS A SCRIPTURE-FIRST, SITE-WIDE KNOWLEDGE AND GUIDANCE SYSTEM
+
+This is a foundational production requirement.
+
+Ask Emmaus is not a gimmick, optional chatbot, or isolated feature. It must function as the reliable, relational and knowledgeable guide to the whole Emmaus platform.
+
+Do not perform a cosmetic patch. Audit the present Ask Emmaus retrieval, indexing, citations, recommendations, permissions and internal-link handling, then implement the architecture below.
+
+Before changing anything:
+
+1. Create a restore point/checkpoint.
+2. Inspect the existing database schema, content models, indexing pipeline, search system, Ask Emmaus prompt construction, link generation and routing.
+3. Preserve Emmaus’s existing AI Constitution and pastoral safeguards.
+4. Do not create duplicate content tables, duplicate indexing systems or a second competing search system if the existing system can be corrected and extended.
+
+==================================================
+1. NON-NEGOTIABLE ANSWER PRIORITY
+==================================================
+
+Ask Emmaus must respect this order:
+
+1. Scripture
+2. Clear explanation and pastoral reflection
+3. Relevant Emmaus resources:
+   - Sermons
+   - Sermon Companions
+   - Daily Devotionals
+   - Walks
+   - Journeys
+   - Bible Studies
+   - Other published discipleship resources
+   - Eligible Daily Rhythm content
+4. Prayer or a gentle practical Next Step when appropriate
+
+Scripture remains primary.
+
+Emmaus resources may explain, reinforce, illustrate and help users apply Scripture, but they must never replace Scripture or be presented as having equal authority with Scripture.
+
+Keep the existing constitutional flow:
+
+Scripture → Reflection → Prayer → Next Step
+
+Ask Emmaus must not force every answer into a rigid template. Responses should feel natural, warm, personable and sensitive to what the user actually asked.
+
+==================================================
+2. SITE-WIDE KNOWLEDGE BASE
+==================================================
+
+Ask Emmaus must be able to retrieve and use all eligible, published content across Emmaus.
+
+Include:
+
+- Bible text and Bible Study content
+- Sermons
+- Sermon transcripts
+- Sermon summaries
+- Sermon Companion steps
+- Daily Devotionals
+- Walk introductions
+- Walk steps
+- Walk completion material
+- Journeys and their included Walks
+- Other published discipleship resources
+- Eligible Daily Rhythm content under the user-specific rules below
+
+For each indexed resource, store enough metadata to identify and open it correctly:
+
+- resource type
+- resource ID
+- canonical record ID
+- title
+- subtitle where applicable
+- Scripture references
+- book
+- chapter
+- verse or verse range
+- speaker or author where applicable
+- parent Journey
+- parent Walk
+- step/day number
+- publication status
+- tenant/church ID if applicable
+- visibility/access rules
+- canonical internal route
+- indexed version or content hash
+- created date
+- updated date
+- published date
+
+Only published and currently accessible resources may appear in normal user answers or recommendations.
+
+Draft, deleted, archived, unpublished or inaccessible content must not be exposed.
+
+Maintain tenant isolation. One church or tenant’s private resources must never be retrieved for another tenant.
+
+==================================================
+3. AUTOMATIC KNOWLEDGE-BASE UPDATES
+==================================================
+
+The knowledge base must update automatically when content is:
+
+- created and published
+- edited and republished
+- unpublished
+- archived
+- deleted
+- restored
+- moved between Walks or Journeys
+- given different visibility or access permissions
+
+Implement event-driven indexing from the canonical publishing workflow.
+
+On publish or update:
+
+1. Save the canonical content.
+2. Create or update searchable/indexed chunks.
+3. Generate or update embeddings if embeddings are used.
+4. save metadata and the canonical internal route.
+5. Mark the indexing result as successful or failed.
+6. Retry transient failures safely.
+7. Never create duplicate chunks for the same content version.
+
+On unpublish, archive or delete:
+
+- remove the resource from active retrieval immediately, or mark it unavailable in a way that guarantees Ask Emmaus cannot return it.
+
+Also add a scheduled reconciliation job that compares published content with indexed content. This is a safety net for missed events, not the primary indexing mechanism.
+
+The reconciliation job must:
+
+- find published resources that are missing from the index
+- update stale indexed resources
+- remove orphaned indexed resources
+- report failures
+- be safe to rerun
+- be idempotent
+
+Add admin visibility showing:
+
+- total published resources
+- total indexed resources
+- resources awaiting indexing
+- failed resources
+- last successful reconciliation
+- ability to retry individual failures
+- ability to safely reindex a resource
+- ability to run a full reconciliation without creating duplicates
+
+Do not make normal administrators manually remember to index content after publishing.
+
+==================================================
+4. USER-DEPENDENT DAILY RHYTHM RULES
+==================================================
+
+Daily Rhythm must be included, but it must be filtered for the signed-in user before its content is supplied to the AI.
+
+Not every user has reached the same Daily Rhythm content. Ask Emmaus must never reveal future Daily Rhythm material.
+
+A Daily Rhythm resource is eligible for a user only when one of these is true:
+
+A. The user has completed that Daily Rhythm day/step.
+
+B. It is the user’s currently unlocked and available Daily Rhythm for today.
+
+C. The user explicitly asks about the Daily Rhythm currently open on their screen, and that resource is available to them.
+
+Daily Rhythm content is not eligible when:
+
+- it belongs to a future day for that user
+- it is locked
+- the user has not reached it
+- it belongs to another user’s progress
+- it is unpublished
+- it is unavailable under the user’s access rules
+
+Apply this filtering in the retrieval query or server-side authorization layer before content reaches the language model.
+
+Do not retrieve all Daily Rhythm content and merely instruct the AI not to mention future content. The restricted content must never enter the model context.
+
+For Daily Rhythm recommendations:
+
+- Ask Emmaus may recommend today’s available Daily Rhythm.
+- It may recommend a previously completed Daily Rhythm where directly relevant.
+- It must not suggest a future or locked Daily Rhythm.
+- If a relevant future Daily Rhythm exists but is locked, do not reveal its title, teaching, Scripture selection or content.
+- If the user has not completed today’s Daily Rhythm, Ask Emmaus may gently invite them to continue it, but must not nag or repeatedly redirect them.
+- If today’s Daily Rhythm has been completed, Ask Emmaus may offer “Review today’s Daily Rhythm” or an eligible previous day.
+- If no Daily Rhythm content is eligible, continue answering from Scripture and other accessible resources.
+
+Create one shared server-side eligibility function for Daily Rhythm access. Use the same function for:
+
+- opening Daily Rhythm
+- Ask Emmaus retrieval
+- recommendations
+- search results
+- generated internal links
+
+Do not duplicate this logic in several frontend components.
+
+==================================================
+5. RETRIEVAL AND ANSWER GENERATION
+==================================================
+
+Use a two-stage retrieval process.
+
+STAGE 1: SCRIPTURE
+
+Detect the question’s subject, pastoral need and any explicit Bible reference.
+
+Retrieve the most relevant Scripture passages first.
+
+When the user names a specific passage, prioritize that passage and its immediate context.
+
+Do not attach an unrelated verse merely to make the answer appear biblical.
+
+STAGE 2: EMMAUS RESOURCES
+
+Retrieve relevant eligible resources from across Emmaus, including:
+
+- sermons
+- devotionals
+- Bible Studies
+- Walks
+- Journeys
+- Sermon Companions
+- eligible Daily Rhythm content
+
+Rank resources using:
+
+- relevance to the user’s question
+- Scripture alignment
+- publication and access eligibility
+- user progress
+- whether the resource is already active
+- whether it provides a useful next step
+- recency only when recency is relevant
+
+Do not overwhelm users with recommendations.
+
+Usually provide no more than a small number of highly relevant resources. If no Emmaus resource is genuinely relevant, answer from Scripture without inventing a recommendation.
+
+Do not claim that Pastor Jeremy preached or wrote something unless the retrieved source proves it.
+
+Do not fabricate sermon titles, quotations, Scripture references, resource names, completion status, URLs or internal routes.
+
+==================================================
+6. RELATIONAL AND PERSONABLE RESPONSES
+==================================================
+
+Ask Emmaus should respond like a thoughtful, trustworthy discipleship companion.
+
+It should:
+
+- recognize the user’s actual question
+- use the user’s preferred name when appropriate and not excessively
+- remember relevant conversation context within the conversation
+- acknowledge pain, uncertainty or struggle sensitively
+- avoid generic filler
+- avoid sounding like a search-results page
+- avoid overloading the answer with resources
+- distinguish Scripture from reflection
+- never imply certainty where Scripture is silent
+- encourage participation in the Local Church when relevant
+- recommend professional or emergency support appropriately when safety is involved
+
+It should not:
+
+- claim to replace a pastor, church community, counsellor, doctor or emergency service
+- manufacture personal knowledge about the user
+- use a sermon or devotional as if it were Scripture
+- force a prayer or recommendation into every answer
+- repeatedly recommend the same resource without a good reason
+
+==================================================
+7. ALL SCRIPTURE LINKS MUST WORK
+==================================================
+
+User feedback confirms that suggested Scripture links are currently broken. Treat this as a production-blocking defect.
+
+Audit every way Ask Emmaus currently generates Scripture links.
+
+Do not allow the AI to invent raw URLs.
+
+Create one canonical server-side Scripture-link builder that accepts structured data:
+
+- Bible book ID or canonical book slug
+- chapter
+- optional starting verse
+- optional ending verse
+- optional translation if supported
+
+Normalize book names and aliases, including numbered books such as:
+
+- 1 Samuel
+- 2 Corinthians
+- 1 Thessalonians
+- 1 John
+
+Generate links using the actual My Bible routes already supported by Emmaus.
+
+A Scripture link must:
+
+1. Open the correct Bible book.
+2. Open the correct chapter.
+3. Scroll to or highlight the correct verse/range when supplied.
+4. Work on desktop browser.
+5. Work on mobile browser.
+6. Work in the installed PWA.
+7. Work after a page refresh.
+8. Work when the user is already inside My Bible.
+9. Handle authentication without losing the destination.
+10. Fail gracefully if the requested translation is unavailable.
+
+If the route supports only chapter opening at present, implement reliable verse scrolling/highlighting rather than silently producing a broken verse URL.
+
+Render Scripture citations from structured reference objects, not from AI-generated Markdown strings.
+
+The model may choose the reference, but application code must validate, normalize and generate the final link.
+
+If a model returns an invalid or nonexistent Bible reference:
+
+- do not render it as a link
+- log the validation failure
+- either correct it deterministically where safe or show the reference as unlinked text
+
+==================================================
+8. ALL RESOURCE LINKS MUST WORK
+==================================================
+
+Apply the same principle to sermons, devotionals, Walks, Journeys, Bible Studies, Sermon Companions and Daily Rhythm.
+
+The AI must return a structured resource citation containing the canonical resource ID and type.
+
+The application must resolve that ID to the canonical route.
+
+Do not let the AI invent internal paths.
+
+Every suggested resource must be validated before rendering:
+
+- resource exists
+- published
+- accessible to current user
+- belongs to correct tenant
+- route exists
+- Daily Rhythm eligibility passes when applicable
+
+If validation fails, do not show a broken card or link.
+
+Resource links must preserve the intended destination through login and work in the installed PWA.
+
+Where a resource belongs to a Journey or Walk, open the correct resource and step—not merely the generic Next Steps page.
+
+==================================================
+9. STRUCTURED RESPONSE CONTRACT
+==================================================
+
+Change Ask Emmaus so the language model returns a structured response rather than uncontrolled Markdown links.
+
+Use a schema similar to:
+
+{
+  "answer": "Natural-language answer without invented URLs",
+  "scriptureReferences": [
+    {
+      "book": "John",
+      "chapter": 4,
+      "verseStart": 13,
+      "verseEnd": 14,
+      "reason": "Why this passage is relevant"
+    }
+  ],
+  "resourceRecommendations": [
+    {
+      "resourceType": "sermon|devotional|walk|journey|bible_study|sermon_companion|daily_rhythm",
+      "resourceId": "canonical database ID",
+      "reason": "Short, user-facing reason"
+    }
+  ],
+  "prayer": "Optional prayer or null",
+  "nextStep": "Optional gentle next step or null"
+}
+
+Server-side code must then:
+
+1. Validate the response schema.
+2. Validate every Scripture reference.
+3. Validate every resource ID.
+4. Apply tenant and user permissions.
+5. Apply Daily Rhythm eligibility.
+6. Resolve canonical internal links.
+7. Remove invalid recommendations.
+8. Render safe, clickable UI components.
+
+Never render a link directly from model-generated URL text.
+
+==================================================
+10. SEARCH AND ASK EMMAUS MUST SHARE KNOWLEDGE
+==================================================
+
+Ask Emmaus and site-wide Search should use the same canonical content index, metadata and authorization rules.
+
+They may rank and present results differently, but they must not have separate, contradictory knowledge sources.
+
+Search should return matching resources.
+
+Ask Emmaus should interpret the question, answer from Scripture and use the same eligible resources to provide relevant guidance.
+
+Daily Rhythm user-specific filtering must apply to both.
+
+==================================================
+11. LINK AND RETRIEVAL TESTING
+==================================================
+
+Add automated tests covering at least:
+
+SCRIPTURE LINKS
+
+- John 3:16
+- John 4:13–14
+- Psalm 23
+- 1 Corinthians 13
+- 2 Corinthians 5:17
+- 1 Thessalonians 5:16–18
+- 1 John 1:9
+- a full chapter reference
+- a reference without verses
+- an invalid book
+- an invalid chapter
+- an invalid verse range
+
+RESOURCE LINKS
+
+- sermon
+- Daily Devotional
+- Walk introduction
+- specific Walk step
+- Journey
+- Bible Study chapter
+- Sermon Companion step
+- today’s available Daily Rhythm
+- completed Daily Rhythm
+- future locked Daily Rhythm
+- unpublished resource
+- deleted resource
+- another tenant’s resource
+
+USER STATES
+
+- brand-new user
+- user who has not completed today’s Daily Rhythm
+- user who completed today’s Daily Rhythm
+- user with several previously completed Daily Rhythms
+- user attempting to open future Daily Rhythm content
+- logged-out user following a deep link
+- user opening links inside the installed PWA
+
+For each valid link, test both URL resolution and the final displayed destination. A 200 response alone is not sufficient if the application opens the wrong screen.
+
+==================================================
+12. OBSERVABILITY AND RELIABILITY
+==================================================
+
+Add structured logging for:
+
+- user question ID
+- retrieval request ID
+- Scripture references selected
+- eligible resources retrieved
+- resources rejected by authorization
+- Daily Rhythm resources rejected by eligibility
+- invalid model citations
+- broken or unresolved routes
+- indexing success/failure
+- response generation failure
+
+Do not log private conversation content unnecessarily. Follow existing privacy and retention requirements.
+
+Add monitoring for:
+
+- indexing failure rate
+- zero-result retrieval rate
+- invalid Scripture-reference rate
+- unresolved resource-link rate
+- Ask Emmaus response failure rate
+- response latency
+
+A broken citation or recommendation must be diagnosable without guessing.
+
+==================================================
+13. GRACEFUL FAILURE
+==================================================
+
+If resource retrieval fails:
+
+- still provide a Scripture-grounded response where possible
+- do not invent Emmaus resources
+- do not display broken recommendation cards
+- log the retrieval failure
+
+If Scripture retrieval fails:
+
+- do not pretend that Scripture was retrieved successfully
+- do not invent quotations
+- provide a safe error/retry state
+
+If the complete Ask Emmaus request fails:
+
+- retain the user’s typed question
+- display a clear retry option
+- do not leave an endless loading state
+
+==================================================
+14. REQUIRED DELIVERY REPORT
+==================================================
+
+After implementation, report:
+
+1. The root cause of the broken Scripture links.
+2. The files and systems changed.
+3. How the canonical Scripture-link builder works.
+4. How resource IDs are converted into safe internal links.
+5. How automatic indexing is triggered.
+6. How stale or deleted content is removed.
+7. Exactly how Daily Rhythm eligibility is enforced.
+8. How tenant and user permissions are enforced.
+9. The automated tests added and their results.
+10. Any remaining limitations.
+
+Do not report this as complete until:
+
+- Ask Emmaus can retrieve across the whole eligible Emmaus knowledge base.
+- Scripture is consistently prioritized.
+- Newly published content is automatically indexed.
+- edited/unpublished/deleted content is correctly reconciled.
+- Daily Rhythm content is filtered by the current user’s actual access and progress.
+- Scripture citations open the correct passage.
+- resource recommendations open the correct content.
+- links work on desktop, mobile browser and installed PWA.
+- invalid or inaccessible resources cannot be exposed.
+- automated tests pass.

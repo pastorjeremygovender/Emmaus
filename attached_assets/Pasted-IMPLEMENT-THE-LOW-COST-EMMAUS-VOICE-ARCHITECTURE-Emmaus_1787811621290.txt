@@ -1,0 +1,633 @@
+IMPLEMENT THE LOW-COST EMMAUS VOICE ARCHITECTURE
+
+Emmaus must remain free for users and have the lowest sustainable operating cost.
+
+Replace the current ElevenLabs-dependent Voice configuration with a low-cost, provider-neutral system.
+
+Target architecture:
+
+VOICE INPUT
+
+- OpenAI gpt-4o-mini-transcribe for dependable tap-to-speak transcription
+
+EMMAUS INTELLIGENCE
+
+- the existing canonical Ask Emmaus pipeline
+- Scripture first
+- Local Church resources
+- authenticated user context
+- validated Emmaus actions
+
+VOICE OUTPUT
+
+- device/browser speech synthesis as the free default
+- optional OpenAI TTS for comparison and higher-quality speech
+- ElevenLabs retained but disabled behind a feature flag
+
+PUBLISHED RESOURCE READING
+
+- provider-neutral Read to Me player
+- generate once and cache reusable audio where appropriate
+- never regenerate identical published content for every user
+
+FUTURE
+
+- native on-device speech recognition and TTS
+- dramatized Bible audio
+- interchangeable audio providers
+
+Create a checkpoint before changing anything.
+
+Do not republish automatically.
+
+Do not delete the existing ElevenLabs integration. Isolate it safely so it can be restored for comparison if needed.
+
+==================================================
+1. AUDIT CURRENT VOICE PROVIDERS
+==================================================
+
+Before changing code, identify:
+
+- current speech-to-text provider
+- current transcription endpoint
+- current TTS provider
+- ElevenLabs models used
+- Voice environment variables
+- client-side Voice code
+- server-side transcription code
+- audio-player code
+- provider selection logic
+- retry and failure handling
+- current ElevenLabs usage points
+- any remaining browser speech-recognition code
+- whether text Ask Emmaus initializes Voice services
+
+Report these in the completion report.
+
+Do not expose API keys or tokens.
+
+==================================================
+2. CREATE PROVIDER INTERFACES
+==================================================
+
+Create shared provider-neutral interfaces.
+
+Speech-to-text interface:
+
+{
+  "provider": "openai | elevenlabs | browser | native_future",
+  "transcribe": "audio input to validated transcript",
+  "supportsRealtime": false,
+  "supportsLanguageHint": true
+}
+
+Text-to-speech interface:
+
+{
+  "provider": "device | openai | elevenlabs | recorded | dramatized_future",
+  "speak": "text or structured segments to playback",
+  "supportsStreaming": true,
+  "supportsBackgroundAudio": false,
+  "supportsCaching": true
+}
+
+Audio-source resolver:
+
+{
+  "sourceType": "device_tts | openai_tts | elevenlabs_tts | recorded_audio | dramatized_audio",
+  "audioAssetId": null,
+  "audioUrl": null,
+  "textSegments": [],
+  "startTimeMs": null,
+  "endTimeMs": null,
+  "cacheKey": null
+}
+
+Ask Emmaus, Voice intent routing and the Read to Me player must not directly depend on ElevenLabs.
+
+==================================================
+3. REPLACE ELEVENLABS TRANSCRIPTION
+==================================================
+
+Use OpenAI `gpt-4o-mini-transcribe` for normal tap-to-speak transcription.
+
+Required flow:
+
+1. User taps microphone.
+2. Browser requests microphone permission where necessary.
+3. Start MediaRecorder.
+4. Record one bounded utterance.
+5. Stop automatically after reliable end-of-speech or when user taps Stop.
+6. Validate recorded duration and byte size.
+7. Send audio securely to the Emmaus server.
+8. Emmaus server calls OpenAI transcription.
+9. Return transcript and metadata.
+10. Route transcript through the canonical Ask Emmaus intent system.
+11. Release microphone and recorder resources.
+
+Do not expose the OpenAI API key to the client.
+
+Supported recorded formats must match both:
+
+- actual browser MediaRecorder output
+- OpenAI transcription input requirements
+
+Detect the real MIME type rather than hard-coding one.
+
+Support common mobile formats such as:
+
+- audio/webm
+- audio/mp4
+- audio/m4a where produced
+- audio/wav where available
+
+If format conversion is necessary, perform it safely on the server and clean up temporary files.
+
+Do not create persistent raw-audio storage unless explicitly required.
+
+==================================================
+4. CLEAN RECORDING LIFECYCLE
+==================================================
+
+The recent Voice system worked for two questions and then displayed “Transcription is not available.”
+
+Ensure every transcription attempt—successful or failed—performs cleanup:
+
+- stop every MediaStream track
+- stop and release MediaRecorder
+- clear audio chunks
+- clear timers
+- remove event listeners
+- close previous provider request/session
+- revoke temporary object URLs
+- reset abort controllers
+- reset Voice state
+- allow the next tap to create a completely new recording session
+
+Only one active transcription request is allowed per user interface instance.
+
+Prevent double taps from creating overlapping requests.
+
+Add a request/session ID so late results from an old recording cannot overwrite a new session.
+
+==================================================
+5. TRANSCRIPTION RETRY AND ERRORS
+==================================================
+
+Retry once for:
+
+- temporary network error
+- timeout
+- OpenAI 429 when Retry-After permits
+- temporary OpenAI 5xx failure
+
+Do not automatically retry:
+
+- empty recording
+- microphone permission denial
+- invalid audio
+- missing authentication
+- exhausted account usage limit
+
+Use clear user-facing messages:
+
+NO SPEECH
+
+“I couldn’t hear any speech. Please try again.”
+
+MICROPHONE DENIED
+
+“Emmaus needs microphone permission for Voice. You can still type your question.”
+
+TEMPORARY FAILURE
+
+“Voice is temporarily unavailable. Please try again.”
+
+NETWORK FAILURE
+
+“Your connection was interrupted. Please try again.”
+
+Do not expose provider names, API errors or billing information to normal users.
+
+Keep typed Ask Emmaus fully functional whenever Voice fails.
+
+==================================================
+6. DEVICE SPEECH AS FREE DEFAULT OUTPUT
+==================================================
+
+Use browser/device `speechSynthesis` as the default spoken-output trial.
+
+This applies to:
+
+- Ask Emmaus spoken answers
+- short navigation confirmations
+- player confirmations
+- short resource sections
+- testing Read to Me
+
+Requirements:
+
+- enumerate available device voices
+- select the best appropriate English voice deterministically
+- prefer `en-ZA` where a good voice exists
+- otherwise prefer a high-quality `en-GB` voice
+- otherwise use the best available English voice
+- retain the selected voice for the session
+- do not change voice between paragraphs
+- use a calm, mature male voice where the device provides one
+- use natural rate, pitch and volume defaults
+- allow admin/test configuration of rate and voice
+- do not expose personality or accent customization to normal users
+
+Emmaus has one centrally defined identity. Users may turn Voice on or off and use accessibility controls, but must not redefine Emmaus’s personality.
+
+Do not speak:
+
+- URLs
+- Markdown markers
+- raw database labels
+- technical metadata
+- card-button labels
+- sermon IDs
+
+==================================================
+7. DEVICE TTS PLAYER LIMITATIONS
+==================================================
+
+Device speech synthesis may not support dependable background playback or precise saved audio time.
+
+Represent progress using logical content segments:
+
+- verse
+- paragraph
+- section
+- Step
+- devotional segment
+
+Save progress after each completed segment.
+
+If device speech pauses or stops when the PWA is backgrounded:
+
+- preserve the last completed segment
+- display Paused
+- allow Resume
+- do not claim screen-off support
+
+Do not force browser speech synthesis into unsupported background behaviour.
+
+==================================================
+8. OPTIONAL OPENAI TTS COMPARISON
+==================================================
+
+Add OpenAI TTS as an optional test provider.
+
+Use the current recommended OpenAI speech endpoint and a suitable built-in voice.
+
+Do not use OpenAI Realtime Voice for this phase.
+
+The Voice flow remains:
+
+tap
+→ bounded recording
+→ transcription
+→ Ask Emmaus
+→ generated spoken output
+
+Add an admin/test-only provider selector:
+
+- Device Voice — Free
+- OpenAI Voice — Test
+- ElevenLabs Voice — Legacy Test
+
+Normal users must not see technical provider names during this trial.
+
+Default normal-user provider:
+
+Device Voice
+
+Do not enable ElevenLabs automatically.
+
+==================================================
+9. CACHE REUSABLE GENERATED AUDIO
+==================================================
+
+Do not generate paid TTS repeatedly for identical published content.
+
+Reusable content includes:
+
+- Daily Rhythm sections
+- Daily Devotionals
+- Walk introductions
+- Walk Steps
+- Journey introductions
+- Bible Study content
+- Sermon Companion content
+- other fixed published Emmaus resources
+
+Use a safe cache key based on:
+
+- tenant
+- canonical resource type
+- canonical resource ID
+- content version/hash
+- section or segment ID
+- TTS provider
+- voice
+- model
+- speaking settings
+- language
+
+On a cache hit:
+
+- reuse the existing authorised audio asset
+
+On content edit or republish:
+
+- create a new versioned cache key
+- stop serving stale audio
+
+Do not cache personalized Ask Emmaus answers globally.
+
+Do not allow one tenant’s private audio to become accessible to another tenant.
+
+Do not pre-generate the entire Emmaus library during this task.
+
+Generate and cache on first use or through a deliberate admin action.
+
+==================================================
+10. BIBLE AUDIO RULES
+==================================================
+
+For current Bible reading:
+
+- retrieve canonical Bible text
+- use device TTS by default
+- optionally use OpenAI TTS during testing
+- preserve translation
+- read the exact requested passage
+- save progress by canonical book/chapter/verse
+- do not navigate unless OPEN intent is explicit
+
+Do not globally cache generated Bible audio unless the translation licence and existing Emmaus permissions allow it.
+
+Keep the audio-source resolver ready for future dramatized Bible metadata:
+
+- translation
+- book
+- chapter
+- verse
+- audio asset ID
+- start timestamp
+- end timestamp
+- licence status
+- availability
+- fallback provider
+
+==================================================
+11. KEEP ASK EMMAUS AS THE BRAIN
+==================================================
+
+This provider change must not turn Voice into a generic chatbot.
+
+After transcription, every request must use the canonical Ask Emmaus intelligence:
+
+- Jesus first
+- Scripture primary
+- Local Church resources
+- ICC sermons
+- sermon timestamps
+- devotionals
+- Walks
+- Walk Steps
+- Journeys
+- Sermon Companions
+- Bible Studies
+- authenticated user state
+- Daily Rhythm eligibility
+- validated Emmaus actions
+
+Do not create a separate OpenAI Voice chatbot.
+
+OpenAI transcription converts speech to text only.
+
+The existing Ask Emmaus system determines:
+
+- what the user means
+- what Scripture is relevant
+- which Emmaus resources are relevant
+- whether to answer, find, open or read
+- which validated action may execute
+
+==================================================
+12. COST AND USAGE CONTROLS
+==================================================
+
+Record privacy-conscious usage metrics:
+
+- transcription provider
+- transcription audio duration
+- transcription success/failure
+- TTS provider
+- generated character count
+- cache hit/miss
+- generated audio duration
+- provider latency
+- estimated provider cost
+
+Do not log private question text unnecessarily.
+
+Add configurable safeguards:
+
+- maximum single recording duration
+- maximum generated spoken-answer length
+- maximum automatic retry count
+- per-user abuse protection
+- global daily cost alert
+- provider circuit breaker
+- typed fallback
+
+Do not abruptly disable legitimate users after a very small number of questions.
+
+Add an admin usage summary showing:
+
+- transcription minutes
+- transcription estimated cost
+- TTS characters
+- TTS estimated cost
+- cached-audio reuse
+- ElevenLabs calls
+- provider failures
+
+==================================================
+13. FEATURE FLAGS
+==================================================
+
+Add safe feature flags:
+
+- `voice_stt_provider=openai`
+- `voice_tts_provider=device`
+- `voice_openai_tts_enabled`
+- `voice_elevenlabs_legacy_enabled`
+- `voice_audio_cache_enabled`
+- `voice_native_future_enabled`
+- `voice_dramatized_bible_enabled`
+
+Use the project’s existing configuration conventions rather than hard-coding these exact environment-variable names if a configuration system already exists.
+
+Default:
+
+- OpenAI transcription enabled
+- device TTS enabled
+- OpenAI TTS available to admin/test accounts
+- ElevenLabs disabled
+- future native provider disabled
+- future dramatized Bible provider disabled
+
+==================================================
+14. AUTOMATED TESTS
+==================================================
+
+Test:
+
+TRANSCRIPTION
+
+- ten consecutive successful tap-to-speak turns
+- empty audio
+- extremely short audio
+- unsupported audio format
+- microphone permission denial
+- network timeout
+- OpenAI 429
+- OpenAI 5xx
+- retry succeeds
+- retry fails
+- stale response arrives after a new session
+- rapid double tap
+- recorder cleanup after success
+- recorder cleanup after failure
+
+DEVICE TTS
+
+- voice selection
+- no preferred regional voice
+- pause
+- resume
+- stop
+- repeat segment
+- next segment
+- provider unavailable
+- route change
+- component unmount
+- device speech interruption
+
+PROVIDER SELECTION
+
+- device default
+- OpenAI test provider
+- ElevenLabs remains disabled
+- provider failure falls back safely
+- typed Ask Emmaus remains available
+
+CACHE
+
+- first request creates audio
+- second identical request reuses audio
+- content edit creates new version
+- another tenant cannot access cached audio
+- personalized Ask Emmaus answer is not globally cached
+
+ASK EMMAUS INTEGRATION
+
+- “What does John 3:16 mean?”
+- “Read John 3:16.”
+- “Open John 3:16.”
+- “What Walks am I doing?”
+- “Continue my current Walk.”
+- “Find Pastor Jeremy’s sermon about faith.”
+- “Play it.”
+- “Read today’s Daily Rhythm.”
+
+==================================================
+15. MANUAL COMPARISON SCREEN
+==================================================
+
+Add a clean admin/test-only Voice comparison screen.
+
+Use the same short sample text for:
+
+- Device Voice
+- OpenAI Voice
+- ElevenLabs Legacy Voice
+
+Provide:
+
+- Play sample
+- Stop
+- selected voice name
+- approximate generation cost where applicable
+- latency
+- whether the result can be cached
+- whether background playback is supported
+
+Do not expose this screen to normal users.
+
+Use sample text:
+
+“Pastor Jeremy, Emmaus is here to help you continue walking with Jesus. You can ask a question, open a Bible passage, continue a Walk, or listen to today’s Daily Rhythm.”
+
+This comparison is for selecting the provider—not customizing Emmaus’s identity.
+
+==================================================
+16. ACCEPTANCE TEST
+==================================================
+
+On the installed Android PWA:
+
+1. Open Ask Emmaus Voice.
+2. Ask ten consecutive questions without refreshing.
+3. Every recording must begin cleanly.
+4. Every valid recording must transcribe.
+5. No ElevenLabs request should occur.
+6. Ask Emmaus must use Scripture and Emmaus resources.
+7. Device Voice must speak the answer.
+8. Stop must stop immediately.
+9. The next tap must work.
+10. Typed Ask Emmaus must remain available.
+
+Then compare Device Voice and OpenAI Voice using the same answer.
+
+Record:
+
+- transcription accuracy
+- response time
+- voice naturalness
+- stability
+- estimated cost
+
+==================================================
+17. COMPLETION REPORT
+==================================================
+
+Report:
+
+1. Previous Voice providers and failure path.
+2. Files changed.
+3. Provider interfaces created.
+4. OpenAI transcription endpoint and model used.
+5. How recorder lifecycle is cleaned up.
+6. Device voice selected on tested devices.
+7. OpenAI TTS voice/model selected for comparison.
+8. ElevenLabs code retained and how it is disabled.
+9. Audio caching implemented.
+10. Cost controls added.
+11. Exact automated test results.
+12. Preview test results.
+13. Manual Android PWA tests still required.
+14. Known device-TTS limitations.
+15. Estimated cost per hour of transcription.
+16. Confirmation that no ElevenLabs call occurs under default settings.
+17. Confirmation that Voice still uses canonical Ask Emmaus.
+
+Create a checkpoint after automated tests pass.
+
+Do not republish.

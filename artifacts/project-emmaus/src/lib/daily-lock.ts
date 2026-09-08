@@ -20,18 +20,15 @@ export function localDateKey(): string {
  */
 export function isCompletedToday(lastCompletedAt: string | null | undefined): boolean {
   if (!lastCompletedAt) return false;
-  const completed = new Date(lastCompletedAt).toLocaleDateString();
-  const today = new Date().toLocaleDateString();
-  return completed === today;
+  // P2-10: use explicit YYYY-MM-DD format rather than toLocaleDateString()
+  // which varies by environment/locale and produces brittle comparisons.
+  const d = new Date(lastCompletedAt);
+  const completedKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return completedKey === localDateKey();
 }
 
-/**
- * Returns true if a journey's next new day is available.
- * For daily-locked journeys (core, devotional): the next new step only unlocks
- * on the following local calendar day after the last completion.
- */
+/** Returns true when the next Daily Rhythm day is available on a later calendar day. */
 export function isNextDayAvailable(lastCompletedAt: string | null | undefined): boolean {
-  if (!lastCompletedAt) return true; // never started — always available
   return !isCompletedToday(lastCompletedAt);
 }
 

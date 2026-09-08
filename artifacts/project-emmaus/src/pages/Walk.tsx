@@ -2,9 +2,10 @@
  * Walk — "What is Jesus inviting me to continue today?"
  *
  * Visual hierarchy (top → bottom):
- *   1. Today's 10 Minutes with Jesus  (highest priority — always first)
- *   2. Your Journeys                  (started journeys; "Explore Journeys →" if none)
- *   3. This Week's Sermon Devotional  (companion journey, only when active)
+ *   1. Today's 10 Minutes with Jesus   (highest priority — always first)
+ *   2. Sermon Companions               (this week's sermon + up to two accessed companions)
+ *   3. Daily Devotionals               (self-paced series the member has started)
+ *   4. Your Journeys                   (started growth journeys)
  *
  * Ask Emmaus floats above the nav — not part of this hierarchy.
  */
@@ -12,16 +13,18 @@
 import { useLocation, Link } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
+import { useRooms } from '@/contexts/RoomsContext';
 import { BottomNav } from '@/components/BottomNav';
-import { Button } from '@/components/ui/button';
-import { EmmausContentCard } from '@/components/EmmausContentCard';
-import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, MoreHorizontal, Pause, Trash2, X } from 'lucide-react';
-import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
-import { isCompletedToday, isNextDayAvailable } from '@/lib/daily-lock';
+import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
+import { dismissBadge, computeUpdatedBadge } from '@/lib/badge-api';
+import { motion } from 'framer-motion';
+import { CheckCircle2, Compass, X } from 'lucide-react';
+import { useEnrollment } from '@/lib/enrollment';
+import { getStepLabel, resolveStepPrefix, getDevotionalLabel } from '@/lib/step-label';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
-import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
+import { MemberHeaderActions } from '@/components/MemberHeaderActions';
+import { useMemo, useEffect, useState, useCallback } from 'react';
 import {
   getAllProgress,
   listPublishedSeries,
@@ -32,426 +35,215 @@ import {
   type DevotionalEntry,
 } from '@/lib/devotionals-api';
 import { calcAvailableDaySelfPaced } from '@/lib/devotional-calendar';
+import { cn } from '@/lib/utils';
+import { ContentBadge } from '@/components/ContentBadge';
+import type { ReactNode } from 'react';
+import { listCollections, type Collection } from '@/lib/collections-api';
+import { projectTodaysJourneys } from '@/lib/todays-journey-projection';
+import { resolveDailyRhythmCalendar, publishedDailyRhythmStep } from '@/lib/daily-rhythm-calendar';
 
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
 
-/** Fire-and-forget engagement action (pause / remove). */
+interface SermonCompanionEngagement {
+  id: string;
+  title: string;
+  numberOfDays: number;
+  isCurrentWeek: boolean;
+  entries: Array<{ dayNumber: number; title: string }>;
+  progress: {
+    currentDay: number;
+    completedDays: number[];
+    status: string;
+    hiddenFromToday?: boolean;
+  } | null;
+  badge: 'UPDATED' | 'NEW' | null;
+}
+
+/** Fire-and-forget engagement action (hide / unhide / remove).
+ *  Identity is derived server-side from the secure session cookie. */
 async function callEngagementAction(
-  type: 'devotional' | 'sermon-companion',
+  type: 'journey' | 'devotional' | 'sermon-companion',
   id: string,
-  action: 'pause' | 'remove',
+  action: 'remove' | 'hide' | 'unhide',
+  _userId?: string,
 ): Promise<void> {
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     await fetch(
       `${BASE_URL}/api/engagements/${type}/${encodeURIComponent(id)}/${action}`,
-      { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } },
+      { method: 'POST', credentials: 'include', headers },
     );
   } catch { /* network errors are non-fatal */ }
 }
 
-// ─── Walk-specific MoreMenu ────────────────────────────────────────────────────
-
-function WalkMoreMenu({ onPause, onRemove }: { onPause: () => void; onRemove: () => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
+// ─── Walk card dismissal ──────────────────────────────────────────────────────
+function WalkDismissButton({ onDismiss }: { onDismiss: () => void }) {
   return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(p => !p)}
-        className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
-        aria-label="More actions"
-      >
-        <MoreHorizontal size={17} />
-      </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: -4 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: -4 }}
-            transition={{ duration: 0.12 }}
-            className="absolute right-0 top-9 z-30 bg-background border border-border rounded-xl shadow-lg py-1 w-44"
-          >
-            <button
-              onClick={() => { setOpen(false); onPause(); }}
-              className="w-full text-left px-4 py-2.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2"
-            >
-              <Pause size={13} className="text-muted-foreground" /> Pause
-            </button>
-            <button
-              onClick={() => { setOpen(false); onRemove(); }}
-              className="w-full text-left px-4 py-2.5 text-[14px] text-destructive hover:bg-destructive/5 transition-colors flex items-center gap-2"
-            >
-              <Trash2 size={13} className="text-destructive/70" /> Remove
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        onDismiss();
+      }}
+      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+      aria-label="Remove from Today's Steps"
+      title="Remove from Today's Steps"
+    >
+      <X size={17} strokeWidth={1.8} />
+    </button>
+  );
+}
+
+// ─── Section color tokens ─────────────────────────────────────────────────────
+
+const SECTION_COLORS = {
+  amber:   { bg: 'bg-amber-50/90 border-amber-200/60',    title: 'text-amber-700',   dot: 'bg-amber-500'   },
+  violet:  { bg: 'bg-violet-50/90 border-violet-200/60',  title: 'text-violet-700',  dot: 'bg-violet-500'  },
+  emerald: { bg: 'bg-emerald-50/90 border-emerald-200/60',title: 'text-emerald-700', dot: 'bg-emerald-500' },
+  blue:    { bg: 'bg-blue-50/90 border-blue-200/60',      title: 'text-blue-700',    dot: 'bg-blue-500'    },
+  indigo:  { bg: 'bg-indigo-50/90 border-indigo-200/60',  title: 'text-indigo-700',  dot: 'bg-indigo-500'  },
+} as const;
+type SectionColor = keyof typeof SECTION_COLORS;
+
+// ─── Section wrapper with soft color highlight ────────────────────────────────
+function SectionWrapper({
+  color,
+  label,
+  children,
+  delay = 0,
+}: {
+  color: SectionColor;
+  label: string;
+  children: ReactNode;
+  delay?: number;
+}) {
+  const c = SECTION_COLORS[color];
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay }}
+      className={cn('rounded-2xl border px-4 pt-3 pb-3.5 space-y-2', c.bg)}
+    >
+      <div className="flex items-center gap-1.5">
+        <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', c.dot)} />
+        <h2 className={cn('text-[10px] font-bold uppercase tracking-[0.14em]', c.title)}>
+          {label}
+        </h2>
+      </div>
+      {children}
+    </motion.section>
+  );
+}
+
+// ─── Skeleton loader (compact) ────────────────────────────────────────────────
+function SkeletonCard({ lines: _lines }: { lines?: number } = {}) {
+  return (
+    <div className="bg-card rounded-xl border border-border/50 px-3.5 py-3 space-y-1.5 animate-pulse">
+      <div className="flex items-center justify-between gap-3">
+        <div className="h-3.5 flex-1 rounded bg-muted" />
+        <div className="h-3 w-10 rounded bg-muted" />
+      </div>
+      <div className="h-2.5 w-3/5 rounded bg-muted" />
     </div>
   );
 }
 
-// ─── Walk-specific PauseDialog ────────────────────────────────────────────────
-
-function WalkPauseDialog({
+// ─── Compact content card (used inside SectionWrapper) ───────────────────────
+//
+// A compact two-line card: title + CTA on row 1, subtitle on row 2.
+// ~52 px tall — 3–4× shorter than EmmausContentCard, enabling 4–6 items
+// on screen without scrolling.
+function CompactCard({
   title,
-  onPause,
-  onCancel,
-}: { title: string; onPause: () => void; onCancel: () => void }) {
+  subtitle,
+  ctaLabel,
+  onAction,
+  done = false,
+  badge,
+  trailing,
+  imageUrl,
+  className,
+}: {
+  title: string;
+  subtitle?: string;
+  ctaLabel?: string;
+  onAction?: () => void;
+  done?: boolean;
+  badge?: 'UPDATED' | 'NEW' | null;
+  trailing?: ReactNode;
+  imageUrl?: string;
+  className?: string;
+}) {
+  const clickable = !!onAction;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-5 bg-foreground/20 backdrop-blur-sm">
-      <div className="bg-background rounded-2xl border border-border p-6 max-w-sm w-full space-y-5 shadow-xl">
-        <div className="flex items-start justify-between">
-          <h2 className="text-[18px] font-medium text-foreground leading-snug pr-3">Pause {title}?</h2>
-          <button onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Close">
-            <X size={18} />
-          </button>
+    <div
+      className={cn(
+        'bg-card rounded-xl border border-border/50 px-3.5 py-2.5 select-none',
+        clickable && 'cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors',
+        className,
+      )}
+      onClick={clickable ? onAction : undefined}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt=""
+            className="h-9 w-9 shrink-0 rounded-lg object-cover"
+            loading="lazy"
+          />
+        ) : null}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <p className="text-[14px] font-semibold text-foreground leading-snug truncate flex-1">
+              {title}
+            </p>
+            {badge && <ContentBadge badge={badge} />}
+            {done && <CheckCircle2 size={13} className="text-primary shrink-0" />}
+          </div>
+          {subtitle && (
+            <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug line-clamp-1">
+              {subtitle}
+            </p>
+          )}
         </div>
-        <p className="text-[14px] text-muted-foreground leading-relaxed">
-          Your progress will be kept exactly as it is. You can resume from the Next Steps tab whenever you're ready.
-        </p>
-        <div className="flex gap-3">
-          <Button className="flex-1 h-11 rounded-xl" onClick={onPause}>Pause</Button>
-          <Button variant="outline" className="flex-1 h-11 rounded-xl" onClick={onCancel}>Not now</Button>
-        </div>
+        {onAction && !done && !trailing && (
+          <X size={15} className="shrink-0 text-muted-foreground/40" aria-hidden="true" />
+        )}
+        {trailing && (
+          <div className="shrink-0 -mr-0.5" onClick={(e) => e.stopPropagation()}>
+            {trailing}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// ─── Skeleton loader ──────────────────────────────────────────────────────────
-function SkeletonCard({ lines = 3 }: { lines?: number }) {
+// ─── Add-more row (used at the bottom of every always-visible section) ─────────
+function AddMoreRow({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <div className="bg-card rounded-2xl border border-border p-6 space-y-3 animate-pulse">
-      <div className="h-3 w-24 rounded bg-muted" />
-      <div className="h-6 w-3/4 rounded bg-muted" />
-      {Array.from({ length: lines - 2 }).map((_, i) => (
-        <div key={i} className="h-4 w-full rounded bg-muted" />
-      ))}
-    </div>
+    <button
+      onClick={onClick}
+      className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-border/60 text-[12px] text-muted-foreground hover:text-foreground hover:border-primary/30 active:opacity-60 transition-colors"
+    >
+      <span className="text-[15px] font-light leading-none">+</span>
+      {label}
+    </button>
   );
 }
 
-// ─── Section label ────────────────────────────────────────────────────────────
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-      {children}
-    </h2>
-  );
-}
-
-// ─── Daily Devotional card — active (member has started) ─────────────────────
-//
-// Daily Devotionals are SELF-PACED — members advance by completing entries,
-// not by waiting for the next calendar day.
-// States:
-//   not-started — no entries completed yet
-//   in-progress — some entries completed, more available
-//   complete    — all published entries completed
-function DevotionalCard({
-  series,
-  completedCount,
-  totalPublished,
-  nextDay,
-  nextEntryTitle,
-  allComplete,
-  onOpen,
-  onViewPreviousEntries,
-  onPause,
-  onRemove,
-}: {
-  series: DevotionalSeries;
-  /** Number of entries the member has completed. */
-  completedCount: number;
-  /** Total number of published entries in the series. */
-  totalPublished: number;
-  /** Next available day number (self-paced: last completed + 1). */
-  nextDay: number;
-  /** Title of the next entry to read, if available. */
-  nextEntryTitle?: string;
-  /** True when all published entries have been completed. */
-  allComplete: boolean;
-  /** Navigate to the next available entry. */
-  onOpen: () => void;
-  onViewPreviousEntries?: () => void;
-  onPause?: () => void;
-  onRemove?: () => void;
-}) {
-  const description = allComplete
-    ? `${totalPublished} of ${totalPublished} completed`
-    : completedCount > 0
-      ? nextEntryTitle
-        ? `Day ${nextDay} of ${totalPublished} · ${nextEntryTitle}`
-        : `Day ${nextDay} of ${totalPublished}`
-      : totalPublished > 0
-        ? `Day 1 of ${totalPublished}`
-        : 'Day 1';
-
-  return (
-    <EmmausContentCard
-      label="DAILY DEVOTIONAL"
-      title={series.title}
-      description={description}
-      primaryActionLabel="Continue"
-      onAction={onOpen}
-      headerTrailing={
-        allComplete
-          ? <CheckCircle2 size={18} className="text-primary shrink-0 mt-0.5" />
-          : (onPause && onRemove)
-            ? <WalkMoreMenu onPause={onPause} onRemove={onRemove} />
-            : undefined
-      }
-      secondaryAction={
-        onViewPreviousEntries
-          ? { label: 'View Previous →', onPress: onViewPreviousEntries }
-          : undefined
-      }
-    />
-  );
-}
-
-// ─── Daily Devotional discovery card — not yet started ───────────────────────
-function DevotionalDiscoveryCard({
-  series,
-  onBegin,
-  starting,
-}: {
-  series: DevotionalSeries;
-  onBegin: () => void;
-  starting: boolean;
-}) {
-  return (
-    <EmmausContentCard
-      label="DAILY DEVOTIONAL"
-      title={series.title}
-      description="A new devotional series is available."
-      primaryActionLabel="Continue"
-      onAction={onBegin}
-      loading={starting}
-    />
-  );
-}
-
-// ─── 10 Minutes with Jesus card ───────────────────────────────────────────────
-// Highest-priority card. Always first.
-// CRITICAL: must never reference a day that has no published entry.
-//   currentEntry — the actual published step the member should open today
-//                  (null = all published content is already complete)
-//   caughtUp     — true when progress.currentDay exceeds the highest published day;
-//                  the member has finished all available content and must wait for
-//                  new entries to be published before continuing.
-//   onViewPreviousDays — when provided, a "View Previous Days →" text link is shown.
-function FifteenMinutesCard({
-  journey,
-  prog,
-  currentEntry,
-  caughtUp = false,
-  onContinue,
-  onViewPreviousDays,
-  devMode = false,
-}: {
-  journey: import('@/contexts/JourneyContext').Journey;
-  prog: import('@/contexts/JourneyContext').Progress | undefined;
-  /**
-   * The real published entry the card should reference.
-   * Null means all published content is done and the member is waiting for more.
-   */
-  currentEntry: { day: number; title: string } | null;
-  /**
-   * True when the member's arithmetic currentDay exceeds the highest published day.
-   * Walk.tsx computes this and must clamp all routing before passing it here.
-   */
-  caughtUp?: boolean;
-  onContinue: () => void;
-  onViewPreviousDays?: () => void;
-  /** When true (admin / super-admin), the daily release schedule is bypassed. */
-  devMode?: boolean;
-}) {
-  // In dev mode the calendar lock is lifted: treat every day as immediately
-  // available so devs can advance freely without waiting for tomorrow.
-  const completedToday = devMode ? false : isCompletedToday(prog?.lastCompletedAt);
-  const nextDayAvail   = devMode ? true  : isNextDayAvailable(prog?.lastCompletedAt);
-  const started        = !!prog;
-
-  /**
-   * State machine — exhaustive:
-   *   start      — member has never started
-   *   ready      — today's entry is available and unread
-   *   complete   — completed today; next day is coming soon
-   *   tomorrow   — completed today; next day is not yet available (normal end-of-day)
-   *   uptodate   — not completed today but caught up to end of published content
-   *   waitlatest — completed today AND caught up (nothing more published yet)
-   *
-   * "waitlatest" is treated identically to "tomorrow" in the UI — both show
-   * the done state with a "Review" action — but the description differs slightly.
-   */
-  type CardState = 'start' | 'ready' | 'complete' | 'tomorrow' | 'uptodate' | 'waitlatest';
-
-  let state: CardState;
-  if (!started)                              state = 'start';
-  else if (caughtUp && completedToday)       state = 'waitlatest';
-  else if (caughtUp && !completedToday)      state = 'uptodate';
-  else if (completedToday && !nextDayAvail)  state = 'tomorrow';
-  else if (completedToday)                   state = 'complete';
-  else                                       state = 'ready';
-
-  const cfg: Record<CardState, { label: string; variant: 'default'; disabled: boolean }> = {
-    start:      { label: "Open Today's Time",      variant: 'default', disabled: false },
-    ready:      {
-      label:   prog && prog.completedDays.length > 0
-                 ? "Return to Today's Time"
-                 : "Open Today's Time",
-      variant: 'default',
-      disabled: false,
-    },
-    complete:   { label: 'Review',                 variant: 'default', disabled: false },
-    tomorrow:   { label: 'Review',                 variant: 'default', disabled: false },
-    uptodate:   { label: 'Review Latest Reading',  variant: 'default', disabled: false },
-    waitlatest: { label: 'Review',                 variant: 'default', disabled: false },
-  };
-
-  const done =
-    state === 'complete' ||
-    state === 'tomorrow' ||
-    state === 'uptodate' ||
-    state === 'waitlatest';
-
-  // ── Title line ──
-  // Always references the real published entry — never a phantom day number.
-  const titleLine = (() => {
-    if (state === 'start') return "Today's time with Jesus is ready.";
-    if (state === 'uptodate') {
-      // Show the last published entry the member has completed
-      return currentEntry
-        ? `Day ${currentEntry.day} — ${currentEntry.title}`
-        : "You're up to date.";
-    }
-    if (done) {
-      // Completed state: show the entry the member just read
-      return currentEntry
-        ? `Day ${currentEntry.day} — done for today`
-        : "Today's time with Jesus is complete.";
-    }
-    // ready — show the entry they are about to open
-    return currentEntry
-      ? `Day ${currentEntry.day} — ${currentEntry.title}`
-      : "Today's time with Jesus is ready.";
-  })();
-
-  // ── Description line ──
-  const descriptionLine = (() => {
-    if (state === 'uptodate') return "You're up to date. The next reading will appear when it is ready.";
-    if (state === 'waitlatest') return "Today's time with Jesus is complete. New content will appear when it is ready.";
-    if (state === 'tomorrow' || state === 'complete') return "Today's time with Jesus is complete. Come back tomorrow.";
-    return undefined;
-  })();
-
-  return (
-    <EmmausContentCard
-      label="DAILY RHYTHM"
-      title={journey.title}
-      description={done ? descriptionLine : titleLine}
-      // When done, suppress the primary button — only the secondary link remains.
-      primaryActionLabel={done ? undefined : cfg[state].label}
-      onAction={done ? undefined : onContinue}
-      disabled={done ? undefined : cfg[state].disabled}
-      variant={done ? 'default' : 'featured'}
-      headerTrailing={
-        done
-          ? <CheckCircle2 size={20} className="text-primary shrink-0" />
-          : undefined
-      }
-      secondaryAction={
-        onViewPreviousDays
-          ? { label: 'View Previous →', onPress: onViewPreviousDays }
-          : undefined
-      }
-    />
-  );
-}
-
-// SermonDevotionalCard removed — Walk.tsx now uses the shared SermonCompanionCard component.
-
-// ─── Your Journeys section ────────────────────────────────────────────────────
-// Lists journeys the member has already started as full EmmausContentCards,
-// mirroring the card style used by Devotionals and Sermon Companions.
-// Returns null when there are no started journeys — no heading, no empty state.
-function YourJourneysSection({
-  startedJourneys,
-  onSelect,
-  onViewPrevious,
-}: {
-  startedJourneys: Array<{
-    journey: import('@/contexts/JourneyContext').Journey;
-    prog: import('@/contexts/JourneyContext').Progress;
-    currentStep: import('@/contexts/JourneyContext').Step | null;
-    totalPublishedSteps: number;
-  }>;
-  onSelect: (journeyId: string, prog: import('@/contexts/JourneyContext').Progress) => void;
-  onViewPrevious: (journeyId: string) => void;
-}) {
-  if (startedJourneys.length === 0) return null;
-
-  return (
-    <section className="space-y-4">
-      {startedJourneys.map(({ journey, prog, currentStep, totalPublishedSteps }) => {
-        const completedCount = prog.completedDays.length;
-        const isCompleted =
-          totalPublishedSteps > 0 && completedCount >= totalPublishedSteps;
-
-        // Mirror the description formula used by Devotionals and Next Steps so
-        // every surface always shows the same progress string for the same walk.
-        const description = isCompleted
-          ? `${totalPublishedSteps} of ${totalPublishedSteps} completed`
-          : completedCount > 0
-            ? currentStep?.title
-              ? `Day ${prog.currentDay} of ${totalPublishedSteps} · ${currentStep.title}`
-              : `Day ${prog.currentDay} of ${totalPublishedSteps}`
-            : totalPublishedSteps > 0
-              ? `Day 1 of ${totalPublishedSteps}`
-              : undefined;
-
-        return (
-          <EmmausContentCard
-            key={journey.id}
-            label="WALK"
-            title={journey.title}
-            description={description}
-            primaryActionLabel={isCompleted ? undefined : 'Continue'}
-            onAction={isCompleted ? undefined : () => onSelect(journey.id, prog)}
-            headerTrailing={
-              isCompleted
-                ? <CheckCircle2 size={18} className="text-primary shrink-0 mt-0.5" />
-                : undefined
-            }
-            secondaryAction={
-              completedCount > 0
-                ? { label: 'View Previous →', onPress: () => onViewPrevious(journey.id) }
-                : undefined
-            }
-          />
-        );
-      })}
-    </section>
-  );
-}
+// (DevotionalCard, DevotionalDiscoveryCard, FifteenMinutesCard and YourJourneysSection
+//  have been replaced by CompactCard + inline logic in the SectionWrapper render below.)
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Walk() {
   const { user } = useAuth();
-  const { journeys, progress, loading, startJourney, getStepsForJourney } = useJourney();
+  const { journeys, progress, loading, getStepsForJourney, dailyRhythmState } = useJourney();
   const { getState } = useEnrollment();
+  const { getMyRooms, loadRooms } = useRooms();
   const [, setLocation] = useLocation();
 
   // Hooks must all be called before early returns.
@@ -469,6 +261,25 @@ export default function Walk() {
   const [unstartedSeries, setUnstartedSeries] = useState<DevotionalSeries[]>([]);
   const [startingId, setStartingId] = useState<string | null>(null);
 
+  // Collections — used to look up the parent collection title for journey cards
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [collectionsReady, setCollectionsReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    listCollections()
+      .then(nextCollections => {
+        if (!cancelled) setCollections(nextCollections);
+      })
+      .catch(() => {
+        // Keep the section usable if the supplementary catalogue is unavailable.
+        // Collection-backed cards remain in the Journeys section; they only use
+        // the child title when there is no parent title to display.
+      })
+      .finally(() => {
+        if (!cancelled) setCollectionsReady(true);
+      });
+    return () => { cancelled = true; };
+  }, []);
   const reloadDevotionals = useCallback(async (userId?: string) => {
     const auth = userId ? { userId } : undefined;
     const [seriesList, progressList] = await Promise.all([
@@ -481,8 +292,8 @@ export default function Walk() {
       progress: progressList.find(p => p.seriesId === s.id) ?? null,
     }));
 
-    // Show ALL started series on Today's Steps, not just the first one.
-    const allStarted = withProg.filter(x => x.progress !== null);
+    // Show ALL started, non-hidden series on Today's Steps.
+    const allStarted = withProg.filter(x => x.progress !== null && !x.progress.hidden_from_today);
     if (allStarted.length > 0) {
       // Load entries in parallel so every card can show its entry title.
       const withEntries = await Promise.all(
@@ -518,74 +329,90 @@ export default function Walk() {
     }
   }, [user, reloadDevotionals, setLocation]);
 
-  // ── Pause / Remove dialog state ──────────────────────────────────────────────
-  // Tracks which card is showing the confirm-pause dialog.
-  const [pauseTarget, setPauseTarget] = useState<
-    { type: 'devotional'; id: string; title: string }
-    | { type: 'sermon-companion'; id: string; title: string }
-    | null
-  >(null);
+  // ── Journey hide state — optimistic local removal ────────────────────────────
+  // Journey progress is loaded from JourneyContext (not a local fetch like
+  // devotionals), so we track hidden IDs in a local Set for instant UI updates
+  // rather than mutating the shared context.
+  const [hiddenJourneyIds, setHiddenJourneyIds] = useState<Set<string>>(new Set());
+  // Groups do not have engagement-progress rows, so keep their Today's Steps
+  // dismissal local to this Walk screen rather than treating dismissal as
+  // leaving the group.
+  const [hiddenRoomIds, setHiddenRoomIds] = useState<Set<string>>(new Set());
 
-  // ── Sermon Companion (from sermon_companion table via API) ───────────────────
-  // currentWeeklySermonCompanionId is set by the admin in Media Studio and stored
-  // in localStorage. Loading it here (before early returns) satisfies Rules of Hooks.
-  // All in-progress sermon companions — not just the current-week one.
-  const [scCompanions, setScCompanions] = useState<Array<{
-    id: string;
-    title: string;
-    numberOfDays: number;
-    currentDay: number;
-    completedDays: number[];
-    /** Title of the entry at currentDay, if available. */
-    nextEntryTitle?: string;
-    isCurrentWeek: boolean;
-  }>>([]);
+  // ── Sermon Companions — this week first, then accessed companions ───────────
+  const [sermonCompanionEngagements, setSermonCompanionEngagements] =
+    useState<SermonCompanionEngagement[] | null>(null);
+  const [hiddenSermonCompanionIds, setHiddenSermonCompanionIds] =
+    useState<Set<string>>(new Set());
 
+  const reloadSermonCompanions = useCallback(() => {
+    fetch(`${BASE_URL}/api/sermon-companions/member/engagements`, {
+      credentials: 'include',
+      cache: 'no-store',
+    })
+      .then(r => {
+        if (!r.ok) throw new Error(`Could not load sermon companions (${r.status})`);
+        return r.json() as Promise<SermonCompanionEngagement[]>;
+      })
+      .then(setSermonCompanionEngagements)
+      .catch(() => setSermonCompanionEngagements([]));
+  }, []);
+
+  // Initial fetch — runs once when the user is known.
   useEffect(() => {
     if (!user?.id) return;
-    fetch(`${BASE_URL}/api/sermon-companions/member/engagements`, { credentials: 'include' })
-      .then(r => r.ok ? r.json() : [])
-      .then((data: Array<{
-        id: string;
-        title: string;
-        numberOfDays: number;
-        isCurrentWeek: boolean;
-        entries: { dayNumber: number; title: string }[];
-        progress: { currentDay: number; completedDays: number[]; status: string } | null;
-      }>) => {
-        // Show only companions the member has started and not paused; sort current-week first.
-        const started = data
-          .filter(c => c.progress !== null && c.progress.status !== 'paused')
-          .sort((a, b) => (b.isCurrentWeek ? 1 : 0) - (a.isCurrentWeek ? 1 : 0));
-        setScCompanions(started.map(c => {
-          const currentDay = c.progress!.currentDay;
-          const nextEntryTitle = c.entries.find(e => e.dayNumber === currentDay)?.title;
-          return {
-            id: c.id,
-            title: c.title,
-            numberOfDays: c.numberOfDays,
-            currentDay,
-            completedDays: c.progress!.completedDays,
-            nextEntryTitle,
-            isCurrentWeek: c.isCurrentWeek,
-          };
-        }));
-      })
-      .catch(() => setScCompanions([]));
-  }, [user?.id]);
+    reloadSermonCompanions();
+    loadRooms().catch(() => {/* rooms are supplementary */});
+    const refreshTimer = window.setInterval(reloadSermonCompanions, 60_000);
+    return () => window.clearInterval(refreshTimer);
+  }, [user?.id, reloadSermonCompanions, loadRooms]);
+
+  // Visibility-change refresh — refreshes the Sermon Companions card whenever
+  // the member returns to this tab.
+  // Critical for Sunday mornings: admin marks a new companion as This Week's
+  // Sermon while the member has Today's Steps open; when they switch back to the
+  // app the card updates immediately without requiring a manual reload.
+  //
+  // Devotionals are also refreshed here so that after a member completes an entry
+  // in the reader and taps Back, the Walk card immediately shows the updated
+  // position (next uncompleted entry) rather than the stale completedDays snapshot
+  // from the previous mount.
+  useEffect(() => {
+    if (!user?.id) return;
+    const userId = user.id;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        reloadSermonCompanions();
+        reloadDevotionals(userId).catch(() => {/* non-fatal */});
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [user?.id, reloadSermonCompanions, reloadDevotionals]);
 
   if (!user) return null;
 
   if (loading) {
     return (
       <div className="min-h-[100dvh] bg-background pb-page-safe">
-        <main className="px-5 pt-10 max-w-[480px] mx-auto space-y-8">
-          <div className="space-y-1.5 pt-2">
-            <div className="h-8 w-48 rounded-lg bg-muted animate-pulse" />
+        <main className="px-4 pt-8 max-w-[480px] mx-auto space-y-3.5">
+          <div className="px-1 space-y-1.5 animate-pulse">
+            <div className="h-7 w-44 rounded-lg bg-muted" />
+            <div className="h-3 w-24 rounded bg-muted" />
           </div>
-          <SkeletonCard lines={5} />
-          <SkeletonCard lines={3} />
-          <SkeletonCard lines={3} />
+          <div className="h-11 rounded-full bg-muted animate-pulse" />
+          <div className="rounded-2xl border bg-amber-50/60 border-amber-200/40 p-4 space-y-2 animate-pulse">
+            <div className="h-2 w-16 rounded bg-amber-200/60" />
+            <SkeletonCard />
+          </div>
+          <div className="rounded-2xl border bg-blue-50/60 border-blue-200/40 p-4 space-y-2 animate-pulse">
+            <div className="h-2 w-24 rounded bg-blue-200/60" />
+            <SkeletonCard />
+          </div>
+          <div className="rounded-2xl border bg-violet-50/60 border-violet-200/40 p-4 space-y-2 animate-pulse">
+            <div className="h-2 w-20 rounded bg-violet-200/60" />
+            <SkeletonCard />
+          </div>
         </main>
       </div>
     );
@@ -598,7 +425,25 @@ export default function Walk() {
   // Daily Rhythm journey from 'core' → 'daily-rhythm', so any remaining 'core'
   // journey is an admin-created growth journey and must NOT be shown here.
   const coreJourney = publishedJourneys.find(j => j.journeyType === 'daily-rhythm');
-  const coreProg = coreJourney ? progress[coreJourney.id] : undefined;
+  const coreProg = coreJourney ? (dailyRhythmState?.progress ?? progress[coreJourney.id]) : undefined;
+  const rhythmResolution = resolveDailyRhythmCalendar(undefined, dailyRhythmState);
+
+  const visibleSermonCompanions = (() => {
+    const companions = sermonCompanionEngagements ?? [];
+    const current = companions.find(companion =>
+      companion.isCurrentWeek &&
+      !companion.progress?.hiddenFromToday &&
+      !hiddenSermonCompanionIds.has(companion.id)
+    );
+    const accessed = companions.filter(companion =>
+      companion.id !== current?.id &&
+      companion.progress !== null &&
+      companion.progress.status !== 'paused' &&
+      !companion.progress.hiddenFromToday &&
+      !hiddenSermonCompanionIds.has(companion.id)
+    );
+    return [...(current ? [current] : []), ...accessed].slice(0, 3);
+  })();
 
   const devMode = isDevelopmentMode(user);
 
@@ -615,17 +460,24 @@ export default function Walk() {
   const coreMaxPublishedDay = coreSteps.length > 0
     ? Math.max(...coreSteps.map(s => s.day))
     : 0;
-  const rawCoreCurrentDay   = coreProg?.currentDay ?? 1;
+  const rawCoreCurrentDay   = rhythmResolution?.currentDay ?? coreProg?.currentDay ?? 1;
   // "Caught up" = the member's progress has advanced past all published content.
   const coreCaughtUp        = coreMaxPublishedDay > 0 && rawCoreCurrentDay > coreMaxPublishedDay;
+  // Calendar-day gating keeps the next day closed until tomorrow.
+  // Calendar gating is server-owned. Do not derive it from a timestamp or the
+  // device clock (which can be stale after a PWA resume).
+  const coreCompletedToday  = !devMode && Boolean(rhythmResolution?.completedToday || rhythmResolution?.currentStepCompleted);
   // The day we actually show and route to — clamped to real published content.
-  const effectiveCoreDay    = coreCaughtUp ? coreMaxPublishedDay : rawCoreCurrentDay;
+  const lastCompletedCoreDay = coreProg?.completedDays?.length
+    ? Math.max(...coreProg.completedDays)
+    : 0;
+  const effectiveCoreDay = coreCompletedToday
+    ? Math.max(1, lastCompletedCoreDay || rawCoreCurrentDay - 1)
+    : coreCaughtUp
+      ? coreMaxPublishedDay
+      : rawCoreCurrentDay;
   // The concrete published entry for effectiveCoreDay (null if no entries loaded yet).
-  const coreCurrentEntry    = coreSteps.find(s => s.day === effectiveCoreDay) ?? null;
-
-  // In dev mode the calendar lock is lifted, so "completed today" is always false —
-  // the card advances freely without waiting for tomorrow.
-  const coreCompletedToday  = !devMode && isCompletedToday(coreProg?.lastCompletedAt);
+  const coreCurrentEntry    = publishedDailyRhythmStep(coreSteps, effectiveCoreDay);
 
   // True when the member has nothing left to act on today — used to suppress
   // the heartbeat animation so it only pulses when there is something to open.
@@ -638,14 +490,26 @@ export default function Walk() {
     coreSteps.some(s => s.day < effectiveCoreDay);
 
   // 3. Your Journeys — journeys the member has already started.
-  //    Includes: active growth journeys + started daily devotional.
+  //    Includes: every published journey progress record that is not owned by
+  //    one of the dedicated sections below.
   //    Excludes: Daily Rhythm (shown above), Companion (shown below).
+  //    Excludes: hidden journeys (optimistic local set OR server flag).
   //    Status check: prefer server-backed progress[j.id]?.status; fall back to
   //    localStorage (enrollment.ts optimistic cache) for instant UI updates.
-  const activeGrowthJourneys = publishedJourneys
+  //    IMPORTANT: overloadExempt only controls the active-enrollment limit. It
+  //    must never make started content disappear from Today's Steps.
+  const activeMemberJourneys = publishedJourneys
     .filter(j => {
       if (!progress[j.id]) return false;
-      if (isExemptJourney(j)) return false;
+      // These content types have their own canonical Today's Steps sections.
+      // Do not use isExemptJourney here: it also includes the independent
+      // overloadExempt flag, which is not a visibility decision.
+      if (j.journeyType === 'daily-rhythm' || j.journeyType === 'companion') {
+        return false;
+      }
+      // Hide: optimistic local set (instant) OR server flag (after page reload).
+      if (hiddenJourneyIds.has(j.id)) return false;
+      if (progress[j.id]?.hiddenFromToday) return false;
       // Server status wins when present; optimistic localStorage cache as fallback.
       const serverStatus = progress[j.id]?.status;
       if (serverStatus) return serverStatus === 'active';
@@ -653,16 +517,9 @@ export default function Walk() {
     })
     .map(j => ({ journey: j, prog: progress[j.id]! }));
 
-  const devotionalJourney = publishedJourneys.find(j => j.journeyType === 'devotional');
-  const devotionalProg    = devotionalJourney ? progress[devotionalJourney.id] : undefined;
-  const devotionalEntry   =
-    devotionalJourney && devotionalProg
-      ? [{ journey: devotionalJourney, prog: devotionalProg }]
-      : [];
-
   // Enrich each started journey with its current step title and total published
   // step count so YourJourneysSection can render a progress-aware description.
-  const startedJourneys = [...activeGrowthJourneys, ...devotionalEntry].map(
+  const startedJourneys = activeMemberJourneys.map(
     ({ journey, prog }) => {
       const steps = getStepsForJourney(journey.id).filter(
         s => s.status === 'Published' && !s.isCompletionStep,
@@ -672,18 +529,36 @@ export default function Walk() {
     },
   );
 
+  const visibleStartedJourneys = startedJourneys.filter(({ journey }) => {
+    const category = journey.category?.trim().toLowerCase();
+    const tags = (journey.tags ?? []).map(tag => tag.trim().toLowerCase());
+    return category !== 'companion' && !tags.includes('companion');
+  });
+  const {
+    standaloneWalks: startedWalks,
+    standaloneJourneys: startedLongerJourneys,
+    collectionCards,
+  } = projectTodaysJourneys(visibleStartedJourneys, collections);
+
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
-  function goToDailyRhythmDay(day: number) {
-    setLocation(`/daily-rhythm/day/${day}`);
+  /** Navigate to the Discover (Journeys) page with a pre-selected tab. */
+  function navigateToDiscover(tab: 'walks' | 'journeys' | 'devotionals' | 'sermons') {
+    try { sessionStorage.setItem('emmaus_discover_tab', tab); } catch { /* ignore */ }
+    setLocation('/journeys');
   }
 
-  function goToJourney(journeyId: string, prog: { currentDay: number }) {
+  function goToDailyRhythmDay(_day: number) {
+    // Navigate to the step navigator so the member can choose Previous / Current / Next
+    // rather than being dropped straight into the reading.
+    setLocation('/daily-rhythm/navigate');
+  }
+
+  function goToJourney(journeyId: string, _prog: { currentDay: number }) {
     // progress[journeyId] is always present here — goToJourney is only called from
-    // "Your Journeys" cards which filter on progress[j.id] existence. The
-    // startJourney guard that was previously here was dead code and has been removed.
-    const day = prog.currentDay ?? 1;
-    setLocation(`/journey/${journeyId}/day/${day}?source=walk`);
+    // "Your Journeys" cards which filter on progress[j.id] existence.
+    // All Walk entry points must use the same overview/list experience.
+    setLocation(`/journeys/${journeyId}?source=today`);
   }
 
   // ── Greeting ─────────────────────────────────────────────────────────────────
@@ -692,253 +567,380 @@ export default function Walk() {
   const greeting =
     hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
-  // Derive a safe first name — never show 'Friend' or empty strings.
   const rawPreferredName = user.preferredName?.trim();
   const greetingFirstName =
     rawPreferredName && !rawPreferredName.includes('@')
       ? rawPreferredName.split(' ')[0]
       : null;
 
+  // ── Daily Rhythm compact card — state machine ──
+  // One-step-per-day gate removed: members can continue to the next day immediately.
+  type DrState = 'start' | 'ready' | 'uptodate';
+  const drStarted = !!coreProg;
+  let drState: DrState;
+  if (!drStarted)    drState = 'start';
+  else if (coreCompletedToday || coreCaughtUp) drState = 'uptodate';
+  else               drState = 'ready';
+
+  const drSubtitle = (() => {
+    if (drState === 'start') return 'Your daily time with Jesus is ready';
+    if (drState === 'uptodate') {
+      return coreCurrentEntry
+        ? `${getStepLabel(coreCurrentEntry, coreJourney!)} — you're up to date`
+        : "You're up to date";
+    }
+    return coreCurrentEntry?.title || 'Ready to continue';
+  })();
+
+  const drCtaLabel = drState === 'start'
+    ? "Open today's reading"
+    : drState === 'ready'
+      ? ((coreProg?.completedDays.length ?? 0) > 0 ? "Continue" : "Open today's reading")
+      : 'Review';
+
+  function handleDrAction() {
+    if (coreCaughtUp) {
+      const reviewDay = coreMaxPublishedDay > 0 ? coreMaxPublishedDay : effectiveCoreDay;
+      setLocation(`/daily-rhythm/day/${reviewDay}?from=walk`);
+    } else {
+      goToDailyRhythmDay(effectiveCoreDay);
+    }
+  }
+
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
-      {/* Dev mode indicator — shown only to authorised admins with dev mode on */}
       {devMode && <DevModeBanner />}
-      {/* Admin quick-link (shown to admins regardless of dev mode) */}
-      {user.role === 'admin' && !devMode && (
+      {(user.role === 'admin' || user.role === 'superAdmin') && !devMode && (
         <div className="bg-primary text-primary-foreground text-xs py-1.5 text-center font-medium">
           Admin mode —{' '}
-          <Link href="/admin" className="underline">
-            Go to Admin
-          </Link>
+          <Link href="/admin" className="underline">Go to Admin</Link>
         </div>
       )}
 
-      <main className="px-5 pt-10 max-w-[480px] mx-auto space-y-8">
+      <main className="relative px-4 pt-10 pb-4 max-w-[480px] mx-auto space-y-3.5">
 
-        {/* ── Greeting ───────────────────────────────────────────────────────── */}
-        <header>
-          <motion.h1
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-[30px] font-sans font-medium tracking-tight leading-tight text-foreground"
-            data-testid="text-greeting"
-          >
-            {greetingFirstName ? `${greeting}, ${greetingFirstName}.` : `${greeting}.`}
-          </motion.h1>
+        {/* ── Greeting ─────────────────────────────────────────────────────── */}
+        <header className="px-1 pb-0.5">
+          <div className="mb-1 flex justify-end">
+            <MemberHeaderActions compact />
+          </div>
+          <div className="min-w-0">
+            <motion.h1
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6 }}
+              className="text-[26px] font-sans font-medium tracking-tight leading-tight text-foreground"
+              data-testid="text-greeting"
+            >
+              {greetingFirstName ? `${greeting}, ${greetingFirstName}.` : `${greeting}.`}
+            </motion.h1>
+            <p className="text-[13px] text-muted-foreground mt-0.5">Here's your day.</p>
+          </div>
         </header>
 
-        {/* ── 1. 10 Minutes with Jesus ───────────────────────────────────────── */}
+        {/* ── Ask Emmaus / Search ───────────────────────────────────────────── */}
+        <UnifiedEmmausInput launchOnly />
+
+        {/* ── 1. Start Here — Daily Rhythm only ─────────────────────────────── */}
         {coreJourney ? (
-          <motion.section
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.05 }}
-          >
-            {/* Heartbeat wrapper — animates as a single unit when actionable.
-                Separate from motion.section so scale never conflicts with the
-                entrance translateY. Suppressed once the member has read today. */}
-            <div className={coreDone ? undefined : 'emmaus-heartbeat'}>
-            <FifteenMinutesCard
-              journey={coreJourney}
-              prog={coreProg}
-              currentEntry={coreCurrentEntry}
-              caughtUp={coreCaughtUp}
-              devMode={devMode}
-              onContinue={() => {
-                if (coreCaughtUp) {
-                  // Caught up past all published content → review the last published entry.
-                  // ?from=walk keeps the back arrow pointing to Today's Steps (not Previous Days).
-                  const reviewDay = coreMaxPublishedDay > 0 ? coreMaxPublishedDay : effectiveCoreDay;
-                  setLocation(`/daily-rhythm/day/${reviewDay}?from=walk`);
-                } else if (coreCompletedToday) {
-                  // Completed today's entry. After completeStep runs, currentDay advances by 1,
-                  // so the day just finished is rawCoreCurrentDay - 1.
-                  // ?from=walk keeps the back arrow pointing to Today's Steps.
-                  const reviewDay = Math.max(1, rawCoreCurrentDay - 1);
-                  setLocation(`/daily-rhythm/day/${reviewDay}?from=walk`);
-                } else {
-                  goToDailyRhythmDay(effectiveCoreDay);
-                }
-              }}
-              onViewPreviousDays={
-                hasPreviousDays ? () => setLocation('/daily-rhythm/previous?from=walk') : undefined
-              }
+          <SectionWrapper color="amber" label="Start Here" delay={0.05}>
+            <CompactCard
+              title={coreJourney.title}
+              subtitle={drSubtitle}
+              ctaLabel={drCtaLabel}
+              onAction={handleDrAction}
+              done={drState === 'uptodate'}
+              className={drState !== 'uptodate' ? 'daily-rhythm-actionable-card' : undefined}
             />
-            </div>
-          </motion.section>
+          </SectionWrapper>
         ) : (
-          <div className="rounded-2xl border border-dashed border-border p-6 text-center">
-            <p className="text-[15px] text-muted-foreground">
-              We couldn't load this step. Please try again.
+          <div className="rounded-2xl border border-dashed border-border p-5 text-center">
+            <p className="text-[14px] text-muted-foreground">
+              We couldn't load your daily reading. Please try again.
             </p>
           </div>
         )}
 
-        {/* ── 2. Daily Devotionals — self-paced (all active series) ─────────── */}
-        {activeDevotionals.length > 0
-          ? activeDevotionals.map(activeDevotional => {
-              const publishedEntries = activeDevotional.entries.filter(e => e.status === 'Published');
-              const maxPublishedDay  = publishedEntries.length > 0
-                ? Math.max(...publishedEntries.map(e => e.dayNumber))
-                : 1;
-              const completedDays   = activeDevotional.progress.completedDays ?? [];
-              const nextDay         = calcAvailableDaySelfPaced(completedDays, maxPublishedDay, devMode);
-              const nextEntry       = activeDevotional.entries.find(
-                e => e.dayNumber === nextDay && e.status === 'Published',
-              );
-              const completedCount  = completedDays.length;
-              const allComplete     = completedCount >= publishedEntries.length && publishedEntries.length > 0;
-              const openDay         = allComplete ? Math.max(...completedDays) : nextDay;
-              const hasPrevEntries  = completedCount > 0;
-
+        {/* ── 2. Sermon Companions — current week + accessed, maximum three ──── */}
+        <SectionWrapper color="blue" label="Sermon Companions" delay={0.06}>
+          {sermonCompanionEngagements === null ? (
+            <SkeletonCard />
+          ) : visibleSermonCompanions.length === 0 ? (
+            <div className="bg-card/70 rounded-xl border border-border/40 px-3.5 py-2.5">
+              <p className="text-[12px] text-muted-foreground leading-snug">
+                Sermon Companions you start from Discover will appear here.
+              </p>
+            </div>
+          ) : (
+            visibleSermonCompanions.map(companion => {
+              const entryCount = companion.entries.length || companion.numberOfDays;
+              const completedCount = companion.progress?.completedDays.length ?? 0;
+              const allComplete = entryCount > 0 && completedCount >= entryCount;
+              const currentDay = companion.progress?.currentDay ?? 1;
+              const nextEntry = companion.entries.find(entry => entry.dayNumber === currentDay);
+              const displayTitle = companion.title.includes(': ')
+                ? companion.title.split(': ')[0].trim()
+                : companion.title;
+              const subtitle = companion.isCurrentWeek
+                ? "This week's sermon"
+                : allComplete
+                  ? 'Companion complete'
+                  : nextEntry?.title ?? `Step ${currentDay} of ${entryCount}`;
               return (
-                <motion.section
-                  key={activeDevotional.series.id}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.09 }}
-                >
-                  <DevotionalCard
-                    series={activeDevotional.series}
-                    completedCount={completedCount}
-                    totalPublished={publishedEntries.length}
-                    nextDay={nextDay}
-                    nextEntryTitle={nextEntry?.title}
-                    allComplete={allComplete}
-                    onOpen={() =>
-                      setLocation(`/devotional/${activeDevotional.series.id}/day/${openDay}?source=today`)
-                    }
-                    onViewPreviousEntries={
-                      hasPrevEntries
-                        ? () => setLocation(`/devotional/${activeDevotional.series.id}/previous?from=walk`)
-                        : undefined
-                    }
-                    onPause={() => setPauseTarget({
-                      type: 'devotional',
-                      id: activeDevotional.series.id,
-                      title: activeDevotional.series.title,
-                    })}
-                    onRemove={() => {
-                      setActiveDevotionals(prev => prev.filter(d => d.series.id !== activeDevotional.series.id));
-                      void callEngagementAction('devotional', activeDevotional.series.id, 'remove');
-                    }}
-                  />
-                </motion.section>
+                <CompactCard
+                  key={companion.id}
+                  title={displayTitle}
+                  subtitle={subtitle}
+                  ctaLabel={!companion.progress ? 'Start' : allComplete ? 'Review' : 'Continue'}
+                  onAction={() => {
+                    void dismissBadge('companion', companion.id);
+                    setLocation(`/sermon-companion/${companion.id}/overview?source=today`);
+                  }}
+                  done={allComplete}
+                  badge={companion.badge}
+                  trailing={
+                    <WalkDismissButton
+                      onDismiss={() => {
+                        setHiddenSermonCompanionIds(prev => new Set([...prev, companion.id]));
+                        void callEngagementAction('sermon-companion', companion.id, 'hide', user?.id);
+                      }}
+                    />
+                  }
+                />
               );
             })
-          : unstartedSeries.length > 0
-            ? (
-              <motion.section
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.09 }}
-              >
-                <DevotionalDiscoveryCard
-                  series={unstartedSeries[0]}
-                  onBegin={() => handleBeginDevotional(unstartedSeries[0].id)}
-                  starting={startingId === unstartedSeries[0].id}
-                />
-              </motion.section>
-            )
-            : null
-        }
+          )}
+          <AddMoreRow
+            label="Add a Sermon Companion"
+            onClick={() => navigateToDiscover('sermons')}
+          />
+        </SectionWrapper>
 
-        {/* ── 3. Your Journeys ───────────────────────────────────────────────── */}
+        {/* ── 3. Daily Devotionals — always visible ────────────────────────── */}
+        <SectionWrapper color="violet" label="Daily Devotionals" delay={0.07}>
+          {activeDevotionals.map(ad => {
+            const published      = ad.entries.filter(e => e.status === 'Published');
+            const sortedPub      = [...published].sort((a, b) => a.dayNumber - b.dayNumber);
+            const maxDay         = sortedPub.length > 0 ? Math.max(...sortedPub.map(e => e.dayNumber)) : 1;
+            const completedDays  = ad.progress.completedDays ?? [];
+            const nextDay        = calcAvailableDaySelfPaced(completedDays, maxDay, devMode, sortedPub.map(e => e.dayNumber));
+            const nextEntry      = sortedPub.find(e => e.dayNumber === nextDay);
+            const completedCount = completedDays.length;
+            const allComplete    = completedCount >= published.length && published.length > 0;
+            const openDay        = allComplete ? Math.max(...completedDays) : nextDay;
+            // Use position within sorted published entries (not raw dayNumber) so that
+            // non-sequential dayNumbers (e.g. day 16 in a 14-entry series) never produce
+            // a confusing "16 of 14" counter.
+            const nextEntryPos   = nextEntry ? (sortedPub.findIndex(e => e.dayNumber === nextEntry.dayNumber) + 1) : null;
+            const nextLabel      = getDevotionalLabel({ dayNumber: nextDay, displayLabel: nextEntry?.displayLabel });
+            const devSubtitle    = allComplete
+              ? 'Complete'
+              : nextEntry?.title || undefined;
+            const badge = computeUpdatedBadge(
+              ad.series.notifyPublishedAt ?? null,
+              ad.progress.lastOpenedAt ?? null,
+              true,
+            );
+            return (
+              <CompactCard
+                key={ad.series.id}
+                title={ad.series.title}
+                subtitle={devSubtitle}
+                ctaLabel={allComplete ? undefined : 'Continue'}
+                onAction={() => {
+                  void dismissBadge('devotional', ad.series.id);
+                  setLocation(`/devotional/${ad.series.id}/navigate`);
+                }}
+                done={allComplete}
+                badge={badge}
+                trailing={
+                  !allComplete ? (
+                    <WalkDismissButton
+                      onDismiss={() => {
+                        setActiveDevotionals(prev => prev.filter(d => d.series.id !== ad.series.id));
+                        void callEngagementAction('devotional', ad.series.id, 'hide', user?.id);
+                      }}
+                    />
+                  ) : undefined
+                }
+              />
+            );
+          })}
+          <AddMoreRow label="Add a devotional" onClick={() => navigateToDiscover('devotionals')} />
+        </SectionWrapper>
+
+        {/* ── 3. Walks (Quick Studies) — always visible ─────────────────────── */}
+        <SectionWrapper color="emerald" label="Walks (Quick Studies)" delay={0.09}>
+          {startedWalks.map(({ journey, prog, currentStep, totalPublishedSteps }) => {
+            const completedCount = prog.completedDays.length;
+            const isCompleted    = totalPublishedSteps > 0 && completedCount >= totalPublishedSteps;
+            const walkSubtitle   = isCompleted ? 'Walk Complete' : (currentStep?.title || undefined);
+            const badge = computeUpdatedBadge(
+              journey.notifyPublishedAt ?? null,
+              prog.lastOpenedAt ?? null,
+              true,
+            );
+            return (
+              <CompactCard
+                key={journey.id}
+                title={journey.title}
+                subtitle={walkSubtitle}
+                ctaLabel={isCompleted ? undefined : 'Continue'}
+                onAction={() => {
+                  void dismissBadge('journey', journey.id);
+                  goToJourney(journey.id, prog);
+                }}
+                done={isCompleted}
+                badge={badge}
+                trailing={
+                  !isCompleted ? (
+                    <WalkDismissButton
+                      onDismiss={() => {
+                        setHiddenJourneyIds(prev => new Set([...prev, journey.id]));
+                        void callEngagementAction('journey', journey.id, 'hide', user?.id);
+                      }}
+                    />
+                  ) : undefined
+                }
+              />
+            );
+          })}
+          <AddMoreRow label="Add a Walk" onClick={() => navigateToDiscover('walks')} />
+        </SectionWrapper>
+
+        {/* ── 4. Journeys (Longer Studies) — always visible ─────────────────── */}
+        <SectionWrapper color="indigo" label="Journeys (Longer Studies)" delay={0.11}>
+          {!collectionsReady && visibleStartedJourneys.some(({ journey }) => journey.collectionId) ? (
+            <SkeletonCard />
+          ) : <>
+          {collectionCards.map(({ collection, active, children }) => {
+            const { journey, prog, currentStep } = active;
+            const allComplete = children.every(child =>
+              child.totalPublishedSteps > 0 &&
+              child.prog.completedDays.length >= child.totalPublishedSteps
+            );
+            const journeySubtitle = allComplete
+              ? 'Journey Complete'
+              : `${journey.title}${currentStep?.title ? ` · ${currentStep.title}` : ''}`;
+            return (
+              <CompactCard
+                key={collection.id}
+                title={collection.title}
+                subtitle={journeySubtitle}
+                ctaLabel={allComplete ? undefined : 'View & Continue'}
+                imageUrl={collection.coverImageUrl}
+                onAction={() => {
+                  void dismissBadge('journey', journey.id);
+                  setLocation(`/journeys/collections/${collection.id}?source=today&resume=${encodeURIComponent(journey.id)}`);
+                }}
+                done={allComplete}
+                trailing={
+                  !allComplete ? (
+                    <WalkDismissButton
+                      onDismiss={() => {
+                        const ids = children.map(child => child.journey.id);
+                        setHiddenJourneyIds(prev => new Set([...prev, ...ids]));
+                        ids.forEach(id => {
+                          void callEngagementAction('journey', id, 'hide', user?.id);
+                        });
+                      }}
+                    />
+                  ) : undefined
+                }
+              />
+            );
+          })}
+          {startedLongerJourneys.map(({ journey, prog, currentStep, totalPublishedSteps }) => {
+            const completedCount  = prog.completedDays.length;
+            const isCompleted     = totalPublishedSteps > 0 && completedCount >= totalPublishedSteps;
+            const journeySubtitle = isCompleted ? 'Walk Complete' : (currentStep?.title || undefined);
+            const badge = computeUpdatedBadge(
+              journey.notifyPublishedAt ?? null,
+              prog.lastOpenedAt ?? null,
+              true,
+            );
+            return (
+              <CompactCard
+                key={journey.id}
+                title={journey.title}
+                subtitle={journeySubtitle}
+                ctaLabel={isCompleted ? undefined : 'Continue'}
+                onAction={() => {
+                  void dismissBadge('journey', journey.id);
+                  goToJourney(journey.id, prog);
+                }}
+                done={isCompleted}
+                badge={badge}
+                trailing={
+                  !isCompleted ? (
+                    <WalkDismissButton
+                      onDismiss={() => {
+                        setHiddenJourneyIds(prev => new Set([...prev, journey.id]));
+                        void callEngagementAction('journey', journey.id, 'hide', user?.id);
+                      }}
+                    />
+                  ) : undefined
+                }
+              />
+            );
+          })}</>}
+          <AddMoreRow label="Add a Journey" onClick={() => navigateToDiscover('journeys')} />
+        </SectionWrapper>
+
+        {/* ── 5. My Groups — always visible ─────────────────────────────────── */}
+        {(() => {
+          const myRooms = getMyRooms(user.id).filter(room => !hiddenRoomIds.has(room.id));
+          return (
+            <SectionWrapper color="blue" label="My Groups" delay={0.13}>
+              {myRooms.map(room => (
+                <CompactCard
+                  key={room.id}
+                  title={room.name}
+                  subtitle={
+                    room.leaderNote
+                      ? room.leaderNote
+                      : `${room.memberCount} ${room.memberCount === 1 ? 'member' : 'members'}${room.adminName ? ` · Led by ${room.adminName}` : ''}`
+                  }
+                  ctaLabel="Open"
+                  onAction={() => setLocation(`/rooms/${room.id}`)}
+                  trailing={
+                    <WalkDismissButton
+                      onDismiss={() => {
+                        setHiddenRoomIds(prev => new Set([...prev, room.id]));
+                      }}
+                    />
+                  }
+                />
+              ))}
+              <AddMoreRow label="Add a Group" onClick={() => setLocation('/rooms?chooser=1')} />
+            </SectionWrapper>
+          );
+        })()}
+
+        {/* ── Discover More ─────────────────────────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.10 }}
+          transition={{ duration: 0.4, delay: 0.13 }}
+          className="pb-24"
         >
-          <YourJourneysSection
-            startedJourneys={startedJourneys}
-            onSelect={goToJourney}
-            onViewPrevious={(id) => setLocation(`/journey/${id}/previous?from=walk`)}
-          />
+          <button
+            type="button"
+            onClick={() => setLocation('/journeys')}
+            className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)] left-1/2 z-40 flex w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 items-center justify-center gap-2.5 rounded-full border border-border bg-card px-4 py-3 text-[14px] text-muted-foreground/50 shadow-sm transition-all hover:border-primary/25 hover:shadow-md"
+            aria-label="Discover More"
+          >
+            <Compass size={15} className="shrink-0 text-muted-foreground/50" strokeWidth={1.8} />
+            Discover More
+          </button>
         </motion.div>
-
-        {/* ── 4. Sermon Companions — all in-progress ─────────────────────────── */}
-        {scCompanions.map(sc => {
-          const completedCount = sc.completedDays.length;
-          const total = sc.numberOfDays;
-          const allComplete = total > 0 && completedCount >= total;
-          const description = allComplete
-            ? `${total} of ${total} completed`
-            : completedCount > 0
-              ? sc.nextEntryTitle
-                ? `Day ${sc.currentDay} of ${total} · ${sc.nextEntryTitle}`
-                : `Day ${sc.currentDay} of ${total}`
-              : total > 0 ? `Day 1 of ${total}` : 'Day 1';
-
-          return (
-            <motion.section
-              key={sc.id}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.15 }}
-            >
-              <EmmausContentCard
-                label="SERMON COMPANION"
-                title={sc.title}
-                description={description}
-                metadata={`${sc.numberOfDays} Days`}
-                // Hide Continue when all days are complete.
-                primaryActionLabel={sc.currentDay > sc.numberOfDays ? undefined : 'Continue'}
-                onAction={
-                  sc.currentDay > sc.numberOfDays
-                    ? undefined
-                    : () => setLocation(`/sermon-companion/${sc.id}/day/${sc.currentDay}?source=today`)
-                }
-                headerTrailing={
-                  <WalkMoreMenu
-                    onPause={() => setPauseTarget({
-                      type: 'sermon-companion',
-                      id: sc.id,
-                      title: sc.title,
-                    })}
-                    onRemove={() => {
-                      setScCompanions(prev => prev.filter(c => c.id !== sc.id));
-                      void callEngagementAction('sermon-companion', sc.id, 'remove');
-                    }}
-                  />
-                }
-                secondaryAction={
-                  sc.currentDay > 1
-                    ? {
-                        label: 'View Previous →',
-                        onPress: () => setLocation(`/sermon-companion/${sc.id}/previous?from=walk`),
-                      }
-                    : undefined
-                }
-              />
-            </motion.section>
-          );
-        })}
 
       </main>
 
       <BottomNav />
 
-      {/* ── Pause confirmation dialog ─────────────────────────────────────────── */}
-      {pauseTarget && (
-        <WalkPauseDialog
-          title={pauseTarget.title}
-          onCancel={() => setPauseTarget(null)}
-          onPause={() => {
-            const target = pauseTarget;
-            setPauseTarget(null);
-            if (target.type === 'devotional') {
-              setActiveDevotionals(prev => prev.filter(d => d.series.id !== target.id));
-              void callEngagementAction('devotional', target.id, 'pause');
-            } else {
-              setScCompanions(prev => prev.filter(c => c.id !== target.id));
-              void callEngagementAction('sermon-companion', target.id, 'pause');
-            }
-          }}
-        />
-      )}
     </div>
   );
 }

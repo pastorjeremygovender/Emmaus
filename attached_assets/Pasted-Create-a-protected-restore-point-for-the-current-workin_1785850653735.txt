@@ -1,0 +1,185 @@
+Create a protected restore point for the current working version of Emmaus before making any further changes.
+
+Do not modify any application functionality as part of this task.
+
+==================================================
+1. VERIFY CURRENT STATE
+==================================================
+
+First confirm that the currently published version and the development version contain the same intended code.
+
+Do not make feature changes.
+
+Record the current:
+
+- Git branch
+- latest commit
+- deployment version
+- database environment
+- application URL
+
+==================================================
+2. CREATE A NAMED GIT COMMIT
+==================================================
+
+Commit every current intended code change.
+
+Use this exact commit message:
+
+Emmaus stable baseline — 4 August 2026
+
+Do not include:
+
+- temporary files
+- local caches
+- uploaded media binaries that should live in object storage
+- secret values
+- environment files containing credentials
+
+Confirm that there are no important uncommitted code changes remaining afterward.
+
+==================================================
+3. CREATE A PERMANENT GIT TAG
+==================================================
+
+Create an annotated Git tag named:
+
+emmaus-stable-2026-08-04
+
+Tag message:
+
+Stable Emmaus baseline before next development phase
+
+This tag must point to the stable commit created above.
+
+Do not move or reuse this tag later.
+
+==================================================
+4. PUSH TO GITHUB
+==================================================
+
+Push the stable commit and the tag to the connected GitHub repository.
+
+Confirm that both exist remotely:
+
+- the stable commit
+- emmaus-stable-2026-08-04
+
+Do not force-push or rewrite existing history.
+
+==================================================
+5. CREATE A STABLE BRANCH
+==================================================
+
+Create and push a protected reference branch named:
+
+stable/2026-08-04
+
+This branch must point to the same stable commit and must not be used for normal development.
+
+Do not make future feature changes directly on this branch.
+
+==================================================
+6. CREATE THE NEXT DEVELOPMENT BRANCH
+==================================================
+
+Create and switch future work to:
+
+development/next-phase
+
+Base it on:
+
+stable/2026-08-04
+
+All further changes must happen on development/next-phase.
+
+Do not continue development on the stable branch.
+
+==================================================
+7. REPLIT CHECKPOINT
+==================================================
+
+Ensure there is a Replit checkpoint representing the current stable state.
+
+Clearly identify it in the Agent history as:
+
+Emmaus stable baseline — 4 August 2026
+
+Do not begin another feature task until this checkpoint is visible and restorable.
+
+==================================================
+8. DATABASE SAFETY
+==================================================
+
+Do not reset, migrate, seed, delete or modify database data during this task.
+
+Record the current database schema or migration state.
+
+Create a database backup or documented restoration point using the database provider’s supported backup method.
+
+Important:
+
+- preserve user accounts
+- preserve progress
+- preserve sermons and companions
+- preserve uploaded-media references
+- preserve Rooms and attendance data
+- preserve all published content
+
+Do not place a database export containing personal data into a public Git repository.
+
+==================================================
+9. DEPLOYMENT RECORD
+==================================================
+
+Record the currently working published deployment as the stable deployment.
+
+Do not replace it during this task.
+
+Provide:
+
+- deployment identifier
+- deployment date
+- associated Git commit
+- published URL
+
+==================================================
+10. RESTORE INSTRUCTIONS
+==================================================
+
+Create a file named:
+
+RESTORE-EMMAUS-STABLE.md
+
+It must explain how to restore the stable version using:
+
+A. Replit checkpoint rollback
+
+B. Git stable branch:
+stable/2026-08-04
+
+C. Git tag:
+emmaus-stable-2026-08-04
+
+D. The recorded stable deployment
+
+E. The database backup or point-in-time restore
+
+Include a warning that restoring code does not necessarily restore production database contents automatically.
+
+==================================================
+11. FINAL CONFIRMATION
+==================================================
+
+Report only after confirming:
+
+- stable commit created
+- Git tag created
+- stable branch created
+- development branch created and active
+- commit, branch and tag pushed to GitHub
+- Replit checkpoint identified
+- database restoration method recorded
+- stable deployment recorded
+- RESTORE-EMMAUS-STABLE.md created
+- no application features were changed
