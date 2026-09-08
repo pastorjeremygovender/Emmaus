@@ -28,6 +28,10 @@ args = "emmaus-member-flow-regressions"
 task = "workflow.run"
 args = "Emmaus APK download (temporary)"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Jarvis temporary preview"
+
 [[workflows.workflow]]
 name = "data-safety: content integrity"
 author = "agent"
@@ -61,6 +65,18 @@ outputType = "webview"
 task = "shell.exec"
 args = "PORT=3000 node /tmp/emmaus-apk-download-server.mjs"
 waitForPort = 3000
+
+[[workflows.workflow]]
+name = "Jarvis temporary preview"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /tmp/emmaus-codex-jarvis-7d77a50/artifacts/api-server && APP_ENV=development NODE_ENV=development PORT=3000 pnpm exec tsx ../project-emmaus/.jarvis-preview-server.mjs"
+waitForPort = 3000
+
+[workflows.workflow.metadata]
+outputType = "webview"
 
 [agent]
 stack = "PNPM_WORKSPACE"
