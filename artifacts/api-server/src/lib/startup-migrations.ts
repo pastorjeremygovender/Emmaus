@@ -34,24 +34,7 @@ import { setDailyRhythmOpeningReady, setStartSharedReady } from "./feature-flags
 import { verifySermonStore } from "./sermon-store.js";
 import { FFMPEG_BIN, FFMPEG_AVAILABLE } from "./audio-transcription.js";
 
-export async function runStartupMigrations(): Promise<void> {
-  // Presentation ordering columns are additive and intentionally have no data
-  // mutations here. Legacy rows remain stable via created_at/day fallbacks.
-  for (const statement of [
-    `ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS appearance_theme text NOT NULL DEFAULT 'light'`,
-    `ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS appearance_text_size text NOT NULL DEFAULT 'standard'`,
-    `ALTER TABLE journeys ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
-    `ALTER TABLE journey_steps ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
-    `ALTER TABLE devotional_series ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
-    `ALTER TABLE devotional_entries ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
-    `ALTER TABLE sermons ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
-    `ALTER TABLE sermon_companion ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
-    `CREATE TABLE IF NOT EXISTS youtube_archive_state (
-      state_key text PRIMARY KEY,
-      payload jsonb NOT NULL,
-      updated_at timestamptz NOT NULL DEFAULT now()
-    )`,
-    `CREATE TABLE IF NOT EXISTS emmaus_conversations (
+const JARVIS_CONVERSATION_SCHEMA_SQL = `CREATE TABLE IF NOT EXISTS emmaus_conversations (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id text NOT NULL,
       title text NOT NULL,
@@ -97,7 +80,30 @@ export async function runStartupMigrations(): Promise<void> {
       created_at timestamptz NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS emmaus_safety_flags_user_created_idx
-      ON emmaus_safety_flags(user_id, created_at DESC);`,
+      ON emmaus_safety_flags(user_id, created_at DESC);`;
+
+export async function ensureJarvisConversationSchema(): Promise<void> {
+  await pool.query(JARVIS_CONVERSATION_SCHEMA_SQL);
+}
+
+export async function runStartupMigrations(): Promise<void> {
+  // Presentation ordering columns are additive and intentionally have no data
+  // mutations here. Legacy rows remain stable via created_at/day fallbacks.
+  for (const statement of [
+    `ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS appearance_theme text NOT NULL DEFAULT 'light'`,
+    `ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS appearance_text_size text NOT NULL DEFAULT 'standard'`,
+    `ALTER TABLE journeys ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
+    `ALTER TABLE journey_steps ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
+    `ALTER TABLE devotional_series ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
+    `ALTER TABLE devotional_entries ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
+    `ALTER TABLE sermons ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
+    `ALTER TABLE sermon_companion ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
+    `CREATE TABLE IF NOT EXISTS youtube_archive_state (
+      state_key text PRIMARY KEY,
+      payload jsonb NOT NULL,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`,
+    JARVIS_CONVERSATION_SCHEMA_SQL,
   ]) {
     try { await pool.query(statement); } catch (err) {
       logger.warn({ err, statement }, "Startup migration: display order column failed (non-fatal)");
