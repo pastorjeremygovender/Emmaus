@@ -746,6 +746,19 @@ async function resolveSermonSearch(message: string): Promise<EmmausResponseMetad
   return metadata;
 }
 
+export function canonicalFailureMetadata(routed: TypedAskEmmausIntent): EmmausResponseMetadata {
+  const metadata = emptyMetadata();
+  const source = routed.requestedCapability ?? (
+    routed.intent === "BIBLE_READ" || routed.intent === "BIBLE_CONTINUE"
+      ? "my-bible"
+      : "emmaus"
+  );
+  metadata.answer = "I couldn't safely access that part of Emmaus right now. Please try again.";
+  metadata.retrievalFailures = [source];
+  metadata.followUpPrompts = ["Try again.", "What else can Emmaus help me with?"];
+  return metadata;
+}
+
 export async function resolveCanonicalAskRequest(
   message: string,
   userId: string,
@@ -800,6 +813,14 @@ export async function resolveCanonicalAskRequest(
     }
   } catch (error) {
     logger.warn({ intent: routed.intent, err: String(error) }, "emmaus: canonical tool resolution failed");
-    return { handled: false };
+    const mustNotGuess =
+      routed.intent === "APP_HELP"
+      || routed.intent === "BIBLE_READ"
+      || routed.intent === "BIBLE_CONTINUE"
+      || routed.intent === "RESOURCE_SEARCH"
+      || routed.intent === "DIRECT_ACTION";
+    return mustNotGuess
+      ? { handled: true, metadata: canonicalFailureMetadata(routed) }
+      : { handled: false };
   }
 }
