@@ -1,0 +1,57 @@
+Begin Phase 1 of the Emmaus native Android app.
+
+TIME PRIORITY
+The immediate objective is the shortest safe path to an installable Android APK that displays and functions exactly like the currently published Emmaus app at https://emmaus.co.za.
+
+SOURCE CONTROL
+- Start from branch: native/android-production-baseline
+- Verified baseline commit: 86105bc0c25097ef452f3ffd99c825d50e8df0f1
+- Create and work only on: native/android-app-phase-1
+- The separate proof branch is: poc/android-geofence-proof
+- Proof commit: 93a7ba12ab3dda593c30c62ab65e6a3c4fe7964d
+
+Do not merge the entire proof branch because it may contain older application source. Inspect it and selectively reuse only proven Android/Capacitor configuration that is required for the native shell.
+
+PHASE 1 SCOPE ONLY
+1. Create a production-quality Android Capacitor shell for the current Emmaus app.
+2. Preserve the existing application ID: za.co.emmaus.app
+3. App name: Emmaus
+4. Connect the shell to https://emmaus.co.za so that the current published appearance, content, accounts and behaviour remain unchanged.
+5. Support Android back navigation, external links, file downloads/uploads, microphone, camera, notifications and other permissions already required by current Emmaus features.
+6. Use the existing Emmaus icon and branding where suitable.
+7. Ensure status-bar, navigation-bar, keyboard and safe-area behaviour work correctly on Android.
+8. Produce a separately installable debug APK for physical-device testing.
+9. Push the completed Phase 1 branch and commit to GitHub.
+
+DO NOT
+- Change the live website or republish it.
+- Change production code unless essential for native-shell compatibility.
+- Change the database, schema, records, Secrets, DNS, deployment settings or authentication.
+- Add Jarvis, the new layout, widget, geofencing or Welcome Assist yet.
+- Request or create a Play Store signing key.
+- Submit anything to Google Play.
+- Expose or commit credentials.
+- merge into the production baseline or main.
+
+TEST BEFORE REPORTING
+Verify:
+- clean build;
+- app launches;
+- https://emmaus.co.za loads inside the native app;
+- sign-in screen loads;
+- Android back button behaves correctly;
+- external web links do not trap the user;
+- app relaunch works;
+- APK exists and can be downloaded.
+
+REPORT
+- branch name;
+- commit SHA;
+- APK filename and exact downloadable location;
+- package/application ID;
+- Android minimum and target SDK;
+- tests passed and failed;
+- any limitation that still requires physical-device testing;
+- confirmation that production and the live published app were untouched.
+
+Stop after producing the APK and report. Do not begin Phase 2.
