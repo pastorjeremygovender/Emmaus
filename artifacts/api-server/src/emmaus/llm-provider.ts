@@ -3,7 +3,7 @@
  *
  * Defines a provider-agnostic interface for streaming LLM completions.
  * Two implementations:
- *   - OpenAIProvider  → uses OPENAI_API_KEY; model: gpt-4o
+ *   - OpenAIProvider  → uses OPENAI_API_KEY; model: gpt-5.6-luna by default
  *   - MockProvider    → deterministic canned responses, works with no env vars
  *
  * The factory `createLLMProvider()` selects the correct one at startup.
@@ -67,7 +67,7 @@ export class OpenAIProvider implements LLMProvider {
   private client: OpenAI;
   private model: string;
 
-  constructor(apiKey: string, model = "gpt-4o") {
+  constructor(apiKey: string, model = "gpt-5.6-luna") {
     this.client = new OpenAI({ apiKey });
     this.model = model;
   }
@@ -536,7 +536,7 @@ export function createLLMProvider(): LLMProvider {
   if (_provider) return _provider;
 
   const apiKey = process.env.OPENAI_API_KEY;
-  const model = process.env.OPENAI_MODEL ?? "gpt-4o";
+  const model = process.env.OPENAI_MODEL ?? "gpt-5.6-luna";
 
   if (apiKey && apiKey.length > 10) {
     console.log(`[Emmaus] Using OpenAI provider (model: ${model})`);
