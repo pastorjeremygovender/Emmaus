@@ -1,0 +1,276 @@
+We need to replace Replit Auth as the production identity provider for Emmaus with Supabase Auth, but preserve as much of the secure authentication and authorization work already completed as possible.
+
+This is NOT a request to rebuild the entire login/auth system from scratch.
+
+PRIMARY GOAL
+
+Users must experience a normal Emmaus account system:
+
+* Sign up with email and password
+* Sign in with email and password
+* Email verification
+* Forgot password
+* Password reset by email
+* Persistent session
+* Secure logout
+
+Users must never need a Replit account or interact with Replit identity screens.
+
+Supabase Auth should provide the external identity/authentication layer.
+
+The existing Emmaus PostgreSQL production database remains the application database.
+
+IMPORTANT FIRST STEP — AUDIT BEFORE CHANGING
+
+Before modifying code:
+
+1. Inspect all authentication work already completed.
+2. Identify which parts can remain unchanged, including:
+
+   * existing login UI
+   * route guards
+   * server-side authorization middleware
+   * session handling
+   * user/admin/superAdmin role logic
+   * user_profiles integration
+   * privileged API route protections
+   * production/demo environment guards
+3. Identify only the Replit-Auth-specific pieces that must be replaced.
+4. Create a checkpoint before making changes.
+
+Do not duplicate existing security architecture unnecessarily.
+
+TARGET ARCHITECTURE
+
+Emmaus UI
+→ Supabase Auth
+→ verified Supabase user identity
+→ existing Emmaus server
+→ existing Emmaus user profile / role
+→ existing Emmaus production database
+
+Supabase Auth is ONLY the authentication/identity provider at this stage.
+
+Do not migrate Emmaus content or production application data to Supabase.
+
+Do not replace the existing Emmaus PostgreSQL application database.
+
+IDENTITY REQUIREMENTS
+
+Every real user must receive a unique, stable Supabase Auth user ID.
+
+That verified Supabase user ID must be mapped durably to the existing Emmaus user profile.
+
+Prefer extending/reusing the existing user_profiles structure rather than introducing a second parallel user system.
+
+Suggested model:
+
+user_profiles
+
+* existing fields
+* auth_provider
+* auth_user_id
+* app_role
+
+Where:
+
+auth_provider = "supabase"
+auth_user_id = verified Supabase user UUID
+app_role = user | admin | superAdmin
+
+Do not use email alone as the authorization identity.
+
+Email may change. Authorization must be based on the stable verified Supabase user ID.
+
+SUPABASE AUTH FLOWS
+
+Implement:
+
+1. Sign up with email/password.
+2. Email verification.
+3. Sign in with email/password.
+4. Forgot password.
+5. Password reset flow.
+6. Secure logout.
+7. Session refresh/persistence.
+8. Appropriate error states for:
+
+   * invalid login
+   * unverified email
+   * expired reset link
+   * duplicate account
+   * password requirements
+   * unavailable auth service
+
+Keep the existing Emmaus visual design as much as possible.
+
+Do not replace the current Emmaus login screen with generic Supabase UI unless technically necessary.
+
+The user-facing experience must remain branded as Emmaus.
+
+SERVER-SIDE SECURITY
+
+This is non-negotiable.
+
+The Emmaus backend must validate the Supabase access token server-side.
+
+Do not trust:
+
+* browser-supplied user IDs
+* email addresses
+* roles
+* request headers containing identity/role values
+* localStorage user objects
+* client-provided session identity
+
+Use Supabase's supported server-side token/user verification approach.
+
+Every privileged request must derive identity from the verified Supabase session/token.
+
+ADMIN ROLES
+
+Preserve the existing roles:
+
+* user
+* admin
+* superAdmin
+
+/admin must remain available only to admin and superAdmin.
+
+Super-admin-only functions must remain restricted to superAdmin.
+
+New users must default to:
+
+user
+
+Never derive an admin role from email/domain/name.
+
+Do not automatically promote any account.
+
+MY ADMIN ACCOUNT
+
+Do not assign superAdmin to demo-user-1 or any shared/demo identity.
+
+After the new Supabase authentication is working, provide a safe one-time method to associate my genuine verified Supabase account with the existing Emmaus profile and assign that exact auth_user_id:
+
+superAdmin
+
+Do not perform that role assignment until the account can be uniquely verified.
+
+DEMO AUTH
+
+The public production deployment must NOT show:
+
+* Continue as Demo Admin
+* Continue as Super Admin
+
+Development-only demo functionality may remain available only where explicitly detected as non-production.
+
+Do not allow demo identity logic to execute in production.
+
+EXISTING USERS / DATA
+
+Do not:
+
+* delete production users
+* delete user_profiles
+* reset progress
+* recreate Walk/Journey progress
+* replace the production database
+* repopulate content
+* change existing content IDs
+* run destructive migrations
+
+If existing pre-Supabase users need account linking or migration, identify the safest approach and report it before changing production data.
+
+If no genuine production accounts exist yet, say so clearly.
+
+DATABASE CHANGES
+
+Small additive schema changes are allowed only where needed to persist:
+
+* Supabase auth_user_id
+* auth provider
+* durable app role
+
+Do not run destructive schema migrations.
+
+Stop and report before any migration that could overwrite, delete, rename or recreate production data.
+
+EMAIL / SMTP
+
+Supabase's default mail service is not suitable as the final production email delivery mechanism.
+
+Implement the code assuming Supabase Auth handles email verification and password resets, but do not hard-code SMTP credentials.
+
+Report exactly what custom SMTP configuration will be needed later for:
+
+* email verification
+* password reset emails
+* sender address
+* redirect URLs
+
+Use:
+
+https://emmaus.co.za
+
+as the production domain.
+
+Ensure auth redirect URLs return users to appropriate Emmaus routes.
+
+PWA
+
+Preserve all existing PWA functionality.
+
+Do not remove:
+
+* manifest
+* service worker
+* icons
+* standalone behavior
+* existing domain configuration
+
+Authentication must work correctly when Emmaus is launched as an installed PWA.
+
+TESTS
+
+Before declaring completion, test:
+
+1. Two different signup accounts receive different Supabase user IDs.
+2. User A cannot access User B's data.
+3. Normal user cannot access /admin.
+4. Client cannot promote itself to admin/superAdmin.
+5. Forged user IDs or roles are rejected.
+6. Login works.
+7. Signup works.
+8. Email verification flow is wired correctly.
+9. Forgot password flow works through Supabase Auth.
+10. Reset password flow returns correctly to Emmaus.
+11. Logout invalidates/clears the local application session.
+12. Session survives normal refresh/reopen.
+13. PWA login/session works.
+14. Existing Emmaus user data remains intact.
+15. Existing Walk/Journey/Daily Rhythm progress remains intact.
+16. Existing admin routes still enforce role authorization.
+17. Production does not expose demo-admin shortcuts.
+
+DO NOT PUBLISH AUTOMATICALLY.
+
+When complete, report:
+
+1. Which authentication code was preserved.
+2. Which Replit Auth code was removed/replaced.
+3. Every file changed.
+4. Every database schema change.
+5. How Supabase user IDs map to Emmaus user_profiles.
+6. How admin/superAdmin authorization works.
+7. How my genuine account will be provisioned as superAdmin.
+8. Supabase environment variables/secrets I must provide.
+9. SMTP/email setup still required.
+10. Auth redirect URLs required in Supabase.
+11. Test results.
+12. Any remaining risks or migration issues.
+
+Make a checkpoint before implementation and another checkpoint after successful tests.
+
+Do not publish.

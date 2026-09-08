@@ -1,0 +1,191 @@
+We are preparing to replace the current Ask Emmaus answer system with a secure, app-wide Emmaus AI Agent using the OpenAI Responses API and approved function tools.
+
+THIS FIRST TASK IS A READ-ONLY ARCHITECTURAL AUDIT ONLY.
+
+Do not modify application code, database schemas, records, secrets, deployment settings, DNS, indexes or production. Do not install packages, migrate data or republish.
+
+PURPOSE
+
+Determine precisely how the current Ask Emmaus implementation works and produce a concrete integration design for turning it into an agent.
+
+The intended future agent must:
+
+1. Follow the locked Emmaus AI Constitution:
+   - Jesus first
+   - Scripture primary
+   - The Holy Spirit transforms
+   - The local church matters
+   - Do not claim certainty where Scripture is silent
+   - Use the flow Scripture → Reflection → Prayer → Next Step
+
+2. Know and retrieve all appropriate published Emmaus content:
+   - Bible content
+   - Sermons
+   - Sermon Companions
+   - Daily Devotionals
+   - 10 Minutes with Jesus / Daily Rhythm
+   - Walks
+   - Journeys
+   - relevant app help and feature information
+
+3. Understand the signed-in user’s permitted context:
+   - active Walks and Journeys
+   - progress
+   - Today’s Steps
+   - Bible position
+   - previously opened or completed content
+   - role and permissions
+
+4. Eventually use controlled application tools to:
+   - open an exact Bible passage
+   - open a sermon, devotional, Walk or Journey
+   - show or resume user content
+   - navigate to relevant Emmaus screens
+   - read content aloud
+   - perform approved actions only after appropriate confirmation
+
+5. Never receive unrestricted database access or authority to perform arbitrary administrative actions.
+
+AUDIT THE FOLLOWING
+
+A. CURRENT ASK EMMAUS PIPELINE
+
+Identify:
+
+- every frontend component and route used by Ask Emmaus;
+- every backend endpoint, service and model call;
+- the currently configured OpenAI API or other AI provider;
+- how system instructions and prompts are constructed;
+- how conversation history and state are stored;
+- how signed-in user identity is passed;
+- how responses are streamed;
+- how errors and timeouts are handled;
+- how Bible and Emmaus content links are created;
+- why some Scripture references may be linked while others are not;
+- how the current retrieval/indexing system works.
+
+Do not reveal API keys, database URLs, passwords or other secret values. Secret names and whether they are configured may be reported safely.
+
+B. CONTENT AND RETRIEVAL
+
+Identify:
+
+- all tables, indexes, vector stores or search services used;
+- which content types are currently indexed;
+- whether only published content is retrieved;
+- how permissions and user-specific access are enforced;
+- whether Daily Rhythm content is limited according to user access;
+- how sermon indexing and approval status affect retrieval;
+- missing content sources or inconsistent metadata;
+- duplicate or stale indexes;
+- how deep links are generated for each content type.
+
+C. USER CONTEXT
+
+Document which existing services can safely supply:
+
+- user identity and role;
+- Today’s Steps;
+- active Walks and Journeys;
+- progress and completion;
+- current or last Bible position;
+- recent Emmaus activity;
+- notification preferences.
+
+State clearly which of these exist now and which would need to be added.
+
+D. PROPOSED AGENT ARCHITECTURE
+
+Design a proposed architecture using the OpenAI Responses API.
+
+Include:
+
+- where the server-side agent orchestration should live;
+- how the Emmaus AI Constitution should be supplied;
+- how conversation state should be maintained;
+- how relevant Emmaus content should be retrieved;
+- how user context should be scoped;
+- how citations and deep links should be returned in structured data;
+- how streaming should work;
+- how failures should fall back safely;
+- how usage and cost should be recorded;
+- how model choice should be configurable without code changes.
+
+Propose an initial read-only tool registry including at least:
+
+- search_emmaus_content
+- get_bible_passage
+- open_bible_passage
+- get_todays_steps
+- get_user_progress
+- find_sermons
+- find_walks_and_journeys
+- open_emmaus_content
+- get_app_help
+
+For every proposed tool, specify:
+
+- purpose;
+- input schema;
+- output schema;
+- permission requirement;
+- whether it reads or changes data;
+- whether user confirmation is required;
+- existing code or service it should call.
+
+Do not implement these tools during this audit.
+
+E. PRIVACY AND SECURITY
+
+Identify safeguards needed for:
+
+- private user data;
+- pastoral information;
+- role-based permissions;
+- prompt injection from indexed content;
+- unpublished content;
+- cross-user data leakage;
+- administrative actions;
+- logging and retention;
+- minors or vulnerable users;
+- crisis, self-harm, abuse and emergency responses.
+
+The agent must never present itself as God, the Holy Spirit, a replacement for Scripture, a pastor, medical care or emergency assistance.
+
+F. IMPLEMENTATION PLAN
+
+Produce a staged implementation plan:
+
+Stage 1: text agent with reliable Emmaus knowledge and links
+Stage 2: read-only navigation and user-context tools
+Stage 3: confirmed user actions
+Stage 4: voice
+Stage 5: separately secured administration and Pastoral Briefing assistance
+
+For every stage provide:
+
+- exact files likely to change;
+- new files or services required;
+- database changes, if any;
+- migration requirements;
+- tests and evaluation cases;
+- rollback strategy;
+- risks;
+- estimated implementation complexity.
+
+REQUIRED FINAL REPORT
+
+Return a single, clearly structured report containing:
+
+1. Current Ask Emmaus architecture
+2. Current retrieval and indexing coverage
+3. Current user-context capabilities
+4. Confirmed deficiencies
+5. Proposed agent architecture
+6. Proposed tool registry
+7. Security and privacy boundaries
+8. Staged implementation plan
+9. Exact recommended first implementation slice
+10. Explicit confirmation that nothing was changed
+
+Do not begin implementation after producing the report. Wait for approval.

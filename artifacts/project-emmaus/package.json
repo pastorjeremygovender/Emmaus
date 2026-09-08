@@ -8,9 +8,16 @@
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --config vitest.config.ts"
+    "test": "vitest run --config vitest.config.ts",
+    "test:bible-import-ui": "vitest run --config vitest.config.ts src/pages/admin/__tests__/BibleStudyBulkImporter.test.tsx",
+    "android:verify": "node scripts/verify-android-release.mjs",
+    "android:sync": "pnpm run build && CAPACITOR_SERVER_URL=https://emmaus.co.za pnpm exec cap sync android",
+    "android:assembleDebug": "pnpm run android:verify && pnpm run android:sync && cd android && ./gradlew assembleDebug",
+    "android:bundleRelease": "pnpm run android:verify -- --require-signing && pnpm run android:sync && cd android && ./gradlew bundleRelease",
+    "android:open": "pnpm exec cap open android"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",
@@ -50,6 +57,7 @@
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/node": "catalog:",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
@@ -64,6 +72,7 @@
     "jsdom": "^30.0.0",
     "lucide-react": "catalog:",
     "next-themes": "^0.4.6",
+    "pdfjs-dist": "^6.3.289",
     "react": "catalog:",
     "react-day-picker": "^9.11.1",
     "react-dom": "catalog:",
@@ -82,7 +91,14 @@
     "zod": "catalog:"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@livekit/components-react": "^2.9.23",
+    "@livekit/components-styles": "^1.2.0",
     "firebase": "^12.16.0",
-    "qrcode.react": "^4.2.0"
+    "livekit-client": "^2.21.0",
+    "papaparse": "^5.5.4",
+    "qrcode.react": "^4.2.0",
+    "xlsx": "^0.18.5"
   }
 }

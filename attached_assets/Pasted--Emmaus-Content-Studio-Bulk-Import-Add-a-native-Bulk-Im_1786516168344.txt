@@ -1,0 +1,216 @@
+# Emmaus Content Studio — Bulk Import
+
+Add a native **Bulk Import** feature to Emmaus Content Studio.
+
+## Objective
+
+Allow an administrator/content editor to create multiple content steps at once without manually creating each step.
+
+This must be a reusable Emmaus feature and must not be tied specifically to one devotional or journey.
+
+## Entry Point
+
+Inside Content Studio, add:
+
+**Bulk Import**
+
+Place it near the existing content creation controls.
+
+## Import Methods
+
+Support:
+
+1. **Upload CSV**
+2. **Upload XLSX**
+3. **Paste Structured Content**
+
+Design the importer so additional formats such as Markdown or DOCX can be added later.
+
+## Supported Core Fields
+
+For devotional-style content, support:
+
+* Step Number / Day Number
+* Title
+* Scripture Reference
+* Greeting
+* Reflection
+* Prayer
+* Your Next Step
+* Closing
+
+Also support:
+
+* Content Type
+* Journey / Walk / Collection
+* Status
+* Sort Order
+* Publish Date if applicable
+
+Do not hard-code this importer only for “10 Minutes with Jesus.”
+
+## Import Flow
+
+### Step 1 — Select Destination
+
+User selects where the content should be imported.
+
+Examples:
+
+* Daily Rhythm
+* Daily Devotional
+* Walk
+* Journey
+* Bible Study
+* Sermon Companion
+
+If importing into an existing Walk/Journey, allow the user to select it.
+
+### Step 2 — Add Content
+
+User either:
+
+* uploads a CSV/XLSX file, or
+* pastes structured content.
+
+### Step 3 — Detect and Map Fields
+
+Emmaus should automatically detect obvious column names.
+
+Example:
+
+`Day` → Step Number
+`Scripture` → Scripture Reference
+`Next Step` → Your Next Step
+
+Show a simple mapping screen if anything is unclear.
+
+Do not require manual mapping when the match is obvious.
+
+### Step 4 — Preview
+
+Before saving anything, show:
+
+**10 steps detected**
+
+Then display a preview of every imported item.
+
+Each item should show at least:
+
+* step/day number
+* title
+* Scripture
+* status
+* any validation warning
+
+Allow the admin to open an individual item to inspect its full content.
+
+### Step 5 — Validation
+
+Flag:
+
+* missing titles
+* missing step numbers
+* duplicate step numbers
+* missing Scripture references where required
+* empty required content sections
+* invalid ordering
+* duplicate existing content
+
+Do not silently discard content.
+
+### Step 6 — Existing Content Conflicts
+
+If the destination already contains the same step/day number, clearly show the conflict.
+
+For each conflict allow:
+
+* **Skip existing**
+* **Replace existing**
+* **Import as new draft**
+
+Provide an **Apply to all conflicts** option.
+
+Never overwrite existing content automatically.
+
+### Step 7 — Import
+
+Once confirmed, create all items.
+
+The import should be atomic/transactional where practical.
+
+If a critical failure occurs, do not leave the destination partially imported without clearly reporting what happened.
+
+### Step 8 — Results
+
+After completion show something like:
+
+**Import complete**
+
+10 imported
+0 skipped
+0 failed
+
+If errors occurred, show exactly which items failed and why.
+
+## Draft First
+
+Default imported content to **Draft** unless the administrator deliberately selects Publish.
+
+Do not automatically publish bulk imported content.
+
+## Content Ordering
+
+Preserve the supplied step/day order.
+
+If importing Days 10–19, they must be stored and displayed as Days 10–19.
+
+Do not renumber them automatically unless the administrator explicitly chooses to.
+
+## Editing After Import
+
+Imported items must behave exactly like manually created Content Studio items.
+
+The administrator must be able to:
+
+* open them
+* edit them
+* reorder them
+* preview them
+* publish/unpublish them
+* delete them
+
+Bulk imported content must not use a separate content system.
+
+## Architecture Requirement
+
+Use the existing Emmaus content models and APIs wherever possible.
+
+Do not create a second parallel storage system just for imports.
+
+The importer should transform incoming structured data into the same content records that the current manual Content Studio creates.
+
+## Future Compatibility
+
+Build the import parser so Emmaus can later support:
+
+* Markdown
+* DOCX
+* AI-assisted document parsing
+* importing full Walks/Journeys
+* importing Bible studies
+* importing course content
+* bulk media references
+* bulk Scripture linking
+
+## UX Principle
+
+This feature exists to make content creation dramatically faster.
+
+The normal workflow should eventually become:
+
+**Create content externally → Bulk Import → Preview → Publish**
+
+rather than manually creating every individual step.
+
+Keep the interface simple, clean and consistent with the existing Emmaus Content Studio.

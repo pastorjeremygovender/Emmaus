@@ -1,25 +1,35 @@
 /**
- * SermonsList — Sermon Companions list screen.
+ * SermonsList — Canonical Sermons list screen.
  *
- * Replaces the previous horizontal-scrolling AdminTable with the shared
- * ContentStudioListItem row design. Each row shows:
- *   icon · title · speaker + date + scripture + transcript + companion · status · actions
+ * Data source: canonical PostgreSQL sermons table via /api/sermons/admin.
+ * Status values: "Draft" | "Review" | "Published" (title-case).
  *
  * Actions: Edit | Quick Publish/Unpublish | Delete
  */
-import React, { useState, useMemo } from 'react';
-import { useAdmin } from '@/contexts/AdminContext';
-import { useJourney } from '@/contexts/JourneyContext';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Plus, Mic2, BookOpen, Trash2, Loader2, CheckCircle2, ExternalLink, MoreHorizontal,
-  ArrowLeft, X,
+  ArrowLeft, X, RefreshCw, Upload, FileAudio, AlertCircle, Star, ShieldCheck,
 } from 'lucide-react';
-import { deleteServerSermon, patchServerSermon } from '@/lib/sermon-generator-api';
-import type { Sermon } from '@/lib/admin-demo-data';
+import {
+  type CanonicalSermon,
+  listAdminSermons,
+  publishAdminSermon,
+  unpublishAdminSermon,
+  deleteAdminSermon,
+  createAdminSermon,
+  requestAudioUploadUrl,
+  setCurrentWeekSermon,
+  processSermon,
+  updateAdminSermon,
+  getSermonRetrievalDiagnostics,
+  type SermonRetrievalDiagnostics,
+} from '@/lib/canonical-sermon-api';
 import { StatusBadge } from './shared';
 import ContentStudioListItem from './content-studio/ContentStudioListItem';
-import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls } from './content-studio/ContentStudioListPage';
+import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls, ReorderButtons } from './content-studio/ContentStudioListPage';
+import { moveVisibleOrder, reorderContent } from '@/lib/content-reorder-api';
 
 
 type Props = {
@@ -28,17 +38,13 @@ type Props = {
   onOpenCompanion: (sermonId: string, companionId: string) => void;
 };
 
-const STATUS_TABS = ['All', 'Draft', 'Published'] as const;
+const STATUS_TABS = ['All', 'Draft', 'Review', 'Published'] as const;
 
 const TRANSCRIPT_LABELS: Record<string, string> = {
   none: 'No transcript',
   pending: 'Transcript pending',
   complete: 'Transcript complete',
 };
-
-function isUUID(id: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-}
 
 function formatDate(raw: string): string {
   if (!raw) return '';
@@ -47,80 +53,356 @@ function formatDate(raw: string): string {
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: Props) {
-  const { sermons, addSermon, removeSermon, updateSermon, settings, updateSettings } = useAdmin();
-  const { journeys } = useJourney();
+/** Map a canonical sermon's edit ID: prefer legacyJsonId so SermonEditor still works */
+function editId(s: CanonicalSermon): string {
+  return s.legacyJsonId ?? s.id;
+}
+
+export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
   const { user } = useAuth();
 
-  const [statusTab, setStatusTab]       = useState<string>('All');
-  const [deleteTarget, setDeleteTarget] = useState<Sermon | null>(null);
-  const [deleting, setDeleting]         = useState(false);
-  const [deleteError, setDeleteError]   = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [errorMessage, setErrorMessage]     = useState('');
-  const [publishing, setPublishing]     = useState<Record<string, boolean>>({});
-  const [unpublishTarget, setUnpublishTarget] = useState<Sermon | null>(null);
-  const [openMenuId, setOpenMenuId]     = useState<string | null>(null);
+  const [sermons, setSermons]                 = useState<CanonicalSermon[]>([]);
+  const [loading, setLoading]                 = useState(true);
+  const [loadError, setLoadError]             = useState('');
+  const [statusTab, setStatusTab]             = useState<string>('All');
+  const [deleteTarget, setDeleteTarget]       = useState<CanonicalSermon | null>(null);
+  const [deleting, setDeleting]               = useState(false);
+  const [deleteError, setDeleteError]         = useState('');
+  const [successMessage, setSuccessMessage]   = useState('');
+  const [errorMessage, setErrorMessage]       = useState('');
+  const [publishing, setPublishing]           = useState<Record<string, boolean>>({});
+  const [unpublishTarget, setUnpublishTarget] = useState<CanonicalSermon | null>(null);
+  const [openMenuId, setOpenMenuId]           = useState<string | null>(null);
+  const [settingCurrentWeek, setSettingCurrentWeek] = useState<Record<string, boolean>>({});
+  const [retrievalDiagnostics, setRetrievalDiagnostics] = useState<SermonRetrievalDiagnostics | null>(null);
 
-  // New companion creation modal state
-  const [showNewModal, setShowNewModal] = useState(false);
-  const [newTitle, setNewTitle]         = useState('');
-  const [newCreating, setNewCreating]   = useState(false);
+  // New sermon creation modal — metadata
+  const [showNewModal, setShowNewModal]     = useState(false);
+  const [newTitle, setNewTitle]             = useState('');
+  const [newSpeaker, setNewSpeaker]         = useState('');
+  const [newDate, setNewDate]               = useState(() => new Date().toISOString().split('T')[0]);
+  const [newScripture, setNewScripture]     = useState('');
+  const [newSeries, setNewSeries]           = useState('');
+  const [newYoutubeUrl, setNewYoutubeUrl]   = useState('');
+  const [newNotes, setNewNotes]             = useState('');
+  const [newCreating, setNewCreating]       = useState(false);
+  const [newError, setNewError]             = useState('');
+  const [newCreateStep, setNewCreateStep]   = useState<'form' | 'uploading'>('form');
+  const [newUploadProgress, setNewUploadProgress] = useState(0);
 
-  const auth = user ? { userId: user.id, userRole: user.role } : null;
+  // Audio file for new sermon
+  const [newAudioFile, setNewAudioFile]     = useState<File | null>(null);
+  const [newAudioError, setNewAudioError]   = useState('');
+  const newAudioInputRef                    = useRef<HTMLInputElement>(null);
 
-  const handleOpenNewModal = () => { setShowNewModal(true); setNewTitle(''); };
+  const ACCEPTED_AUDIO = '.mp3,.m4a,.wav,.mp4,.mpeg,.webm';
+  const ACCEPTED_MIMES = ['audio/mpeg','audio/mp3','audio/mp4','audio/x-m4a','audio/wav','video/mp4','audio/webm'];
+  const MAX_AUDIO_MB   = 250;
 
-  const handleCloseNewModal = () => { setShowNewModal(false); setNewTitle(''); };
+  function fmtBytes(b: number) {
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)} KB`;
+    return `${(b / 1024 / 1024).toFixed(1)} MB`;
+  }
 
-  const handleCreateCompanion = () => {
-    setNewCreating(true);
-    const id: string = `sermon-${Date.now()}`;
-    const now = new Date().toISOString();
-    const stub: Sermon = {
-      id,
-      title: newTitle.trim() || 'New Sermon Companion',
-      speaker: '',
-      sermonDate: now.split('T')[0],
-      series: '',
-      scriptureReference: '',
-      youtubeUrl: '',
-      summary: '',
-      topics: [],
-      keywords: [],
-      transcript: '',
-      transcriptStatus: 'none',
-      aiIndexStatus: 'none',
-      companionJourneyId: '',
-      mainTheme: '',
-      status: 'draft',
-      pastorEdited: false,
-      updatedAt: now,
-    };
-    addSermon(stub);
-    setNewCreating(false);
-    handleCloseNewModal();
-    onEdit(id);
-  };
+/**
+ * Upload directly to the presigned object-storage URL.
+ *
+ * Mobile connections can briefly drop while sending a large recording, so
+ * retry once before surfacing the error. Keep the status detail because a
+ * generic "upload failed" message makes storage/CORS/session problems
+ * impossible to diagnose from the admin UI.
+ */
+async function uploadAudioFile(
+  uploadURL: string,
+  file: File,
+  onProgress: (percent: number) => void,
+): Promise<void> {
+  let lastError: Error = new Error('Audio upload failed');
 
-  // ── Status filter ─────────────────────────────────────────────────────────
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', uploadURL);
+        xhr.timeout = 15 * 60 * 1000;
+        xhr.setRequestHeader('Content-Type', file.type || 'audio/mpeg');
+        xhr.upload.addEventListener('progress', e => {
+          if (e.lengthComputable) onProgress(Math.round(e.loaded / e.total * 100));
+        });
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`Storage upload failed (${xhr.status})`));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Storage upload could not reach object storage.'));
+        xhr.ontimeout = () => reject(new Error('Storage upload timed out.'));
+        xhr.onabort = () => reject(new Error('Storage upload was interrupted.'));
+        xhr.send(file);
+      });
+      return;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < 2) {
+        onProgress(0);
+        await new Promise(resolve => setTimeout(resolve, 1200));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+  function handleNewAudioSelect(f: File) {
+    setNewAudioError('');
+    if (!ACCEPTED_MIMES.some(m => f.type === m) && !/\.(mp3|m4a|wav|mp4|mpeg|webm)$/i.test(f.name)) {
+      setNewAudioError('This file format is not supported. Use MP3, M4A, WAV, MP4, MPEG or WEBM.');
+      return;
+    }
+    if (f.size > MAX_AUDIO_MB * 1024 * 1024) {
+      setNewAudioError(`The file exceeds the ${MAX_AUDIO_MB} MB maximum (${fmtBytes(f.size)}).`);
+      return;
+    }
+    setNewAudioFile(f);
+  }
+
+  // ── Load sermons ────────────────────────────────────────────────────────────
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const data = await listAdminSermons();
+      setSermons(data);
+      getSermonRetrievalDiagnostics().then(setRetrievalDiagnostics).catch(() => setRetrievalDiagnostics(null));
+    } catch (err) {
+      // Surface the actual status code so production failures can be diagnosed
+      // without needing to inspect server logs. Common causes:
+      //   401 — session expired, sign out and back in
+      //   403 — account does not have admin access
+      //   500 — server error (check deployment logs)
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('401')) {
+        setLoadError('Session expired. Please sign out and sign back in.');
+      } else if (msg.includes('403')) {
+        setLoadError('Access denied. Admin permission required.');
+      } else if (msg.includes('5')) {
+        setLoadError(`Server error loading sermons. Please refresh. (${msg})`);
+      } else {
+        setLoadError(`Failed to load sermons. Please refresh. (${msg})`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // ── Status filter ────────────────────────────────────────────────────────────
 
   const filtered = useMemo(() => {
-    if (statusTab === 'All') return sermons;
-    return sermons.filter(s => s.status === statusTab.toLowerCase());
+    const list = statusTab === 'All' ? sermons : sermons.filter(s => s.status === statusTab);
+    return [...list].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || b.createdAt.localeCompare(a.createdAt));
   }, [sermons, statusTab]);
 
-  // ── Publish / Unpublish ───────────────────────────────────────────────────
+  const reorderable = useMemo(
+    () => sermons
+      .filter(sermon => (sermon.status as string) !== 'Archived')
+      .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || b.createdAt.localeCompare(a.createdAt)),
+    [sermons],
+  );
 
-  const handlePublish = async (sermon: Sermon, e: React.MouseEvent) => {
+  const moveSermon = async (index: number, direction: -1 | 1) => {
+    const target = filtered[index];
+    if (!target) return;
+    const visible = filtered.filter(sermon => (sermon.status as string) !== 'Archived');
+    const reorderedIds = moveVisibleOrder(
+      reorderable.map(sermon => sermon.id),
+      visible.map(sermon => sermon.id),
+      target.id,
+      direction,
+    );
+    if (reorderedIds.join(',') === reorderable.map(sermon => sermon.id).join(',')) return;
+    try {
+      await reorderContent('sermon', reorderedIds);
+      setSuccessMessage('Sermon order saved.');
+      setTimeout(() => setSuccessMessage(''), 3000);
+      await load();
+    } catch {
+      setErrorMessage("We couldn't save the sermon order. Please try again.");
+      setTimeout(() => setErrorMessage(''), 5000);
+    }
+  };
+
+  // ── New canonical sermon ──────────────────────────────────────────────────────
+
+  const handleOpenNewModal = () => {
+    setShowNewModal(true); setNewTitle(''); setNewSpeaker('Pastor Jeremy Govender'); setNewScripture('');
+    setNewSeries(''); setNewYoutubeUrl(''); setNewNotes(''); setNewError('');
+    setNewAudioFile(null); setNewAudioError(''); setNewCreateStep('form');
+    setNewUploadProgress(0);
+    setNewDate(new Date().toISOString().split('T')[0]);
+  };
+  const handleCloseNewModal = () => {
+    if (newCreating) return;
+    setShowNewModal(false);
+  };
+
+  const handleCreateSermon = async () => {
+    if (newCreating) return;
+    setNewCreating(true);
+    setNewError('');
+    try {
+      // Step 1: Create the record with all metadata
+      const created = await createAdminSermon({
+        title:              newTitle.trim()      || 'New Sermon',
+        speaker:            newSpeaker.trim()    || '',
+        sermonDate:         newDate              || new Date().toISOString().split('T')[0],
+        scriptureReference: newScripture.trim()  || '',
+        series:             newSeries.trim()     || '',
+        youtubeUrl:         newYoutubeUrl.trim() || '',
+        notes:              newNotes.trim()      || '',
+        status:             'Draft',
+      });
+
+      // Step 2: Upload audio if selected
+      if (newAudioFile) {
+        setNewCreateStep('uploading');
+        try {
+          const { uploadURL } = await requestAudioUploadUrl(created.id, {
+            name:        newAudioFile.name,
+            size:        newAudioFile.size,
+            contentType: newAudioFile.type || 'audio/mpeg',
+          });
+          await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('PUT', uploadURL);
+            xhr.setRequestHeader('Content-Type', newAudioFile.type || 'audio/mpeg');
+            xhr.upload.addEventListener('progress', e => {
+              if (e.lengthComputable) setNewUploadProgress(Math.round(e.loaded / e.total * 100));
+            });
+            xhr.onload  = () => (xhr.status >= 200 && xhr.status < 300) ? resolve() : reject(new Error(`Upload failed: ${xhr.status}`));
+            xhr.onerror = () => reject(new Error('Network error during upload'));
+            xhr.send(newAudioFile);
+          });
+        } catch (uploadErr) {
+          // Non-fatal: sermon was created, just no audio — editor can upload later
+          console.warn('Audio upload failed (non-fatal):', uploadErr);
+        }
+      }
+
+      setSermons(prev => [created, ...prev]);
+      setShowNewModal(false);
+      onEdit(editId(created));
+    } catch (err) {
+      setNewError(err instanceof Error ? err.message : 'Failed to create sermon');
+      setNewCreateStep('form');
+    } finally {
+      setNewCreating(false);
+      setNewUploadProgress(0);
+    }
+  };
+
+  // ── Process Sermon — create + upload + trigger AI pipeline ───────────────────
+  // Primary "new sermon" action when audio is available. Creates the record,
+  // uploads the audio, triggers the background pipeline, then opens the editor
+  // which shows the SermonProcessingView progress screen.
+
+  const handleCreateAndProcess = async () => {
+    if (newCreating) return;
+    if (!newAudioFile) {
+      setNewError('Please upload sermon audio to use Process Sermon.');
+      return;
+    }
+    setNewCreating(true);
+    setNewError('');
+    try {
+      const autoTitleDate = newDate ? new Date(newDate + 'T00:00:00') : new Date();
+      const autoTitle = `Processing sermon from ${autoTitleDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+      const created = await createAdminSermon({
+        title:              newTitle.trim()      || autoTitle,
+        speaker:            newSpeaker.trim()    || 'Pastor Jeremy Govender',
+        sermonDate:         newDate              || new Date().toISOString().split('T')[0],
+        scriptureReference: newScripture.trim()  || '',
+        series:             newSeries.trim()     || '',
+        youtubeUrl:         newYoutubeUrl.trim() || '',
+        notes:              newNotes.trim()      || '',
+        status:             'Draft',
+      });
+
+      setNewCreateStep('uploading');
+      try {
+        const { uploadURL } = await requestAudioUploadUrl(created.id, {
+          name:        newAudioFile.name,
+          size:        newAudioFile.size,
+          contentType: newAudioFile.type || 'audio/mpeg',
+        });
+        await uploadAudioFile(uploadURL, newAudioFile, setNewUploadProgress);
+      } catch (uploadErr) {
+        setNewError(uploadErr instanceof Error
+          ? `${uploadErr.message} Please try again.`
+          : 'Audio upload failed. Please try again.');
+        setNewCreateStep('form');
+        return;
+      }
+
+      // Trigger background pipeline — returns 202 with updated processingStage
+      const pending = await processSermon(created.id);
+      // Merge the returned processingStage into the in-memory record so
+      // SermonEditor initialises with the correct stage ('preparing') rather
+      // than the stale 'idle' from the original createAdminSermon response.
+      const withStage: typeof created = {
+        ...created,
+        processingStage: pending?.processingStage ?? 'preparing',
+      };
+
+      setSermons(prev => [withStage, ...prev]);
+      setShowNewModal(false);
+      onEdit(editId(created));
+    } catch (err) {
+      setNewError(err instanceof Error ? err.message : 'Failed to create sermon');
+      setNewCreateStep('form');
+    } finally {
+      setNewCreating(false);
+      setNewUploadProgress(0);
+    }
+  };
+
+  // ── Set current week ──────────────────────────────────────────────────────────
+
+  const handleSetCurrentWeek = async (sermon: CanonicalSermon & { companionId?: string | null }) => {
+    const companionId = sermon.companionId;
+    if (!companionId) return;
+    setSettingCurrentWeek(prev => ({ ...prev, [sermon.id]: true }));
+    setOpenMenuId(null);
+    setErrorMessage(''); setSuccessMessage('');
+    try {
+      await setCurrentWeekSermon(companionId);
+      // Update list in-place: clear old current-week, set new one
+      setSermons(prev => prev.map(s => ({
+        ...s,
+        isCurrentWeek: s.id === sermon.id ? true : false,
+      })));
+      setSuccessMessage('Set as This Week\'s Sermon.');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch {
+      setErrorMessage("We couldn't set this as This Week's Sermon. Please try again.");
+      setTimeout(() => setErrorMessage(''), 5000);
+    } finally {
+      setSettingCurrentWeek(prev => { const copy = { ...prev }; delete copy[sermon.id]; return copy; });
+    }
+  };
+
+  // ── Publish / Unpublish ──────────────────────────────────────────────────────
+
+  const handlePublish = async (sermon: CanonicalSermon, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!auth) return;
     setPublishing(prev => ({ ...prev, [sermon.id]: true }));
     setErrorMessage(''); setSuccessMessage('');
     try {
-      const now = new Date().toISOString();
-      await patchServerSermon(sermon.id, { status: 'published', updatedAt: now }, auth);
-      updateSermon({ ...sermon, status: 'published', updatedAt: now });
+      const updated = await publishAdminSermon(sermon.id);
+      setSermons(prev => prev.map(s => s.id === sermon.id ? { ...s, ...updated } : s));
       setSuccessMessage('Published successfully.');
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch {
@@ -132,13 +414,12 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
   };
 
   const handleConfirmUnpublish = async () => {
-    if (!unpublishTarget || !auth) return;
+    if (!unpublishTarget) return;
     setPublishing(prev => ({ ...prev, [unpublishTarget.id]: true }));
     setErrorMessage(''); setSuccessMessage('');
     try {
-      const now = new Date().toISOString();
-      await patchServerSermon(unpublishTarget.id, { status: 'draft', updatedAt: now }, auth);
-      updateSermon({ ...unpublishTarget, status: 'draft', updatedAt: now });
+      const updated = await unpublishAdminSermon(unpublishTarget.id);
+      setSermons(prev => prev.map(s => s.id === unpublishTarget.id ? { ...s, ...updated } : s));
       setUnpublishTarget(null);
       setSuccessMessage('Unpublished successfully.');
       setTimeout(() => setSuccessMessage(''), 4000);
@@ -155,57 +436,91 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
     }
   };
 
-  // ── Delete ────────────────────────────────────────────────────────────────
+  // ── Delete ────────────────────────────────────────────────────────────────────
 
   const handleConfirmDelete = async () => {
-    if (!deleteTarget || !auth) return;
+    if (!deleteTarget) return;
     setDeleting(true); setDeleteError('');
     try {
-      // Pass the companionJourneyId so the server can handle legacy companions
-      // that have no admin-sermon JSON record (slug-based journeys table entries).
-      await deleteServerSermon(
-        deleteTarget.id,
-        auth,
-        { companionJourneyId: deleteTarget.companionJourneyId },
-      );
-      removeSermon(deleteTarget.id);
-      // Clear the "This Week's Sermon" setting if it pointed to the deleted companion
-      if (
-        deleteTarget.companionJourneyId &&
-        settings.currentWeeklySermonCompanionId === deleteTarget.companionJourneyId
-      ) {
-        updateSettings({ ...settings, currentWeeklySermonCompanionId: undefined });
-      }
+      await deleteAdminSermon(deleteTarget.id);
+      setSermons(prev => prev.filter(s => s.id !== deleteTarget.id));
       setDeleteTarget(null);
-      setSuccessMessage('Sermon Companion deleted successfully.');
+      setSuccessMessage('Sermon deleted successfully.');
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch {
-      setDeleteError('We couldn\'t delete this Sermon Companion. Nothing was removed. Please try again.');
+      setDeleteError("We couldn't delete this sermon. Nothing was removed. Please try again.");
     } finally {
       setDeleting(false);
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-48 text-gray-400">
+        <Loader2 size={18} className="animate-spin mr-2" />
+        Loading sermons…
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 gap-3 text-gray-500">
+        <p className="text-sm">{loadError}</p>
+        <button onClick={load} className="flex items-center gap-1.5 text-sm text-teal-600 hover:underline">
+          <RefreshCw size={13} /> Try again
+        </button>
+      </div>
+    );
+  }
 
   return (
     <>
       <ContentStudioListPage
-        title="Sermon Companions"
-        description="Turn Sunday's sermon into discipleship for the week."
+        title="Sermons"
+        description="Manage sermons and their companion discipleship content."
         newButton={
           <button onClick={handleOpenNewModal} className={newBtnCls}>
-            <Plus size={14} /> New Sermon Companion
+            <Plus size={14} /> New Sermon
           </button>
         }
         filters={{ tabs: STATUS_TABS, active: statusTab, onChange: setStatusTab }}
+        beforeList={
+          retrievalDiagnostics ? (
+            <div className="mb-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-3.5 py-3 text-[12px] text-indigo-900">
+              <div className="flex items-center gap-2 font-semibold">
+                <ShieldCheck size={14} className="text-indigo-600" />
+                Ask Emmaus retrieval coverage
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-indigo-800/80">
+                <span>{retrievalDiagnostics.eligibleCanonical} eligible published</span>
+                <span>{retrievalDiagnostics.indexedPublished} indexed</span>
+                {retrievalDiagnostics.hiddenCanonical > 0 && <span>{retrievalDiagnostics.hiddenCanonical} hidden</span>}
+                {retrievalDiagnostics.missingIndexRows > 0 && <span className="font-medium text-amber-700">{retrievalDiagnostics.missingIndexRows} missing index</span>}
+                {retrievalDiagnostics.staleIndexRows > 0 && <span className="font-medium text-amber-700">{retrievalDiagnostics.staleIndexRows} stale index</span>}
+                {retrievalDiagnostics.orphanedIndexRows > 0 && <span className="font-medium text-red-700">{retrievalDiagnostics.orphanedIndexRows} orphaned index</span>}
+              </div>
+            </div>
+          ) : filtered.length > 0 && statusTab === 'All' ? (
+            <div className="mb-3 flex items-center gap-2 rounded-xl border border-teal-100 bg-teal-50/60 px-3.5 py-2.5 text-[12px] text-teal-800">
+              <span className="font-semibold">Display order</span>
+              <span className="text-teal-700/80">Use the ↑ and ↓ controls on each row to choose the order members see in Discover.</span>
+            </div>
+          ) : statusTab !== 'All' && filtered.length > 0 ? (
+            <div className="mb-3 rounded-xl border border-gray-100 bg-gray-50 px-3.5 py-2.5 text-[12px] text-gray-500">
+              Reordering is available from the <strong>All</strong> tab so every sermon keeps one consistent display order.
+            </div>
+          ) : null
+        }
         isEmpty={filtered.length === 0}
         emptyState={
           <div className="rounded-2xl border border-dashed border-gray-200 p-10 text-center">
             <Mic2 size={28} className="text-gray-300 mx-auto mb-3" />
             <p className="text-sm text-gray-500">
               {statusTab === 'All'
-                ? 'No Sermon Companions yet. Click "New Sermon Companion" to generate your first draft.'
+                ? 'No sermons yet. Click "New Sermon" to add your first one, or use the URL-based generator.'
                 : `No ${statusTab} sermons.`}
             </p>
           </div>
@@ -223,15 +538,13 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
           </div>
         )}
 
-        {filtered.map(s => {
-          const hasCompanion     = !!s.companionJourneyId;
-          const companionIsNew   = hasCompanion && isUUID(s.companionJourneyId!);
-          const legacyCompanion  = !companionIsNew && s.companionJourneyId
-            ? journeys.find(j => j.id === s.companionJourneyId)
-            : null;
-          const isPublished      = s.status === 'published';
-          const isPublishingThis = !!publishing[s.id];
-          const isMenuOpen       = openMenuId === s.id;
+        {filtered.map((s, index) => {
+          const isPublished          = s.status === 'Published';
+          const isPublishingThis     = !!publishing[s.id];
+          const isMenuOpen           = openMenuId === s.id;
+          const companionId          = (s as CanonicalSermon & { companionId?: string | null }).companionId;
+          const isCurrentWeek        = !!(s as CanonicalSermon & { isCurrentWeek?: boolean }).isCurrentWeek;
+          const isSettingCurrentWeek = !!settingCurrentWeek[s.id];
 
           return (
             <ContentStudioListItem
@@ -256,26 +569,47 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
                     {s.scriptureReference && <span>{s.scriptureReference}</span>}
                     <span className="text-gray-300">·</span>
                     <span>{TRANSCRIPT_LABELS[s.transcriptStatus] ?? s.transcriptStatus}</span>
-                    {(companionIsNew || legacyCompanion) && (
+                    {companionId && (
                       <>
                         <span className="text-gray-300">·</span>
                         <button
-                          onClick={() => onOpenCompanion(s.id, s.companionJourneyId!)}
+                          onClick={() => onOpenCompanion(editId(s), companionId)}
                           className="text-teal-600 hover:text-teal-800 hover:underline flex items-center gap-0.5"
                         >
                           <BookOpen size={10} />
-                          {legacyCompanion ? legacyCompanion.title : 'View Companion'}
+                          View Companion
                         </button>
                       </>
                     )}
                   </div>
                 </div>
               }
-              status={<StatusBadge status={s.status} />}
+              status={
+                <div className="flex items-center gap-1.5">
+                  {isCurrentWeek && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide bg-amber-100 text-amber-700 border border-amber-200">
+                      <Star size={8} className="fill-amber-500 text-amber-500" />
+                      THIS WEEK
+                    </span>
+                  )}
+                  <StatusBadge status={isPublished ? 'published' : s.status.toLowerCase()} />
+                </div>
+              }
               actions={
                 <>
+                  {(s.status as string) !== 'Archived' && (() => {
+                    const visible = filtered.filter(sermon => (sermon.status as string) !== 'Archived');
+                    const reorderIndex = visible.findIndex(sermon => sermon.id === s.id);
+                    return <ReorderButtons
+                      canMoveUp={reorderIndex > 0}
+                      canMoveDown={reorderIndex >= 0 && reorderIndex < visible.length - 1}
+                      onMoveUp={() => void moveSermon(index, -1)}
+                      onMoveDown={() => void moveSermon(index, 1)}
+                      label={`Display order for ${s.title}`}
+                    />;
+                  })()}
                   {/* Edit */}
-                  <button onClick={() => onEdit(s.id)} className={actionBtnCls}>
+                  <button onClick={() => onEdit(editId(s))} className={actionBtnCls}>
                     Edit
                   </button>
 
@@ -313,7 +647,20 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
                     {isMenuOpen && (
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
-                        <div className="absolute right-0 top-8 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 w-44">
+                        <div className="absolute right-0 top-8 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 w-48">
+                          {/* Set as This Week — Published sermons with a companion that aren't already current */}
+                          {isPublished && companionId && !isCurrentWeek && (
+                            <button
+                              onClick={() => handleSetCurrentWeek(s as CanonicalSermon & { companionId?: string | null })}
+                              disabled={isSettingCurrentWeek}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                            >
+                              {isSettingCurrentWeek
+                                ? <Loader2 size={13} className="animate-spin" />
+                                : <Star size={13} />}
+                              Set as This Week
+                            </button>
+                          )}
                           {s.youtubeUrl && (
                             <a
                               href={s.youtubeUrl}
@@ -342,11 +689,11 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
         })}
       </ContentStudioListPage>
 
-      {/* ── Unpublish confirmation ──────────────────────────────────────────── */}
+      {/* ── Unpublish confirmation ────────────────────────────────────────────── */}
       {unpublishTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <h3 className="text-base font-semibold text-gray-900 mb-2">Unpublish this content?</h3>
+            <h3 className="text-base font-semibold text-gray-900 mb-2">Unpublish this sermon?</h3>
             <p className="text-sm text-gray-500 mb-4">Members will no longer see it.</p>
             <div className="flex gap-2">
               <button
@@ -369,19 +716,19 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
         </div>
       )}
 
-      {/* ── Delete confirmation ────────────────────────────────────────────── */}
+      {/* ── Delete confirmation ──────────────────────────────────────────────── */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
             <h3 className="text-base font-semibold text-gray-900 mb-2">Delete Sermon?</h3>
             <p className="text-sm text-gray-500 mb-3">
               You are about to permanently delete this sermon.
-              {deleteTarget.companionJourneyId && (
-                <> The linked sermon companion draft will also be deleted.</>
+              {(deleteTarget as CanonicalSermon & { companionId?: string | null }).companionId && (
+                <> The linked sermon companion will also be deleted.</>
               )}
               {' '}This action cannot be undone.
             </p>
-            {deleteTarget.status === 'published' && (
+            {deleteTarget.status === 'Published' && (
               <div className="mb-3 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
                 This sermon is currently visible to members. Deleting it will immediately remove it from Emmaus.
               </div>
@@ -409,43 +756,58 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
         </div>
       )}
 
-      {/* ── New Sermon Companion creation wizard — new standard ─────────────── */}
+      {/* ── New Sermon modal ──────────────────────────────────────────────────── */}
       {showNewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[calc(100dvh-2rem)]">
 
-            {/* Header — ← Cancel | title | ✕ */}
+            {/* Header */}
             <div className="flex-shrink-0 flex items-center px-5 pt-5 pb-4 border-b border-gray-100">
               <button
                 onClick={handleCloseNewModal}
+                disabled={newCreating}
                 aria-label="Cancel"
-                className="flex items-center gap-1.5 text-[13px] font-medium text-gray-500 hover:text-gray-900 transition-colors w-20 flex-shrink-0"
+                className="flex items-center gap-1.5 text-[13px] font-medium text-gray-500 hover:text-gray-900 transition-colors w-20 flex-shrink-0 disabled:opacity-40"
               >
                 <ArrowLeft size={14} />
                 Cancel
               </button>
               <h2 className="flex-1 text-[15px] font-semibold text-gray-900 text-center">
-                New Sermon Companion
+                New Sermon
               </h2>
               <div className="w-20 flex-shrink-0 flex justify-end">
                 <button
                   onClick={handleCloseNewModal}
+                  disabled={newCreating}
                   aria-label="Close"
-                  className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-700 transition-colors"
+                  className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-40"
                 >
                   <X size={16} />
                 </button>
               </div>
             </div>
 
-            {/* Step progress — single pill (1-step wizard) */}
-            <div className="flex-shrink-0 flex items-center gap-1.5 px-5 pt-3.5 pb-1">
-              <div className="h-[3px] rounded-full flex-1 bg-teal-500" />
-            </div>
+            {/* Upload progress bar */}
+            {newCreateStep === 'uploading' && (
+              <div className="flex-shrink-0 px-5 pt-3 pb-1 space-y-1">
+                <div className="flex justify-between text-[11px] text-gray-500">
+                  <span>Uploading audio…</span>
+                  <span>{newUploadProgress}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-teal-500 transition-all"
+                    style={{ width: `${newUploadProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
-            {/* Scrollable content */}
+            {/* Content */}
             <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
               <div className="space-y-4">
+
+                {/* Title */}
                 <div>
                   <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
                     Sermon Title
@@ -456,30 +818,183 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
                     type="text"
                     value={newTitle}
                     onChange={e => setNewTitle(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' && !newCreating) handleCreateCompanion();
-                    }}
                     placeholder="e.g. The God Who Sees"
                     className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-[14px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
                   />
-                  <p className="mt-2 text-[12px] text-gray-500 leading-relaxed">
-                    You can update the title inside the editor. Leave blank to start with a placeholder.
-                  </p>
                 </div>
+
+                {/* Speaker + Date */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[12px] font-semibold text-gray-700 mb-1">Speaker</label>
+                    <input
+                      type="text"
+                      value={newSpeaker}
+                      onChange={e => setNewSpeaker(e.target.value)}
+                      placeholder="Pastor name"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-semibold text-gray-700 mb-1">Date</label>
+                    <input
+                      type="date"
+                      value={newDate}
+                      onChange={e => setNewDate(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Scripture + Series */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[12px] font-semibold text-gray-700 mb-1">Main Scripture</label>
+                    <input
+                      type="text"
+                      value={newScripture}
+                      onChange={e => setNewScripture(e.target.value)}
+                      placeholder="e.g. John 3:1-21"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-semibold text-gray-700 mb-1">
+                      Series
+                      <span className="ml-1 text-[10px] font-normal text-gray-400">optional</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newSeries}
+                      onChange={e => setNewSeries(e.target.value)}
+                      placeholder="Series name"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Audio Upload */}
+                <div>
+                  <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">
+                    Upload Sermon Audio
+                    <span className="ml-1 text-[10px] font-normal text-gray-400">optional</span>
+                  </label>
+                  <input
+                    ref={newAudioInputRef}
+                    type="file"
+                    accept={ACCEPTED_AUDIO}
+                    className="hidden"
+                    onChange={e => {
+                      const f = e.target.files?.[0];
+                      if (f) handleNewAudioSelect(f);
+                      e.target.value = '';
+                    }}
+                  />
+                  {newAudioFile ? (
+                    <div className="flex items-center gap-2.5 p-3 rounded-xl border border-teal-200 bg-teal-50">
+                      <FileAudio size={16} className="text-teal-600 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-medium text-gray-800 truncate">{newAudioFile.name}</p>
+                        <p className="text-[11px] text-gray-500">{fmtBytes(newAudioFile.size)}</p>
+                      </div>
+                      <button
+                        onClick={() => setNewAudioFile(null)}
+                        className="p-1 rounded hover:bg-teal-100 text-gray-400 hover:text-gray-700"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => newAudioInputRef.current?.click()}
+                      className="w-full border-2 border-dashed border-gray-200 hover:border-teal-300 hover:bg-gray-50 rounded-xl p-4 text-center transition-colors"
+                    >
+                      <Upload size={16} className="mx-auto mb-1.5 text-gray-400" />
+                      <p className="text-[12px] font-medium text-gray-600">Click to select audio</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">MP3, M4A, WAV, MP4, MPEG, WEBM · Max 250 MB</p>
+                    </button>
+                  )}
+                  {newAudioError && (
+                    <p className="mt-1.5 text-[11px] text-red-600 flex items-center gap-1">
+                      <AlertCircle size={11} /> {newAudioError}
+                    </p>
+                  )}
+                </div>
+
+                {/* YouTube URL */}
+                <div>
+                  <label className="block text-[12px] font-semibold text-gray-700 mb-1">
+                    YouTube URL
+                    <span className="ml-1 text-[10px] font-normal text-gray-400">optional</span>
+                  </label>
+                  <input
+                    type="url"
+                    value={newYoutubeUrl}
+                    onChange={e => setNewYoutubeUrl(e.target.value)}
+                    placeholder="https://www.youtube.com/watch?v=…"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <label className="block text-[12px] font-semibold text-gray-700 mb-1">
+                    Notes
+                    <span className="ml-1 text-[10px] font-normal text-gray-400">optional</span>
+                  </label>
+                  <textarea
+                    value={newNotes}
+                    onChange={e => setNewNotes(e.target.value)}
+                    rows={2}
+                    placeholder="Admin notes about this sermon…"
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent resize-none"
+                  />
+                </div>
+
+                {newError && (
+                  <p className="text-[12px] text-red-600 flex items-center gap-1.5">
+                    <AlertCircle size={12} /> {newError}
+                  </p>
+                )}
               </div>
             </div>
 
-            {/* Footer — single full-width CTA */}
-            <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100">
+            {/* Footer */}
+            <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100 space-y-2">
+              {/* Primary — Process Sermon (requires audio) */}
               <button
-                onClick={handleCreateCompanion}
-                disabled={newCreating}
+                onClick={handleCreateAndProcess}
+                disabled={newCreating || !!newAudioError || !newAudioFile}
+                title={!newAudioFile ? 'Upload sermon audio to enable this' : undefined}
                 className="w-full h-12 rounded-2xl text-[15px] font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-700 text-white"
               >
-                {newCreating
-                  ? <><Loader2 size={15} className="animate-spin" /><span>Creating…</span></>
-                  : <span>Create Companion</span>
+                {newCreating && newCreateStep === 'uploading'
+                  ? <><Loader2 size={15} className="animate-spin" /><span>Uploading audio…</span></>
+                  : newCreating
+                  ? <><Loader2 size={15} className="animate-spin" /><span>Starting pipeline…</span></>
+                  : <span>Process Sermon</span>
                 }
+              </button>
+              {!newAudioFile && (
+                <p className="text-center text-[11px] text-gray-400 -mt-1">
+                  Upload audio above to enable Process Sermon
+                </p>
+              )}
+              {/* Secondary — Save as Draft (no audio required, no AI processing) */}
+              <button
+                onClick={handleCreateSermon}
+                disabled={newCreating || !!newAudioError}
+                className="w-full h-10 rounded-xl text-[13px] text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors disabled:opacity-40"
+              >
+                {newCreating && newCreateStep === 'uploading' ? 'Uploading…' : 'Save as Draft →'}
+              </button>
+              <button
+                onClick={() => { if (!newCreating) { handleCloseNewModal(); onNew(); } }}
+                disabled={newCreating}
+                className="w-full h-8 rounded-xl text-[12px] text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40"
+              >
+                Or generate from a YouTube URL →
               </button>
             </div>
 

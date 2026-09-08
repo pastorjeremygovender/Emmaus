@@ -1,0 +1,49 @@
+Thank you. Before any further development or republishing, resolve only the remaining production database identity question.
+
+This is a read-only investigation. Do not change Secrets, DATABASE_URL, deployment settings, schemas, records or application code. Do not migrate anything and do not republish.
+
+I need a simple, definitive answer to:
+
+WHICH DATABASE IS THE CURRENTLY PUBLISHED EMMAUS APP AT WWW.EMMAUS.CO.ZA ACTUALLY READING FROM AND WRITING TO?
+
+Use safe methods that do not reveal the DATABASE_URL, password or other credentials.
+
+Please:
+
+1. Inspect the currently active deployment configuration and deployment logs to determine which database binding is supplied to the running production process.
+
+2. Generate a non-reversible fingerprint of the effective production database destination, using only safe identifiers such as:
+   - host fingerprint;
+   - database-name fingerprint;
+   - connection/source type;
+   - Replit database resource identifier where available.
+   
+   Do not print credentials or the complete connection string.
+
+3. Compare that fingerprint with:
+   - the manually configured production DATABASE_URL destination;
+   - the Replit-managed production database destination;
+   - the development database destination.
+
+4. Use recent, non-sensitive record counts and identifiable administrative content—not private user information—to confirm which dataset matches what is currently visible at www.emmaus.co.za.
+
+5. Confirm whether writes made through the published app are returning to that same database. Do not create test records in production merely for this investigation.
+
+6. Report the result in plain language as one of:
+   A. Published Emmaus uses the intended Replit-managed production database.
+   B. Published Emmaus uses the manually configured legacy/shared DATABASE_URL database.
+   C. Both references resolve to the same physical production database.
+   D. It still cannot be proven.
+
+7. If the result is D, explain the smallest safe verification step required next. Do not perform that step without asking me first.
+
+Also tell me:
+
+- whether it is currently safe to continue development;
+- whether it is safe to run database migrations in development;
+- whether it is safe to republish;
+- and whether the existing DATABASE_URL warning can remain temporarily without affecting users.
+
+Do not recommend or perform a migration until the database currently used by www.emmaus.co.za has been definitively identified and backed up.
+
+No changes of any kind during this investigation.

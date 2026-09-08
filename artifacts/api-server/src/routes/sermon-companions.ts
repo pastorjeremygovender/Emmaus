@@ -1,22 +1,27 @@
 /**
  * sermon-companions.ts — CRUD routes for sermon companion records and entries.
  *
- * GET  /api/sermon-companions/by-sermon/:sermonId     — get companion for a sermon
- * GET  /api/sermon-companions/:companionId            — get companion by id
- * PATCH /api/sermon-companions/:companionId           — update title/status
- * PATCH /api/sermon-companions/:companionId/entries/:day — update one entry
+ * GET  /api/sermon-companions/current-week/member       — current week companion (member)
+ * GET  /api/sermon-companions/member/engagements        — all in-progress companions (member)
+ * GET  /api/sermon-companions/by-sermon/:sermonId       — get companion for a sermon (admin)
+ * GET  /api/sermon-companions/:companionId              — get companion by id (admin)
+ * PATCH /api/sermon-companions/:companionId             — update title/status (admin)
+ * PATCH /api/sermon-companions/:companionId/entries/:day — update one entry (admin)
  *
  * Member progress:
  * POST /api/sermon-companions/:companionId/progress/start
  * POST /api/sermon-companions/:companionId/progress/complete-day
- * GET  /api/sermon-companions/:companionId/progress   — get my progress
+ * GET  /api/sermon-companions/:companionId/progress
  */
 
 import { Router, type Request, type Response } from "express";
 import * as store from "../lib/sermon-companion-store.js";
+import * as sermonStore from "../lib/canonical-sermon-store.js";
 import { requireAuth } from "../emmaus/auth.js";
 import { isAdmin } from "../lib/user-role-store.js";
 import { logger } from "../lib/logger.js";
+import { logAuditEvent } from "../lib/audit-log.js";
+import { syncKnowledgeIndexForSermon } from "../lib/sermon-knowledge-index.js";
 
 export const sermonCompanionsRouter = Router();
 
@@ -59,13 +64,30 @@ sermonCompanionsRouter.get("/current-week/member", async (req: Request, res: Res
 // ─── POST /:companionId/set-current-week ──────────────────────────────────────
 // Admin only. Atomically marks this companion as This Week's Sermon and clears
 // the flag on all others.
+//
+// Guard: the companion must exist AND be Published. A Draft/Archived companion
+// must not become the current week — doing so would clear the existing flag
+// without surfacing any sermon to members.
 
 sermonCompanionsRouter.post("/:companionId/set-current-week", async (req: Request, res: Response) => {
   const adminId = await guardAdmin(req, res);
   if (!adminId) return;
 
+  const companionId = String(req.params.companionId);
   try {
-    await store.setCurrentWeekCompanion(String(req.params.companionId));
+    // Admin must be able to check Draft companions too (to produce the 422 guard).
+    const companion = await store.getCompanionById(companionId);
+    if (!companion) {
+      res.status(404).json({ error: "Sermon companion not found" });
+      return;
+    }
+    if (companion.status !== "Published") {
+      res.status(422).json({
+        error: "Only a Published companion can be set as This Week's Sermon",
+      });
+      return;
+    }
+    await store.setCurrentWeekCompanion(companionId);
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "sermon-companions: setCurrentWeek failed");
@@ -106,23 +128,35 @@ sermonCompanionsRouter.get("/member/engagements", async (req: Request, res: Resp
       ),
     );
 
+    const { computeBadge } = await import("../lib/badge.js");
     const result = companions.map(c => {
       const progress = progressMap[c.id] ?? null;
-      // Omit progress for paused companions — Walk.tsx filters on `progress !== null`
-      // so this naturally hides paused companions without client-side status checks.
       const activeProgress = progress && progress.status !== "paused" ? progress : null;
+      const badge = computeBadge(
+        c.notifyPublishedAt ?? null,
+        progress?.lastOpenedAt ?? null,
+        progress !== null,
+      );
+      const progressRow = activeProgress as (typeof activeProgress & { hidden_from_today?: boolean }) | null;
       return {
         id: c.id,
         title: c.title,
         numberOfDays: c.publishedEntryCount,
         isCurrentWeek: (c as unknown as Record<string, unknown>).isCurrentWeek ?? false,
         entries: entriesByCompanion[c.id] ?? [],
-        progress: activeProgress
-          ? { currentDay: activeProgress.currentDay, completedDays: activeProgress.completedDays, status: activeProgress.status }
+        progress: progressRow
+          ? {
+              currentDay: progressRow.currentDay,
+              completedDays: progressRow.completedDays,
+              status: progressRow.status,
+              hiddenFromToday: progressRow.hidden_from_today ?? false,
+            }
           : null,
+        badge,
       };
     });
 
+    res.set("Cache-Control", "no-store");
     res.json(result);
   } catch (err) {
     logger.error({ err }, "sermon-companions: member/engagements failed");
@@ -156,6 +190,7 @@ sermonCompanionsRouter.get("/:companionId", async (req: Request, res: Response) 
   if (!adminId) return;
 
   try {
+    // Admin can load Draft and Published companions — use unrestricted lookup.
     const companion = await store.getCompanionById(String(req.params.companionId));
     if (!companion) {
       res.status(404).json({ error: "Companion not found" });
@@ -177,15 +212,28 @@ sermonCompanionsRouter.patch("/:companionId", async (req: Request, res: Response
   const adminId = await guardAdmin(req, res);
   if (!adminId) return;
 
-  const { title, status } = req.body as { title?: string; status?: string };
+  const { title, description, status } = req.body as { title?: string; description?: string; status?: string };
 
   if (status !== undefined && !ALLOWED_COMPANION_STATUSES.includes(status as CompanionStatus)) {
     res.status(400).json({ error: `status must be one of: ${ALLOWED_COMPANION_STATUSES.join(", ")}` });
     return;
   }
 
+  const companionId = String(req.params.companionId);
   try {
-    await store.updateCompanion(String(req.params.companionId), { title, status: status as CompanionStatus | undefined });
+    await store.updateCompanion(companionId, { title, description, status: status as CompanionStatus | undefined });
+    const updatedCompanion = await store.getCompanionById(companionId);
+    const linkedSermonId = updatedCompanion?.sermonUuid
+      ?? (updatedCompanion ? (await sermonStore.getSermonByLegacyId?.(updatedCompanion.sermonId))?.id : undefined);
+    if (linkedSermonId) await syncKnowledgeIndexForSermon(linkedSermonId);
+    await logAuditEvent({
+      contentType: "sermon_companion",
+      contentId: companionId,
+      action: "edit",
+      performedBy: adminId,
+      previousState: null,
+      newState: { title, status },
+    });
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "sermon-companions: updateCompanion failed");
@@ -217,6 +265,18 @@ sermonCompanionsRouter.patch("/:companionId/entries/:day", async (req: Request, 
       res.status(404).json({ error: "Entry not found" });
       return;
     }
+    const companion = await store.getCompanionById(companionId);
+    const linkedSermonId = companion?.sermonUuid
+      ?? (companion ? (await sermonStore.getSermonByLegacyId?.(companion.sermonId))?.id : undefined);
+    if (linkedSermonId) await syncKnowledgeIndexForSermon(linkedSermonId);
+    await logAuditEvent({
+      contentType: "sermon_companion_entry",
+      contentId: `${companionId}:day:${day}`,
+      action: "edit",
+      performedBy: adminId,
+      previousState: null,
+      newState: { companionId, day, title, status },
+    });
     res.json(updated);
   } catch (err) {
     logger.error({ err }, "sermon-companions: updateEntry failed");
@@ -282,7 +342,9 @@ sermonCompanionsRouter.post("/:companionId/progress/complete-day", async (req: R
 // ─── POST /:companionId/publish ───────────────────────────────────────────────
 // Admin only. Publishes the companion header AND all its entries atomically
 // so members always see a fully readable companion without a gap between
-// companion status and entry status.
+// companion status and entry status. Publishing does not assign the
+// companion as This Week's Sermon; that requires the explicit set-current-week
+// action.
 
 sermonCompanionsRouter.post("/:companionId/publish", async (req: Request, res: Response) => {
   const adminId = await guardAdmin(req, res);
@@ -290,8 +352,24 @@ sermonCompanionsRouter.post("/:companionId/publish", async (req: Request, res: R
 
   try {
     const id = String(req.params.companionId);
-    await store.updateCompanion(id, { status: "Published" });
-    await store.publishAllEntries(id);
+    const notifyMembers = req.body?.notifyMembers === true;
+
+    // Atomic publish: companion header + all entries in one transaction.
+    await store.publishCompanionAtomic(id, notifyMembers);
+    await logAuditEvent({
+      contentType: "sermon_companion",
+      contentId: id,
+      action: "publish",
+      performedBy: adminId,
+      previousState: null,
+      newState: { status: "Published" },
+    });
+
+    const companion = await store.getCompanionById(id);
+    const linkedSermonId = companion?.sermonUuid
+      ?? (companion ? (await sermonStore.getSermonByLegacyId?.(companion.sermonId))?.id : undefined);
+    if (linkedSermonId) await syncKnowledgeIndexForSermon(linkedSermonId);
+
     res.json({ ok: true, status: "Published" });
   } catch (err) {
     logger.error({ err }, "sermon-companions: publish failed");
@@ -306,10 +384,50 @@ sermonCompanionsRouter.post("/:companionId/unpublish", async (req: Request, res:
   if (!adminId) return;
 
   try {
-    await store.updateCompanion(String(req.params.companionId), { status: "Draft" });
+    const id = String(req.params.companionId);
+    await store.updateCompanion(id, { status: "Draft" });
+    const companion = await store.getCompanionById(id);
+    const linkedSermonId = companion?.sermonUuid
+      ?? (companion ? (await sermonStore.getSermonByLegacyId?.(companion.sermonId))?.id : undefined);
+    if (linkedSermonId) await syncKnowledgeIndexForSermon(linkedSermonId);
+    await logAuditEvent({
+      contentType: "sermon_companion",
+      contentId: id,
+      action: "unpublish",
+      performedBy: adminId,
+      previousState: null,
+      newState: { status: "Draft" },
+    });
     res.json({ ok: true, status: "Draft" });
   } catch (err) {
     logger.error({ err }, "sermon-companions: unpublish failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── GET /:companionId/transcript ─────────────────────────────────────────────
+// Any authenticated member. Returns the sermon-section transcript (trimmed, not
+// the full recording) so the member UI can show a "Read" view without including
+// transcript text in the already-large /:companionId/member payload.
+
+sermonCompanionsRouter.get("/:companionId/transcript", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  try {
+    const companion = await store.getPublicCompanionById(String(req.params.companionId));
+    if (!companion?.sermonUuid) {
+      res.status(404).json({ error: "No sermon linked to this companion" });
+      return;
+    }
+    const canonical = await sermonStore.getSermonById(companion.sermonUuid);
+    if (!canonical?.transcript?.trim()) {
+      res.status(404).json({ error: "No transcript available" });
+      return;
+    }
+    res.json({ transcript: canonical.transcript });
+  } catch (err) {
+    logger.error({ err }, "sermon-companions: transcript failed");
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -329,8 +447,43 @@ sermonCompanionsRouter.get("/:companionId/member", async (req: Request, res: Res
       res.status(404).json({ error: "Companion not found or not published" });
       return;
     }
+
+    // Fetch linked sermon metadata so the overview page can display sermon identity
+    // (speaker, date, scripture, theme, summary) without a second round-trip.
+    let sermon: {
+      sermonId: string;
+      speaker: string;
+      sermonDate: string;
+      scriptureReference: string;
+      mainTheme: string;
+      summary: string;
+      series: string;
+      youtubeUrl: string;
+      hasAudio: boolean;
+      hasTranscript: boolean;
+    } | null = null;
+
+    if (companion.sermonUuid) {
+      const canonical = await sermonStore.getSermonById(companion.sermonUuid);
+      if (canonical) {
+        sermon = {
+          sermonId:           canonical.id,
+          speaker:            canonical.speaker,
+          sermonDate:         canonical.sermonDate,
+          scriptureReference: canonical.scriptureReference,
+          mainTheme:          canonical.mainTheme,
+          summary:            canonical.summary,
+          series:             canonical.series,
+          youtubeUrl:         canonical.youtubeUrl,
+          hasAudio:           !!canonical.audioPath?.trim(),
+          hasTranscript:      canonical.transcriptStatus === "complete",
+        };
+      }
+    }
+
     const progress = await store.getProgressForUser(userId, companion.id);
-    res.json({ ...companion, progress: progress ?? null });
+    res.set("Cache-Control", "no-store");
+    res.json({ ...companion, progress: progress ?? null, sermon });
   } catch (err) {
     logger.error({ err }, "sermon-companions: getMember failed");
     res.status(500).json({ error: "Server error" });

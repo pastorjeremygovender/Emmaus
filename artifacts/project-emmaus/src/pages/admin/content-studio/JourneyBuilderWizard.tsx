@@ -23,6 +23,7 @@ import {
   validateScriptureRef, searchSermonsForBuilder, buildJourneyWithAI,
   type ValidatedScripture, type ApprovedSermon, type BuilderPayload,
 } from '@/lib/journeys-api';
+import { useJourney } from '@/contexts/JourneyContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -146,6 +147,7 @@ function WizardField({ label, hint, children }: { label: string; hint?: string; 
 const TOTAL_SCREENS = 6;
 
 export default function JourneyBuilderWizard({ initialContentType, initialTitle, initialScreen, userId, collections, onClose, onCreated }: Props) {
+  const { journeys } = useJourney();
   const storageKey = userId ? `emmaus_builder_draft_${userId}` : null;
 
   // Load persisted draft, always honouring initialContentType and initialTitle
@@ -281,7 +283,23 @@ export default function JourneyBuilderWizard({ initialContentType, initialTitle,
 
   // ─── Generate ──────────────────────────────────────────────────────────────
 
+  const [allowDuplicate, setAllowDuplicate] = useState(false);
+
   const handleGenerate = async () => {
+    // Guard: warn if a walk with the same title already exists.
+    // The user can explicitly override by clicking "Create Anyway."
+    if (!allowDuplicate) {
+      const titleTrimmed = state.title.trim().toLowerCase();
+      const duplicate = journeys.find(j => j.title.trim().toLowerCase() === titleTrimmed);
+      if (duplicate) {
+        setGenerateError(
+          `A walk titled "${duplicate.title}" already exists. ` +
+          `If you want a second one, click "Create Anyway" below.`
+        );
+        setGenerating(false);
+        return;
+      }
+    }
     setGenerating(true); setGenerateError('');
     try {
       const payload: BuilderPayload = {
@@ -340,6 +358,10 @@ export default function JourneyBuilderWizard({ initialContentType, initialTitle,
         <Screen6
           state={state} patch={patch}
           generating={generating} generateError={generateError}
+          onCreateAnyway={generateError.includes('already exists') ? () => {
+            setAllowDuplicate(true);
+            setTimeout(handleGenerate, 0);
+          } : undefined}
         />
       );
       default: return null;
@@ -835,11 +857,12 @@ function Screen5({
 
 // ─── Screen 6: Style & Review ─────────────────────────────────────────────────
 
-function Screen6({ state, patch, generating, generateError }: {
+function Screen6({ state, patch, generating, generateError, onCreateAnyway }: {
   state: WizardState;
   patch: <K extends keyof WizardState>(k: K, v: WizardState[K]) => void;
   generating: boolean;
   generateError: string;
+  onCreateAnyway?: () => void;
 }) {
   return (
     <div className="space-y-5">
@@ -885,9 +908,19 @@ function Screen6({ state, patch, generating, generateError }: {
       </div>
 
       {generateError && (
-        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
-          <AlertCircle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-red-600">{generateError}</p>
+        <div className="p-3 bg-red-50 border border-red-100 rounded-xl space-y-2">
+          <div className="flex items-start gap-2">
+            <AlertCircle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-red-600">{generateError}</p>
+          </div>
+          {onCreateAnyway && (
+            <button
+              onClick={onCreateAnyway}
+              className="text-xs font-medium text-red-700 underline hover:text-red-900"
+            >
+              Create Anyway
+            </button>
+          )}
         </div>
       )}
 

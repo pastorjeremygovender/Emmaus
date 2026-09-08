@@ -1,0 +1,144 @@
+Create a temporary A/B test for Emmaus shareable image generation.
+
+Do not remove or modify the existing image-generation workflow.
+
+Add a temporary second generation option called:
+
+Generate with New Method
+
+PURPOSE
+
+We are testing whether Emmaus's current GPT-4o art-direction stage is over-directing GPT Image 2 and producing more generic/template-like results.
+
+The existing generator must remain completely intact so we can compare both outputs.
+
+NEW TEST WORKFLOW
+
+For Generate with New Method:
+
+1. Take the exact devotional/share quote supplied by the user.
+2. Do NOT send it through the existing GPT-4o art-direction generator.
+3. Use the current OpenAI reasoning/orchestration capability available in our implementation to interpret the quote before image generation where supported.
+4. Generate the final image with gpt-image-2.
+5. Keep the output square at 1024×1024.
+6. Preserve the existing Emmaus footer/branding overlay system after generation.
+
+CREATIVE OBJECTIVE
+
+The image should not simply place devotional text over an attractive background.
+
+First understand the spiritual meaning and emotional centre of the quote.
+
+Then identify ONE strong visual metaphor or scene that communicates that meaning.
+
+The image and typography should work together as one professionally art-directed composition.
+
+Allow the model substantial creative freedom.
+
+Do not force:
+
+* a fixed layout
+* a fixed text position
+* a fixed hero phrase
+* a fixed font hierarchy
+* a landscape
+* a Cross
+* sunlight
+* mountains
+* paths
+* hands
+* people
+* any recurring Christian visual cliché
+
+Only use those elements when they genuinely communicate the meaning of the specific quote.
+
+TYPOGRAPHY
+
+The exact supplied quote must appear in the artwork.
+
+Preserve the wording exactly.
+
+Allow the image model to determine:
+
+* which words deserve emphasis
+* font scale
+* line breaks
+* placement
+* contrast
+* hierarchy
+* relationship between typography and imagery
+
+The result should feel professionally designed rather than templated.
+
+Prioritise:
+
+* excellent typography
+* strong visual hierarchy
+* emotional resonance
+* sophisticated composition
+* readability on a phone
+* premium editorial quality
+* meaningful imagery
+* generous negative space
+* restraint
+
+Avoid:
+
+* generic motivational-poster appearance
+* unnecessarily ornate typography
+* excessive decorative flourishes
+* clutter
+* random Christian symbols
+* repetitive backgrounds
+* stock-photo appearance
+* automatically placing a Cross in every Christian image
+* automatically using golden-hour landscapes
+
+BRANDING
+
+Do not ask the image model to generate Emmaus branding.
+
+Continue using the existing Emmaus footer overlay after image generation.
+
+TEST
+
+Use this exact quote:
+
+"When life becomes confusing...
+
+When faith feels difficult...
+
+When circumstances don't make sense...
+
+Keep coming back to Jesus."
+
+Generate one image using:
+
+A. Existing Emmaus workflow
+B. New Method
+
+Do not overwrite either result.
+
+Display both so they can be compared visually.
+
+IMPORTANT
+
+This is an experiment only.
+
+Do not remove the existing image-generation system.
+
+Do not change database structures unless absolutely necessary.
+
+Do not change unrelated Content Studio functionality.
+
+Do not make this new method the production default yet.
+
+After completing the test, report:
+
+1. Which model/API endpoint was used.
+2. Whether GPT-4o art direction was bypassed.
+3. The exact prompt ultimately sent to GPT Image 2 for the New Method.
+4. Any reasoning/orchestration step used before image generation.
+5. Any quality parameter used.
+6. Any other image-generation parameters used.
+7. Files changed.

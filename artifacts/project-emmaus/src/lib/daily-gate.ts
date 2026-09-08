@@ -1,15 +1,10 @@
 /**
- * Daily gate — the 10 Minutes with Jesus gating system.
+ * Daily gate — disabled.
  *
- * Before today's 10 Minutes with Jesus is completed:
- *   - Growth journeys surface a gentle "Complete today's 10 Minutes with Jesus"
- *     CTA instead of their normal primary action.
- *   - No harsh disabling, no guilt language, no errors.
+ * The "complete 10 Minutes with Jesus first" restriction has been removed.
+ * All content is freely accessible regardless of daily rhythm completion.
  *
- * After completion the gate clears immediately, reactively — no reload required.
- *
- * Admin override: set requiresDailyGate = false on a Journey to bypass the gate
- * (for pastoral journeys like Crisis Care, Grief Support, Emergency Prayer etc.)
+ * The hook and function signatures are preserved so call-sites require no changes.
  *
  * Search alias: searching "15 minutes with jesus" also finds "10 minutes with jesus"
  * because the journey ID and tags preserve backward compatibility.
@@ -17,42 +12,31 @@
 
 import { useMemo } from 'react';
 import { useJourney } from '@/contexts/JourneyContext';
-import { isCompletedToday } from './daily-lock';
 import type { Journey } from '@/contexts/JourneyContext';
 
 /**
- * Returns true if this journey should respect the daily gate.
- * Exempt types (daily-rhythm/core/companion/devotional) are the gate content themselves.
- * Admin can also disable the gate per journey via requiresDailyGate = false.
+ * Always returns false — no journey is gated by the daily rhythm.
  */
-export function isGatedByDailyGate(j: Journey): boolean {
-  // The 10-min daily rhythm, sermon companion, and daily devotional are never gated —
-  // they ARE the core rhythm content.
-  if (['daily-rhythm', 'core', 'companion', 'devotional'].includes(j.journeyType)) return false;
-  // Admin-marked overload-exempt journeys bypass the gate too.
-  if (j.overloadExempt === true) return false;
-  // Admin can explicitly disable the gate for pastoral/crisis journeys.
-  if (j.requiresDailyGate === false) return false;
-  // All other growth journeys are gated by default.
-  return true;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function isGatedByDailyGate(_j: Journey): boolean {
+  return false;
 }
 
 export interface DailyGateResult {
-  /** True when the user has completed today's 10 Minutes with Jesus. */
+  /** Always true — the gate is disabled. */
   gateClear: boolean;
   /** The published daily rhythm journey (10 Minutes with Jesus), if found. */
   coreJourney: Journey | undefined;
 }
 
 /**
- * Reactive hook — returns the current gate state.
- * Updates immediately when the user completes today's 10 Minutes with Jesus,
- * because progress comes from JourneyContext which updates on completeStep().
+ * Reactive hook — gate is permanently clear.
+ * coreJourney is still resolved so any UI that references it (e.g. nudge cards)
+ * continues to work without changes.
  */
 export function useDailyGate(): DailyGateResult {
-  const { journeys, progress } = useJourney();
+  const { journeys } = useJourney();
 
-  // Accepts 'daily-rhythm' (current) and 'core' (legacy) for backward compat.
   const coreJourney = useMemo(
     () => journeys.find(
       j => (j.journeyType === 'daily-rhythm' || j.journeyType === 'core') && j.status === 'Published'
@@ -60,8 +44,5 @@ export function useDailyGate(): DailyGateResult {
     [journeys]
   );
 
-  const coreProg = coreJourney ? progress[coreJourney.id] : undefined;
-  const gateClear = isCompletedToday(coreProg?.lastCompletedAt);
-
-  return { gateClear, coreJourney };
+  return { gateClear: true, coreJourney };
 }

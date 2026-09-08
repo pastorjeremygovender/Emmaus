@@ -1,0 +1,887 @@
+REBUILD ASK EMMAUS VOICE AS THE INTELLIGENT CONTROL LAYER FOR THE WHOLE EMMAUS PLATFORM
+
+The Voice mechanics are now much better:
+
+- tap works
+- listening works
+- transcription works
+- spoken answers work
+
+However, the product is still fundamentally wrong.
+
+Ask Emmaus Voice currently behaves like a generic chatbot with speech added. It has little or no dependable awareness of:
+
+- the user’s Emmaus activity
+- Daily Rhythm
+- Walks
+- Walk Steps
+- Journeys
+- sermons
+- Sermon Companions
+- Daily Devotionals
+- Bible Studies
+- current reading position
+- Today’s Steps
+- the page the user is currently viewing
+
+It also navigates to irrelevant pages after some Bible requests.
+
+This is not the intended product.
+
+Ask Emmaus Voice must become the intelligent, voice-accessible control layer woven throughout Emmaus.
+
+Remember the Jarvis design principle:
+
+Emmaus is not a separate AI feature. It is the consistent presence across the Bible, Daily Rhythm, Walks, Journeys, sermons, Groups, prayer and personal discipleship. It understands context, helps the user navigate, connects relevant resources, answers questions and performs validated actions.
+
+Its roles include:
+
+- Bible Guide
+- Sermon Guide
+- Journey Coach
+- Daily Rhythm companion
+- Emmaus navigation assistant
+- Scripture-first pastoral companion
+
+It must never replace Scripture, prayer, the Holy Spirit, pastors, church leadership or fellowship. It must always point people towards Jesus and participation in the Local Church.
+
+Create a checkpoint before making changes.
+
+Do not republish automatically.
+
+==================================================
+1. ROOT-CAUSE AUDIT
+==================================================
+
+Before changing code, determine why Voice appears disconnected from Emmaus.
+
+Audit the complete Voice path:
+
+microphone
+→ transcription
+→ intent classification
+→ conversation/context construction
+→ Ask Emmaus retrieval
+→ tool selection
+→ action validation
+→ navigation
+→ spoken response
+
+Determine whether Voice currently:
+
+- calls a generic model endpoint instead of the canonical Ask Emmaus endpoint
+- uses a reduced or separate system prompt
+- bypasses the Scripture-first retrieval system
+- bypasses Local Church resource retrieval
+- lacks the authenticated user ID
+- lacks tenant/church context
+- lacks current page context
+- lacks user-progress context
+- lacks canonical resource IDs
+- receives only resource titles without actionable metadata
+- uses legacy regex commands before Ask Emmaus intent routing
+- executes tool arguments streamed directly from the model
+- interprets any Bible reference as a navigation instruction
+- opens a default page when route resolution fails
+- silently falls back to generic chat when retrieval fails
+- uses a separate Voice conversation history
+- loses context between spoken turns
+
+Report the actual causes.
+
+Do not attempt to solve this only by expanding the Voice system prompt.
+
+The Voice request must connect to the real Emmaus services and data.
+
+==================================================
+2. ONE EMMAUS BRAIN FOR TEXT AND VOICE
+==================================================
+
+Text Ask Emmaus and Voice Ask Emmaus must use the same canonical intelligence pipeline.
+
+They must share:
+
+- AI Constitution
+- Jesus-first principles
+- Scripture-first retrieval
+- current tenant/church configuration
+- Local Church resource index
+- published-resource filters
+- user access rules
+- Daily Rhythm eligibility
+- canonical Scripture validation
+- canonical resource validation
+- conversation history
+- user preference and progress context
+- Local Church attribution rules
+- resource recommendations
+- safety and pastoral escalation rules
+
+Voice must not maintain:
+
+- a separate generic chatbot
+- a separate knowledge base
+- a weaker Voice-only prompt
+- an independent search system
+- a duplicate resource catalogue
+
+Voice is an interface to Ask Emmaus—not another assistant.
+
+For the same authenticated user and same question, typed and spoken Ask Emmaus should produce substantively consistent answers and resources.
+
+Minor speech-friendly formatting differences are acceptable.
+
+==================================================
+3. EMMAUS CONTEXT ENVELOPE
+==================================================
+
+Create one server-generated Emmaus context envelope for each Voice request.
+
+The model must not invent this context.
+
+Use a structure similar to:
+
+{
+  "requestId": "request ID",
+  "user": {
+    "userId": "authenticated user ID",
+    "preferredDisplayName": "Pastor Jeremy",
+    "tenantId": "current tenant ID",
+    "churchName": "Isipingo Community Church",
+    "role": "authorized role where relevant"
+  },
+  "currentLocation": {
+    "section": "todays_steps | my_bible | discover | my_journey | ask_emmaus | group",
+    "route": "validated current route",
+    "resourceType": "resource type or null",
+    "resourceId": "canonical resource ID or null",
+    "book": "canonical Bible book or null",
+    "chapter": null,
+    "verseStart": null,
+    "verseEnd": null,
+    "stepId": null
+  },
+  "currentActivity": {
+    "activeDailyRhythmId": null,
+    "activeWalkIds": [],
+    "activeJourneyIds": [],
+    "activeSermonCompanionId": null,
+    "activeDevotionalIds": [],
+    "recentReadToMeSession": null
+  },
+  "eligibleResources": {
+    "todayDailyRhythm": null,
+    "completedDailyRhythms": [],
+    "activeWalks": [],
+    "activeJourneys": [],
+    "sermonCompanions": [],
+    "devotionals": []
+  }
+}
+
+Only include data the user is authorised to access.
+
+Do not dump large resource bodies into every Voice request.
+
+Use this envelope for identity, state and disambiguation. Retrieve full relevant content only when needed.
+
+Daily Rhythm must remain user-scoped before model context assembly.
+
+==================================================
+4. UNDERSTAND FOUR DIFFERENT REQUEST TYPES
+==================================================
+
+Every Voice request must be classified as one or a safe combination of:
+
+A. ASK
+
+The user wants an answer.
+
+Examples:
+
+- “What does John 3:16 mean?”
+- “What is faith?”
+- “Why should I forgive?”
+- “What did Pastor Jeremy say about this?”
+
+B. FIND
+
+The user wants Emmaus to locate something.
+
+Examples:
+
+- “Find the Walk about prayer.”
+- “Do we have anything about temptation?”
+- “Find Pastor Jeremy’s sermon on faith.”
+- “Show me a Bible Study on Luke.”
+
+C. OPEN
+
+The user wants to navigate.
+
+Examples:
+
+- “Open my current Walk.”
+- “Take me to today’s Daily Rhythm.”
+- “Open John chapter 3.”
+- “Show me this week’s Sermon Companion.”
+
+D. READ
+
+The user wants content spoken.
+
+Examples:
+
+- “Read John 3:16.”
+- “Read today’s Daily Rhythm.”
+- “Continue my Walk.”
+- “Read this week’s Sermon Companion.”
+
+Do not treat ASK as OPEN.
+
+Do not treat READ as OPEN unless opening the Read to Me player is required.
+
+Do not treat a Bible reference appearing inside a question as a navigation command.
+
+Examples:
+
+“What does John 3:16 mean?”
+
+Expected:
+
+- remain in Ask Emmaus
+- answer the question
+- include a working Scripture link
+- do not jump to My Bible
+
+“Read John 3:16.”
+
+Expected:
+
+- remain in the current conversational context
+- open the Read to Me player or compact player
+- read John 3:16
+- do not navigate to an unrelated Bible page
+
+“Open John 3:16.”
+
+Expected:
+
+- navigate to My Bible
+- open John 3
+- scroll to verse 16
+- highlight verse 16
+
+==================================================
+5. NAVIGATION REQUIRES EXPLICIT INTENT
+==================================================
+
+Navigation must occur only when:
+
+- the user explicitly asks to open, show, go to or take them to something; or
+- an action genuinely requires a dedicated screen and the user’s request clearly implies it.
+
+Never navigate merely because:
+
+- an answer cites Scripture
+- a resource was retrieved
+- a sermon is recommended
+- a Bible Study is mentioned
+- playback starts
+- the model emitted a route without explicit navigation intent
+
+Remove any default fallback route that opens:
+
+- the beginning of a Bible book
+- generic Discover
+- generic My Journey
+- generic Today’s Steps
+- an unrelated resource page
+
+If a precise destination cannot be validated:
+
+- remain on the current screen
+- explain briefly
+- offer a validated choice where possible
+
+Track the initiating screen and preserve it unless navigation was intended.
+
+==================================================
+6. JARVIS-STYLE EMMAUS ACTIONS
+==================================================
+
+Ask Emmaus Voice must help users operate Emmaus naturally.
+
+Support validated actions including:
+
+DAILY RHYTHM
+
+- “Open today’s Daily Rhythm.”
+- “Read today’s Daily Rhythm.”
+- “Continue my Daily Rhythm.”
+- “What day am I on?”
+- “Show my previous completed days.”
+- “Take me back to Today’s Steps.”
+
+WALKS
+
+- “What Walks am I doing?”
+- “Open my Walk about prayer.”
+- “Continue my current Walk.”
+- “Read today’s Step.”
+- “What Step am I on?”
+- “Find a Walk about forgiveness.”
+- “What Walk should I do next?”
+
+JOURNEYS
+
+- “What Journey am I doing?”
+- “Open my Journey.”
+- “What Walk comes next in this Journey?”
+- “Show me the Journey about Coming to Jesus.”
+- “How far have I progressed?”
+
+SERMONS
+
+- “Find Pastor Jeremy’s sermon about faith.”
+- “Play the sermon about forgiveness.”
+- “What did Pastor Jeremy teach about this?”
+- “Continue the sermon I was listening to.”
+- “Take me to 46 minutes and 56 seconds.”
+- “Show me the Sermon Companion.”
+
+BIBLE
+
+- “Read John 3:16.”
+- “Open John 3:16.”
+- “Explain John 3:16.”
+- “What was I reading?”
+- “Continue reading the Bible.”
+- “Show me the Bible Study for this passage.”
+- “Are there any ICC sermons on this passage?”
+
+DEVOTIONALS
+
+- “Read today’s devotional.”
+- “Continue my Psalms devotional.”
+- “What devotional am I doing?”
+- “Find a devotional about hope.”
+
+GENERAL NAVIGATION
+
+- “Take me home.”
+- “Open My Bible.”
+- “Show Today’s Steps.”
+- “Show my progress.”
+- “Go back.”
+- “What can I do here?”
+- “Help me find what I was doing.”
+
+Do not require users to know Emmaus’s exact menu names.
+
+==================================================
+7. HELP USERS WHO ARE STRUGGLING
+==================================================
+
+Ask Emmaus must make Emmaus easier to use.
+
+Support contextual help questions:
+
+- “Where do I find my Walk?”
+- “I don’t know what to do next.”
+- “How do I get back to today’s reading?”
+- “What am I supposed to do here?”
+- “Where is the sermon?”
+- “I was reading something yesterday.”
+- “What have I not finished?”
+- “Help me continue.”
+- “I can’t find the Bible Study.”
+
+Use the authenticated user’s real state to answer.
+
+Do not give generic instructions when Emmaus can perform the action.
+
+Preferred pattern:
+
+User:
+
+“Where do I find my current Walk?”
+
+Emmaus:
+
+“You’re currently on Step 3 of Prayer. I can open it for you.”
+
+If the request itself implies action:
+
+“Open my current Walk.”
+
+Emmaus should open it immediately.
+
+If several resources match:
+
+“You have two active Walks: Prayer and Walking with God. Which would you like?”
+
+Do not list inaccessible, paused or completed resources as active unless relevant.
+
+==================================================
+8. RESOURCE DISCOVERY MUST USE REAL EMMAUS DATA
+==================================================
+
+When the user asks about Walks, Journeys, sermons, devotionals or Bible Studies:
+
+1. Search the current tenant’s canonical published resource catalogue.
+2. Apply user access rules.
+3. Apply Daily Rhythm eligibility where applicable.
+4. Consider active and recent resources.
+5. Return canonical resource IDs and precise destinations.
+6. Provide the strongest relevant matches.
+7. Allow the user to open, read or continue them.
+
+Do not respond with:
+
+- “I don’t have access to your Walks”
+- “Check the Discover page”
+- “You may be able to find it in the app”
+- “I cannot navigate Emmaus”
+- fabricated resource names
+- instructions to use a menu when Voice can perform the action
+
+If retrieval genuinely fails:
+
+- admit the temporary problem
+- do not pretend Emmaus has no such capability
+- retain the user’s request
+- offer Retry
+
+==================================================
+9. SERMON GUIDE BEHAVIOUR
+==================================================
+
+Sermon requests must use actual ICC sermon data.
+
+Return:
+
+- canonical sermon ID
+- title
+- Pastor Jeremy attribution
+- relevant transcript excerpt
+- exact timestamp where available
+- Watch, Listen or Read availability
+- Sermon Companion where published
+
+Examples:
+
+“What did Pastor Jeremy say about faith?”
+
+Expected:
+
+- search relevant ICC sermons
+- answer from Scripture first
+- incorporate the actual relevant sermon teaching
+- show a validated sermon card
+- provide the exact timestamp where available
+- allow “Play it” as the next spoken command
+
+When the authenticated user is Pastor Jeremy, use:
+
+“You spoke about this in…”
+
+For normal ICC users, use:
+
+“Pastor Jeremy spoke about this in…”
+
+Do not tell users a link is in Discover when no such link is present.
+
+==================================================
+10. CONTEXTUAL FOLLOW-UP COMMANDS
+==================================================
+
+Voice must retain the context of the previous result.
+
+Example:
+
+User:
+
+“Find Pastor Jeremy’s sermon about faith.”
+
+Emmaus returns a sermon.
+
+User:
+
+“Play it.”
+
+Expected:
+
+- `it` resolves to the validated sermon from the previous turn
+- playback begins
+
+User:
+
+“Show me the Companion.”
+
+Expected:
+
+- resolve the Companion connected to that sermon
+- open the exact Companion
+
+Other contextual commands:
+
+- “Open it.”
+- “Read it.”
+- “Continue.”
+- “Play that.”
+- “Show me the next Step.”
+- “What did he mean by that?”
+- “Take me there.”
+- “Go back.”
+
+Store short-lived, server-trusted conversation references containing canonical resource IDs.
+
+Do not allow the model to invent what `it` refers to.
+
+If the reference is ambiguous, ask one brief clarification.
+
+==================================================
+11. VOICE RESPONSE STYLE
+==================================================
+
+Ask Emmaus Voice must remain:
+
+- warm
+- calm
+- mature
+- hopeful
+- biblically grounded
+- humble
+- personable
+- church-specific
+
+It must not sound like:
+
+- a generic customer-service bot
+- a technical navigation assistant
+- a search-results reader
+- an artificial sales agent
+
+Use the preferred user name selectively.
+
+For my account, use “Pastor Jeremy.”
+
+Do not repeat the name in every answer.
+
+Keep spoken navigation confirmations short:
+
+- “Opening your Prayer Walk.”
+- “You’re on Step 3. I’ll continue from there.”
+- “I found the sermon. It begins discussing this at 46:56.”
+- “Reading John chapter 3, verse 16.”
+
+Do not give a long explanation before performing an explicit action.
+
+==================================================
+12. UI BEHAVIOUR DURING VOICE ACTIONS
+==================================================
+
+Avoid irrelevant full-page jumps.
+
+Use the least disruptive suitable presentation:
+
+ASK
+
+- remain in Ask Emmaus
+- show answer and linked resources
+
+READ
+
+- open or expand the compact Read to Me player
+- preserve the current page where possible
+
+FIND
+
+- display concise validated results in Ask Emmaus
+- do not navigate until the user selects or requests a result
+
+OPEN
+
+- navigate to the exact validated destination
+
+PLAYER CONTROL
+
+- remain on the current screen
+- update the player state
+
+If a full page is necessary:
+
+- use the exact destination
+- preserve conversation and Back behaviour
+- retain the Voice session context
+
+==================================================
+13. ONE ACTION REGISTRY
+==================================================
+
+Implement one canonical Emmaus action registry used by Voice and any future assistant controls.
+
+Each action definition must include:
+
+- action name
+- required parameters
+- validation schema
+- authorization service
+- canonical resolver
+- execution handler
+- user-facing confirmation
+- failure response
+- whether navigation is permitted
+- whether autoplay is permitted
+
+Actions should include at least:
+
+- ASK_EMMAUS
+- FIND_RESOURCES
+- OPEN_BIBLE_PASSAGE
+- READ_BIBLE_PASSAGE
+- OPEN_DAILY_RHYTHM
+- READ_DAILY_RHYTHM
+- OPEN_WALK
+- READ_WALK_STEP
+- OPEN_JOURNEY
+- FIND_SERMON
+- PLAY_SERMON
+- OPEN_SERMON_COMPANION
+- OPEN_BIBLE_STUDY
+- READ_DEVOTIONAL
+- RESUME_READING
+- SHOW_TODAYS_STEPS
+- SHOW_PROGRESS
+- GO_BACK
+- CONTROL_PLAYER
+
+Do not scatter execution logic through UI components and regex handlers.
+
+Retire or redirect legacy Voice commands after all callers and tests have migrated.
+
+==================================================
+14. DO NOT CONFUSE READING WITH NAVIGATION
+==================================================
+
+Correct the reported Bible behaviour specifically.
+
+For each request below, verify the result:
+
+“Read John 3:16.”
+
+- read the verse
+- display compact player
+- do not jump to an irrelevant page
+
+“What does John 3:16 mean?”
+
+- answer in Ask Emmaus
+- do not navigate
+- show clickable John 3:16 reference
+
+“Open John 3:16.”
+
+- navigate to John 3
+- scroll to verse 16
+- highlight verse 16
+
+“Show me the Bible Study on John 3:16.”
+
+- open the relevant validated Bible Study if one exists
+- otherwise remain in Ask Emmaus and say none is currently available
+- do not open the beginning of John
+
+“Read John chapter 3.”
+
+- begin chapter reading
+- show compact player
+- do not navigate unless the user explicitly asks to open it
+
+==================================================
+15. INSTRUMENTATION
+==================================================
+
+Add structured diagnostic events for each Voice request:
+
+- request ID
+- authenticated user ID or safe internal identifier
+- tenant ID
+- current page/resource
+- transcript confidence
+- classified mode: ASK/FIND/OPEN/READ/CONTROL
+- retrieved resource types
+- canonical resource IDs
+- Daily Rhythm eligibility result
+- selected action
+- whether navigation was permitted
+- executed destination
+- fallback used
+- failure stage
+- latency by stage
+
+Do not unnecessarily store sensitive spoken content.
+
+Add an admin/developer diagnostic view for test accounts that can show why a Voice request chose an action without exposing it to normal users.
+
+==================================================
+16. AUTOMATED TEST MATRIX
+==================================================
+
+Test using realistic authenticated fixtures.
+
+NEW USER
+
+- “What should I do first?”
+- “Open today’s Daily Rhythm.”
+- “What Walks am I doing?”
+
+ACTIVE USER
+
+- “Continue my Walk.”
+- “What Step am I on?”
+- “Open my Journey.”
+- “What have I not finished?”
+- “Continue reading where I stopped.”
+
+MULTIPLE ACTIVE WALKS
+
+- “Open my Walk.”
+- Must clarify which one.
+
+SERMON
+
+- “Find Pastor Jeremy’s sermon about faith.”
+- “Play it.”
+- “Show me the Sermon Companion.”
+
+BIBLE
+
+- “Read John 3:16.”
+- “Open John 3:16.”
+- “Explain John 3:16.”
+- “Read John 3:16 and explain it.”
+- “Show the Bible Study on John 3:16.”
+
+DAILY RHYTHM
+
+- “Read today’s Daily Rhythm.”
+- “Open today’s Daily Rhythm.”
+- request future content
+- future content must not enter context or playback
+
+DEVOTIONAL
+
+- “Read today’s devotional.”
+- “Continue my Psalms devotional.”
+
+NAVIGATION HELP
+
+- “Where is my current Walk?”
+- “I don’t know what to do next.”
+- “Help me continue.”
+- “Take me home.”
+- “Go back.”
+
+GENERIC-CHAT REGRESSION
+
+Test that Voice does not say it lacks access to Emmaus resources when those resources exist and the user is eligible.
+
+Test that Voice does not instruct users to find nonexistent links in Discover.
+
+==================================================
+17. PARITY TEST BETWEEN TEXT AND VOICE
+==================================================
+
+For the same authenticated account, ask by text and Voice:
+
+- “What Walks am I doing?”
+- “What did Pastor Jeremy teach about faith?”
+- “Do we have a Bible Study on John 4?”
+- “What should I do next?”
+- “What does John 3:16 mean?”
+
+Compare:
+
+- user identity
+- tenant
+- Scripture retrieval
+- Local Church retrieval
+- resource IDs
+- recommendations
+- access decisions
+- substantive answer
+
+Voice and text must use the same facts.
+
+Voice may be shorter and more conversational, but it must not have less knowledge of Emmaus.
+
+==================================================
+18. REAL USER ACCEPTANCE TEST
+==================================================
+
+After implementation, the following sequence must work:
+
+User:
+
+“What Walks am I doing?”
+
+Emmaus:
+
+Returns the authenticated user’s actual active Walks.
+
+User:
+
+“Continue the Prayer Walk.”
+
+Emmaus:
+
+Opens or reads the user’s exact current Step.
+
+User:
+
+“What did Pastor Jeremy teach about prayer?”
+
+Emmaus:
+
+Uses Scripture first and retrieves actual relevant ICC sermon content.
+
+User:
+
+“Play it.”
+
+Emmaus:
+
+Plays the validated sermon at the relevant timestamp where available.
+
+User:
+
+“Take me back to my Walk.”
+
+Emmaus:
+
+Returns to the correct active Walk and Step.
+
+No generic menu instructions should be necessary.
+
+==================================================
+19. COMPLETION REPORT
+==================================================
+
+After completing the work, report:
+
+1. Why Voice behaved like a generic chatbot.
+2. Whether it was using a different endpoint, prompt or retrieval path.
+3. Why Bible reading caused an irrelevant navigation.
+4. How Voice now receives authenticated user and tenant context.
+5. How current page and resource context are supplied.
+6. How active Walks, Journeys and other progress are resolved.
+7. How sermon discovery and timestamps work.
+8. How ASK/FIND/OPEN/READ are distinguished.
+9. How follow-up references such as “play it” are validated.
+10. Action registry implemented.
+11. Legacy Voice paths removed or redirected.
+12. Files changed.
+13. Database/schema changes.
+14.

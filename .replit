@@ -1,4 +1,4 @@
-modules = ["nodejs-24", "python-base-3.13", "postgresql-16"]
+modules = ["nodejs-24", "python-base-3.13", "postgresql-16", "java-graalvm22.3"]
 
 [deployment]
 router = "application"
@@ -10,6 +10,41 @@ env = { "CI" = "true" }
 
 [workflows]
 runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "data-safety: content integrity"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "emmaus-member-flow-regressions"
+
+[[workflows.workflow]]
+name = "data-safety: content integrity"
+author = "agent"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/project-emmaus run build && pnpm --filter @workspace/api-server run export:seed && pnpm --filter @workspace/api-server run checksum:content > /tmp/pre-deploy-checksum.json && pnpm --filter @workspace/api-server run test:integrity"
+
+[[workflows.workflow]]
+name = "emmaus-member-flow-regressions"
+author = "agent"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/project-emmaus exec vitest run --config vitest.config.ts src/lib/__tests__/startup-routing.test.ts src/lib/__tests__/daily-launch-regression.test.ts src/pages/__tests__/Welcome.daily-open.test.tsx src/pages/__tests__/ExploreJourneys.discovery-start.test.tsx src/pages/__tests__/Journeys.discovery-actions.test.tsx && pnpm --filter @workspace/project-emmaus run build"
 
 [agent]
 stack = "PNPM_WORKSPACE"
@@ -24,6 +59,10 @@ timeoutMs = 20000
 [userenv.shared]
 EMMAUS_DEEP_MODEL = "gpt-5"
 EMMAUS_FAST_MODEL = "gpt-4o"
+VAPID_SUBJECT = "https://emmaus.co.za"
+
+[userenv.production]
+EMMAUS_PUBLIC_ORIGIN = "https://emmaus.co.za"
 
 [nix]
 channel = "stable-25_05"

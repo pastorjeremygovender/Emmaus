@@ -1,0 +1,139 @@
+PILOT BLOCKER — MAKE THE BIBLE STUDY PANEL AUTHORABLE AND POPULATE CORRECTLY
+
+The member Bible reader has a Study section when a verse is tapped, but it currently displays:
+
+“No study notes yet for this passage.”
+
+We need a reliable admin workflow for creating, editing, publishing and displaying Bible study notes.
+
+Do not redesign the Bible reader.
+Do not change Scripture text, Bible navigation, Ask Emmaus or Preached Here.
+
+==================================================
+FIRST: VERIFY EXISTING DATA
+==================================================
+
+Before creating anything new, inspect the existing:
+
+- bible_study_notes table
+- bible_chapter_overviews table
+- Bible Study admin UI
+- member VerseStudyPanel
+- relevant API routes
+
+Report:
+
+1. How many Bible study notes currently exist.
+2. Which books and chapters have notes.
+3. How verse references are stored:
+   - book
+   - chapter
+   - start verse
+   - end verse
+4. Whether notes have a published/member-visible status.
+5. Why Luke 1:2 currently shows no study note.
+6. Whether existing notes are being loaded from the production database.
+
+Do not seed duplicate content if relevant notes already exist.
+
+==================================================
+ADMIN AUTHORING
+==================================================
+
+In Emmaus Admin → Bible Study, provide a clear authoring interface with:
+
+- Book
+- Chapter
+- Start verse
+- End verse
+- Study title
+- Passage context
+- Explanation
+- Key truth
+- Reflection question
+- Practical application
+- Related Scriptures
+- Draft / Published status
+- Preview
+- Save
+- Publish / Unpublish
+- Edit
+- Delete
+
+Allow one note to cover a verse range.
+
+Example:
+
+Book: Luke
+Chapter: 1
+Start verse: 1
+End verse: 4
+
+That note must appear when a member taps Luke 1:1, 1:2, 1:3 or 1:4.
+
+==================================================
+MEMBER DISPLAY RULES
+==================================================
+
+The Study panel must:
+
+1. Query the exact selected book, chapter and verse.
+2. Return any published note whose verse range includes that verse.
+3. Never display drafts or admin-only notes.
+4. Display:
+   - Study title
+   - Context
+   - Explanation
+   - Key truth
+   - Reflection
+   - Application
+   - Related Scriptures
+5. Show the existing empty-state message only when no published matching note exists.
+
+Use canonical book identifiers consistently so “Luke”, “LUK”, and numeric book IDs do not cause mismatches.
+
+==================================================
+LUKE 1:2 ACCEPTANCE TEST
+==================================================
+
+Create or identify a published note covering Luke 1:1–4.
+
+Then verify in the published mobile app:
+
+1. Open Luke 1.
+2. Tap verse 2.
+3. Open Study.
+4. The published Luke 1:1–4 study content appears.
+5. Tap verse 5.
+6. The Luke 1:1–4 note does not incorrectly appear unless another matching note exists.
+
+==================================================
+REGRESSION TESTS
+==================================================
+
+Confirm this does not break:
+
+- Preached Here
+- Ask Emmaus about this verse
+- Find a Walk on this passage
+- Notes
+- Save
+- Bible chapter navigation
+- translation selection
+- verse selection
+
+==================================================
+DELIVERY
+==================================================
+
+Fix the existing pipeline rather than creating a competing Bible Study system.
+
+Report:
+
+1. root cause of the empty Luke 1:2 panel;
+2. existing data recovered;
+3. admin workflow added or repaired;
+4. files and database fields changed;
+5. published mobile test evidence.
+
+Republish and stop after verification.

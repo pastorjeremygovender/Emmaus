@@ -3,9 +3,12 @@ import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRooms } from '@/contexts/RoomsContext';
 import { BottomNav } from '@/components/BottomNav';
+import { goBackOrFallback } from '@/lib/return-context';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Copy, Check, Share2, Loader2 } from 'lucide-react';
 import type { RoomDetail } from '@/lib/rooms-types';
+import { isRoomLeaderRole } from '@/lib/rooms-types';
+import { groupInviteUrl } from '@/lib/groups-invite';
 
 export default function InviteMembers() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -21,8 +24,8 @@ export default function InviteMembers() {
   useEffect(() => {
     if (!roomId || !user) return;
     loadRoomDetail(String(roomId)).then(detail => {
-      if (!detail) { setLoadError('Room not found.'); return; }
-      if (detail.currentUserRole !== 'admin') { setLoadError('Only the Room admin can invite members.'); return; }
+      if (!detail) { setLoadError('Group not found.'); return; }
+      if (!isRoomLeaderRole(detail.currentUserRole)) { setLoadError('Only a Group Owner or Leader can invite members.'); return; }
       setRoom(detail);
     });
   }, [roomId, user, loadRoomDetail]);
@@ -33,7 +36,7 @@ export default function InviteMembers() {
     return (
       <div className="p-6 text-center mt-20 space-y-4">
         <p className="text-muted-foreground">{loadError}</p>
-        <Button onClick={() => setLocation(`/rooms/${roomId}`)}>Back</Button>
+        <Button onClick={() => goBackOrFallback(`/rooms/${roomId}`, setLocation)}>Back</Button>
       </div>
     );
   }
@@ -46,7 +49,7 @@ export default function InviteMembers() {
     );
   }
 
-  const inviteLink = `${window.location.origin}${import.meta.env.BASE_URL}join-room/${room.inviteToken}`;
+  const inviteLink = groupInviteUrl(room.inviteToken);
 
   const copyLink = async () => {
     await navigator.clipboard.writeText(inviteLink);
@@ -79,7 +82,7 @@ export default function InviteMembers() {
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
           <button
-            onClick={() => setLocation(`/rooms/${roomId}`)}
+            onClick={() => goBackOrFallback(`/rooms/${roomId}`, setLocation)}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             <ArrowLeft size={22} />
@@ -116,7 +119,7 @@ export default function InviteMembers() {
               </button>
             </div>
             <p className="text-[12px] text-muted-foreground">
-              Anyone with this code can join your Room.
+              Anyone with this code can join your Group.
             </p>
           </div>
 

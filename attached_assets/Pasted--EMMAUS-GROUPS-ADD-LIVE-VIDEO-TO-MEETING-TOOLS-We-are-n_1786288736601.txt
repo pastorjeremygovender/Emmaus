@@ -1,0 +1,309 @@
+# EMMAUS GROUPS — ADD LIVE VIDEO TO MEETING TOOLS
+
+We are now adding Live Video back into Emmaus Groups.
+
+IMPORTANT:
+
+Do NOT redesign Groups.
+
+Do NOT create a separate video meeting product.
+
+Do NOT make video the default Group experience.
+
+Live Video is simply ONE optional Meeting Tool inside the existing Group workflow.
+
+Preserve all current:
+
+• Group creation
+• invitations
+• assigned study
+• preparation progress
+• leader notes
+• meeting scheduling
+• discussion
+• prayer requests
+• group notes
+• attendance
+• permissions
+• LiveKit backend integration
+
+====================================================
+WHO MAY START LIVE VIDEO
+====================================================
+
+Only an Authorized Group Leader, Pastor or Super Admin may start Live Video.
+
+Ordinary Group creators may still create and run Groups without video.
+
+Members may JOIN Live Video once an authorized leader starts it.
+
+Do not automatically grant video permission because someone created the Group.
+
+====================================================
+MEETING TOOLS
+====================================================
+
+Inside the existing Meeting Tools screen add:
+
+LIVE VIDEO
+
+[ Start Live Video ]
+
+This control should only appear if:
+
+1. The current Group supports Live Video
+AND
+2. The current user is an Authorized Group Leader / Pastor / Super Admin
+AND
+3. A Group meeting is currently in progress
+
+If any condition fails, do not show a dead or disabled technical control.
+
+====================================================
+START LIVE VIDEO
+====================================================
+
+When leader taps:
+
+Start Live Video
+
+Emmaus should:
+
+1. Use the existing LiveKit integration.
+2. Create/use the LiveKit room linked to this Emmaus Group.
+3. Generate the leader's short-lived participant token server-side.
+4. Join the leader immediately.
+5. Mark Live Video as active for this Group meeting.
+6. Make Join Live Video available to Group members.
+
+Do not require:
+
+• meeting IDs
+• passwords
+• copied links
+• external browser pages
+• another app
+
+====================================================
+MEMBER EXPERIENCE
+====================================================
+
+When Live Video is active, Group members should see a simple card on the main Group meeting screen:
+
+LIVE VIDEO
+
+Jeremy has started the live meeting.
+
+[ Join Live Video ]
+
+One tap joins.
+
+If the member chooses not to join video, they can still use:
+
+• Discussion
+• Prayer Requests
+• Group Notes
+• Today's Study
+• Ask Emmaus
+
+Video must never block the rest of the Group.
+
+====================================================
+VIDEO PANEL
+====================================================
+
+After joining, render Live Video INSIDE the Group.
+
+Support:
+
+• participant video tiles
+• microphone mute/unmute
+• camera on/off
+• participant names
+• leave video
+• active speaker indicator if available naturally from LiveKit
+
+Do not add yet:
+
+• recording
+• virtual backgrounds
+• screen effects
+• AI agents
+• synchronized media playback
+• whiteboard
+
+====================================================
+VIDEO LAYOUT
+====================================================
+
+Keep the Group content primary.
+
+On desktop:
+
+Live Video may appear as a responsive panel near the top of the Meeting screen.
+
+On mobile:
+
+Use a compact responsive video panel.
+
+Allow:
+
+[ Expand Video ]
+
+and
+
+[ Return to Group ]
+
+Expanding video must not destroy the meeting state.
+
+====================================================
+LEAVE VS END
+====================================================
+
+These must be separate actions.
+
+MEMBER:
+
+Leave Live Video
+
+This only disconnects that participant from video.
+
+They remain inside the Emmaus Group meeting.
+
+LEADER:
+
+End Live Video
+
+This ends the LiveKit video session for everyone.
+
+It does NOT end the Emmaus Group meeting.
+
+The leader may continue:
+
+• Discussion
+• Prayer
+• Notes
+• Study
+
+Separately, the existing:
+
+End Meeting
+
+ends the actual Group meeting.
+
+====================================================
+MEETING TOOLS STATE
+====================================================
+
+When video is inactive:
+
+Meeting Tools shows:
+
+Start Live Video
+
+When video is active:
+
+Meeting Tools shows:
+
+End Live Video
+
+Do not show both.
+
+====================================================
+GROUP HOME DURING MEETING
+====================================================
+
+When video is active, main Group screen should show:
+
+🟢 Live Video Active
+
+[number] joined
+
+[ Join / Return to Live Video ]
+
+Do not add another duplicate Meeting in Progress banner.
+
+The existing Meeting in Progress state remains the primary meeting status.
+
+====================================================
+SECURITY
+====================================================
+
+Keep existing LiveKit security rules:
+
+• LIVEKIT_API_SECRET stays server-side
+• API credentials never reach browser
+• token generation is server-side
+• participant tokens are short-lived
+• only authenticated Group members receive participant tokens
+• only authorized leaders can start/end video
+
+====================================================
+COST CONTROL
+====================================================
+
+Do not connect users to LiveKit automatically.
+
+LiveKit usage begins only when:
+
+Leader taps Start Live Video
+
+and each member deliberately taps Join Live Video.
+
+Opening the Group must not start LiveKit.
+
+====================================================
+TESTING
+====================================================
+
+Test with two authenticated users.
+
+Leader:
+
+1. Open Group.
+2. Start Meeting.
+3. Open Meeting Tools.
+4. See Start Live Video.
+5. Start Live Video.
+6. Camera and microphone connect.
+
+Member:
+
+7. Open same Group.
+8. See Join Live Video.
+9. Join.
+10. Both users can see/hear each other.
+11. Member leaves Live Video.
+12. Member remains in Group.
+13. Member rejoins.
+
+Leader:
+
+14. End Live Video.
+15. Group Meeting remains active.
+16. Discussion, notes and prayer remain intact.
+17. End Meeting separately.
+
+Also verify:
+
+• unauthorized user cannot start video
+• non-member cannot obtain token
+• no LiveKit connection occurs until Start/Join
+• no API secret reaches client
+• no duplicate video controls appear
+
+====================================================
+SUCCESS CONDITION
+====================================================
+
+Live Video should feel like:
+
+"We're already having our Group meeting in Emmaus and now we're turning video on."
+
+It should NOT feel like:
+
+"We left the Group and launched a video meeting."
+
+Video is a tool.
+
+The Group remains the discipleship experience.

@@ -4,6 +4,7 @@ import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { BIBLE_BOOKS } from '@/lib/bible-data';
 import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
+import { goBackOrFallback } from '@/lib/return-context';
 
 const OT_BOOKS = BIBLE_BOOKS.filter(b => b.testament === 'OT');
 const NT_BOOKS = BIBLE_BOOKS.filter(b => b.testament === 'NT');
@@ -26,7 +27,7 @@ export default function BrowseBooks() {
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[520px] mx-auto">
           <button
-            onClick={() => setLocation('/bible')}
+            onClick={() => goBackOrFallback('/bible', setLocation)}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Back"
           >

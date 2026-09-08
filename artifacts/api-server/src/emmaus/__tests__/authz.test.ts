@@ -12,8 +12,13 @@
 
 import http from "node:http";
 import https from "node:https";
-import { describe, it } from "node:test";
+import { describe, it, after } from "node:test";
 import assert from "node:assert/strict";
+import {
+  authHeader,
+  cleanupTestAuth,
+  testUserIdFor,
+} from "../../test-utils/test-auth.ts";
 
 const BASE_URL = process.env.TEST_SERVER_URL ?? "http://localhost:8080";
 const url = new URL(BASE_URL);
@@ -22,16 +27,23 @@ const transport = isHttps ? https : http;
 
 // ─── HTTP Helpers ─────────────────────────────────────────────────────────────
 
-function request(opts: {
+async function request(opts: {
   method: string;
   path: string;
   userId?: string;
   body?: object;
 }): Promise<{ status: number; body: string }> {
+  // Members authenticate with a real opaque session (app_role "user"). Requests
+  // without a userId stay unauthenticated so negative-case 401s still hold.
+  const authHeaders = opts.userId
+    ? await authHeader(opts.userId, { role: "user" })
+    : {};
   return new Promise((resolve, reject) => {
     const payload = opts.body ? JSON.stringify(opts.body) : undefined;
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (opts.userId) headers["X-User-Id"] = opts.userId;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...authHeaders,
+    };
     if (payload) headers["Content-Length"] = String(Buffer.byteLength(payload));
 
     const req = transport.request(
@@ -210,13 +222,25 @@ describe("Emmaus authz — list conversations", () => {
     const alice = JSON.parse(aliceRes.body) as { userId: string }[];
     const bob = JSON.parse(bobRes.body) as { userId: string }[];
 
+    // Conversations are owned by the server-resolved verified user id (the real
+    // session identity), not the logical test key.
+    const aliceId = await testUserIdFor("user-list-alice", "user");
+    const bobId = await testUserIdFor("user-list-bob", "user");
+
     assert.ok(
-      alice.every((c) => c.userId === "user-list-alice"),
+      alice.every((c) => c.userId === aliceId),
       "Alice should only see her own conversations"
     );
     assert.ok(
-      bob.every((c) => c.userId === "user-list-bob"),
+      bob.every((c) => c.userId === bobId),
       "Bob should only see his own conversations"
     );
   });
+});
+
+// ─── Module teardown ──────────────────────────────────────────────────────────
+// Idempotent: removes only auth rows this process created (unique per PID nonce),
+// so it is safe under concurrent `node --test` files.
+after(async () => {
+  await cleanupTestAuth();
 });

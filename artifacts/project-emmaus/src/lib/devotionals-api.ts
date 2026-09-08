@@ -14,13 +14,11 @@ interface RequestOptions extends RequestInit {
 }
 
 async function request<T>(url: string, options?: RequestOptions): Promise<T> {
-  const { userId, userRole, ...fetchOptions } = options ?? {};
+  const { userId: _userId, userRole: _userRole, ...fetchOptions } = options ?? {};
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(fetchOptions.headers as Record<string, string> ?? {}),
   };
-  if (userId) headers["X-User-Id"] = userId;
-  if (userRole) headers["X-User-Role"] = userRole;
 
   const res = await fetch(url, {
     credentials: "include",
@@ -48,9 +46,12 @@ export interface DevotionalSeries {
   seriesType: string;
   status: string;
   publishedAt: string | null;
+  /** Set when admin opts-in to notifying members on publish (Smart Content Indicators). */
+  notifyPublishedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   createdBy: string | null;
+  displayOrder: number;
 }
 
 export interface DevotionalEntry {
@@ -64,10 +65,15 @@ export interface DevotionalEntry {
   prayer: string | null;
   nextStep: string | null;
   closing: string | null;
+  /** Optional per-entry display label (e.g. "1 January"). Overrides "Day N" when set. */
+  displayLabel?: string | null;
+  /** Optional share image — object-storage path ("/objects/…"). Members see a "Take this with you" card. */
+  shareImageUrl?: string | null;
   status: string;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  displayOrder: number;
 }
 
 export interface DevotionalProgress {
@@ -78,10 +84,30 @@ export interface DevotionalProgress {
   completedDays: number[];
   startedAt: string;
   updatedAt: string;
+  /** Set when the member opens the content — used for UPDATED badge computation. */
+  lastOpenedAt?: string | null;
+  /**
+   * When true the card is hidden from Today's Steps without losing progress.
+   * Set via POST /api/engagements/devotional/:id/hide; cleared automatically
+   * when the member opens the content from Next Steps.
+   */
+  hidden_from_today?: boolean;
 }
 
 export interface SeriesWithEntries extends DevotionalSeries {
   entries: DevotionalEntry[];
+}
+
+export interface DevotionalEntryGroup {
+  id: string;
+  seriesId: string;
+  title: string;
+  description: string | null;
+  status: string;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  items: DevotionalEntry[];
 }
 
 // ─── Admin: Series ────────────────────────────────────────────────────────────
@@ -102,9 +128,16 @@ export function listAllSeries(auth?: AdminAuth): Promise<DevotionalSeries[]> {
 }
 
 export function getSeriesWithEntries(id: string, auth?: AdminAuth | MemberAuth): Promise<SeriesWithEntries> {
-  // Read-only route — only userId is needed for requireAuth; userRole is ignored.
-  const userRole = auth && 'userRole' in auth ? (auth as AdminAuth).userRole : undefined;
-  return request<SeriesWithEntries>(apiUrl(`/${id}`), { userId: auth?.userId, userRole });
+  // This is always the member-facing read path, even when an admin is previewing
+  // the app. Draft content is available through the explicit admin helper below.
+  return request<SeriesWithEntries>(apiUrl(`/${id}`), { userId: auth?.userId });
+}
+
+export function getSeriesWithEntriesForAdmin(id: string, auth?: AdminAuth): Promise<SeriesWithEntries> {
+  return request<SeriesWithEntries>(apiUrl(`/admin/${id}`), {
+    userId: auth?.userId,
+    userRole: auth?.userRole,
+  });
 }
 
 export function createSeries(
@@ -121,7 +154,7 @@ export function createSeries(
 
 export function updateSeries(
   id: string,
-  data: Partial<Pick<DevotionalSeries, "title" | "description" | "seriesType" | "status">>,
+  data: Partial<Pick<DevotionalSeries, "title" | "description" | "seriesType" | "status" | "displayOrder">> & { notifyMembers?: boolean },
   auth?: AdminAuth
 ): Promise<DevotionalSeries> {
   return request<DevotionalSeries>(apiUrl(`/${id}`), {
@@ -137,7 +170,12 @@ export function archiveSeries(id: string, auth?: AdminAuth): Promise<void> {
 }
 
 export function permanentDeleteSeries(id: string, auth?: AdminAuth): Promise<void> {
-  return request<void>(apiUrl(`/${id}/permanent`), { method: "DELETE", userId: auth?.userId, userRole: auth?.userRole });
+  return request<void>(apiUrl(`/${id}/permanent`), {
+    method: "DELETE",
+    body: JSON.stringify({ confirm: "PERMANENTLY_DELETE" }),
+    userId: auth?.userId,
+    userRole: auth?.userRole,
+  });
 }
 
 // ─── Admin: Entries ───────────────────────────────────────────────────────────
@@ -145,7 +183,7 @@ export function permanentDeleteSeries(id: string, auth?: AdminAuth): Promise<voi
 export function saveEntry(
   seriesId: string,
   dayNumber: number,
-  data: Partial<Pick<DevotionalEntry, "title" | "scriptureReference" | "greeting" | "considerThis" | "prayer" | "nextStep" | "closing" | "status">>,
+  data: Partial<Pick<DevotionalEntry, "title" | "scriptureReference" | "greeting" | "considerThis" | "prayer" | "nextStep" | "closing" | "displayLabel" | "shareImageUrl" | "status" | "displayOrder">>,
   auth?: AdminAuth
 ): Promise<DevotionalEntry> {
   return request<DevotionalEntry>(apiUrl(`/${seriesId}/entries/${dayNumber}`), {
@@ -164,10 +202,102 @@ export function deleteEntry(seriesId: string, dayNumber: number, auth?: AdminAut
   });
 }
 
+export interface BulkLabelsResult {
+  updated: number;
+  previewFirst: string | null;
+  previewLast: string | null;
+}
+
+export function bulkGenerateEntryLabels(
+  seriesId: string,
+  opts: { startDate: string; format: string; overwriteExisting: boolean },
+  auth?: AdminAuth
+): Promise<BulkLabelsResult> {
+  return request<BulkLabelsResult>(apiUrl(`/${seriesId}/entries/bulk-labels`), {
+    method: "POST",
+    body: JSON.stringify(opts),
+    userId: auth?.userId,
+    userRole: auth?.userRole,
+  });
+}
+
+// ─── Entry groups ─────────────────────────────────────────────────────────────
+
+export function listDevotionalEntryGroups(
+  seriesId: string,
+  auth?: AdminAuth | MemberAuth,
+): Promise<DevotionalEntryGroup[]> {
+  return request<DevotionalEntryGroup[]>(apiUrl(`/${seriesId}/groups`), {
+    userId: auth?.userId,
+  });
+}
+
+export function listDevotionalEntryGroupsForAdmin(
+  seriesId: string,
+  auth?: AdminAuth,
+): Promise<DevotionalEntryGroup[]> {
+  return request<DevotionalEntryGroup[]>(apiUrl(`/admin/${seriesId}/groups`), {
+    userId: auth?.userId,
+    userRole: auth?.userRole,
+  });
+}
+
+export function createDevotionalEntryGroup(
+  seriesId: string,
+  data: { title: string; description?: string; status?: string; displayOrder?: number },
+  auth?: AdminAuth,
+): Promise<DevotionalEntryGroup> {
+  return request<DevotionalEntryGroup>(apiUrl(`/${seriesId}/groups`), {
+    method: "POST",
+    body: JSON.stringify(data),
+    userId: auth?.userId,
+    userRole: auth?.userRole,
+  });
+}
+
+export function updateDevotionalEntryGroup(
+  seriesId: string,
+  groupId: string,
+  data: Partial<Pick<DevotionalEntryGroup, "title" | "description" | "status" | "displayOrder">>,
+  auth?: AdminAuth,
+): Promise<DevotionalEntryGroup> {
+  return request<DevotionalEntryGroup>(apiUrl(`/${seriesId}/groups/${groupId}`), {
+    method: "PATCH",
+    body: JSON.stringify(data),
+    userId: auth?.userId,
+    userRole: auth?.userRole,
+  });
+}
+
+export function deleteDevotionalEntryGroup(
+  seriesId: string,
+  groupId: string,
+  auth?: AdminAuth,
+): Promise<void> {
+  return request<void>(apiUrl(`/${seriesId}/groups/${groupId}`), {
+    method: "DELETE",
+    userId: auth?.userId,
+    userRole: auth?.userRole,
+  });
+}
+
+export function saveDevotionalEntryGroupItems(
+  seriesId: string,
+  groupId: string,
+  entryIds: string[],
+  auth?: AdminAuth,
+): Promise<DevotionalEntryGroup> {
+  return request<DevotionalEntryGroup>(apiUrl(`/${seriesId}/groups/${groupId}/items`), {
+    method: "PUT",
+    body: JSON.stringify({ entryIds }),
+    userId: auth?.userId,
+    userRole: auth?.userRole,
+  });
+}
+
 // ─── Member auth bag ──────────────────────────────────────────────────────────
-// Member routes rely on session cookies (set at login). In demo / dev mode,
-// the caller's userId is forwarded as the X-User-Id header so requireAuth()
-// can identify the user without a cookie.
+// Member routes rely on the secure session cookie (set at login) for identity;
+// the server derives the user from that cookie via requireAuth().
 
 export interface MemberAuth {
   userId?: string;

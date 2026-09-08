@@ -1,0 +1,359 @@
+STOP.
+
+Do not add any new features until this task is complete.
+
+This task is a WORKFLOW REDESIGN of Emmaus Groups.
+
+The functionality is largely there, but the user experience is wrong because the page is trying to be a preparation screen, a live meeting screen and a follow-up screen all at once.
+
+I want to redesign the experience around the natural lifecycle of a discipleship group.
+
+====================================================
+THE CORE PRINCIPLE
+====================================================
+
+Emmaus Groups is NOT a video conferencing app.
+
+Emmaus Groups is a discipleship coordination tool.
+
+Groups may meet:
+
+• in someone's home
+• at church
+• in a coffee shop
+• on WhatsApp
+• on Zoom
+• eventually inside Emmaus Video
+
+The app exists to prepare people, guide the meeting, and help them afterwards.
+
+The UI must reflect this.
+
+====================================================
+PHASE 1
+PREPARATION
+====================================================
+
+This is the default Group screen.
+
+Do NOT show meeting controls.
+
+The page should contain ONLY:
+
+-----------------------------------
+
+Today's Study
+
+• Assigned Walk / Journey / Devotional
+• Hide until meeting toggle
+• Change Study
+
+-----------------------------------
+
+Leader's Note
+
+A simple introduction from the leader.
+
+Example:
+
+"Tonight we'll focus on forgiveness."
+
+-----------------------------------
+
+Meeting
+
+Date
+
+Time
+
+Location
+
+Meeting link (optional)
+
+Schedule Meeting
+
+-----------------------------------
+
+Members
+
+Show every member.
+
+Display:
+
+• Online / Offline
+
+• Reading complete
+
+• Still reading
+
+• Not started
+
+The leader should immediately know who is prepared.
+
+-----------------------------------
+
+Discussion
+
+Locked until meeting begins.
+
+Show:
+
+Discussion opens when the meeting starts.
+
+-----------------------------------
+
+Prayer Requests
+
+Visible before the meeting.
+
+-----------------------------------
+
+Primary button
+
+START MEETING
+
+ONLY ONE BUTTON.
+
+====================================================
+PHASE 2
+MEETING
+====================================================
+
+When the leader presses
+
+START MEETING
+
+the page should transform.
+
+Not slightly change.
+
+Transform.
+
+Display:
+
+-----------------------------------
+
+🟢 Meeting in Progress
+
+Started 19:00
+
+Today's Study
+
+Leader Note
+
+Members Present
+
+Discussion
+
+Prayer Requests
+
+Group Notes
+
+Meeting Tools
+
+END MEETING
+
+-----------------------------------
+
+Remove all preparation-only messaging.
+
+The page must now feel like a live gathering.
+
+====================================================
+MEETING TOOLS
+====================================================
+
+Meeting Tools is secondary.
+
+It is NOT the main page.
+
+Rename
+
+Controls
+
+to
+
+Meeting Tools
+
+Inside:
+
+Open Today's Study
+
+Present Bible
+
+Previous Step
+
+Next Step
+
+Prayer Time
+
+Launch Poll
+
+Ask Emmaus Together
+
+Complete Meeting
+
+Every Meeting Tools screen MUST have
+
+Back
+
+or
+
+Close
+
+Never trap the user.
+
+====================================================
+PHASE 3
+FOLLOW-UP
+====================================================
+
+After End Meeting
+
+the page changes again.
+
+Show
+
+Meeting Complete
+
+Attendance
+
+Discussion Archive
+
+Prayer Requests
+
+Group Notes
+
+Next Meeting
+
+Schedule Next Meeting
+
+Do NOT lose data.
+
+====================================================
+REMOVE DUPLICATES
+====================================================
+
+Search the entire Groups feature.
+
+Remove every duplicate.
+
+There must only be:
+
+ONE Start Meeting button.
+
+ONE End Meeting button.
+
+ONE Meeting Status.
+
+ONE Discussion card.
+
+ONE Ask Emmaus entry point.
+
+ONE Today's Study section.
+
+ONE Leader Note section.
+
+ONE Meeting Tools entry.
+
+Delete all obsolete placeholders and old UI.
+
+====================================================
+LABEL CHANGES
+====================================================
+
+Replace
+
+Continue
+
+with
+
+Open Today's Study
+
+or
+
+Present Today's Study
+
+Replace
+
+Visible Now
+
+with
+
+Hidden Until Meeting
+
+(toggle)
+
+When switched on
+
+Visible To Members
+
+Rename
+
+Controls
+
+to
+
+Meeting Tools
+
+====================================================
+VISUAL EXPERIENCE
+====================================================
+
+Preparation should look calm.
+
+Meeting should feel active.
+
+Follow-up should feel complete.
+
+Each phase must feel like a different experience even though it is the same Group.
+
+====================================================
+DO NOT BUILD MORE FEATURES
+====================================================
+
+Do not add video.
+
+Do not add new meeting functions.
+
+Do not add new screens.
+
+Perfect the workflow first.
+
+====================================================
+FINAL QA
+====================================================
+
+Before marking complete:
+
+Open the published app.
+
+Walk through the entire lifecycle.
+
+Preparation
+
+↓
+
+Start Meeting
+
+↓
+
+Meeting in Progress
+
+↓
+
+End Meeting
+
+↓
+
+Meeting Complete
+
+Confirm every screen is clean.
+
+Confirm no duplicate controls exist.
+
+Confirm no cut-off panels.
+
+Confirm every secondary screen has a Back or Close button.
+
+Only then mark this task complete.

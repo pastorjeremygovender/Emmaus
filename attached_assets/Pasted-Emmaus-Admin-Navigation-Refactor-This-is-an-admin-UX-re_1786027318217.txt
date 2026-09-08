@@ -1,0 +1,246 @@
+Emmaus Admin Navigation Refactor
+
+This is an admin UX refactor only.
+
+Do not change any database schema, content models, API endpoints, routing logic, or existing content.
+
+Only reorganize the admin interface to make it clearer and more intuitive.
+
+1. Remove Media Studio
+
+Remove Media Studio completely from the admin interface for now.
+
+Remove it from the Content Studio top navigation.
+Remove it from the left navigation.
+Remove any menu links to Media Studio.
+Do NOT delete any Media Studio code or database tables.
+Simply hide it from the UI until development begins.
+2. Separate Walks and Journeys
+
+Walks and Journeys are different content types and must no longer share one section.
+
+Create two independent sections inside Content Studio.
+
+Walks
+
+This is the home for every individual discipleship walk.
+
+Examples:
+
+Road to Emmaus
+Prayer
+Baptism
+Made Free
+Who Is Jesus?
+
+Functions:
+
+Search
+Filter
+Create Walk
+Edit
+Duplicate
+Publish
+Archive
+Delete
+
+The page title should simply be:
+
+Walks
+
+NOT "Walk Library".
+
+Journeys
+
+Journeys are collections of Walks.
+
+A Journey contains an ordered list of Walks.
+
+Example:
+
+Growing in Christ
+
+Prayer
+The Bible
+Church
+Baptism
+Holy Communion
+Faith
+Holy Spirit
+
+The Journey editor should only manage:
+
+Journey Name
+Description
+Thumbnail
+Availability
+Add Walk
+Remove Walk
+Drag to reorder Walks
+
+No Walk editing should happen inside Journeys.
+
+Walk content belongs only inside Walks.
+
+3. Content Studio Navigation
+
+Replace the current top navigation with:
+
+Daily Rhythm
+Daily Devotionals
+Walks
+Journeys
+Sermons
+
+Remove:
+
+Media Studio
+Bible Study
+
+Bible Study will become its own admin section.
+
+4. Bible Study
+
+There must only be ONE Bible Study section.
+
+Currently there are two different Bible Study areas with different content.
+
+Merge them into a single navigation item.
+
+The Bible Study section should contain tabs:
+
+Overview
+Notes
+Cross References
+Generation
+Book Intros
+
+Move the existing content into the appropriate tab.
+
+Overview
+
+Displays:
+
+Publishing progress
+Completion
+Drafts
+Books completed
+Overall statistics
+Notes
+
+Contains:
+
+Study Notes
+Editing
+Publishing
+Search
+
+(Current Study Notes screen.)
+
+Cross References
+
+Current Cross References screen.
+
+Generation
+
+Contains:
+
+Book generation
+Passage generation
+Progress bars
+Generate buttons
+
+(Current Progress screen.)
+
+Book Intros
+
+Contains introduction generation and editing.
+
+5. Left Navigation
+
+Reorganize the left navigation as follows:
+
+Dashboard
+
+Pastoral Dashboard
+
+People
+
+Analytics
+
+Workflows
+
+Content Studio
+
+Bible Study
+
+Settings
+
+Audit Log
+
+Testing
+
+Back to App
+
+Remove duplicate Bible Study navigation from Content Studio.
+
+There should only be one Bible Study entry in the entire admin.
+
+6. Dashboard
+
+Leave Dashboard functional.
+
+Do not redesign it yet.
+
+We will redesign Dashboard later.
+
+Only ensure the navigation points correctly.
+
+7. Preserve Existing Functionality
+
+This is extremely important.
+
+Do NOT modify:
+
+Daily Rhythm
+Daily Devotionals
+Walks content
+Journeys content
+Sermons
+Bible notes
+Bible generation
+Publishing
+User content
+Routes
+Database
+APIs
+
+Only reorganize the admin interface.
+
+No functionality should change.
+
+8. Quality Check
+
+Before marking this complete, verify:
+
+✓ Media Studio no longer appears anywhere.
+
+✓ Walks and Journeys are completely separate.
+
+✓ Walk editing only happens inside Walks.
+
+✓ Journey editing only manages collections of Walks.
+
+✓ There is only ONE Bible Study section.
+
+✓ All previous Bible Study functionality still exists.
+
+✓ No broken routes.
+
+✓ No missing pages.
+
+✓ No duplicated navigation.
+
+✓ Existing content remains intact.
+
+This refactor is intended to simplify the Emmaus Admin so it reflects the actual content architecture rather than the order in which features were originally built. After this change, future development should continue using this structure as the standard.

@@ -1,0 +1,87 @@
+# EMMAUS GROUPS — FIX MEETING TOOLS (LIVE VIDEO STILL MISSING)
+
+The published app is still displaying the OLD Meeting Tools sheet.
+
+This is now the fourth/fifth attempt to add Live Video.
+
+The feature is still missing.
+
+Do NOT tell me it has been added.
+
+Inspect the actual component that is rendered when I tap "Meeting Tools" in the published app.
+
+The screenshots prove that the app is still rendering the old sheet.
+
+--------------------------------------------------
+REPLACE THE CURRENT MEETING TOOLS
+--------------------------------------------------
+
+The Meeting Tools panel must contain the following tools in this order:
+
+CONTENT
+• Open Today's Study
+• Previous Step
+• Next Step
+• Present Bible
+
+MEETING
+• Start Live Video (camera icon)
+• Open Discussion
+• Prayer Time
+• Launch Poll
+• Ask Emmaus Together
+
+SESSION
+• End Meeting
+
+--------------------------------------------------
+LIVE VIDEO
+--------------------------------------------------
+
+Add a visible tile:
+
+🎥 Start Live Video
+
+Description:
+
+Start a live video meeting for everyone in this Group.
+
+For now it may open a placeholder screen or LiveKit placeholder.
+
+The important thing is:
+
+• the option must exist
+• it must be visible
+• it must be clickable
+• it must be part of the Meeting Tools sheet
+
+--------------------------------------------------
+VERIFY THE CORRECT COMPONENT
+--------------------------------------------------
+
+Search the codebase for every Meeting Tools component.
+
+If multiple versions exist:
+
+• remove duplicates
+• delete unused legacy components
+• ensure the published app renders the new component.
+
+Do not leave multiple Meeting Tools implementations.
+
+--------------------------------------------------
+QA
+--------------------------------------------------
+
+Publish the app.
+
+Open:
+
+Prayer Walk
+→ Meeting Tools
+
+Verify the visible list now includes:
+
+🎥 Start Live Video
+
+Take a screenshot of the published app showing the Live Video option before marking this task complete.

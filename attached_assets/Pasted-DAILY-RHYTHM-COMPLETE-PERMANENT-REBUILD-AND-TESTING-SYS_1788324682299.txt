@@ -1,0 +1,594 @@
+DAILY RHYTHM — COMPLETE PERMANENT REBUILD AND TESTING SYSTEM
+
+Daily Rhythm, particularly 10 Minutes with Jesus, is the heart and foundational feature of Emmaus. It has repeatedly worked briefly and then broken again after other adjustments.
+
+Do not apply another narrow patch to the current symptom.
+
+Trace and correct the entire Daily Rhythm system across the database, server, client, app launch, navigation, notifications, caching, PWA resume behaviour, completion actions and progress history. There must be one authoritative system used by every Daily Rhythm entry point.
+
+CURRENT FAILURE
+
+This morning:
+
+- The Daily Rhythm notification was received.
+- Emmaus did not automatically open onto Daily Rhythm.
+- The user was not trapped inside 10 Minutes with Jesus.
+- Daily Rhythm had not advanced to a new day.
+- It was still displaying yesterday’s content.
+- Yesterday was itself still displaying the previous day because Continue had not been pressed.
+- Therefore the Daily Rhythm was effectively stuck on an older day.
+
+Today’s automatic opening cannot currently be verified. Because the correct new day was never resolved, we cannot determine whether:
+
+- the automatic-opening rule failed;
+- the system incorrectly believed today’s Daily Rhythm had already been opened;
+- yesterday’s opened state was reused for today;
+- a cached route or last-viewed page was restored;
+- or the old Daily Rhythm day prevented today’s automatic opening.
+
+Do not assume that automatic opening works because a notification was received or because the user was not trapped in Daily Rhythm. Correct-day progression and automatic opening must both be tested independently and together.
+
+NON-NEGOTIABLE PRODUCT BEHAVIOUR
+
+Daily Rhythm must:
+
+1. Advance automatically according to the user’s local calendar date.
+2. Open automatically once on the user’s first app opening each new local day.
+3. Allow the user to navigate away immediately without pressing Continue, Finished or Complete.
+4. Never repeatedly force the user back into Daily Rhythm during the same day.
+5. Allow every previously available day to be reviewed.
+6. Never make a missed or unfinished day block today’s day.
+7. Never make a navigation or completion button control calendar progression.
+8. Keep My Bible available at all times, regardless of Daily Rhythm state.
+9. Work consistently across refreshes, app restarts, devices, notification links and PWA resume.
+10. Be fully testable without waiting for real calendar days to pass.
+
+CORE PROGRESSION RULE
+
+The Daily Rhythm day available today must be determined only by:
+
+1. The user’s Daily Rhythm start/enrolment date.
+2. The current calendar date in the user’s local timezone.
+3. The sequence and publication status of Daily Rhythm content.
+
+It must never be determined by whether the user previously pressed:
+
+- Continue;
+- Finished;
+- Complete;
+- Back to Today’s Steps;
+- or any other navigation button.
+
+Example:
+
+- User begins Daily Rhythm on 1 September.
+- 1 September = Day 1.
+- 2 September = Day 2.
+- 3 September = Day 3.
+
+On the first opening of Emmaus on 3 September, Day 3 must be shown even if the user:
+
+- did not press Continue on Day 1;
+- did not press Finished on Day 2;
+- completely missed Day 2;
+- navigated away while reading;
+- closed the app while reading;
+- refreshed the PWA;
+- left the app open overnight;
+- opened from a notification;
+- cleared a temporary client cache;
+- or signed in on another device.
+
+Buttons must not control progression.
+
+ONE AUTHORITATIVE DAILY RHYTHM RESOLVER
+
+Create one authoritative Daily Rhythm resolver and require every part of Emmaus to use it.
+
+It must resolve:
+
+- the user’s local calendar date;
+- the user’s timezone;
+- the user’s Daily Rhythm start date;
+- the correct day number available today;
+- the corresponding published content ID;
+- whether today’s exact content has been opened today;
+- whether the user is intentionally reviewing a past day;
+- and whether the app should automatically open today’s content.
+
+Search the entire codebase for all competing logic that calculates, increments, stores, restores, redirects or assumes the current Daily Rhythm day.
+
+This includes:
+
+- initial app startup;
+- authentication and post-login routing;
+- Today’s Steps;
+- the Daily Rhythm reader;
+- notification creation;
+- notification deep links;
+- completion screens;
+- Continue, Finished and Complete actions;
+- Back to Today’s Steps;
+- local storage;
+- session storage;
+- cached database queries;
+- service-worker caches;
+- PWA install and resume logic;
+- page visibility and foreground events;
+- route guards;
+- progress hooks;
+- server APIs;
+- database functions and triggers;
+- user progress records;
+- content publication logic;
+- admin previews;
+- and cross-device synchronisation.
+
+Remove or replace any competing day calculation. Do not leave multiple systems capable of choosing the current Daily Rhythm day.
+
+SEPARATE THE STATES
+
+Do not use one progress value or boolean to represent several different things.
+
+Maintain separate states for:
+
+1. todayAvailableDay
+   The day calculated from the user’s start date and current local calendar date.
+
+2. todayContentId
+   The published Daily Rhythm content resolved for todayAvailableDay.
+
+3. lastOpenedDay
+   The most recent Daily Rhythm day opened by the user.
+
+4. lastOpenedContentId
+   The exact content item most recently opened.
+
+5. openedAt
+   When a Daily Rhythm day was first opened.
+
+6. openedLocalDate
+   The user’s local calendar date on which it was opened.
+
+7. completedDay
+   Whether the user explicitly pressed Finished or Complete.
+
+8. completedAt
+   When explicit completion occurred.
+
+9. reviewDay
+   A past day deliberately selected by the user.
+
+10. notificationState
+    Whether today’s exact Daily Rhythm content has been opened on today’s exact local date.
+
+These values must not overwrite or incorrectly control one another.
+
+The state used to prevent repeat automatic opening must be keyed by both:
+
+- the resolved Daily Rhythm content/day;
+- and the user’s local calendar date.
+
+Do not use an undated permanent boolean such as:
+
+dailyRhythmOpened = true
+
+That kind of value will incorrectly suppress future days.
+
+CORRECT-DAY OPENING BEHAVIOUR
+
+Whenever Daily Rhythm is opened normally:
+
+1. Calculate todayAvailableDay fresh using the authoritative resolver.
+2. Resolve the corresponding published content.
+3. Open today’s content by default.
+4. Do not restore yesterday’s content merely because it was the last viewed item.
+5. Do not allow stale local storage, a cached route, an old content ID or retained component state to override todayAvailableDay.
+6. Only display an earlier day when the user deliberately selects it from the past-days list.
+7. Leaving a past-day review and reopening Daily Rhythm normally must return to today’s day.
+8. Refreshing while deliberately reviewing a past day may preserve the review within that review route, but must never change which day is considered today.
+9. Today’s Steps must always display the correct current Daily Rhythm day and status.
+
+AUTOMATIC OPENING ONCE PER DAY
+
+On the user’s first normal app launch or first return to the foreground on each new local calendar day:
+
+1. Recalculate todayAvailableDay.
+2. Resolve todayContentId.
+3. Check whether that exact content has been opened on that exact local date.
+4. If it has not been opened today, automatically open today’s Daily Rhythm.
+5. Once it opens, immediately record that today’s exact content was opened on today’s local date.
+6. The user must then be free to navigate away without pressing Continue, Finished or Complete.
+7. Do not automatically reopen it repeatedly during the same local day.
+8. Reviewing a past day must not count as opening today’s day.
+9. Yesterday’s opened or completed state must never suppress today’s automatic opening.
+10. A stale route, cached page or last-viewed content ID must never override the new-day calculation.
+
+If Emmaus remains open overnight, returning to the foreground after the local date changes must:
+
+- invalidate the previous day’s resolved state;
+- recalculate todayAvailableDay;
+- and automatically open today’s Daily Rhythm once if it has not yet been opened.
+
+BIBLE EXEMPTION
+
+My Bible must always remain available.
+
+Daily Rhythm automatic opening must not become a navigation lock.
+
+If the user deliberately opens My Bible directly, including through a Bible link or deep link, permit access without forcing Daily Rhythm first.
+
+Daily Rhythm may be the normal first screen of the new day, but users must be able to navigate away immediately and use the Bible or any other permitted area of Emmaus.
+
+CONTINUE, FINISHED AND COMPLETE
+
+These actions may:
+
+- record explicit completion;
+- display a completion screen;
+- navigate within the current experience;
+- provide access to the past-days list;
+- return to Today’s Steps.
+
+They must not:
+
+- unlock tomorrow’s content;
+- determine which day appears tomorrow;
+- advance the user to tomorrow’s content early;
+- prevent tomorrow’s content from appearing;
+- modify the user’s start date;
+- change todayAvailableDay;
+- or control the next calendar day.
+
+If the user never presses any of these buttons, tomorrow must still advance correctly.
+
+COMPLETION SCREEN
+
+When the user presses Finished or Complete:
+
+- show the Daily Rhythm completion screen;
+- keep it visible;
+- do not automatically redirect before the user chooses an option;
+- allow the user to choose Back to Today’s Steps or review past days;
+- do not reload the same Daily Rhythm unexpectedly;
+- do not trap the user in a redirect loop.
+
+PAST DAYS AND HISTORY
+
+The user must be able to review every Daily Rhythm day that became available from their start date through today.
+
+This includes days they:
+
+- completed;
+- opened but did not complete;
+- or did not open at all.
+
+Future days must remain unavailable.
+
+Show accurate statuses:
+
+- Completed — the user explicitly pressed Finished or Complete.
+- Opened — the user opened that day but did not explicitly complete it.
+- Missed — the day became available but the user never opened it.
+
+A missed, opened-but-incomplete or partially viewed day must never block today’s day.
+
+Selecting a past day is review mode. It must not:
+
+- change todayAvailableDay;
+- overwrite todayContentId;
+- suppress today’s notification;
+- mark today as opened;
+- alter the user’s start date;
+- or become the default day on the following app launch.
+
+NOTIFICATIONS
+
+The daily notification must correspond to todayAvailableDay and todayContentId.
+
+Notification suppression must be based only on whether today’s exact Daily Rhythm content has already been opened on today’s exact local date.
+
+The following must not suppress today’s notification:
+
+- opening yesterday’s content;
+- reviewing a past day;
+- an old lastOpenedDay value;
+- a completion record from yesterday;
+- a stale local-storage flag;
+- or an app session that remained open overnight.
+
+When the user taps the notification:
+
+1. Open Emmaus.
+2. Recalculate todayAvailableDay.
+3. Resolve todayContentId.
+4. Navigate directly to today’s Daily Rhythm.
+5. Never reopen yesterday’s cached or last-viewed day.
+6. Record today as opened only when today’s resolved content is actually opened.
+
+Receiving the notification does not prove that automatic app-opening logic works. Test notifications and normal app launches separately.
+
+TIMEZONE AND DATE HANDLING
+
+Use the user’s local calendar date consistently across:
+
+- client calculations;
+- server calculations;
+- database records;
+- notification scheduling;
+- automatic-opening checks;
+- and reporting.
+
+Do not calculate progression using elapsed 24-hour periods.
+
+A calendar day changes at midnight in the user’s effective local timezone, even if fewer or more than 24 hours have elapsed because of timezone or daylight-saving changes.
+
+Use a clear timezone priority:
+
+1. The timezone stored in the user’s profile, if available and valid.
+2. Otherwise the device/browser timezone.
+3. Otherwise the configured church/default timezone.
+
+Store timestamps in UTC, but calculate Daily Rhythm calendar dates in the effective user timezone.
+
+Do not mix UTC calendar dates with local calendar dates.
+
+PUBLISHED CONTENT SAFETY
+
+Only published Daily Rhythm content may be delivered to normal users.
+
+The resolver must use the authoritative sequence/order field, not an unreliable UI position or arbitrary database-return order.
+
+If todayAvailableDay points beyond the published Daily Rhythm content:
+
+- do not crash;
+- do not show a draft;
+- do not silently reset the user to Day 1;
+- do not incorrectly reopen an old day as though it were today;
+- show the latest valid published day with an appropriate “You’re up to date” state;
+- and create a clear administrative warning that future Daily Rhythm content must be published.
+
+Also verify that all 30 published Daily Rhythm days are correctly discoverable by the resolver. Do not assume only the first five items exist because an admin list is paginated or only five items are visible.
+
+CACHE AND PWA SAFETY
+
+Daily Rhythm data must not become stale across calendar days.
+
+Review:
+
+- service-worker cache strategy;
+- cached API responses;
+- React/query cache or equivalent;
+- persisted client state;
+- last-route restoration;
+- browser back/forward restoration;
+- PWA cold launch;
+- PWA warm resume;
+- visibility-change handling;
+- online/offline transitions.
+
+Static assets may be cached normally, but date-sensitive Daily Rhythm resolution must be revalidated when:
+
+- the app launches;
+- authentication completes;
+- the app returns to the foreground;
+- the local date changes;
+- a notification is tapped;
+- the Daily Rhythm route is opened;
+- or the user changes device/timezone.
+
+Do not briefly display an old Daily Rhythm day before replacing it with today’s day. Show a calm loading state while the authoritative resolver runs.
+
+CROSS-DEVICE BEHAVIOUR
+
+The server/database must remain the authoritative source for:
+
+- the user’s start date;
+- opened history;
+- completion history;
+- and the correct content sequence.
+
+Local storage may improve performance but must not override authoritative server state.
+
+When the user signs in on another device, the same correct day must be available and their legitimate history must remain intact.
+
+MIGRATION OF EXISTING USERS
+
+Existing users may have inconsistent progress caused by the previous logic.
+
+Do not reset users to Day 1.
+
+Do not erase legitimate history.
+
+Do not change their genuine Daily Rhythm start date unless it is missing or provably invalid.
+
+On first load after this rebuild:
+
+1. Preserve the original start date.
+2. Calculate which day should be available today.
+3. Preserve explicit completion records where they exist.
+4. Preserve valid opened records where they exist.
+5. Make all earlier eligible days reviewable.
+6. Ignore stale current-day, last-route and client-cache values that conflict with the authoritative calculation.
+7. Do not allow a previously unfinished day to block today.
+
+If legacy data is ambiguous, migrate conservatively and log what was repaired.
+
+ADMIN DAILY RHYTHM TEST CLOCK
+
+This feature cannot be tested safely by waiting for one real morning at a time.
+
+Add an admin-only testing tool under:
+
+Administration Tools → Settings → Daily Rhythm Testing
+
+It must allow an administrator to:
+
+- select a test user;
+- view the user’s real start date;
+- view the effective timezone;
+- view today’s actual calculated day;
+- view the resolved published content ID and title;
+- simulate a past or future local date without changing the device clock;
+- simulate first app launch on that date;
+- simulate returning to an app left open overnight;
+- simulate normal website opening;
+- simulate PWA cold launch;
+- simulate PWA foreground resume;
+- simulate post-login routing;
+- simulate notification delivery and notification tapping;
+- mark a simulated day as opened;
+- mark it completed;
+- leave it unfinished;
+- mark it missed by advancing without opening;
+- review a past day;
+- inspect the resulting state;
+- reset only the selected test user’s simulated test data;
+- and exit simulation immediately.
+
+Test mode must:
+
+- be restricted to authorised administrators;
+- be visibly labelled TEST MODE;
+- never alter the administrator’s device clock;
+- never affect other users;
+- never send real production notifications;
+- never replace or corrupt the selected user’s genuine production history;
+- and be isolated from production progress unless an explicit dedicated test account is selected.
+
+If safe simulation against real users is not possible, provide dedicated test-user records and do not risk production data.
+
+DIAGNOSTICS
+
+Add structured administrator diagnostics showing:
+
+- user ID;
+- entry point used;
+- current UTC timestamp;
+- effective timezone;
+- effective local date;
+- Daily Rhythm start date;
+- calculated day number;
+- resolved content ID and title;
+- publication status;
+- last opened day;
+- last opened content ID;
+- opened local date;
+- explicit completion state;
+- whether review mode is active;
+- whether automatic opening was triggered;
+- why automatic opening was or was not triggered;
+- whether stale client state was detected and discarded;
+- notification target day/content;
+- and resolver version.
+
+Do not log private journal entries, prayers, responses or devotional text entered by users.
+
+AUTOMATED TESTS
+
+Add automated tests for at least all of the following:
+
+1. A user opens Day 1 but does not press Continue; Day 2 is available and opens the next day.
+2. A user opens Day 1 but does not press Finished; Day 2 still opens the next day.
+3. A user completely misses Day 2; Day 3 opens the following day.
+4. A missed day remains available for later review.
+5. An incomplete day remains available for later review.
+6. Reviewing Day 1 does not replace todayAvailableDay.
+7. After reviewing Day 1, reopening Daily Rhythm normally opens today’s day.
+8. Reviewing a past day does not suppress today’s notification.
+9. A PWA left open overnight resolves and opens the new day when foregrounded.
+10. A cold PWA launch opens today’s Daily Rhythm once.
+11. Refreshing the app does not revert to yesterday.
+12. Closing and reopening the app does not revert to the last-viewed past day.
+13. Notification tapping opens today’s resolved day.
+14. A stale notification for yesterday recalculates and opens today instead.
+15. Post-login routing opens today’s Daily Rhythm when it has not been opened today.
+16. After today’s Daily Rhythm opens once, navigation remains free for the rest of the day.
+17. The app does not repeatedly redirect back to Daily Rhythm during the same day.
+18. Direct access to My Bible remains available.
+19. Completion does not unlock tomorrow early.
+20. Not completing today does not prevent tomorrow’s progression.
+21. Future days cannot be opened.
+22. Existing users retain their valid history after migration.
+23. Existing users do not reset to Day 1.
+24. Signing in on a second device shows the same correct available day.
+25. Local timezone—not the UTC calendar date—controls the day boundary.
+26. Returning from a past-day review opens today on the next normal entry.
+27. Draft Daily Rhythm content is never shown to normal users.
+28. Published content order is resolved correctly beyond the first five records.
+29. No old Daily Rhythm content flashes before today’s content loads.
+30. The completion screen remains visible until the user makes a choice.
+31. The Back to Today’s Steps action does not reload or trap the user in Daily Rhythm.
+32. The first opening of a new day is correctly detected even if yesterday’s PWA session remained open.
+33. Opening yesterday’s content does not mark today’s content as opened.
+34. Today’s notification is suppressed only after today’s exact content has been opened on today’s local date.
+35. Test Clock simulation does not alter production progress or send real notifications.
+
+MANUAL ACCEPTANCE TEST
+
+Use the admin Test Clock to demonstrate at least this sequence:
+
+Simulated Day 1:
+- Launch Emmaus.
+- Day 1 opens automatically.
+- Navigate away without pressing Continue or Finished.
+- Reopen Emmaus on the same simulated day.
+- Daily Rhythm does not repeatedly force itself open.
+
+Simulated Day 2:
+- Advance the Test Clock by one local calendar day.
+- Launch Emmaus.
+- Day 2 opens automatically.
+- Confirm Day 1 remains reviewable and is marked Opened, not Completed.
+- Leave Day 2 completely untouched after testing the initial state as required.
+
+Simulated Day 3:
+- Advance another local calendar day.
+- Launch Emmaus.
+- Day 3 opens automatically despite Day 2 not being completed.
+- Review Day 1.
+- Exit and reopen Daily Rhythm normally.
+- Confirm Day 3 opens, not Day 1.
+
+Simulated Day 4:
+- Leave the simulated PWA open across the date change.
+- Return it to the foreground.
+- Confirm Day 4 resolves and opens once.
+- Navigate to My Bible.
+- Confirm the user is not forced back into Daily Rhythm.
+
+Simulated Day 5:
+- Simulate a notification.
+- Tap it.
+- Confirm Day 5 opens directly.
+- Confirm no old day flashes first.
+- Confirm Day 5 opening suppresses only Day 5’s later reminder.
+
+REQUIRED REPORT BEFORE PUBLISHING
+
+Before reporting this as fixed, provide:
+
+1. The root cause or causes found.
+2. Every competing progression calculation that was removed or consolidated.
+3. The database fields and authoritative resolver now used.
+4. How existing user data was migrated safely.
+5. The automated test results.
+6. The complete Test Clock multi-day results.
+7. The launch, resume, login and notification entry points tested.
+8. Confirmation that My Bible remains exempt and always accessible.
+9. Confirmation that all published Daily Rhythm content—not only the first five records—is resolvable.
+10. Any remaining risk or limitation.
+
+Do not publish based only on a single successful screen load.
+
+Do not report the task as complete until correct-day progression and automatic opening have both passed several consecutive simulated days, including opened, unfinished, missed and past-review scenarios.
+
+FINAL ACCEPTANCE STANDARD
+
+Daily Rhythm must advance automatically every local calendar day without requiring any button press on the previous day.
+
+On the first normal opening of Emmaus each new local day, today’s correct Daily Rhythm must open once.
+
+After it opens, the user must be free to navigate away without completing it and without being repeatedly redirected.
+
+Yesterday’s state, a missed day, an unfinished day, a reviewed past day, a cached route or a stale notification must never prevent today’s correct Daily Rhythm from appearing.

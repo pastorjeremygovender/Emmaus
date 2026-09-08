@@ -31,8 +31,6 @@ async function post<T>(path: string, body: Record<string, unknown>, auth: AuthHe
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      "X-User-Id": auth.userId,
-      "X-User-Role": auth.userRole,
     },
     body: JSON.stringify({ ...body, userId: auth.userId, userRole: auth.userRole }),
   });
@@ -63,14 +61,12 @@ async function post<T>(path: string, body: Record<string, unknown>, auth: AuthHe
   return parsed as T;
 }
 
-async function patch<T>(path: string, body: Record<string, unknown>, auth: AuthHeaders): Promise<T> {
+async function patch<T>(path: string, body: Record<string, unknown>, _auth: AuthHeaders): Promise<T> {
   const res = await fetch(apiUrl(path), {
     method: "PATCH",
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      "X-User-Id": auth.userId,
-      "X-User-Role": auth.userRole,
     },
     body: JSON.stringify(body),
   });
@@ -89,13 +85,9 @@ async function patch<T>(path: string, body: Record<string, unknown>, auth: AuthH
   return res.json();
 }
 
-async function getJson<T>(path: string, auth: AuthHeaders): Promise<T> {
+async function getJson<T>(path: string, _auth: AuthHeaders): Promise<T> {
   const res = await fetch(apiUrl(path), {
     credentials: "include",
-    headers: {
-      "X-User-Id": auth.userId,
-      "X-User-Role": auth.userRole,
-    },
   });
 
   if (!res.ok) {
@@ -128,8 +120,11 @@ export interface CompanionEntry {
   closing: string;
   /** Timestamped YouTube URL linking to the relevant sermon segment. */
   sermonLink: string;
+  /** Optional share image — object-storage path ("/objects/…"). Members see a "Take this with you" card. */
+  shareImageUrl?: string | null;
   status: string;
   createdAt: string;
+  displayOrder?: number;
   updatedAt: string;
 }
 
@@ -344,17 +339,26 @@ export async function listServerSermons(auth: AuthHeaders): Promise<AdminSermonR
   return getJson<AdminSermonRecord[]>("/admin-sermons", auth);
 }
 
+export async function getServerSermon(
+  id: string,
+  auth: AuthHeaders,
+): Promise<AdminSermonRecord | null> {
+  try {
+    return await getJson<AdminSermonRecord>(`/admin-sermons/${id}`, auth);
+  } catch {
+    return null;
+  }
+}
+
 export async function saveServerSermon(
   sermon: AdminSermonRecord,
-  auth: AuthHeaders,
+  _auth: AuthHeaders,
 ): Promise<AdminSermonRecord> {
   const res = await fetch(apiUrl("/admin-sermons"), {
     method: "POST",
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      "X-User-Id": auth.userId,
-      "X-User-Role": auth.userRole,
     },
     body: JSON.stringify(sermon),
   });
@@ -375,7 +379,7 @@ export async function patchServerSermon(
 
 export async function deleteServerSermon(
   id: string,
-  auth: AuthHeaders,
+  _auth: AuthHeaders,
   opts?: { companionJourneyId?: string },
 ): Promise<void> {
   const body: Record<string, unknown> = {};
@@ -386,8 +390,6 @@ export async function deleteServerSermon(
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      "X-User-Id": auth.userId,
-      "X-User-Role": auth.userRole,
     },
     body: JSON.stringify(body),
   });
@@ -425,12 +427,14 @@ export async function saveCompanionEntry(
  * Publish a sermon companion and ALL its entries atomically.
  * The companion moves from Draft → Published and all 5 days become visible
  * to members in a single request.
+ * @param notifyMembers When true, sets notify_published_at so members see a badge.
  */
 export async function publishSermonCompanion(
   companionId: string,
   auth: AuthHeaders,
+  notifyMembers = false,
 ): Promise<void> {
-  await post<{ ok: boolean }>(`/sermon-companions/${companionId}/publish`, {}, auth);
+  await post<{ ok: boolean }>(`/sermon-companions/${companionId}/publish`, { notifyMembers }, auth);
 }
 
 /**

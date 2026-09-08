@@ -23,11 +23,13 @@ import {
 import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Journey, Step } from '@/lib/journeys-api';
+import { getStepLabel } from '@/lib/step-label';
 import { DailyRhythmReading, PreviewContinueButton, resolveDisplayName } from '@/components/DailyRhythmReading';
-import { WritingAssistantPanel, type PreviousDayInfo } from '@/components/WritingAssistantPanel';
+import { ShareImageField } from '@/components/ShareImageField';
 import { refineContent, type DraftField, type RefineAction } from '@/lib/writing-assistant-api';
 import { ContentStudioToolbar } from '../shared';
 import EmmausContentEditor from './EmmausContentEditor';
+import IllustrationPicker from './IllustrationPicker';
 
 // ─── Variant labels ───────────────────────────────────────────────────────────
 
@@ -76,6 +78,10 @@ interface DayForm {
   prayerPrompt: string;
   actionStep: string;
   closingText: string;
+  /** Optional display label (e.g. "1 January"). Overrides the journey-level prefix formula. */
+  displayLabel: string;
+  /** Optional share image — object-storage path ("/objects/…"). */
+  shareImageUrl: string | null;
 }
 
 const EMPTY_FORM: DayForm = {
@@ -87,6 +93,8 @@ const EMPTY_FORM: DayForm = {
   prayerPrompt: '',
   actionStep: '',
   closingText: '',
+  displayLabel: '',
+  shareImageUrl: null,
 };
 
 // ─── Field sub-components ─────────────────────────────────────────────────────
@@ -215,20 +223,20 @@ function FieldRefiner({ field, fieldLabel, value, onApply, scripture, dayTitle, 
           type="button"
           onClick={() => setOpen(o => !o)}
           disabled={!value.trim()}
-          className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-teal-600 disabled:opacity-30 transition-colors py-0.5"
+          className="min-h-10 flex items-center gap-1 text-[12px] text-gray-400 hover:text-teal-600 disabled:opacity-30 transition-colors py-0.5"
         >
           <Wand2 size={11} />
           AI
           <ChevronDown size={10} />
         </button>
         {open && (
-          <div className="absolute left-0 top-6 z-30 w-52 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden py-1">
+          <div className="fixed inset-x-3 bottom-3 z-50 max-h-[60dvh] overflow-y-auto bg-white border border-gray-200 rounded-2xl shadow-2xl overflow-hidden py-1 md:absolute md:inset-x-auto md:bottom-auto md:left-0 md:top-10 md:w-52 md:max-h-80 md:rounded-xl md:shadow-lg">
             {actions.map(({ action, label }) => (
               <button
                 key={action}
                 type="button"
                 onClick={() => handleAction(action)}
-                className="w-full text-left px-3 py-2 text-[12px] text-gray-700 hover:bg-gray-50 transition-colors"
+                className="w-full min-h-11 text-left px-4 md:px-3 py-2 text-sm md:text-[12px] text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 {label}
               </button>
@@ -253,23 +261,24 @@ function FieldRefiner({ field, fieldLabel, value, onApply, scripture, dayTitle, 
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-teal-700 uppercase tracking-wide">AI Suggestion</span>
             <button type="button" onClick={() => { setSuggestion(''); setActiveAction(null); }}
-              className="text-teal-400 hover:text-teal-600 transition-colors">
+              className="min-w-10 min-h-10 inline-flex items-center justify-center text-teal-400 hover:text-teal-600 transition-colors"
+              aria-label="Dismiss AI suggestion">
               <X size={12} />
             </button>
           </div>
           <p className="text-[13px] text-gray-700 whitespace-pre-line leading-relaxed">{suggestion}</p>
-          <div className="flex gap-2 pt-1">
+          <div className="flex flex-wrap gap-2 pt-1">
             <button
               type="button"
               onClick={() => { onApply(suggestion, 'replace'); setSuggestion(''); setActiveAction(null); }}
-              className="flex items-center gap-1 px-3 py-1.5 text-[12px] bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+              className="min-h-10 flex items-center gap-1 px-3 py-1.5 text-[12px] bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
             >
               <CornerDownLeft size={10} /> Replace
             </button>
             <button
               type="button"
               onClick={() => { onApply(suggestion, 'append'); setSuggestion(''); setActiveAction(null); }}
-              className="px-3 py-1.5 text-[12px] border border-teal-200 text-teal-700 rounded-lg hover:bg-teal-50 transition-colors"
+              className="min-h-10 px-3 py-1.5 text-[12px] border border-teal-200 text-teal-700 rounded-lg hover:bg-teal-50 transition-colors"
             >
               Insert Below
             </button>
@@ -306,9 +315,9 @@ function DeleteConfirmDialog({ dayNum, onConfirm, onCancel }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
-        <div className="flex items-start gap-3 px-6 pt-6 pb-4 border-b border-gray-100">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-sm bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
+        <div className="flex items-start gap-3 px-4 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-gray-100">
           <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
             <AlertTriangle size={18} className="text-red-600" />
           </div>
@@ -353,6 +362,7 @@ export default function DailyRhythmDayEditor({
   variant = 'daily-rhythm',
 }: Props) {
   const { getJourney, getStep, steps, addStep, updateStep, deleteStep } = useJourney();
+  const editorJourney = getJourney(journeyId);
   const { user } = useAuth();
   const journey = getJourney(journeyId) as Journey | undefined;
   const isEditor = user?.role === 'admin' || user?.role === 'superAdmin';
@@ -371,8 +381,6 @@ export default function DailyRhythmDayEditor({
   const [errorMsg, setErrorMsg] = useState('');
   const [showDelete, setShowDelete] = useState(false);
   const [currentDay, setCurrentDay] = useState<number | null>(day);
-  const [showAssistant, setShowAssistant] = useState(false);
-
   useEffect(() => {
     if (day !== null) {
       const existing = getStep(journeyId, day) as (Step & { closingText?: string }) | undefined;
@@ -386,6 +394,8 @@ export default function DailyRhythmDayEditor({
           prayerPrompt: existing.prayerPrompt ?? '',
           actionStep: existing.actionStep ?? '',
           closingText: existing.closingText ?? '',
+          displayLabel: (existing as any).displayLabel ?? '',
+          shareImageUrl: existing.shareImageUrl ?? null,
         });
         setCurrentDay(existing.day);
         setStepStatus(((existing as Step & { status?: string }).status as 'Draft' | 'Published') ?? 'Draft');
@@ -408,8 +418,10 @@ export default function DailyRhythmDayEditor({
     prayerPrompt: form.prayerPrompt,
     actionStep: form.actionStep,
     closingText: form.closingText,
+    displayLabel: form.displayLabel || null,
+    shareImageUrl: form.shareImageUrl ?? null,
     status,
-  } as Step & { closingText: string; status: string });
+  } as Step & { closingText: string; displayLabel: string | null; shareImageUrl: string | null; status: string });
 
   const handleSave = async (status: 'Draft' | 'Published' = 'Draft') => {
     if (saving) return;
@@ -464,21 +476,6 @@ export default function DailyRhythmDayEditor({
     onDeleted();
   };
 
-  const previousDays = useMemo<PreviousDayInfo[]>(() =>
-    (steps as Step[])
-      .filter(s => s.journeyId === journeyId && s.day < form.day)
-      .sort((a, b) => b.day - a.day)
-      .slice(0, 3)
-      .map(s => ({
-        day: s.day,
-        title: (s as Step & { title?: string }).title ?? '',
-        scripture: (s as Step & { scripture?: string }).scripture ?? '',
-        devotional: (s as Step & { devotional?: string }).devotional ?? '',
-        actionStep: (s as Step & { actionStep?: string }).actionStep ?? '',
-      })),
-    [steps, journeyId, form.day]
-  );
-
   const handleApplyField = useCallback((field: DraftField, value: string, mode: 'replace' | 'append') => {
     const existing = form[field as keyof DayForm] as string;
     patch(
@@ -497,27 +494,6 @@ export default function DailyRhythmDayEditor({
 
   return (
     <>
-      {/* Writing Assistant panel — full-screen overlay, rendered outside layout flow */}
-      {showAssistant && user && (
-        <WritingAssistantPanel
-          journeyId={journeyId}
-          dayNumber={form.day}
-          dayTitle={form.title}
-          scriptureRef={form.scripture}
-          existingContent={{
-            mentorIntro:  form.mentorIntro,
-            devotional:   form.devotional,
-            prayerPrompt: form.prayerPrompt,
-            actionStep:   form.actionStep,
-            closingText:  form.closingText,
-          }}
-          previousDays={previousDays}
-          user={user}
-          onApplyField={handleApplyField}
-          onClose={() => setShowAssistant(false)}
-        />
-      )}
-
       <EmmausContentEditor
         toolbar={
           <ContentStudioToolbar
@@ -535,19 +511,6 @@ export default function DailyRhythmDayEditor({
             onDelete={() => setShowDelete(true)}
             extraActions={
               <div className="flex items-center gap-1.5">
-                {isEditor && (
-                  <button
-                    onClick={() => setShowAssistant(v => !v)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[13px] transition-colors ${
-                      showAssistant
-                        ? 'border-teal-400 bg-teal-600 text-white hover:bg-teal-700'
-                        : 'border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100'
-                    }`}
-                  >
-                    <Wand2 size={12} />
-                    Help Me Write
-                  </button>
-                )}
                 <button
                   onClick={handleDuplicate}
                   disabled={saving}
@@ -562,6 +525,10 @@ export default function DailyRhythmDayEditor({
         }
         fields={
           <div className="flex-1 p-6 space-y-7 max-w-2xl">
+            <div className="flex items-center justify-between rounded-xl border border-teal-100 bg-teal-50/60 px-3 py-2.5">
+              <div><p className="text-xs font-semibold text-teal-800">Illustration</p><p className="text-[11px] text-teal-700/70">Add an approved visual without editing this day’s words.</p></div>
+              <IllustrationPicker contentType={journey?.journeyType === 'bible-study' ? 'bible-study' : 'journey'} contentId={journeyId} stepId={(form as DayForm & { id?: string }).id} compact />
+            </div>
 
             {/* Day Number + Title row */}
             <div className="grid grid-cols-[120px_1fr] gap-4">
@@ -700,6 +667,47 @@ export default function DailyRhythmDayEditor({
               )}
             </div>
 
+            {/* Display Label (optional override) */}
+            <div>
+              <FieldLabel hint="Leave blank to use the default label (e.g. Day 1, Step 1)">Display Label</FieldLabel>
+              <input
+                type="text"
+                value={form.displayLabel}
+                onChange={e => patch('displayLabel', e.target.value)}
+                placeholder="e.g. 1 January"
+                className="w-full px-4 py-3 text-[14px] text-gray-800 bg-gray-50 border border-gray-200 rounded-xl
+                  focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
+              />
+            </div>
+
+            {/* Share Image */}
+            <div>
+              <FieldLabel hint="Members see a 'Take this with you' card with Save + Share buttons">Share Image</FieldLabel>
+              <ShareImageField
+                value={form.shareImageUrl}
+                onChange={async (path) => {
+                  // Update form state and persist immediately with the new path.
+                  // Calling handleSave() would read stale form before the state update settles,
+                  // so we build the payload here and call updateStep directly.
+                  setForm(f => ({ ...f, shareImageUrl: path }));
+                  if (currentDay !== null) {
+                    await updateStep(
+                      { ...buildStepData(stepStatus), shareImageUrl: path },
+                      undefined
+                    );
+                  }
+                }}
+
+                stepContent={[
+                  form.title,
+                  form.scripture,
+                  form.devotional,
+                  form.prayerPrompt,
+                  form.actionStep,
+                ].filter(Boolean).join('\n\n')}
+              />
+            </div>
+
           </div>
         }
         preview={
@@ -713,6 +721,7 @@ export default function DailyRhythmDayEditor({
             prayerPrompt={form.prayerPrompt}
             actionStep={form.actionStep}
             closingText={form.closingText}
+            displayLabel={getStepLabel({ day: form.day, displayLabel: form.displayLabel || null }, editorJourney ?? undefined)}
             previewMode
             actionButton={<PreviewContinueButton />}
           />

@@ -1,0 +1,365 @@
+# EMMAUS VOICE PHASE 1 — FIX CURRENT IMPLEMENTATION
+
+Do NOT rebuild Emmaus Voice.
+
+Phase 1 has already been implemented. We are now testing the existing implementation and have found a specific failure.
+
+CURRENT BEHAVIOUR:
+
+* Microphone input works.
+* User can speak to Emmaus.
+* Speech is transcribed.
+* Ask Emmaus receives the request.
+* Ask Emmaus generates the correct TEXT response.
+* However, Emmaus does NOT automatically SPEAK the response.
+* On mobile, the "Hear Emmaus" control is not visible.
+
+Therefore the speech-input → Ask Emmaus portion works.
+
+The problem is the SPEECH OUTPUT / MOBILE UI portion.
+
+Fix this existing implementation rather than creating another Voice system.
+
+---
+
+# 1. FIRST DIAGNOSE THE EXISTING CODE
+
+Before changing anything, trace the complete existing VoiceMode pipeline:
+
+microphone
+→ recording
+→ transcription
+→ Ask Emmaus request
+→ Ask Emmaus response
+→ TTS request
+→ audio response
+→ audio playback
+
+Determine exactly where the pipeline stops.
+
+Specifically verify:
+
+* whether VoiceMode knows when the Ask Emmaus response has completed
+* whether the TTS endpoint is being called
+* whether the returned response contains playable audio
+* whether an Audio object/player is created
+* whether playback is attempted
+* whether mobile browser autoplay restrictions are preventing playback
+* whether voiceEnabled gating is blocking TTS
+* whether the selected voice/provider is correctly configured
+* whether an exception is occurring silently
+* whether the Hear Emmaus component is being hidden by responsive CSS or conditional rendering
+
+Do NOT simply add another button to work around the problem.
+
+Fix the underlying flow.
+
+---
+
+# 2. VOICE MODE MUST SPEAK AUTOMATICALLY
+
+When the user enters Emmaus Voice Mode and speaks:
+
+User speaks
+→ transcription
+→ Ask Emmaus
+→ text response
+→ Emmaus automatically speaks that response
+
+The user should NOT need to press "Hear Emmaus" after every answer while in Voice Mode.
+
+"Hear Emmaus" is the manual read-aloud control.
+
+Voice Mode is conversational and therefore speech output should happen automatically.
+
+Example:
+
+User taps microphone and says:
+
+"Who is Jesus?"
+
+Emmaus generates the existing Ask Emmaus text response.
+
+As soon as that response is ready:
+
+Emmaus should automatically begin speaking it.
+
+The text response should remain visible on screen while it is being spoken.
+
+---
+
+# 3. FIX MOBILE AUDIO PLAYBACK PROPERLY
+
+This must work on MOBILE, not just desktop.
+
+Investigate browser audio restrictions, particularly:
+
+* iOS Safari
+* Android Chrome
+
+The initial user microphone/tap interaction should establish whatever user interaction/audio context is required for subsequent playback.
+
+Do NOT depend on desktop autoplay behaviour.
+
+Do NOT silently fail if autoplay is blocked.
+
+If automatic playback is blocked by the browser, show an obvious fallback:
+
+"Tap to hear Emmaus"
+
+But first attempt the intended automatic Voice Mode playback.
+
+---
+
+# 4. RESTORE / FIX "HEAR EMMAUS" ON MOBILE
+
+The "Hear Emmaus" control must not disappear on mobile.
+
+Find why it is missing.
+
+Check:
+
+* responsive breakpoints
+* hidden classes
+* display:none
+* mobile-specific layouts
+* overflow clipping
+* z-index
+* fixed bottom navigation
+* Ask Emmaus floating button collision
+* conditional rendering
+* voiceEnabled state
+* loading state
+
+Do not create duplicate Hear Emmaus controls.
+
+Use the existing component wherever possible.
+
+---
+
+# 5. ASK EMMAUS RESPONSE
+
+Every completed Ask Emmaus answer should have a manual read-aloud control.
+
+Use a compact control such as:
+
+🔊 Hear Emmaus
+
+While playing, change it appropriately to:
+
+⏸ Pause
+
+or
+
+■ Stop
+
+Keep the UI clean.
+
+On mobile it must remain accessible without being hidden behind:
+
+* bottom navigation
+* Ask Emmaus floating controls
+* keyboard
+* viewport edges
+
+---
+
+# 6. INTERRUPTING EMMAUS
+
+This is required.
+
+While Emmaus is speaking, the user must be able to tap the microphone and begin speaking again.
+
+When this happens:
+
+1. stop Emmaus audio immediately
+2. stop/cancel pending TTS where possible
+3. begin recording
+4. transcribe
+5. send the new request through Ask Emmaus
+6. speak the new answer
+
+Do NOT allow the old response to continue speaking over the user.
+
+---
+
+# 7. DO NOT CREATE DUPLICATE AUDIO
+
+Ensure only ONE speech playback instance exists at a time.
+
+Starting another response must cancel/stop the previous audio.
+
+Navigating away from Voice Mode must stop playback.
+
+Closing Ask Emmaus must stop playback.
+
+Unmounting the component must clean up:
+
+* Audio objects
+* object URLs
+* streams
+* MediaRecorder
+* timers
+* event listeners
+
+---
+
+# 8. VOICE ENABLED STATE
+
+The implementation currently uses fail-closed behaviour:
+
+voiceEnabled === true
+
+Verify the database/admin setting is actually enabled for the current environment.
+
+If Voice is disabled:
+
+do not silently hide controls and leave the user wondering why they disappeared.
+
+Admin should clearly show:
+
+Emmaus Voice: OFF
+
+or
+
+Emmaus Voice: ON
+
+When ON, the mobile controls must render.
+
+---
+
+# 9. DO NOT CHANGE ASK EMMAUS
+
+Ask Emmaus text responses are currently working.
+
+Do NOT rewrite or replace the existing Ask Emmaus logic.
+
+Do NOT create a second AI endpoint.
+
+Do NOT alter the Emmaus Constitution or theological behaviour.
+
+Voice remains:
+
+speech input
+→ EXISTING Ask Emmaus
+→ EXISTING response
+→ speech output
+
+---
+
+# 10. TEST ON MOBILE VIEWPORT
+
+Do not mark this fixed based only on desktop testing.
+
+Test at realistic mobile widths.
+
+At minimum verify:
+
+### TEST A — Basic Voice
+
+Tap microphone.
+
+Say:
+
+"Who is Jesus?"
+
+Expected:
+
+* transcription succeeds
+* Ask Emmaus response appears
+* Emmaus automatically speaks the response
+
+### TEST B — Manual playback
+
+After the response appears:
+
+"Hear Emmaus" is visible on mobile.
+
+Tap it.
+
+Expected:
+
+response plays.
+
+### TEST C — Interruption
+
+While Emmaus is speaking:
+
+tap microphone.
+
+Say:
+
+"Read Psalm 23."
+
+Expected:
+
+* existing speech stops immediately
+* microphone begins listening
+* Psalm 23 request is processed
+* new response is spoken
+
+### TEST D — Follow-up
+
+Say:
+
+"What does verse 4 mean?"
+
+Expected:
+
+Ask Emmaus understands the existing conversation context and answers about Psalm 23:4.
+
+The answer is spoken automatically.
+
+### TEST E — Navigation
+
+While Emmaus is speaking:
+
+navigate away.
+
+Expected:
+
+audio stops immediately.
+
+### TEST F — Mobile layout
+
+Verify:
+
+* Hear Emmaus visible
+* microphone visible
+* controls not behind bottom navigation
+* controls not behind Ask Emmaus floating button
+* no horizontal overflow
+* no clipped controls
+* keyboard does not permanently hide voice controls
+
+---
+
+# 11. IMPORTANT — DO NOT MARK COMPLETE UNTIL TESTED
+
+Do not report success simply because the TTS endpoint returns successfully.
+
+Phase 1 is only working when the USER EXPERIENCE works:
+
+SPEAK
+→ EMMAUS UNDERSTANDS
+→ EMMAUS ANSWERS
+→ USER HEARS EMMAUS
+
+on mobile.
+
+At completion, report exactly:
+
+1. What caused automatic speech not to play.
+2. Why Hear Emmaus was missing on mobile.
+3. What files/components were changed.
+4. How mobile browser autoplay was handled.
+5. Whether Android Chrome was tested.
+6. Whether iOS Safari was tested or remains unverified.
+7. The exact end-to-end tests that passed.
+
+Do not begin Phase 2.
+Do not add wake words.
+Do not add always-listening.
+Do not redesign Ask Emmaus.
+
+Fix and verify Phase 1 only.

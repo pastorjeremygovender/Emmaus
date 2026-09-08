@@ -1,0 +1,30 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "AC4KrF7bjMU_ab8HTxZNT"
+uri = "file://evidence/task-712-preview-sign-in.jpg"
+type = "image"
+title = "Ask Emmaus preview sign-in boundary"
+description = "Signed-out preview evidence captured during the authenticated browser verification attempt on 2026-08-28. This does not represent a signed-in member or admin pass."
+logical_id = "cadba9e0-4ac3-4ae0-9c90-398525ae3afa"
+content_hash = "sha256:c5325c1da2baedb0693297bd868aef40af21cf6f316dd10cd51d762ec9f9a0ab"
+size = 26191
+mtime_ms = 1787928383166
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:56d2210c-938e-4468-a6aa-b25d01eaaa3b/cadba9e0-4ac3-4ae0-9c90-398525ae3afa/ea3930e2-598d-4f21-8384-68426d6bc86f"
+storage_version_token = "1787928875811805"
+content_type = "image/jpeg"
+
+[[outputs]]
+id = "Tno0hO2kJ2cm5i2l-IFBT"
+uri = "file://artifacts/project-emmaus/android/app/build/outputs/apk/debug/app-debug.apk"
+type = "unspecified"
+title = "Emmaus Geofence Test APK"
+description = "Standalone debug-only APK with its own application ID (za.co.emmaus.app.geofencetest), launcher icon and native diagnostic screen. It does not open emmaus.co.za, authenticate against Emmaus or call production endpoints. SHA-256: 6df9f27b40174c3608c218bc4c7e8652c13614f5b8807bbba79ea2e5a5c50bd7"
+logical_id = "98351fdb-630d-4065-be2b-83dc48944c14"
+content_hash = "sha256:6df9f27b40174c3608c218bc4c7e8652c13614f5b8807bbba79ea2e5a5c50bd7"
+size = 8055720
+mtime_ms = 1788526880252
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:56d2210c-938e-4468-a6aa-b25d01eaaa3b/98351fdb-630d-4065-be2b-83dc48944c14/0d199263-5d9c-4e0e-ae7c-d92d528d4569"
+storage_version_token = "1788526927137485"
+content_type = "application/octet-stream"

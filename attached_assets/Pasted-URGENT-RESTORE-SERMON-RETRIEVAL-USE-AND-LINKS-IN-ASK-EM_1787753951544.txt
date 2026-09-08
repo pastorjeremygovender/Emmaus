@@ -1,0 +1,408 @@
+URGENT: RESTORE SERMON RETRIEVAL, USE AND LINKS IN ASK EMMAUS
+
+Ask Emmaus has stopped using sermons in its answers and recommendations.
+
+This is a serious regression.
+
+Considerable time has been spent populating, processing, approving, indexing and publishing the ICC sermon pipeline specifically so that sermons can become a central Local Church resource for Ask Emmaus.
+
+Real production test:
+
+User question:
+
+“Prodigal”
+
+Current result:
+
+- Scripture reference to Luke 15:11–32
+- generic biblical explanation
+- generic reflection and suggested questions
+- no ICC sermon teaching
+- no Preached Here card
+- no sermon link
+- no timestamp
+- no indication that the sermon catalogue was searched
+
+The problem must not be “fixed” by forcing the model to mention Pastor Jeremy without a real retrieved source.
+
+Create a checkpoint before changing anything.
+
+Do not republish automatically.
+
+==================================================
+1. TRACE THE ACTUAL PRODUCTION REQUEST
+==================================================
+
+Reproduce the exact authenticated production-equivalent request:
+
+“Prodigal”
+
+Trace it through:
+
+1. authenticated user and tenant resolution
+2. query normalization
+3. Scripture retrieval
+4. Local Church retrieval
+5. sermon-index search
+6. sermon candidate ranking
+7. publication and approval filtering
+8. tenant filtering
+9. transcript/chunk retrieval
+10. relevance threshold
+11. reranking
+12. model-context construction
+13. answer generation
+14. structured resource recommendations
+15. citation validation
+16. frontend card rendering
+
+Report at every stage:
+
+- whether the stage ran
+- input query
+- filters applied
+- number of results
+- canonical sermon IDs
+- sermon titles
+- relevance scores
+- rejection reason for every removed candidate
+- whether candidates entered model context
+- whether the model cited them
+- whether post-processing removed them
+- whether the frontend received them
+
+Do not infer success from database record counts.
+
+Trace the real request end to end.
+
+==================================================
+2. CONFIRM WHICH ASK EMMAUS ENDPOINT IS ACTIVE
+==================================================
+
+Identify the exact endpoint used by:
+
+- typed Ask Emmaus
+- Ask Emmaus Voice
+- production deployment
+- Preview deployment
+
+Confirm whether the published app still uses:
+
+- the canonical site-wide Ask Emmaus pipeline
+- a legacy generic-chat endpoint
+- a Voice-specific endpoint
+- an endpoint that retrieves Scripture but bypasses sermons
+- an endpoint that searches only some resource types
+
+All Ask Emmaus interfaces must use the same canonical retrieval system.
+
+Do not maintain a separate generic fallback that silently answers without searching ICC resources.
+
+If Local Church retrieval fails:
+
+- a Scripture-first answer may still be returned
+- but log the retrieval failure
+- do not silently pretend the complete Emmaus retrieval succeeded
+
+==================================================
+3. AUDIT THE SERMON INDEX
+==================================================
+
+Audit production sermon data and index status.
+
+Report:
+
+- total sermons in the canonical sermon table
+- published sermons
+- approved sermons
+- sermons eligible for Ask Emmaus
+- sermons with transcripts
+- sermons with indexed chunks
+- total active sermon chunks
+- sermons missing chunks
+- stale sermon chunks
+- orphaned sermon chunks
+- tenant IDs
+- publication states
+- approval states
+- visibility states
+- embedding/index versions
+- most recent successful sermon indexing event
+- failed sermon indexing events
+
+Confirm that sermons previously populated through the sermon pipeline remain:
+
+- published
+- approved
+- indexed
+- tenant-associated
+- searchable by Ask Emmaus
+
+Do not run a destructive full reindex during the audit.
+
+==================================================
+4. TEST THE SERMON INDEX DIRECTLY
+==================================================
+
+Search the production-equivalent sermon index directly for:
+
+- prodigal
+- prodigal son
+- Luke 15
+- Luke 15:11–32
+- forgiveness
+- restoration
+- returning to God
+- father’s love
+- lost son
+- repentance
+
+For each search, show the strongest sermon matches with:
+
+- title
+- canonical sermon ID
+- tenant
+- publication status
+- transcript excerpt
+- timestamp
+- raw similarity/relevance score
+- final reranked score
+- eligibility result
+
+If expected sermons do not appear, determine whether:
+
+- transcript text was never indexed
+- embeddings are missing
+- Scripture metadata is missing
+- keyword search is not included
+- synonym/concept matching is weak
+- tenant metadata is wrong
+- publication state excludes them
+- threshold is too high
+- stale production index is being queried
+- the wrong index/table is being queried
+
+==================================================
+5. USE HYBRID SERMON RETRIEVAL
+==================================================
+
+Sermon discovery must not depend on one exact keyword or embeddings alone.
+
+Use hybrid retrieval combining:
+
+- semantic/vector relevance
+- full-text/keyword matching
+- sermon title matching
+- Scripture-reference matching
+- transcript matching
+- sermon-topic/tag matching where available
+
+A query such as “Prodigal” must be able to retrieve sermons containing or substantially discussing:
+
+- Prodigal Son
+- Luke 15
+- forgiveness
+- restoration
+- returning to God
+- the Father’s welcome
+
+Explicit Scripture references should strongly boost sermons linked to that passage.
+
+Do not use broad synonym expansion to attach irrelevant sermons.
+
+Apply a meaningful relevance threshold, but do not set it so high that genuine ICC content is routinely excluded.
+
+==================================================
+6. SEARCH SERMONS FOR EVERY SUBSTANTIVE QUESTION
+==================================================
+
+For every substantive Ask Emmaus question:
+
+1. Retrieve Scripture first.
+2. Search eligible Local Church resources, including sermons.
+3. Rank genuine matches.
+4. Provide relevant sermon context to the answer model.
+5. Validate any sermon recommendation.
+6. Render a working link/card.
+
+The sermon stage must not run only when the user says:
+
+- sermon
+- Pastor Jeremy
+- preached
+- message
+
+A topical question such as:
+
+- “Prodigal”
+- “What is faith?”
+- “How do I forgive?”
+- “I feel far from God.”
+- “How can I return to God?”
+- “What does Luke 15 mean?”
+
+must also search sermons.
+
+If no sermon is genuinely relevant, do not fabricate one.
+
+But record that the sermon search ran and returned no eligible match.
+
+==================================================
+7. SERMONS MUST INFORM THE ANSWER
+==================================================
+
+When a relevant sermon is retrieved, do not merely attach a card at the bottom.
+
+Use its verified teaching naturally within the answer after Scripture.
+
+Required order:
+
+1. Scripture
+2. biblical explanation
+3. relevant ICC sermon insight
+4. pastoral application
+5. optional Next Step
+
+Examples for a normal ICC user:
+
+“Pastor Jeremy spoke about this in [Sermon Title], emphasizing…”
+
+For Pastor Jeremy’s authenticated account:
+
+“You spoke about this in [Sermon Title], emphasizing…”
+
+Do not quote or attribute content that is not present in the sermon transcript.
+
+Do not present sermon teaching as equal to Scripture.
+
+==================================================
+8. INLINE LINK AND PREACHED HERE CARD
+==================================================
+
+When a sermon is referenced in the paragraph:
+
+- the sermon title in the paragraph must be clickable
+- the link must use the validated canonical sermon ID
+- the Preached Here card must also appear below
+- both must open the same sermon
+- if a verified timestamp exists, both should open or play from that timestamp
+- the user must not be told to search Discover manually
+
+Structured recommendation:
+
+{
+  "resourceType": "sermon",
+  "resourceId": "canonical sermon ID",
+  "title": "verified sermon title",
+  "timestampSeconds": 2816,
+  "reason": "verified relevance reason"
+}
+
+The model must not invent URLs, IDs or timestamps.
+
+==================================================
+9. DO NOT DISCARD VALID SERMON RESULTS
+==================================================
+
+Audit whether sermon candidates are being lost because:
+
+- the structured response schema does not support sermon IDs
+- the model omits resourceRecommendations
+- output parsing rejects sermon records
+- post-processing expects a different resource-type name
+- `sermon`, `sermons`, `message` or another enum mismatch exists
+- timestamp fields fail validation
+- route resolution fails
+- the frontend card component rejects the payload
+- a maximum recommendation count is already filled by Scripture or questions
+- “Keep Exploring” replaces resource recommendations
+- null optional fields cause the whole sermon recommendation to be removed
+
+A missing timestamp must not invalidate an otherwise valid sermon.
+
+If a sermon is relevant but has no exact timestamp:
+
+- link to the sermon itself
+- do not fabricate a timestamp
+
+==================================================
+10. KEEP EXPLORING MUST NOT REPLACE EMMAUS RESOURCES
+==================================================
+
+The current response displays generic “Keep Exploring” questions but no Local Church resources.
+
+“Keep Exploring” questions may supplement an answer, but they must not displace:
+
+- relevant sermons
+- Bible Studies
+- Walks
+- Journeys
+- devotionals
+- Sermon Companions
+
+Presentation priority after the answer:
+
+1. primary Scripture
+2. relevant Preached Here sermon
+3. strongest relevant Emmaus resource
+4. optional Keep Exploring questions
+
+Do not fill the available recommendation limit with AI-generated questions before validated Emmaus resources are rendered.
+
+==================================================
+11. FIX USER FORM OF ADDRESS
+==================================================
+
+The screenshot still says:
+
+“Sometimes, Jeremy…”
+
+For my authenticated account, it must use:
+
+“Pastor Jeremy”
+
+Do not hard-code this for other users.
+
+Use the canonical preferred display-name service.
+
+Do not repeat the user’s name unnecessarily in every answer.
+
+==================================================
+12. SERMON PIPELINE LIFECYCLE
+==================================================
+
+Confirm that the sermon pipeline updates Ask Emmaus automatically when a sermon is:
+
+- processed
+- approved
+- published
+- edited and republished
+- unpublished
+- reapproved
+- deleted
+- restored
+
+A published sermon must become searchable without a separate forgotten manual step.
+
+An unpublished or deleted sermon must stop appearing.
+
+Indexing must be:
+
+- idempotent
+- version-aware
+- tenant-safe
+- retryable
+- observable
+
+Do not create duplicate sermon chunks when republishing.
+
+==================================================
+13. ADMIN VISIBILITY
+==================================================
+
+Within the appropriate existing sermon/admin interface, show for each sermon:
+
+- publication status
+- Ask Emmaus eligibility
+- transcript status
+- indexed

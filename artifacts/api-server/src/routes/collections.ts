@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../emmaus/auth.js";
+import { requireAdmin } from "../emmaus/auth.js";
 import {
   listCollections,
   getCollection,
@@ -44,17 +44,16 @@ router.get("/collections/:id/journeys", async (req, res) => {
 
 // POST /api/collections
 router.post("/collections", async (req, res) => {
-  const callerId = requireAuth(req, res);
+  const callerId = requireAdmin(req, res);
   if (!callerId) return;
   try {
-    const userId = req.headers["x-user-id"] as string | undefined;
     const { title, description, coverImageUrl, status, tags, displayOrder } = req.body;
     if (!title?.trim()) {
       res.status(400).json({ error: "Title is required" }); return;
     }
     const collection = await createCollection(
       { title: title.trim(), description, coverImageUrl, status, tags, displayOrder },
-      userId
+      callerId
     );
     res.status(201).json({ collection });
   } catch (err) {
@@ -64,15 +63,14 @@ router.post("/collections", async (req, res) => {
 
 // PUT /api/collections/:id
 router.put("/collections/:id", async (req, res) => {
-  const callerId = requireAuth(req, res);
+  const callerId = requireAdmin(req, res);
   if (!callerId) return;
   try {
-    const userId = req.headers["x-user-id"] as string | undefined;
     const { title, description, coverImageUrl, status, tags, displayOrder } = req.body;
     const collection = await updateCollection(
       String(req.params.id),
       { title, description, coverImageUrl, status, tags, displayOrder },
-      userId
+      callerId
     );
     if (!collection) { res.status(404).json({ error: "Not found" }); return; }
     res.json({ collection });
@@ -83,7 +81,7 @@ router.put("/collections/:id", async (req, res) => {
 
 // DELETE /api/collections/:id
 router.delete("/collections/:id", async (req, res) => {
-  const callerId = requireAuth(req, res);
+  const callerId = requireAdmin(req, res);
   if (!callerId) return;
   try {
     const ok = await deleteCollection(String(req.params.id));

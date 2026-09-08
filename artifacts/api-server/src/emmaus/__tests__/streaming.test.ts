@@ -7,19 +7,30 @@
  *   3. Tag beginning mid-chunk    — text before tag in that chunk is still emitted
  *   4. No tag present             — full text is emitted, fallback metadata used
  *
- * These tests hit the live dev server and use a known MockProvider response so
- * the exact chunk boundaries can be inferred from the mock's word-by-word delivery.
+ * These tests hit the live dev server. Typed model prose is released only as
+ * complete, validated units; canonical actions remain a single deterministic
+ * event.
  */
 
 import http from "node:http";
-import { describe, it } from "node:test";
+import { describe, it, after } from "node:test";
 import assert from "node:assert/strict";
+import { authHeader, cleanupTestAuth } from "../../test-utils/test-auth.ts";
 
 const BASE = process.env.TEST_SERVER_URL ?? "http://localhost:8080";
 const url = new URL(BASE);
 
-function postConversation(message: string): Promise<{ events: string[]; doneEvent: Record<string, unknown> | null }> {
+async function postConversation(message: string): Promise<{
+  events: string[];
+  doneEvent: Record<string, unknown> | null;
+  timeToFirstTextMs: number | null;
+  totalMs: number;
+}> {
+  // Authenticate with a real opaque session (app_role "user") — no X-User-* header.
+  const auth = await authHeader("user-stream-test", { role: "user" });
   return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
+    let timeToFirstTextMs: number | null = null;
     const body = JSON.stringify({ message, context: { entryPoint: "personal" } });
     const req = http.request(
       {
@@ -30,12 +41,17 @@ function postConversation(message: string): Promise<{ events: string[]; doneEven
         headers: {
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(body),
-          "X-User-Id": "user-stream-test",
+          ...auth,
         },
       },
       (res) => {
         const chunks: Buffer[] = [];
-        res.on("data", (c: Buffer) => chunks.push(c));
+        res.on("data", (c: Buffer) => {
+          if (timeToFirstTextMs == null && c.toString().includes('"type":"text"')) {
+            timeToFirstTextMs = Date.now() - startedAt;
+          }
+          chunks.push(c);
+        });
         res.on("end", () => {
           const raw = Buffer.concat(chunks).toString();
           const lines = raw.split("\n").filter((l) => l.startsWith("data: "));
@@ -50,7 +66,7 @@ function postConversation(message: string): Promise<{ events: string[]; doneEven
               doneEvent = parsed;
             }
           }
-          resolve({ events, doneEvent });
+          resolve({ events, doneEvent, timeToFirstTextMs, totalMs: Date.now() - startedAt });
         });
       }
     );
@@ -62,15 +78,17 @@ function postConversation(message: string): Promise<{ events: string[]; doneEven
 
 describe("Emmaus streaming — metadata stripping", () => {
   it("text events contain no <EMMAUS_META> tag bytes", async () => {
-    const { events } = await postConversation("I feel far from God");
+    const { events, timeToFirstTextMs } = await postConversation("I feel far from God");
     const allText = events.join("");
     assert.ok(!allText.includes("<EMMAUS_META"), "no EMMAUS_META tag should appear in emitted text");
     assert.ok(!allText.includes("</EMMAUS_META"), "no EMMAUS_META close tag should appear in emitted text");
     assert.ok(allText.length > 10, "emitted text should be non-empty");
+    assert.ok(events.length >= 1, "response should contain a visible text event before done");
+    assert.ok(timeToFirstTextMs != null, "visible typed text should arrive before done");
   });
 
   it("done event is received with structured metadata", async () => {
-    const { doneEvent } = await postConversation("Help me understand John 3:16");
+    const { doneEvent, timeToFirstTextMs, totalMs } = await postConversation("Help me understand John 3:16");
     assert.ok(doneEvent, "done event must be present");
     assert.ok(doneEvent.conversationId, "done event must include conversationId");
     assert.ok(doneEvent.messageId, "done event must include messageId");
@@ -78,6 +96,13 @@ describe("Emmaus streaming — metadata stripping", () => {
     assert.ok(doneEvent.metadata, "done event must include metadata");
     const meta = doneEvent.metadata as Record<string, unknown>;
     assert.ok(Array.isArray(meta.followUpPrompts), "metadata must include followUpPrompts array");
+    assert.ok(timeToFirstTextMs != null, "authenticated request must produce a visible text event");
+    console.log(JSON.stringify({
+      suite: "ask-emmaus-live-latency",
+      prompt: "Help me understand John 3:16",
+      timeToFirstVisibleTextMs: timeToFirstTextMs,
+      totalResponseMs: totalMs,
+    }));
   });
 
   it("emitted text does not contain JSON-looking metadata fragments", async () => {
@@ -107,4 +132,10 @@ describe("Emmaus streaming — metadata stripping", () => {
       "every followUpPrompt should be a non-empty string"
     );
   });
+});
+
+// ─── Module teardown ──────────────────────────────────────────────────────────
+// Idempotent and concurrency-safe (auth rows are unique per process nonce).
+after(async () => {
+  await cleanupTestAuth();
 });

@@ -1,0 +1,402 @@
+These corrections apply to both text Ask Emmaus and the new Voice system.
+
+--------------------------------------------------
+A. BIBLE STUDY BOOK-NAME CAPITALIZATION
+--------------------------------------------------
+
+The current Bible Study recommendation card still displays lowercase Bible book names.
+
+Current incorrect example:
+
+Bible Study — john 21:20–23
+
+Required:
+
+Bible Study — John 21:20–23
+
+Do not fix only this example.
+
+Use one canonical Bible-book display-name formatter everywhere Bible references are rendered.
+
+Apply it to:
+
+- Ask Emmaus inline Scripture references
+- Scripture cards
+- Bible Study cards
+- Bible Study titles generated from references
+- Search results
+- resource recommendation cards
+- Voice transcripts where references are normalized
+- Read to Me player headings
+- My Bible deep-link labels
+- administrative previews where appropriate
+
+Support correct canonical rendering for all Bible books, including:
+
+- Genesis
+- Psalms or Psalm according to the existing display convention
+- Song of Songs according to the configured Emmaus Bible name
+- John
+- Acts
+- Romans
+- 1 Corinthians
+- 2 Corinthians
+- 1 Thessalonians
+- 2 Thessalonians
+- 1 Timothy
+- 2 Timothy
+- 1 Peter
+- 2 Peter
+- 1 John
+- 2 John
+- 3 John
+
+Do not use CSS `text-transform: capitalize`.
+
+Do not use a generic title-case function.
+
+Those approaches are not reliable for numbered Bible books and configured canonical names.
+
+Normalize stored aliases separately from display formatting.
+
+The canonical formatter must convert examples such as:
+
+- john → John
+- JOHN → John
+- first john → 1 John
+- 1 john → 1 John
+- second corinthians → 2 Corinthians
+- 2 corinthians → 2 Corinthians
+
+Audit whether the lowercase value comes from:
+
+- indexed metadata
+- database content
+- model output
+- reference parsing
+- recommendation-card rendering
+- route parameters
+
+Do not unnecessarily rewrite canonical stored content solely for presentation. Normalize at ingestion where appropriate and always format safely at display time.
+
+Add tests covering all supported Bible books in Bible Study cards.
+
+--------------------------------------------------
+B. RESTORE ASK EMMAUS RESPONSE SPEED
+--------------------------------------------------
+
+Ask Emmaus has become noticeably slower after the recent Scripture-first, Local Church retrieval, citation-validation and link improvements.
+
+Do not remove or weaken those improvements.
+
+Instrument the complete request pipeline and identify the actual latency introduced by:
+
+- authentication/user-context loading
+- conversation-history loading
+- Scripture retrieval
+- explicit-reference parsing
+- Local Church resource retrieval
+- Daily Rhythm eligibility
+- embedding generation, if performed per request
+- vector/database search
+- reranking
+- model start time
+- model generation time
+- Scripture validation
+- resource validation
+- canonical route resolution
+- response post-processing
+- inline-link rendering
+- frontend state or network delays
+
+Record timing for every stage using one request ID.
+
+Do not guess at the cause.
+
+--------------------------------------------------
+C. PARALLELIZE INDEPENDENT RETRIEVAL
+--------------------------------------------------
+
+After the user’s request and access context are available, perform independent work concurrently where safe.
+
+Run in parallel where architecture allows:
+
+- explicit Scripture-reference parsing
+- subject/pastoral-intent analysis
+- Scripture retrieval
+- Local Church resource retrieval
+- conversation-context preparation
+- eligible user-progress context loading
+
+Do not perform:
+
+Scripture retrieval
+→ wait
+→ sermon search
+→ wait
+→ Walk search
+→ wait
+→ devotional search
+→ wait
+→ Bible Study search
+
+Use parallel retrieval against the shared canonical index, followed by a fast merge/ranking stage.
+
+Daily Rhythm filtering and all authorization must remain server-side and must complete before restricted content can enter model context.
+
+Parallelization must not weaken:
+
+- tenant isolation
+- publication checks
+- user permissions
+- Daily Rhythm eligibility
+- citation validation
+
+--------------------------------------------------
+D. USE ONE SITE-WIDE RESOURCE SEARCH
+--------------------------------------------------
+
+Do not make separate sequential model or database calls for:
+
+- sermons
+- devotionals
+- Walks
+- Journeys
+- Bible Studies
+- Sermon Companions
+
+Query the shared canonical resource index once, filtered by:
+
+- tenant
+- publication status
+- access
+- eligible resource types
+
+Then rank the combined candidates.
+
+Daily Rhythm may require an additional user-scoped query or eligibility filter, but it must run concurrently where safe.
+
+Avoid multiple LLM calls merely to decide which resource category to search.
+
+--------------------------------------------------
+E. DO NOT CREATE EMBEDDINGS DURING EACH QUESTION
+--------------------------------------------------
+
+Confirm that published resource embeddings are created during indexing—not regenerated when a user asks a question.
+
+At request time, generate only the query embedding if required.
+
+Cache query embeddings briefly for identical normalized queries where privacy and current architecture permit.
+
+Do not cache private answer content across users.
+
+Do not allow one tenant’s retrieval results to be reused for another tenant.
+
+--------------------------------------------------
+F. REDUCE EXCESSIVE MODEL CONTEXT
+--------------------------------------------------
+
+Do not send full sermons, full Walks or large collections of loosely related content to the model.
+
+Retrieve compact, relevant chunks with metadata.
+
+Deduplicate overlapping chunks from the same source.
+
+Use a reasonable per-source and total-context limit.
+
+Prefer:
+
+- relevant Scripture context
+- strongest sermon excerpt
+- strongest church-resource excerpt
+- essential user-eligible context
+
+Do not reduce answer quality by using arbitrary character truncation that cuts sentences or removes citations.
+
+If several retrieved chunks come from the same resource, merge or select them intelligently before model generation.
+
+--------------------------------------------------
+G. STREAM THE ANSWER EARLIER
+--------------------------------------------------
+
+Where compatible with the validated response architecture, begin showing safe answer text as soon as possible.
+
+The user should quickly see:
+
+- a visible Understanding state
+- then the beginning of the answer
+
+Do not leave a blank or static loading screen while every resource card and link is being prepared.
+
+If full structured streaming is not currently safe:
+
+1. Generate the validated answer.
+2. Render the answer text immediately after validation.
+3. Resolve and display supporting cards as soon as their validation completes.
+
+Do not display unvalidated or invented links temporarily.
+
+Do not allow cards loading later to cause disruptive layout jumps.
+
+For Voice:
+
+- provide a brief non-verbal listening/processing sound only if appropriate
+- do not repeatedly say “Please wait”
+- do not begin speaking unvalidated partial sentences
+- begin speech as soon as the first safe sentence is ready where streaming TTS supports it
+
+--------------------------------------------------
+H. CACHE STABLE DATA SAFELY
+--------------------------------------------------
+
+Cache stable, non-user-specific data where appropriate:
+
+- canonical Bible-book mappings
+- Bible structure validation data
+- published resource metadata
+- canonical route templates
+- tenant configuration
+- frequently accessed public Bible passages where licensing permits
+
+Use short, safe caching for:
+
+- current published resource catalogue metadata
+- resolved canonical resource routes
+
+Do not improperly cache:
+
+- Daily Rhythm eligibility
+- private user progress
+- private conversation history
+- authorization decisions beyond their safe lifetime
+
+Invalidate relevant caches when content is:
+
+- published
+- edited
+- unpublished
+- deleted
+- restored
+- given new visibility/access settings
+
+--------------------------------------------------
+I. AVOID DUPLICATE VALIDATION AND DATABASE CALLS
+--------------------------------------------------
+
+Within one Ask Emmaus request, do not repeatedly load or validate the same resource.
+
+Create a request-scoped map keyed by:
+
+resourceType + canonicalResourceId
+
+Reuse the validated metadata for:
+
+- model context
+- inline link
+- recommendation card
+- Next Step
+- future Voice command
+
+Similarly, validate each Scripture reference once per normalized reference and reuse the result for:
+
+- inline citation
+- Scripture card
+- Read to Me action
+
+--------------------------------------------------
+J. LATENCY TARGETS
+--------------------------------------------------
+
+Measure current production-equivalent performance before and after optimization.
+
+Report:
+
+- median time to visible response
+- 95th-percentile time to visible response
+- median complete-answer time
+- 95th-percentile complete-answer time
+- retrieval time
+- model time
+- validation/link-resolution time
+
+Targets for ordinary Ask Emmaus questions under normal conditions:
+
+- visible feedback: immediate
+- meaningful answer text should begin appearing within approximately 2 seconds where provider latency permits
+- ordinary complete answers should normally finish within approximately 5 seconds
+- slower requests must show active progress and must never look frozen
+
+These are performance goals, not permission to bypass validation or fabricate content.
+
+If the external model provider prevents these targets, identify the provider latency separately from Emmaus application latency.
+
+--------------------------------------------------
+K. PREVENT VOICE FROM MAKING TEXT ANSWERS SLOWER
+--------------------------------------------------
+
+The Voice rebuild must not add speech initialization, ElevenLabs connection setup or audio-source resolution to ordinary typed Ask Emmaus requests.
+
+Only initialize microphone, speech-to-text or streaming voice services when the user activates Voice.
+
+Only resolve an audio provider when:
+
+- spoken output is requested
+- Hear Emmaus is tapped
+- a Read to Me command is executed
+
+Typed Ask Emmaus must remain fast and independent of Voice-service availability.
+
+--------------------------------------------------
+L. PERFORMANCE AND CAPITALIZATION TESTS
+--------------------------------------------------
+
+Add tests confirming:
+
+- Bible Study — John 21:20–23
+- Bible Study — 1 John 1:5–10
+- Bible Study — 2 Corinthians 5:17
+- Bible Study — 1 Thessalonians 5:16–18
+
+No lowercase or incorrectly title-cased Bible book may appear.
+
+Add performance instrumentation tests confirming:
+
+- Scripture and Local Church retrieval run concurrently
+- resource types are not searched through sequential LLM calls
+- repeated resource validation is deduplicated per request
+- typed Ask Emmaus does not initialize Voice services
+- Daily Rhythm authorization still happens before model context assembly
+- streaming never renders an unvalidated link
+
+Run a production-equivalent sample of at least 20 representative questions.
+
+Include:
+
+- explicit Scripture questions
+- pastoral questions
+- questions with a relevant sermon
+- questions with a relevant Walk
+- questions with no relevant ICC resource
+- follow-up questions
+- eligible Daily Rhythm questions
+
+Report before-and-after timing by pipeline stage.
+
+Do not claim that performance is fixed based only on a successful build.
+
+--------------------------------------------------
+M. PRE-FLIGHT COMPLETION REPORT
+--------------------------------------------------
+
+Before completing the wider Voice task, report:
+
+1. Root cause of lowercase Bible book names.
+2. The shared canonical display formatter used.
+3. Root cause of Ask Emmaus’s increased latency.
+4. Before-and-after timing measurements.
+5. Which retrieval operations were parallelized.
+6. Which duplicate calls were removed.
+7. What caching was introduced.
+8. How authorization and Daily Rhythm safety were preserved.
+9. Confirmation that typed Ask Emmaus does not initialize Voice services.
+10. Remaining external-provider latency outside Emmaus’s control.

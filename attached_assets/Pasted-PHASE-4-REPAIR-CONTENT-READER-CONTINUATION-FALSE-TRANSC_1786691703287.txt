@@ -1,0 +1,392 @@
+PHASE 4 — REPAIR CONTENT READER CONTINUATION + FALSE TRANSCRIPT AFTER TTS
+
+IMPORTANT:
+
+Physical-device video confirms that content resolution is now working.
+
+The system successfully recognizes requests such as:
+
+“Read today’s Psalms daily devotional”
+and
+“Read today’s Daily Rhythm 10 Minutes with Jesus.”
+
+DO NOT change:
+- speech recognition provider
+- working Bible-reading path
+- content resolver
+- Voice navigation
+- lock-screen playback
+- Media Session
+- Voice persistence
+- Ask Emmaus conversational logic
+- Voice UI
+
+This repair is specifically for TWO remaining runtime failures.
+
+==================================================
+FAILURE 1 — CONTENT READER READS ONLY FIRST SECTION
+==================================================
+
+Physical-device behaviour:
+
+Emmaus resolves the requested Daily Rhythm/devotional.
+
+It begins reading.
+
+It reads only the first line/section.
+
+Then reading stops instead of automatically continuing through the remaining content.
+
+This proves:
+
+content resolution = working
+TTS = working
+VoiceContentReader continuation/state machine = failing
+
+TRACE THE REAL READING PIPELINE.
+
+For a resolved piece of content log:
+
+[VOICE READER TRACE]
+
+contentTitle:
+entryTitle:
+sectionsTotal:
+currentSectionIndex:
+currentSectionLabel:
+currentSectionTextLength:
+ttsStarted:
+ttsEnded:
+advanceScheduled:
+nextSectionIndex:
+nextSectionExists:
+readerState:
+stopReason:
+
+Do this for EVERY section.
+
+We need to identify exactly why the first completed TTS section is not advancing.
+
+==================================================
+EXPECTED READING BEHAVIOUR
+==================================================
+
+When VoiceContentReader receives structured content with multiple sections:
+
+section 0
+→ TTS
+→ audio completes
+→ short natural pause
+→ section 1
+→ TTS
+→ audio completes
+→ short natural pause
+→ section 2
+→ etc.
+
+Continue until:
+
+- all sections are complete
+OR
+- user interrupts
+OR
+- user says stop/pause
+OR
+- session is explicitly ended
+OR
+- unrecoverable playback error occurs
+
+Do NOT return to normal listening after every individual content section.
+
+==================================================
+CHECK THESE POSSIBLE ROOT CAUSES
+==================================================
+
+Inspect whether:
+
+- audio `ended` handler fires correctly
+- `isReading` becomes false too early
+- `cancelledRef` is being set after each section
+- TTS completion is incorrectly treated as end-of-session
+- section index is not incrementing
+- stale closure captures old section index
+- an 800ms transition timer is cancelled by rerender
+- navigation/session persistence refactor changed reader lifecycle
+- audio cleanup destroys the reader before next section
+- auto-listening restart fires between sections
+- `playTTS()` automatically transitions Voice back to LISTENING even during structured reading
+
+Find the FIRST actual failure.
+
+Do not guess.
+
+==================================================
+READING STATE MODEL
+==================================================
+
+Structured content reading should maintain an explicit state such as:
+
+READING_CONTENT
+
+while all sections are being read.
+
+A single section finishing must NOT mean:
+
+READING_CONTENT → LISTENING
+
+Instead:
+
+READING_CONTENT
+→ section finished
+→ next section
+→ SPEAKING
+→ section finished
+→ next section
+
+Only after the FINAL section:
+
+READING_CONTENT
+→ LISTENING
+
+unless the user pauses/stops.
+
+==================================================
+FAILURE 2 — FALSE TRANSCRIPT “you”
+==================================================
+
+The physical-device recording also shows:
+
+After Emmaus stops reading, the app creates a transcript:
+
+“you”
+
+without the user saying it.
+
+Then Ask Emmaus responds to that false transcript with unrelated content about Romans 9.
+
+This must be fixed.
+
+==================================================
+DIAGNOSE FALSE INPUT
+==================================================
+
+Trace:
+
+TTS finishes
+→ microphone activation
+→ VAD
+→ audio capture
+→ transcription request
+→ transcript
+→ dispatch
+
+Add:
+
+[VOICE INPUT TRACE]
+
+micOpenedAt:
+ttsEndedAt:
+timeSinceTtsEnded:
+audioDurationMs:
+audioBytes:
+vadSpeechDurationMs:
+transcript:
+confidenceIfAvailable:
+accepted:
+rejectReason:
+
+Determine whether the false “you” comes from:
+
+- residual TTS audio
+- speaker echo
+- mic opening too quickly
+- trailing system sound
+- tiny audio blob
+- VAD false positive
+- Whisper hallucination on near-silence
+- playback/recording overlap
+
+==================================================
+POST-TTS MIC GUARD
+==================================================
+
+Introduce a safe post-TTS transition.
+
+After TTS finishes:
+
+1. fully stop/release playback
+2. allow a short configurable settling period
+3. restart microphone
+4. ignore audio until genuine speech onset is detected
+
+Do NOT blindly record/transcribe immediately after TTS ends.
+
+The settling period should be just long enough to avoid echo/residual audio, not so long that conversation feels sluggish.
+
+==================================================
+MINIMUM SPEECH VALIDATION
+==================================================
+
+Before sending audio for transcription, reject obviously invalid clips.
+
+Examples:
+
+- extremely short duration
+- negligible speech/VAD duration
+- effectively silent clip
+- tiny audio payload inconsistent with real speech
+
+Do NOT hardcode the word “you” as invalid.
+
+The system must reject the bad AUDIO EVENT, not individual words.
+
+A genuine user saying “you” must still be allowed.
+
+==================================================
+NO CONVERSATIONAL FALLBACK ON NOISE
+==================================================
+
+If the captured audio does not meet minimum speech criteria:
+
+DO NOT transcribe
+DO NOT dispatch
+DO NOT send anything to Ask Emmaus
+
+Simply remain in LISTENING state.
+
+==================================================
+ECHO / SELF-HEARING PROTECTION
+==================================================
+
+Verify browser audio constraints include appropriate:
+
+echoCancellation
+noiseSuppression
+autoGainControl
+
+where supported.
+
+Also verify:
+
+- microphone track is not recording Emmaus's TTS during playback
+- interruption monitoring and normal transcription recording are separate if necessary
+- TTS audio is not being fed back into the input path
+
+Do not break barge-in capability.
+
+==================================================
+TEST 1 — FULL DAILY RHYTHM
+==================================================
+
+Say:
+
+“Read today’s 10 Minutes with Jesus.”
+
+PASS:
+
+- actual content resolves
+- section 1 reads
+- section 2 automatically reads
+- section 3 automatically reads
+- all remaining sections continue in order
+- no user interaction required between sections
+
+Provide section-by-section trace.
+
+==================================================
+TEST 2 — FULL PSALMS DEVOTIONAL
+==================================================
+
+Say:
+
+“Read today’s Psalms Daily Devotional.”
+
+PASS:
+
+- actual current devotional resolves
+- ALL readable sections play in stored order
+- reading does not stop after Introduction/first line
+
+==================================================
+TEST 3 — NO PHANTOM TRANSCRIPT
+==================================================
+
+Let Emmaus finish a spoken response.
+
+User remains completely silent.
+
+PASS:
+
+- microphone may return to listening
+- no false transcript is generated
+- no Ask Emmaus response begins
+- app remains quietly listening
+
+Run this repeatedly.
+
+==================================================
+TEST 4 — REAL SHORT SPEECH STILL WORKS
+==================================================
+
+After Emmaus finishes, genuinely say:
+
+“Yes.”
+
+PASS:
+
+- legitimate short utterance is still accepted
+- do not solve false input by rejecting all short speech
+
+==================================================
+TEST 5 — INTERRUPT DURING READING
+==================================================
+
+While section 2 is being read, user says:
+
+“Stop.”
+
+PASS:
+
+- current audio stops
+- queued remaining sections stop
+- microphone listens
+- no phantom transcript occurs
+
+==================================================
+REGRESSION PROTECTION
+==================================================
+
+Do not break:
+
+- “Read Psalm 23”
+- Bible reading
+- Daily Rhythm resolver
+- devotional resolver
+- background audio
+- lock-screen controls
+- Voice persistence
+- transcription of genuine user speech
+- normal Ask Emmaus conversation
+- interruption architecture
+
+==================================================
+FINAL REPORT
+==================================================
+
+Before marking complete provide:
+
+1. Root cause of first-section-only reading.
+2. Root cause of phantom “you” transcript.
+3. Exact reader-state changes made.
+4. Exact microphone/VAD validation changes made.
+5. Section-by-section results for Daily Rhythm.
+6. Section-by-section results for Psalms devotional.
+7. Silent-after-TTS test results.
+8. Short genuine utterance test result.
+9. Barge-in regression result.
+
+Create a checkpoint first.
+
+Fix only these issues.
+
+Then STOP for physical-device verification.

@@ -6,23 +6,22 @@
  * Thin page: loads devotional data from the API and renders the shared
  * PreviousDaysScreen component.
  *
- * Back navigation:
- *   ?from=walk  → /walk     (Today's Steps)
- *   default     → /journeys (Next Steps)
+ * Back navigation uses ?source= (standard return-context convention).
+ * Steps opened from this screen receive ?source=devotionalPrevious&sourceId=<seriesId>
+ * so the completion card shows "Back to Previous Steps".
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
-import { isDevelopmentMode } from '@/lib/dev-mode';
-import { calcAvailableDaySelfPaced } from '@/lib/devotional-calendar';
-import { resolveReturn } from '@/lib/return-context';
+import { goBackOrFallback, resolveReturn } from '@/lib/return-context';
 import {
   getSeriesWithEntries,
   getProgress,
   type SeriesWithEntries,
   type DevotionalProgress,
 } from '@/lib/devotionals-api';
+import { getDevotionalLabel } from '@/lib/step-label';
 import { PreviousDaysScreen, type PreviousDayEntry } from '@/components/PreviousDaysScreen';
 
 export default function DevotionalPreviousDays() {
@@ -31,8 +30,11 @@ export default function DevotionalPreviousDays() {
   const { user } = useAuth();
   const seriesId = params.seriesId;
 
-  const from = new URLSearchParams(window.location.search).get('from');
-  const { path: backPath, label: backLabel } = resolveReturn(from, null, '/journeys?tab=devotionals');
+  const qs       = new URLSearchParams(window.location.search);
+  // Accept both ?source= (current) and legacy ?from= so old links and bookmarks keep working.
+  const source   = qs.get('source') ?? qs.get('from');
+  const sourceId = qs.get('sourceId');
+  const { path: backPath, label: backLabel } = resolveReturn(source, sourceId, '/journeys?tab=devotionals');
 
   const [seriesData, setSeriesData] = useState<SeriesWithEntries | null>(null);
   const [progress, setProgress]     = useState<DevotionalProgress | null>(null);
@@ -57,39 +59,35 @@ export default function DevotionalPreviousDays() {
 
   useEffect(() => { load(); }, [load]);
 
-  const devMode = isDevelopmentMode(user ?? undefined);
-
-  const publishedEntries = (seriesData?.entries ?? []).filter(e => e.status === 'Published');
-  const maxPublishedDay  = publishedEntries.length > 0
-    ? Math.max(...publishedEntries.map(e => e.dayNumber))
-    : 1;
-  // Self-paced: show all entries up to and including the member's next available day.
-  const completedDays = progress?.completedDays ?? [];
-  const availableDay = calcAvailableDaySelfPaced(completedDays, maxPublishedDay, devMode);
-
   const completedSet = new Set(progress?.completedDays ?? []);
 
+  // All published entries are accessible — members can open any entry freely.
+  const publishedEntries = (seriesData?.entries ?? []).filter(e => e.status === 'Published');
+
   const entries: PreviousDayEntry[] = publishedEntries
-    .filter(e => e.dayNumber <= availableDay)
     .sort((a, b) => b.dayNumber - a.dayNumber)
     .map(e => ({
       dayNumber: e.dayNumber,
-      title: e.title || `Day ${e.dayNumber}`,
+      label: getDevotionalLabel(e),
+      title: e.title || getDevotionalLabel(e),
       subtitle: e.scriptureReference || undefined,
       status: completedSet.has(e.dayNumber) ? 'completed' : 'current',
     }));
 
+  const openEntry = (day: number) =>
+    setLocation(`/devotional/${seriesId}/day/${day}?source=devotionalPrevious&sourceId=${seriesId}`);
+
   return (
     <PreviousDaysScreen
       contentTitle={seriesData?.title ?? 'Daily Devotional'}
+      screenTitle="All Devotionals"
       entries={entries}
       loading={loading}
-      onBack={() => setLocation(backPath)}
-      onReviewDay={(day) =>
-        setLocation(`/devotional/${seriesId}/day/${day}?source=${from ?? 'nextStepsDevotionals'}`)
-      }
+      onBack={() => goBackOrFallback(backPath, setLocation)}
+      onReviewDay={openEntry}
+      onContinueDay={openEntry}
       backLabel={backLabel}
-      emptyMessage="No previous entries are available yet."
+      emptyMessage="No entries are available yet."
     />
   );
 }

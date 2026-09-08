@@ -1,0 +1,461 @@
+CHECKPOINT 7 — PASTORAL WORKFLOWS & MINISTRY ACTIONS
+
+Emmaus now understands people, discipleship, attendance, care signals and church health.
+
+The next step is helping pastors and ministry leaders respond.
+
+This checkpoint is NOT about sending notifications.
+
+It is about turning Care Signals into real pastoral care.
+
+The goal is to help churches ensure that no one is overlooked.
+
+----------------------------------------------------
+DESIGN PRINCIPLES
+----------------------------------------------------
+
+Emmaus must never replace pastoral care.
+
+Emmaus should simply help leaders:
+
+• notice
+• assign
+• remember
+• follow through
+
+Every workflow should lead to a real conversation, visit, prayer or act of care.
+
+----------------------------------------------------
+SECTION 1
+TASKS
+----------------------------------------------------
+
+Create a central Ministry Tasks system.
+
+Every task includes:
+
+Title
+
+Reason
+
+Linked person
+
+Source (Care Signal, Manual, Attendance, Walk, Prayer Request)
+
+Priority
+
+Assigned leader
+
+Due date
+
+Status
+
+Notes
+
+Statuses
+
+New
+
+Assigned
+
+In Progress
+
+Waiting
+
+Completed
+
+Cancelled
+
+Archive completed tasks.
+
+----------------------------------------------------
+SECTION 2
+ASSIGNMENT
+----------------------------------------------------
+
+Allow pastors to assign work.
+
+Examples
+
+Visit Jeremy
+
+Phone Sarah
+
+Invite David to a Room
+
+Discuss Baptism
+
+Volunteer Conversation
+
+Made Free Follow-up
+
+Prayer Visit
+
+Hospital Visit
+
+Marriage Preparation
+
+Task ownership must always be visible.
+
+----------------------------------------------------
+SECTION 3
+FOLLOW-UP HISTORY
+----------------------------------------------------
+
+Every person should have a complete care history.
+
+Example
+
+Aug 2
+
+Attendance Follow-up
+
+Pastor James
+
+Completed
+
+----------------
+
+Aug 18
+
+Prayer Visit
+
+Sarah
+
+Completed
+
+----------------
+
+Sep 1
+
+Volunteer Discussion
+
+Pending
+
+Nothing is lost.
+
+Everything becomes part of the discipleship story.
+
+----------------------------------------------------
+SECTION 4
+LEADER DASHBOARD
+----------------------------------------------------
+
+Each leader sees only:
+
+Assigned tasks
+
+People assigned
+
+Upcoming follow-ups
+
+Overdue tasks
+
+Today's agenda
+
+Recent notes
+
+Not the entire church.
+
+----------------------------------------------------
+SECTION 5
+PASTOR DASHBOARD
+----------------------------------------------------
+
+The pastor sees everything.
+
+Including
+
+Unassigned tasks
+
+Overdue follow-ups
+
+Outstanding Care Signals
+
+Leader workload
+
+Ministry workload
+
+Recently completed care
+
+----------------------------------------------------
+SECTION 6
+TASK TEMPLATES
+----------------------------------------------------
+
+Allow reusable templates.
+
+Examples
+
+New Believer
+
+Hospital Visit
+
+Bereavement
+
+Attendance Follow-up
+
+Prayer Request
+
+Volunteer Conversation
+
+Marriage Preparation
+
+Baptism Conversation
+
+Templates prefill:
+
+Task title
+
+Checklist
+
+Suggested questions
+
+Bible encouragement (optional)
+
+Prayer reminder
+
+----------------------------------------------------
+SECTION 7
+CHECKLISTS
+----------------------------------------------------
+
+Each task may include checklists.
+
+Hospital Visit
+
+□ Visit completed
+
+□ Prayer offered
+
+□ Family contacted
+
+□ Follow-up arranged
+
+Volunteer Conversation
+
+□ Gifts discussed
+
+□ Ministry introduced
+
+□ Leader assigned
+
+□ Start date agreed
+
+----------------------------------------------------
+SECTION 8
+REMINDERS
+----------------------------------------------------
+
+Task reminders only.
+
+No automatic member messaging.
+
+Remind assigned leaders.
+
+Today
+
+Tomorrow
+
+Overdue
+
+Upcoming
+
+----------------------------------------------------
+SECTION 9
+MINISTRY TEAMS
+----------------------------------------------------
+
+Support
+
+Pastors
+
+Elders
+
+Deacons
+
+Youth Leaders
+
+Small Group Leaders
+
+Women's Ministry
+
+Men's Ministry
+
+Volunteer Coordinators
+
+Made Free Leaders
+
+Each sees only relevant tasks.
+
+----------------------------------------------------
+SECTION 10
+CALENDAR
+----------------------------------------------------
+
+Simple ministry calendar.
+
+Upcoming:
+
+Visits
+
+Meetings
+
+Baptisms
+
+Dedications
+
+Hospital visits
+
+Training
+
+Volunteer interviews
+
+Click any event.
+
+Open person.
+
+Open task.
+
+----------------------------------------------------
+SECTION 11
+NOTES
+----------------------------------------------------
+
+Pastoral notes.
+
+Private.
+
+Timestamped.
+
+Author recorded.
+
+Never editable without audit.
+
+Support confidential notes.
+
+Sensitive notes require permissions.
+
+----------------------------------------------------
+SECTION 12
+AUTOMATION
+----------------------------------------------------
+
+Care Signals may suggest tasks.
+
+Example
+
+Attendance declined
+
+↓
+
+Suggested
+
+Create Follow-up
+
+The pastor chooses whether to create the task.
+
+Emmaus never creates pastoral work automatically.
+
+----------------------------------------------------
+SECTION 13
+SEARCH
+----------------------------------------------------
+
+Search
+
+People
+
+Tasks
+
+Notes
+
+Follow-ups
+
+Prayer Requests
+
+Visits
+
+Conversations
+
+----------------------------------------------------
+SECTION 14
+REPORTS
+----------------------------------------------------
+
+Show
+
+Tasks completed
+
+Average response time
+
+Outstanding work
+
+Leader workload
+
+Ministry workload
+
+Resolved Care Signals
+
+----------------------------------------------------
+SECTION 15
+PERMISSIONS
+----------------------------------------------------
+
+Everything must respect role permissions.
+
+Pastor
+
+Administrator
+
+Leader
+
+Volunteer Coordinator
+
+Made Free Leader
+
+Attendance Recorder
+
+Content Admin
+
+Private notes and sensitive programmes must remain protected.
+
+----------------------------------------------------
+SUCCESS
+----------------------------------------------------
+
+Emmaus should now support the complete pastoral cycle:
+
+Notice
+
+↓
+
+Understand
+
+↓
+
+Assign
+
+↓
+
+Care
+
+↓
+
+Follow Up
+
+↓
+
+Record
+
+↓
+
+Celebrate Growth
+
+No one should become "just another attendance record."
+
+Every person should be able to be known, cared for and encouraged through intentional pastoral workflows.
+
+Do not remove any existing functionality.
+
+Build on the existing Care Signals, Discipleship Profiles and Dashboard architecture.

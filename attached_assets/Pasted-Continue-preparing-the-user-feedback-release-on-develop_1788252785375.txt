@@ -1,0 +1,53 @@
+Continue preparing the user-feedback release on "development/next-phase".
+
+Protect the working app. Do not publish or deploy automatically.
+
+Do not fetch, pull, push, merge, rebase, reset, switch branches, modify production data, change schemas, secrets, environment variables, dependencies, or perform broad refactoring/type-error cleanup.
+
+The safety branch "safety/pre-user-feedback-publish-2026-09-01" must remain untouched.
+
+Before making changes, confirm:
+
+- Current branch is "development/next-phase"
+- Current release commit is "b0baefcf4383fb55fea2a45f9578871ed526120f"
+- Working tree contains only the previously reported attached brief as untracked
+
+Resolve the remaining release issue with the smallest possible targeted change:
+
+1. Fix the authenticated progress-origin mismatch so that when a user starts from Walk, the record remains "walk" and is not changed to "journey".
+2. Add or update a focused regression test proving this.
+3. Do not alter unrelated Journey or Daily Rhythm behaviour.
+
+Then verify, without assuming, that the prepared release satisfies every requested user-feedback requirement:
+
+- The app opens successfully.
+- The Bible translation remains/defaults to NIV where permitted; it was not unintentionally changed to BSB.
+- Daily Rhythm advances according to the server-authoritative calendar day, not completion.
+- Previous Days includes all elapsed available days, including opened-but-unfinished and never-opened days, and excludes future days.
+- Daily reminders are not suppressed merely because the previous day was opened.
+- “The Govender Family” and other real-person placeholder text are absent.
+- Image-generation text opens blank and Generate Image is disabled while blank.
+- Switching rooms or discussions immediately clears the old conversation and prevents late responses from restoring it.
+- Starting from Walk preserves "walk" as the progress origin.
+
+Run the focused tests for all items above, API integrity tests, frontend and API production builds, recursive production builds, API and web smoke tests, "git diff --check", and the relevant browser-console/preview check.
+
+For project-wide typecheck errors:
+
+- Compare them with the recorded pre-change baseline.
+- Do not fix unrelated baseline errors.
+- Confirm whether this task introduces any new errors.
+
+If the targeted fix and all release checks pass, create one new local release commit on "development/next-phase".
+
+Do not click Publish.
+
+Report:
+
+- New commit ID
+- Exact files changed
+- Tests and builds run with pass/fail totals
+- Whether NIV was explicitly verified
+- Whether Walk now remains Walk
+- Any new type errors compared with baseline
+- Final verdict: "READY FOR MANUAL PUBLISH" or "NOT READY", with the exact blocker

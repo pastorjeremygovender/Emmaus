@@ -1,0 +1,229 @@
+Checkpoint 1 implementation is approved in principle, but do not begin Checkpoint 2 yet.
+
+First deploy and complete production verification of the attendance foundation.
+
+Do not add discipleship profiles, care signals, dashboard alerts or follow-up workflows during this task.
+
+==================================================
+PUBLISH CHECKPOINT 1
+==================================================
+
+Publish the current Checkpoint 1 build to the production Emmaus deployment.
+
+Confirm:
+
+- all six new tables exist in the production database;
+- all migrations completed successfully;
+- /api/pastoral routes are registered in production;
+- church/tenant isolation is active;
+- pastoral_role exists on production user_profiles;
+- existing Emmaus features remain operational.
+
+==================================================
+PRODUCTION TEST DATA
+==================================================
+
+Create clearly labelled test records that can be safely removed later:
+
+Meeting Type:
+TEST — Sunday Morning
+
+Meeting Session:
+TEST — Sunday Morning
+Date: current test date
+
+Attendance-only person:
+TEST Attendance Person
+
+Visitor:
+TEST Visitor
+
+Do not use or alter a real member’s attendance record without explicit confirmation.
+
+==================================================
+TEST THE COMPLETE PUBLISHED FLOW
+==================================================
+
+1. Open Admin → People → Attendance.
+
+2. Confirm Meeting Types loads.
+
+3. Create:
+   TEST — Sunday Morning
+
+4. Create a dated meeting session from it.
+
+5. Open the attendance register.
+
+6. Confirm the register includes:
+   - existing Emmaus users;
+   - attendance-only people;
+   - visitors where applicable.
+
+7. Mark one test person:
+   PRESENT
+
+8. Refresh the page and confirm the status persists.
+
+9. Change the status:
+   PRESENT → APOLOGY
+
+10. Confirm the correction persists.
+
+11. Confirm the audit log records:
+   - previous value;
+   - new value;
+   - person;
+   - meeting;
+   - user making the change;
+   - timestamp.
+
+12. Mark another test person:
+   NOT_EXPECTED
+
+13. Confirm NOT_EXPECTED is displayed correctly and is not treated as absent.
+
+14. Add TEST Visitor inline.
+
+15. Confirm no duplicate record is created if the same visitor is selected again.
+
+16. Add TEST Attendance Person.
+
+17. Set an attendance expectation for that person.
+
+18. Link the attendance-only person to a suitable test Emmaus account.
+
+19. Confirm:
+   - only one unified person appears afterward;
+   - attendance history is preserved;
+   - expectations are preserved;
+   - no duplicate account or person remains.
+
+20. Test bulk selection and bulk status update.
+
+21. Confirm totals by status are accurate.
+
+22. Mark the meeting session Completed.
+
+23. Create a second session and mark it Cancelled.
+
+24. Confirm cancelled sessions remain visible but will not later count as missed attendance.
+
+==================================================
+PERMISSION TESTING
+==================================================
+
+Test server-side access with each available role.
+
+PASTOR
+- can view People;
+- can view attendance;
+- can correct attendance;
+- can view audit history where authorised.
+
+RECORDER
+- can access authorised attendance registers;
+- can record and correct attendance;
+- cannot see restricted pastoral information;
+- cannot manage unrelated admin content unless separately authorised.
+
+CONTENT ADMIN
+- does not gain attendance access merely because they manage content.
+
+UNAUTHORISED USER
+- cannot access /api/pastoral data directly.
+
+MADE FREE DATA
+- must remain hidden unless the user has explicit sensitive-programme access.
+
+Do not rely only on visible or hidden navigation.
+Call the API routes directly for permission verification.
+
+==================================================
+REGRESSION TESTING
+==================================================
+
+Confirm all existing areas still load and function:
+
+- Dashboard
+- Content Studio
+- Walks and Journeys
+- Daily Rhythm
+- Daily Devotionals
+- Sermons
+- Bible Study
+- Rooms
+- Ask Emmaus
+- Member-facing app
+
+The pastoral migration and routes must not break existing admin or member APIs.
+
+==================================================
+MOBILE TESTING
+==================================================
+
+Test the published attendance register on a mobile-width screen.
+
+Confirm:
+
+- no horizontal overflow;
+- search is usable;
+- people can be selected quickly;
+- status controls are large enough to tap;
+- the save state is visible;
+- bulk actions remain accessible;
+- visitors can be added;
+- the user is not forced to scroll back to the top after every change.
+
+==================================================
+ERROR AND EMPTY STATES
+==================================================
+
+Verify:
+
+- no meeting types;
+- no meeting sessions;
+- no people results;
+- failed save;
+- lost network connection;
+- expired admin session;
+- duplicate attendance attempt;
+- duplicate person-link attempt.
+
+No screen should become blank or frozen.
+
+==================================================
+CLEANUP
+==================================================
+
+After testing, either:
+
+- delete the clearly labelled TEST records; or
+- retain them only if needed for Checkpoint 2 testing and mark them clearly as test data.
+
+Do not delete real attendance or person records.
+
+==================================================
+REPORT BACK
+==================================================
+
+Report:
+
+1. Production deployment/commit tested.
+2. Production migration results.
+3. Number of pastoral routes registered.
+4. Attendance creation test.
+5. Persistence-after-refresh test.
+6. Correction and audit-log test.
+7. Visitor test.
+8. Attendance-only person test.
+9. Account-linking and deduplication test.
+10. Attendance-expectation test.
+11. Cancelled-session test.
+12. Permission test results by role.
+13. Mobile test result.
+14. Regression test result.
+15. Any failed or incomplete test.
+16. Test-data cleanup result.
+
+Do not begin Checkpoint 2 until the published Checkpoint 1 workflow is verified and I approve it.

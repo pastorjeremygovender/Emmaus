@@ -1,0 +1,178 @@
+STOP. Admin → Sermons has regressed again.
+
+The published application now shows:
+
+“Failed to load sermons. Please refresh.”
+
+This page was working before the latest changes.
+
+Do not continue changing the sermon-processing pipeline until the Sermons list and API are restored.
+
+==================================================
+1. TEST THE ACTUAL PRODUCTION API
+==================================================
+
+Call the exact endpoint used by the Sermons list in the published environment.
+
+Likely:
+
+GET /api/sermons/admin
+
+Report:
+
+- exact URL
+- HTTP status
+- response body
+- production server error
+- stack trace
+- deployment commit currently live
+
+Do not infer the cause from the UI.
+
+==================================================
+2. CHECK SERVER STARTUP AND ROUTE REGISTRATION
+==================================================
+
+Inspect production logs from the latest deployment.
+
+Confirm:
+
+- the backend started successfully
+- the Sermons admin route registered successfully
+- no import, syntax or module-load error exists
+- no model-configuration helper causes server startup failure
+- no ffmpeg dependency import causes route initialization failure
+- database initialization completed
+- authentication middleware completed
+
+If another route works but /api/sermons/admin fails, isolate the route-level error.
+
+==================================================
+3. CHECK THE DATABASE QUERY
+==================================================
+
+Confirm the production database still contains:
+
+- sermons table
+- required columns
+- sermon_companion relationship
+- processing status fields
+- processing error fields
+- audio metadata fields
+
+Run the actual query used by the admin list directly against production.
+
+Report:
+
+- whether the query succeeds
+- number of rows returned
+- exact database error if it fails
+- whether a recent schema change was deployed without its migration
+
+The list must tolerate null or legacy values in every optional field.
+
+One malformed or partially processed sermon must not make the entire list fail.
+
+==================================================
+4. MAKE THE LIST ENDPOINT RESILIENT
+==================================================
+
+The admin list endpoint must return all valid sermon records even when one record has incomplete processing data.
+
+Requirements:
+
+- null-safe mapping
+- legacy-safe fields
+- no parsing of transcript or generated JSON that can crash the full list
+- invalid optional JSON should be isolated to that record
+- no ffmpeg or OpenAI initialization should run when listing sermons
+- no processing job should be triggered by a GET list request
+
+Return a useful structured error only if the database itself is unavailable.
+
+==================================================
+5. DO NOT LOSE THE CURRENT SERMON
+==================================================
+
+Do not delete or recreate the sermon that already completed transcription.
+
+Preserve:
+
+- canonical sermon record
+- stored 82.6 MB audio
+- completed transcript
+- processing state
+- generated data already completed
+- failure stage caused by unsupported temperature
+
+Once the list is restored, that sermon must appear with the correct state:
+
+Processing Failed or Ready to Retry
+
+It must not disappear.
+
+==================================================
+6. FIX AUTHENTICATION IF NEEDED
+==================================================
+
+Confirm the published admin session is being accepted by /api/sermons/admin.
+
+Check for:
+
+- 401 unauthorised
+- 403 forbidden
+- role mismatch
+- missing cookies
+- frontend request missing credentials
+- CSRF or tenant/church context failure
+
+The page is clearly inside the admin app, so an authentication failure must show a proper session message rather than a generic load failure.
+
+==================================================
+7. IMPROVE THE ERROR MESSAGE
+==================================================
+
+The frontend should distinguish:
+
+- Session expired
+- Permission denied
+- Database unavailable
+- Server error
+- Network unavailable
+
+Do not show only:
+
+“Failed to load sermons.”
+
+Include a request ID so production logs can be traced.
+
+==================================================
+8. VERIFY BEFORE CONTINUING
+==================================================
+
+After fixing and publishing:
+
+1. Open Admin → Sermons in the actual published app.
+2. Confirm the list loads.
+3. Confirm the existing failed sermon appears.
+4. Open that sermon.
+5. Confirm its completed transcript remains available.
+6. Confirm Retry Processing resumes after transcription.
+7. Confirm no new upload is required.
+
+Do not continue with AI generation changes until this list page works in production.
+
+==================================================
+9. REPORT BACK
+==================================================
+
+Report:
+
+1. Exact HTTP status from /api/sermons/admin.
+2. Exact root cause.
+3. Production stack trace summary.
+4. Files changed.
+5. Database/migration result.
+6. Number of sermon records restored.
+7. Confirmation that the existing transcript and audio were preserved.
+8. Published deployment/commit tested.

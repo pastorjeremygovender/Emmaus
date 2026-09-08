@@ -1,0 +1,569 @@
+# EMMAUS ROOMS — FOUR-LEVEL ARCHITECTURE + BUILD
+
+We are now establishing the permanent Emmaus Rooms architecture.
+
+Do NOT rebuild existing Rooms from scratch.
+
+Audit the existing Rooms implementation first and preserve working functionality, existing Rooms, members, invitations, discussions, progress and data.
+
+The purpose of this update is to establish FOUR clear levels of Rooms and simplify how users encounter them.
+
+====================================================
+CORE PRINCIPLE
+====================================================
+
+Emmaus Rooms exist to help people walk with Jesus together.
+
+Rooms are NOT a social network.
+
+Rooms are NOT a general-purpose video calling service.
+
+Video is a ministry capability and must be controlled by church permissions.
+
+Ordinary users should still be able to walk through Emmaus content together without requiring video.
+
+====================================================
+THE FOUR ROOM LEVELS
+====================================================
+
+LEVEL 1 — PERSONAL ROOMS
+Available to normal Emmaus users.
+
+Purpose:
+
+Allow friends, families and individuals to walk through Emmaus content together.
+
+NO LIVE VIDEO.
+
+A Personal Room may include:
+
+• Walks
+• Journeys
+• Daily Devotionals
+• Bible Studies
+• Sermon Companions
+• Scripture
+• Discussion
+• Shared progress
+• Prayer requests
+• Text chat
+• Shared notes where appropriate
+
+A user should be able to create a Personal Room from content they are ALREADY doing.
+
+Example:
+
+Jeremy is on Day 6 of a devotional.
+
+He decides it could help a friend.
+
+He taps:
+
+"Walk Together"
+
+or another natural context-specific label.
+
+Emmaus creates a Personal Room attached to that content.
+
+Jeremy invites the friend.
+
+Do NOT force Jeremy to abandon or restart his existing progress.
+
+Handle individual and Room progress separately where necessary so existing personal progress is never lost.
+
+Personal Rooms must NOT have LiveKit video capability.
+
+====================================================
+LEVEL 2 — MINISTRY ROOMS
+====================================================
+
+Ministry Rooms are church-authorised Rooms.
+
+Examples:
+
+• Small Groups
+• Made Free
+• New Believers
+• Youth
+• Men's Ministry
+• Women's Ministry
+• Prayer Groups
+• Home Groups
+• Discipleship Groups
+
+These Rooms support everything in Personal Rooms PLUS:
+
+• Live video
+• Shared Scripture
+• Shared highlighting
+• Shared notes
+• Leader controls
+• Room attendance
+• Polls
+• Shared Ask Emmaus responses
+• Real-time collaborative study
+
+VIDEO PROVIDER:
+
+Use LiveKit as the video infrastructure.
+
+Do NOT build our own WebRTC/video engine.
+
+Emmaus owns the Room experience.
+
+LiveKit only provides the underlying real-time audio/video transport.
+
+IMPORTANT:
+
+Only an authorised Group Leader, Pastor or authorised Church Admin can START a LiveKit video session.
+
+Normal members can JOIN an authorised meeting but cannot create/start video meetings unless granted the appropriate role.
+
+====================================================
+LEVEL 3 — LEADERSHIP ROOMS
+====================================================
+
+Leadership Rooms are restricted to authorised church leadership.
+
+Examples:
+
+• Pastors
+• Elders
+• Ministry Leaders
+• Leadership Teams
+• Staff
+
+They may include:
+
+• Video
+• Scripture
+• Notes
+• Prayer
+• Discussion
+• Planning
+• Private leadership communication
+• Appropriate Emmaus collaboration tools
+
+Leadership Rooms must have stricter membership permissions.
+
+Do NOT expose Leadership Rooms through general Discover browsing.
+
+Only invited/authorised users should see them.
+
+====================================================
+LEVEL 4 — CHURCH SERVICE ROOMS
+====================================================
+
+Create the architecture/Room type for Church Service Rooms but DO NOT build the full online congregation system yet.
+
+This is reserved for the future Emmaus live church experience.
+
+Future purpose:
+
+Integrate the physical congregation and online congregation into one gathering rather than simply livestreaming a broadcast.
+
+Do NOT build Media Studio integration now.
+
+Do NOT build synchronized worship/audio now.
+
+Do NOT build advanced production tools now.
+
+For now:
+
+Create the Room type and permission model only.
+
+Hide unfinished Church Service Room functionality from normal users.
+
+====================================================
+ROLES AND PERMISSIONS
+====================================================
+
+Implement Room permissions based on church roles.
+
+MEMBER
+
+Can:
+
+• Create Personal Rooms
+• Invite people to Personal Rooms
+• Join Rooms they are invited to
+• Participate in discussion
+• Share prayer requests
+• Use shared content
+• Join authorised video meetings
+
+Cannot:
+
+• Start LiveKit video
+• Create Ministry Rooms
+• Create Leadership Rooms
+• Create Church Service Rooms
+
+----------------------------------------------------
+
+GROUP LEADER
+
+Can:
+
+Everything a Member can do PLUS:
+
+• Create/manage authorised Ministry Rooms
+• Start Ministry Room video
+• Invite/remove members
+• Use leader controls
+• View Room attendance
+• Moderate Room activity
+
+Group Leader status must be assigned/approved by the church.
+
+----------------------------------------------------
+
+PASTOR
+
+Can:
+
+• Create/manage Ministry Rooms
+• Create/manage Leadership Rooms
+• Start authorised video
+• Assign/manage appropriate Room leaders
+• Use leader controls
+• View Room attendance
+• Moderate Rooms
+
+----------------------------------------------------
+
+CHURCH ADMIN
+
+Can:
+
+• Configure Room permissions
+• Approve/remove Group Leader status
+• Enable/disable video capability
+• Configure video limits
+• View video usage
+• Manage Room policy
+
+Do not assume every Admin automatically needs access to confidential pastoral content unless their permissions allow it.
+
+====================================================
+LIVEKIT COST CONTROL
+====================================================
+
+LiveKit usage must be controlled.
+
+Add Church Settings for:
+
+VIDEO ROOMS
+
+Enabled: ON/OFF
+
+Maximum concurrent video Rooms
+
+Maximum participants per Room
+
+Maximum meeting duration
+
+Approved roles allowed to start video
+
+Do not allow unlimited uncontrolled video usage.
+
+The backend must verify permission BEFORE issuing a LiveKit access token capable of starting/hosting a meeting.
+
+Do not rely only on hiding the Start Video button in the UI.
+
+====================================================
+ROOMS IN MY JOURNEY
+====================================================
+
+My Journey should NOT contain:
+
+Create Room
+
+Join Room
+
+Those actions duplicate Discover/content actions.
+
+Instead show:
+
+MY ROOMS
+
+If user belongs to no Rooms:
+
+"Any Rooms you are part of will show up here."
+
+Nothing else is required.
+
+If the user belongs to Rooms:
+
+Display those Rooms.
+
+Show useful information such as:
+
+Room name
+Associated content
+Leader
+Current activity/progress
+Next meeting if applicable
+
+Tapping opens the Room.
+
+====================================================
+CREATING ROOMS FROM CONTENT
+====================================================
+
+Users should NOT have to think:
+
+"I need to create a Room."
+
+Rooms should emerge naturally from discipleship.
+
+Add an appropriate action to:
+
+• Walks
+• Journeys
+• Daily Devotionals
+• Bible Studies
+• Sermon Companions
+
+Examples of contextual wording:
+
+Walk Together
+Study Together
+Invite Someone
+
+Do NOT clutter every screen with multiple Room buttons.
+
+Use one consistent, unobtrusive action.
+
+When tapped:
+
+1. Ask who they want to invite.
+2. Create the Personal Room.
+3. Attach the current content.
+4. Preserve the creator's existing progress.
+5. Send invitation.
+6. Room appears under My Journey → My Rooms.
+
+If the user is an authorised Group Leader, allow an additional option:
+
+"Create Ministry Room"
+
+Do not show this option to ordinary members.
+
+====================================================
+MINISTRY ROOM EXPERIENCE
+====================================================
+
+The eventual Ministry Room screen should combine:
+
+LIVE VIDEO
+
++
+
+CURRENT EMMAUS CONTENT
+
+The user should not feel like they have left Emmaus and entered Zoom.
+
+The Room may contain:
+
+Video participants
+
+Current Walk/Devotional/Study
+
+Scripture
+
+Discussion
+
+Chat
+
+Prayer Requests
+
+Shared Notes
+
+Shared Highlights
+
+Ask Emmaus
+
+Attendance
+
+Polls
+
+====================================================
+SHARED SCRIPTURE
+====================================================
+
+Allow members of a Ministry Room to view the same Scripture.
+
+Support shared highlighting.
+
+Example:
+
+Jeremy highlights Luke 24:32.
+
+Other Room members can see the shared highlight.
+
+Keep personal highlights separate from Room highlights.
+
+Do not overwrite a user's personal Bible annotations.
+
+====================================================
+LEADER CONTROLS
+====================================================
+
+Authorised Room leaders should eventually be able to:
+
+Open a Scripture for everyone
+
+Move the group to the current discussion section
+
+Share an Emmaus response
+
+Start a poll
+
+Manage participants
+
+View attendance
+
+Do NOT implement synchronized Bible audio.
+
+Do NOT implement synchronized media playback.
+
+Do NOT implement advanced whiteboards.
+
+Do NOT implement Emmaus Voice participating in the group.
+
+These are explicitly OUT OF SCOPE for this version.
+
+====================================================
+ASK EMMAUS IN ROOMS
+====================================================
+
+Ask Emmaus remains available.
+
+Allow a Room member/leader to choose to share an Ask Emmaus response with the Room.
+
+Do not automatically expose private Ask Emmaus conversations to other Room members.
+
+Privacy must remain the default.
+
+====================================================
+ATTENDANCE
+====================================================
+
+For authorised Ministry Rooms:
+
+Record:
+
+• Joined
+• Left
+• Meeting date
+• Approximate participation duration
+
+Attendance is a ministry administration signal.
+
+Do not use attendance to automatically make spiritual judgments about users.
+
+====================================================
+DISCOVER
+====================================================
+
+Discover may provide the appropriate entry point for finding/joining church-authorised Rooms.
+
+Do not duplicate My Rooms.
+
+Discover = find something new.
+
+My Journey → My Rooms = Rooms I already belong to.
+
+====================================================
+EXISTING ROOMS
+====================================================
+
+Audit existing Room records.
+
+Do NOT delete them.
+
+Migrate/classify existing Rooms into the new model safely.
+
+If the correct type cannot be determined automatically, default conservatively and report the affected records.
+
+====================================================
+BUILD ORDER
+====================================================
+
+Do NOT attempt every advanced feature simultaneously.
+
+Implement in this order:
+
+STEP 1
+
+Four Room types
+Roles
+Permissions
+My Rooms
+Create Personal Room from existing content
+Invitations
+Existing chat/prayer/discussion
+
+STEP 2
+
+LiveKit integration for authorised Ministry Rooms
+Camera
+Microphone
+Participant presence
+Join/leave
+Leader starts/ends meeting
+
+STEP 3
+
+Shared Scripture
+Shared highlighting
+Shared notes
+Leader navigation
+Shared Ask Emmaus responses
+
+STEP 4
+
+Polls
+Attendance
+Moderation
+Usage controls
+
+Church Service Rooms remain architecture-only for now.
+
+====================================================
+DO NOT BUILD
+====================================================
+
+Do NOT build:
+
+• Our own video engine
+• Synchronized Bible audio
+• Emmaus Voice group participation
+• Synchronized media playback
+• Advanced whiteboard
+• Media Studio integration
+• Full online Sunday congregation
+• Unrestricted member video calls
+
+====================================================
+SUCCESS CRITERIA
+====================================================
+
+An ordinary member can be halfway through a Walk or Devotional, decide:
+
+"I want to do this with someone."
+
+and invite them without restarting.
+
+A Group Leader can run that same discipleship experience as an authorised live video group.
+
+Members cannot generate uncontrolled LiveKit costs.
+
+Church leadership controls who can host video.
+
+The video experience remains inside Emmaus.
+
+Rooms feel like shared discipleship, not Zoom embedded in a church app.
+
+Preserve existing Emmaus functionality and data throughout.

@@ -1,0 +1,91 @@
+Do not treat this implementation as production-ready and do not stop at the typed rebuild slice.
+
+Continue the current task and close the remaining requirements before recommending publication.
+
+1. Do not defer resource-index lifecycle synchronization to Task #710. It was part of the required scope. Implement automatic, idempotent synchronization for every existing admin publish, update, unpublish and delete path for sermons, devotionals, Bible Studies, Walks, Journeys and other searchable Emmaus resources. Add reconciliation for missed, stale and orphaned records.
+
+2. Prove that the typed router is semantic and not merely a collection of exact phrase handlers. Add tests for natural variations, including:
+
+* “Where are the devotionals?”
+* “How do I get to today’s devotional?”
+* “Can you open my devotional?”
+* “Take me to the Bible.”
+* “Carry on from where I stopped reading.”
+* “I want to continue my current Walk.”
+* “What Journey am I busy with?”
+* “Has Pastor Jeremy preached on the lost son?”
+* “Do we have anything in Emmaus about forgiveness?”
+* “Show me a Bible Study about faith.”
+* “What resources can help me when I am anxious?”
+
+These variations must resolve through intents, capabilities and canonical data—not one hard-coded response per sentence.
+
+3. Test every capability against real database-backed fixtures, not only mocked IDs. Prove retrieval and actions for:
+
+* My Bible;
+* saved Bible position;
+* Daily Devotional;
+* user-eligible Daily Rhythm;
+* sermons and sermon segments;
+* Bible Studies;
+* Walks;
+* Journeys;
+* Discover;
+* My Journey.
+
+4. Add negative tests proving that Ask Emmaus does not:
+
+* invent a feature location;
+* invent a resource;
+* invent a URL;
+* show sermons for a simple navigation question;
+* expose unpublished content;
+* expose another user’s progress;
+* expose future locked Daily Rhythm content;
+* navigate merely because Scripture was mentioned;
+* produce an action when its target cannot be validated.
+
+5. Verify that a general question still uses the full Scripture-first Ask Emmaus response pipeline. Direct application commands must use the deterministic router, but general questions must not be reduced to canned responses.
+
+For “What is faith?” and “I’m afraid” verify:
+
+* warm acknowledgment;
+* Scripture-first response;
+* canonical clickable Scripture references;
+* genuinely relevant ICC sermons and Emmaus resources when available;
+* inline clickable resource references;
+* no unrelated cards;
+* no fabricated titles, timestamps or claims.
+
+6. Confirm sermon integration using actual indexed sermon records. Test topic, Scripture and synonymous searches. Demonstrate that relevant sermon segments and timestamps are returned and that the action opens the correct sermon at the correct timestamp.
+
+7. Verify exact Bible routing for:
+
+* Psalm 23;
+* John 3:16;
+* John 3:16–18;
+* 1 Corinthians 13;
+* 2 Thessalonians 3:6–10;
+* Song of Songs 2:1;
+* common spoken aliases.
+
+Confirm canonical capitalization and exact starting verse.
+
+8. Instrument and report latency for authentication, context loading, routing, retrieval, model generation, validation and total duration. Compare direct application requests with general pastoral questions. Remove unnecessary serial retrieval and irrelevant searches.
+
+9. Do not modify or extend Voice. Ensure Voice cannot bypass or create a competing Ask Emmaus intelligence path. Voice remains outside the current release gate.
+
+10. Resolve authenticated browser verification. If the environment cannot authenticate automatically, provide a safe development fixture or an explicit manual test checklist and keep the status as “not production-verified.” Do not label the rebuild complete without authenticated verification.
+
+11. Conversation persistence is not the central requirement, but clearly establish whether existing production conversations remain durable across restarts. Do not introduce a regression or claim persistence if the service is still memory-only.
+
+12. Produce a requirement matrix showing each original requirement as:
+
+* fully implemented and verified;
+* implemented but awaiting authenticated/manual verification;
+* partially implemented;
+* not implemented.
+
+For every “fully implemented” item, cite the corresponding automated test or verified browser flow.
+
+Do not recommend republishing until the complete acceptance suite passes and the outstanding production-verification limitations are clearly presented.

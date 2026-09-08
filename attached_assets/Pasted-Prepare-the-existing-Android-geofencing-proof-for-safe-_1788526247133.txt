@@ -1,0 +1,137 @@
+Prepare the existing Android geofencing proof for safe, non-technical physical-device testing.
+
+Remain on the isolated branch "poc/android-geofence-proof".
+
+Do not begin production Welcome Assist implementation. Do not modify the published Emmaus app, production database, production API, production Secrets, deployment configuration, DNS, iOS, Pastoral Briefing or beacon functionality.
+
+The current proof compiles, but physical testing cannot reasonably be performed by Pastor Jeremy because "GeofenceProofActivity" currently requires an ADB command to launch.
+
+Make the smallest debug-only changes required to produce a standalone, tappable test APK.
+
+REQUIREMENTS
+
+1. Create a debug-only launcher entry named:
+   
+   "Emmaus Geofence Test"
+
+2. Give the debug test build a separate Android application ID, such as:
+   
+   "za.co.emmaus.app.geofencetest"
+   
+   It must install alongside any existing Emmaus PWA or native Emmaus app without replacing, updating, sharing data with or interfering with it.
+
+3. The test APK must open directly into the Geofence Proof diagnostic screen when its icon is tapped.
+
+4. It must not load the published Emmaus website.
+
+5. It must not authenticate against Emmaus.
+
+6. It must not communicate with any production endpoint.
+
+7. It must not contain or use production user data.
+
+8. Keep all permissions and components in the debug build only. Confirm again that the release manifest remains unaffected.
+
+NON-TECHNICAL TEST SCREEN
+
+Provide a simple diagnostic screen with large, clearly labelled controls:
+
+- "Set test location to where I am now"
+- Test radius, with a sensible default
+- Test start time
+- Test end time
+- "Explain permissions"
+- "Grant location permission"
+- "Grant background location permission"
+- "Start test"
+- "Stop test"
+- "Test status"
+- "View results"
+- "Copy results"
+- "Clear test data"
+
+Before requesting permissions, clearly explain:
+
+“This is an isolated Emmaus location test. It records only whether this test phone enters the test area during the selected period. It does not record your route, continuously track you, identify an Emmaus user or send information to the production Emmaus system.”
+
+When "Set test location to where I am now" is used, coordinates may be used locally to configure the test geofence, but they must:
+
+- remain on the test device;
+- never be sent to production;
+- never appear in copied or exported results;
+- be deleted by "Clear test data" or uninstalling the test app.
+
+STATUS SCREEN
+
+The status screen must clearly display:
+
+- Test armed/not armed
+- Test window
+- Radius
+- Foreground permission status
+- Background permission status
+- Location services on/off
+- Battery optimisation status where detectable
+- Internet online/offline
+- Last geofence event
+- Whether an event is waiting for connectivity
+- Duplicate events suppressed
+- Test expiry
+
+RESULTS
+
+Results must be understandable without Logcat or ADB and include:
+
+- Event type
+- Detection time
+- Time shown in the test screen
+- Delivery delay
+- Whether the event occurred offline
+- App state where determinable
+- Reboot recovery result
+- Duplicate suppression result
+
+Do not include coordinates, production identifiers or personal information in copied results.
+
+BUILD AND HANDOFF
+
+Build a new debug APK and provide it as a clearly downloadable Replit asset.
+
+Then give Pastor Jeremy simple numbered instructions covering:
+
+1. Downloading the APK to an Android phone.
+2. Allowing installation from that source.
+3. Opening "Emmaus Geofence Test".
+4. Configuring a safe test area.
+5. Granting the required permissions.
+6. Starting the test.
+7. Leaving the area before the test begins.
+8. Entering it under each required scenario.
+9. Copying the results back to Replit.
+10. Stopping the test.
+11. Uninstalling the test application afterward.
+
+Also provide a shortened first test requiring only:
+
+- one Android phone;
+- one configured location;
+- app in the background;
+- phone locked;
+- leaving and re-entering the test radius.
+
+Do not claim that geofencing works until this physical test produces a real event.
+
+VERIFICATION
+
+Before handoff, confirm:
+
+- The test app installs separately from Emmaus.
+- The test app has its own name and launcher icon.
+- No ADB command is required.
+- The test does not load "emmaus.co.za".
+- It cannot call the production API.
+- It contains no production Secrets.
+- The release build and release manifest remain unchanged.
+- The branch remains isolated and reversible.
+
+Stop after producing the APK, instructions and verification report. Do not proceed to production implementation.

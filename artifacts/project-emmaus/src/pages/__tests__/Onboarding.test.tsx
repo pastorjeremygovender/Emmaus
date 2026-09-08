@@ -46,7 +46,10 @@ vi.mock('wouter', () => ({
 
 // ── AuthContext ───────────────────────────────────────────────────────────────
 const mockUpdateName = vi.fn();
-let mockUser: { preferredName: string } | null = { preferredName: '' };
+let mockUser: { id: string; preferredName: string } | null = {
+  id: 'subject-test',
+  preferredName: '',
+};
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -77,7 +80,7 @@ describe('Onboarding — name-collection step (Step 0)', () => {
   });
 
   it('renders Step 0 (name input) when user.preferredName is empty', () => {
-    mockUser = { preferredName: '' };
+    mockUser = { id: 'subject-test', preferredName: '' };
     render(<Onboarding />);
 
     expect(
@@ -89,7 +92,7 @@ describe('Onboarding — name-collection step (Step 0)', () => {
   });
 
   it('skips Step 0 and renders Step 1 directly when user.preferredName is already set', () => {
-    mockUser = { preferredName: 'Sarah' };
+    mockUser = { id: 'subject-test', preferredName: 'Sarah' };
     render(<Onboarding />);
 
     // Step 1 heading should be visible
@@ -104,7 +107,7 @@ describe('Onboarding — name-collection step (Step 0)', () => {
   });
 
   it('calls updateName with the entered name and advances to Step 1 on Continue', async () => {
-    mockUser = { preferredName: '' };
+    mockUser = { id: 'subject-test', preferredName: '' };
     const user = userEvent.setup();
     render(<Onboarding />);
 
@@ -124,7 +127,7 @@ describe('Onboarding — name-collection step (Step 0)', () => {
   });
 
   it('advances to Step 1 without calling updateName when "Skip for now" is clicked', async () => {
-    mockUser = { preferredName: '' };
+    mockUser = { id: 'subject-test', preferredName: '' };
     const user = userEvent.setup();
     render(<Onboarding />);
 

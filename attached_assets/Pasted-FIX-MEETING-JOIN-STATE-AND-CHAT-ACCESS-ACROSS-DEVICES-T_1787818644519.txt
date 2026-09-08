@@ -1,0 +1,231 @@
+FIX MEETING JOIN STATE AND CHAT ACCESS ACROSS DEVICES
+
+The screenshots show the same meeting on two devices.
+
+Exact sequence:
+
+1. ICC started and entered the meeting as leader.
+2. Jeremy used the existing joining process and joined the meeting.
+3. On the leader’s device:
+   - ICC shows “In meeting.”
+   - Jeremy shows “In meeting.”
+   - Group Discussion/chat is available.
+4. On Jeremy’s own device:
+   - ICC shows “Not yet joined.”
+   - Jeremy (you) shows “Not yet joined.”
+   - Group Discussion/chat is missing.
+5. The “Following” toggle can be switched off, but there is no visible explanation or result.
+
+The existing group joining route is not the issue. Do not redesign or replace the Join a Group screen.
+
+ROOT PROBLEM
+
+The server appears to record Jeremy’s meeting attendance because the leader’s device sees him as “In meeting.”
+
+However, Jeremy’s own device does not update or retrieve the same active meeting attendance state. As a result, the participant interface and Group Discussion are not enabled.
+
+Fix the meeting-session state synchronisation and chat permissions. Do not apply a cosmetic-only patch.
+
+AFTER JOINING THE MEETING
+
+When Jeremy successfully joins:
+
+1. Save his attendance against:
+   - the exact active meeting session ID;
+   - the group ID;
+   - Jeremy’s authenticated user ID.
+2. Return the saved attendance record in the join response.
+3. Immediately update Jeremy’s local meeting state to “In meeting.”
+4. Invalidate and refetch:
+   - active meeting;
+   - meeting participants;
+   - current user’s attendance;
+   - meeting tools available to the current user;
+   - Group Discussion/chat access.
+5. Subscribe Jeremy’s device to the active meeting’s real-time channel.
+6. Display Group Discussion immediately.
+7. Update every connected device from the same server-side state.
+
+Do not require Jeremy to refresh, leave and reopen the group, or join twice.
+
+CURRENT USER ATTENDANCE
+
+Audit how the app determines whether the current user is “In meeting.”
+
+It must find the attendance record using:
+
+- authenticated user ID;
+- current group ID;
+- current active meeting session ID.
+
+Do not compare using:
+
+- display name;
+- group membership ID unless consistently resolved;
+- creator ID;
+- leader ID;
+- browser session ID;
+- stale cached state;
+- a different meeting session ID.
+
+Check specifically for a mismatch between:
+
+- auth user ID;
+- user profile ID;
+- group member ID;
+- meeting participant ID.
+
+The leader and participant screens must resolve these identifiers consistently.
+
+The “(you)” label and the user’s attendance status must refer to the same authenticated identity.
+
+PARTICIPANT LIST
+
+Both devices must display the same server-side participant states.
+
+After Jeremy joins, both screens must show:
+
+ICC — In meeting
+Jeremy — In meeting
+
+Before Jeremy joins, both screens must show:
+
+ICC — In meeting
+Jeremy — Not yet joined
+
+A device must not calculate every member’s status from its own local state.
+
+GROUP DISCUSSION
+
+The discussion currently appears for the leader but not for Jeremy after he joins.
+
+Fix the participant permission check.
+
+A user may access Group Discussion when:
+
+- they are an active member of the group; and
+- they have an active attendance record for the current meeting session.
+
+Do not restrict Group Discussion to leaders.
+
+Both devices must use the exact same:
+
+- group ID;
+- active meeting session ID;
+- discussion/channel ID.
+
+After joining, Jeremy must:
+
+- see the Group Discussion button;
+- open the same discussion as the leader;
+- see the leader’s existing “Test” message;
+- send messages;
+- receive new messages in real time;
+- retain the messages after refresh.
+
+If chat is hidden before joining, that is acceptable. It must become available immediately after a successful meeting join.
+
+REAL-TIME AND CACHE FIX
+
+On a successful join:
+
+- update the joining device optimistically using the returned attendance record;
+- invalidate all meeting-related cached queries;
+- refetch authoritative server state;
+- ensure the real-time subscription uses the current meeting session ID.
+
+Also refetch meeting state when:
+
+- the group screen gains focus;
+- the app returns from the background;
+- the connection is restored;
+- a real-time meeting-participant event is received.
+
+Remove any stale cache keys that omit the group ID or meeting session ID.
+
+FOLLOWING BUTTON
+
+“Following” must not control:
+
+- meeting attendance;
+- meeting joining;
+- meeting presence;
+- Group Discussion access;
+- group membership.
+
+Determine what the current button actually changes.
+
+If it controls group notifications, rename it:
+
+Notifications On
+
+When switched off, display:
+
+Notifications Off
+
+Show a confirmation:
+
+“Group notifications turned off.”
+
+Persist the preference for the current user and group.
+
+If notifications are not implemented, remove the Following button for now. Do not leave a control that appears to do nothing.
+
+PERMISSIONS
+
+Normal joined participants may:
+
+- see their correct “In meeting” status;
+- access Group Discussion;
+- read and send messages;
+- view Group Notes;
+- view the Leader’s Note;
+- open the assigned study.
+
+They may not:
+
+- access leader Meeting Tools;
+- end the meeting;
+- present content;
+- edit the Leader’s Note;
+- schedule meetings;
+- add or change the assigned Walk or study.
+
+REQUIRED TWO-DEVICE TEST
+
+Use the same two authenticated accounts:
+
+Device 1: ICC leader
+Device 2: Jeremy member
+
+1. Start the meeting as ICC.
+2. Confirm both devices show ICC as “In meeting.”
+3. Confirm both devices show Jeremy as “Not yet joined.”
+4. Join the meeting as Jeremy using the existing joining process.
+5. Confirm the join API returns Jeremy’s attendance record.
+6. Confirm Jeremy’s device immediately changes to “In meeting.”
+7. Confirm ICC’s device shows Jeremy as “In meeting.”
+8. Confirm Group Discussion appears on Jeremy’s device.
+9. Confirm Jeremy can see the leader’s existing “Test” message.
+10. Send a message from Jeremy.
+11. Confirm it appears on ICC’s device in real time.
+12. Refresh both devices.
+13. Confirm both participants remain “In meeting.”
+14. Confirm the same chat history remains visible.
+15. Switch Following/Notifications off.
+16. Confirm attendance and chat access remain unchanged.
+
+Add temporary diagnostic logging for:
+
+- authenticated user ID;
+- resolved profile ID;
+- group member ID;
+- group ID;
+- active meeting session ID;
+- meeting attendance/participant ID;
+- discussion/channel ID;
+- cache/query key used on each device.
+
+Do not log tokens or secrets.
+
+Report the exact identity, query, subscription or cache mismatch found. Do not report completion until the two-device test passes.

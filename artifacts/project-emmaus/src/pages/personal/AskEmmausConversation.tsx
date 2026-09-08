@@ -14,6 +14,8 @@
 import { useState, useEffect, useRef, useCallback, memo, type RefObject } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { ArrowLeft } from 'lucide-react';
+import { HearEmmausButton } from '@/components/emmaus/HearEmmausButton';
+import { ShareButton } from '@/components/ShareButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { BottomNav } from '@/components/BottomNav';
 import { EmmausComposer } from '@/components/emmaus/EmmausComposer';
@@ -31,6 +33,8 @@ import { ScriptureCard } from '@/components/emmaus/ScriptureCard';
 import { NextStepCard } from '@/components/emmaus/NextStepCard';
 import { NextStepsCard } from '@/components/emmaus/NextStepsCard';
 import { ResourceCard } from '@/components/emmaus/ResourceCard';
+import { SermonRecommendationCard } from '@/components/emmaus/SermonRecommendationCard';
+import { InlineScriptureProse } from '@/components/emmaus/InlineScriptureProse';
 import { SafetyHandoverCard } from '@/components/emmaus/SafetyHandoverCard';
 import { MemoryConsentBar } from '@/components/emmaus/MemoryConsentBar';
 
@@ -120,26 +124,6 @@ function useVisualViewportHeight(ref: RefObject<HTMLElement | null>) {
 
 // ─── Helper: parse paragraphs ─────────────────────────────────────────────────
 
-function renderProse(text: string) {
-  const paragraphs = text.split(/\n{2,}/).filter(Boolean);
-  if (paragraphs.length <= 1) {
-    return (
-      <p className="text-[16px] text-foreground leading-[1.75] font-sans">
-        {text}
-      </p>
-    );
-  }
-  return (
-    <div className="space-y-4">
-      {paragraphs.map((p, i) => (
-        <p key={i} className="text-[16px] text-foreground leading-[1.75] font-sans">
-          {p}
-        </p>
-      ))}
-    </div>
-  );
-}
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function AskEmmausConversation() {
@@ -156,8 +140,11 @@ export default function AskEmmausConversation() {
   const [initialContext, setInitialContext] = useState<import('@/lib/emmaus-client').FlatContext | null>(null);
   const [followUp, setFollowUp] = useState('');
   const [isCrisisMode, setIsCrisisMode] = useState(false);
+  // P2-6: soft pastoral nudge — shown when handoffType === 'pastoral'
+  const [isPastoralMode, setIsPastoralMode] = useState(false);
   const [memoryPrompt, setMemoryPrompt] = useState<string | null>(null);
   const [memoryDecided, setMemoryDecided] = useState(false);
+  const [retrievalFailure, setRetrievalFailure] = useState<string[] | null>(null);
 
   // ─── 20-second slow-response timer ─────────────────────────────────────────
   useEffect(() => {
@@ -201,6 +188,9 @@ export default function AskEmmausConversation() {
     return () => clearTimeout(timer);
   }, [isStreaming]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Scroll position is set to the top of the new message when streaming starts
+  // (effect above). No additional scroll on stream end — the user reads from the top.
+
   // ─── Stream a response ──────────────────────────────────────────────────────
 
   const streamResponse = useCallback(
@@ -214,6 +204,7 @@ export default function AskEmmausConversation() {
     ) => {
       if (!user) return;
 
+      setRetrievalFailure(null);
       const streamingMsgId = `streaming-${Date.now()}`;
       streamingIdRef.current = streamingMsgId;
       setIsStreaming(true);
@@ -224,54 +215,111 @@ export default function AskEmmausConversation() {
         { id: streamingMsgId, role: 'assistant', content: '', isStreaming: true },
       ]);
 
+      // Keep the network stream and the visual stream separate. Fetch can
+      // deliver several SSE frames in one browser task, and React may batch
+      // those state updates into a single paint. A small queue guarantees that
+      // the answer remains visibly progressive even when the transport bursts.
+      let pendingText = '';
+      let drainTimer: ReturnType<typeof setTimeout> | null = null;
+      let completedPayload: SseDoneEvent | null = null;
+      const DISPLAY_CHARS_PER_TICK = 8;
+      const DISPLAY_TICK_MS = 30;
+
+      const drainTextQueue = () => {
+        drainTimer = null;
+        if (pendingText) {
+          const visibleChunk = pendingText.slice(0, DISPLAY_CHARS_PER_TICK);
+          pendingText = pendingText.slice(visibleChunk.length);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === streamingMsgId
+                ? { ...m, content: m.content + visibleChunk }
+                : m
+            )
+          );
+        }
+
+        if (pendingText) {
+          drainTimer = setTimeout(drainTextQueue, DISPLAY_TICK_MS);
+        } else if (completedPayload) {
+          finishStream(completedPayload);
+        }
+      };
+
+      const scheduleTextDrain = () => {
+        if (drainTimer === null) {
+          drainTimer = setTimeout(drainTextQueue, DISPLAY_TICK_MS);
+        }
+      };
+
+      const finishStream = (payload: SseDoneEvent) => {
+        setIsStreaming(false);
+        setConversationId(payload.conversationId);
+        // Update URL to include the conversationId (replace history entry)
+        window.history.replaceState(
+          null,
+          '',
+          `/personal/ask-emmaus/conversation/${payload.conversationId}`
+        );
+        // Finalise the message with metadata
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === streamingMsgId
+              ? {
+                  ...m,
+                  // The server may apply a final transport-level redaction
+                  // after parsing metadata. Reconcile the streamed text
+                  // with that canonical answer before marking it complete.
+                  content: payload.metadata.displayAnswer ?? payload.metadata.answer ?? m.content,
+                  isStreaming: false,
+                  metadata: payload.metadata,
+                }
+              : m
+          )
+        );
+        setRetrievalFailure(
+          payload.metadata.retrievalFailures?.length
+            ? payload.metadata.retrievalFailures
+            : null,
+        );
+        // Persist name change when Emmaus detected a "call me [name]" request
+        if (payload.detectedNameUpdate) {
+          updateName(payload.detectedNameUpdate);
+        }
+        // Crisis handoff
+        if (payload.metadata.handoffType === 'crisis') {
+          setIsCrisisMode(true);
+        }
+        // P2-6: Pastoral nudge — softer than crisis, shown as inline banner
+        if (payload.metadata.handoffType === 'pastoral') {
+          setIsPastoralMode(true);
+        }
+        // Suggest memory if there is a next step worth remembering
+        if (
+          payload.metadata.nextStep &&
+          payload.metadata.nextStep.action &&
+          !memoryDecided
+        ) {
+          setMemoryPrompt(payload.metadata.nextStep.action);
+        }
+        // Do not programmatically focus the follow-up textarea — doing so
+        // causes the browser to scroll it into view, overriding the scroll
+        // position set above. Users tap the textarea themselves on mobile.
+      };
+
       const callbacks = {
         onText: (chunk: string) => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === streamingMsgId
-                ? { ...m, content: m.content + chunk }
-                : m
-            )
-          );
+          pendingText += chunk;
+          scheduleTextDrain();
         },
         onDone: (payload: SseDoneEvent) => {
-          setIsStreaming(false);
-          setConversationId(payload.conversationId);
-          // Update URL to include the conversationId (replace history entry)
-          window.history.replaceState(
-            null,
-            '',
-            `/personal/ask-emmaus/conversation/${payload.conversationId}`
-          );
-          // Finalise the message with metadata
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === streamingMsgId
-                ? { ...m, isStreaming: false, metadata: payload.metadata }
-                : m
-            )
-          );
-          // Persist name change when Emmaus detected a "call me [name]" request
-          if (payload.detectedNameUpdate) {
-            updateName(payload.detectedNameUpdate);
-          }
-          // Crisis handoff
-          if (payload.metadata.handoffType === 'crisis') {
-            setIsCrisisMode(true);
-          }
-          // Suggest memory if there is a next step worth remembering
-          if (
-            payload.metadata.nextStep &&
-            payload.metadata.nextStep.action &&
-            !memoryDecided
-          ) {
-            setMemoryPrompt(payload.metadata.nextStep.action);
-          }
-          // Do not programmatically focus the follow-up textarea — doing so
-          // causes the browser to scroll it into view, overriding the scroll
-          // position set above. Users tap the textarea themselves on mobile.
+          completedPayload = payload;
+          scheduleTextDrain();
         },
         onError: (message: string) => {
+          if (drainTimer !== null) clearTimeout(drainTimer);
+          drainTimer = null;
+          pendingText = '';
           setIsStreaming(false);
           setMessages((prev) =>
             prev.map((m) =>
@@ -300,11 +348,22 @@ export default function AskEmmausConversation() {
           callbacks,
         });
       } else {
+        const appendContext = contextOverride
+          ? {
+              ...contextOverride,
+              conversationId: convId,
+              userName: user.preferredName,
+            }
+          : {
+              entryPoint: 'personal' as const,
+              conversationId: convId,
+              userName: user.preferredName,
+            };
         appendMessage({
           userId: user.id,
           conversationId: convId,
           message: text,
-          context: { entryPoint: 'personal', conversationId: convId, userName: user.preferredName },
+          context: appendContext,
           history,
           callbacks,
         });
@@ -373,7 +432,22 @@ export default function AskEmmausConversation() {
     setMemoryPrompt(null);
     setMemoryDecided(false);
 
-    streamResponse(trimmed, conversationId, history);
+    // Preserve the originating Bible/Walk/Journey context for typed follow-ups
+    // such as "what about this verse?" instead of silently falling back to the
+    // generic Personal context.
+    streamResponse(trimmed, conversationId, history, initialContext ?? undefined);
+  }
+
+  function handleRetryRetrieval() {
+    if (!retrievalFailure || isStreaming || !user) return;
+    const previousUser = [...messages].reverse().find((message) => message.role === 'user');
+    if (!previousUser) return;
+    const history: HistoryItem[] = messages
+      .filter((m) => !m.isStreaming)
+      .map((m) => ({ role: m.role, content: m.content }));
+    const userMsgId = `user-${Date.now()}`;
+    setMessages((prev) => [...prev, { id: userMsgId, role: 'user', content: previousUser.content }]);
+    streamResponse(previousUser.content, conversationId, history, initialContext ?? undefined);
   }
 
   // ─── Memory consent ──────────────────────────────────────────────────────────
@@ -390,10 +464,19 @@ export default function AskEmmausConversation() {
     setMemoryDecided(true);
   }
 
+  function handleBack() {
+    // New conversations launched from a page keep that page as their return
+    // destination. Existing saved conversations have no launch destination and
+    // should return to Ask Emmaus Home as before.
+    const destination = params.id ? null : getReturnDestination();
+    clearReturnDestination();
+    setLocation(destination?.pathname ?? '/personal/ask-emmaus');
+  }
+
   // ─── Crisis mode ─────────────────────────────────────────────────────────────
 
   if (isCrisisMode) {
-    return <SafetyHandoverCard onReturn={() => setLocation('/personal/ask-emmaus')} />;
+    return <SafetyHandoverCard onReturn={handleBack} />;
   }
 
   // ─── Render ──────────────────────────────────────────────────────────────────
@@ -404,28 +487,12 @@ export default function AskEmmausConversation() {
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[560px] mx-auto">
           <button
-            onClick={() => {
-              // Navigate directly to the originating page — no two-press required.
-              const dest = getReturnDestination();
-              clearReturnDestination();
-              const target = dest?.pathname ?? '/walk';
-              setLocation(target);
-              if (dest?.scrollY) {
-                requestAnimationFrame(() => {
-                  setTimeout(() => window.scrollTo({ top: dest.scrollY, behavior: 'instant' }), 80);
-                });
-              }
-            }}
+            onClick={handleBack}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Back"
           >
             <ArrowLeft size={22} aria-hidden="true" />
           </button>
-          <div className="flex-1 text-center">
-            <p className="text-[14px] font-medium text-muted-foreground">
-              Ask Emmaus
-            </p>
-          </div>
           <div className="min-w-[44px]" aria-hidden="true" />
         </div>
       </header>
@@ -433,7 +500,7 @@ export default function AskEmmausConversation() {
       {/* Conversation */}
       <main
         ref={mainRef}
-        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-6 pb-4 max-w-[560px] mx-auto w-full space-y-8"
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-6 pb-28 max-w-[560px] mx-auto w-full space-y-8"
         aria-live="polite"
         aria-label="Conversation"
       >
@@ -464,8 +531,30 @@ export default function AskEmmausConversation() {
                 >
                   {msg.isStreaming && !msg.content
                     ? <ThinkingBubble slow={thinkingPhase === 'slow'} />
-                    : msg.content ? renderProse(msg.content) : null}
+                    : msg.content ? (
+                      <InlineScriptureProse
+                        text={msg.content}
+                        references={msg.metadata?.scriptureReferences ?? (msg.metadata?.scripture ? [msg.metadata.scripture] : [])}
+                        resources={[
+                          ...(msg.metadata?.recommendations ?? []),
+                          ...(msg.metadata?.sermonRecommendations ?? []).map((sermon) => ({
+                            title: sermon.title,
+                            path: sermon.openPath ?? sermon.watchUrl,
+                          })),
+                        ]}
+                      />
+                    ) : null}
                 </div>
+
+                {/* Hear Emmaus — read completed response aloud */}
+                {!msg.isStreaming && msg.content && user && (
+                  <HearEmmausButton
+                    text={msg.content}
+                    userId={user.id}
+                    label="Hear Emmaus read this response"
+                    variant="pill"
+                  />
+                )}
 
                 {/* Response cards — only after streaming completes */}
                 {!msg.isStreaming && msg.metadata && (
@@ -476,11 +565,53 @@ export default function AskEmmausConversation() {
                     {msg.metadata.nextStep && (
                       <NextStepCard nextStep={msg.metadata.nextStep} />
                     )}
+                    {msg.metadata.capabilityActions?.map((action) => (
+                      <button
+                        key={`${action.capabilityId}:${action.kind}:${action.route}`}
+                        type="button"
+                        onClick={() => {
+                          if (action.route.startsWith('/') && !action.route.includes('\n') && !action.route.includes('\r')) {
+                            setLocation(action.route);
+                          }
+                        }}
+                        className="w-full rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-left text-[13px] font-semibold text-primary hover:bg-primary/10 transition-colors"
+                      >
+                        {action.label}
+                      </button>
+                    ))}
                     {msg.metadata.recommendations.slice(0, 3).map((rec, i) => (
-                      <ResourceCard key={i} recommendation={rec} />
+                      <ResourceCard
+                        key={i}
+                        recommendation={rec}
+                        actions={msg.metadata.resourceActions?.filter((action) =>
+                          action.resourceId === rec.resourceId
+                        )}
+                      />
+                    ))}
+                    {msg.metadata.sermonRecommendations?.slice(0, 3).map((sermon) => (
+                      <SermonRecommendationCard key={sermon.sermonId} sermon={sermon} />
                     ))}
                     {msg.metadata.nextSteps && msg.metadata.nextSteps.length > 0 && (
                       <NextStepsCard steps={msg.metadata.nextSteps} />
+                    )}
+
+                    {/* AE-2: follow-up suggestion chips — only on the last assistant message */}
+                    {msg.metadata.followUpPrompts && (msg.metadata.followUpPrompts as string[]).length > 0 &&
+                      msg.id === messages.filter(m => m.role === 'assistant').at(-1)?.id && (
+                      <div className="space-y-2 pt-1">
+                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest px-0.5">
+                          Keep exploring
+                        </p>
+                        {(msg.metadata.followUpPrompts as string[]).map((prompt, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setFollowUp(prompt)}
+                            className="w-full text-left text-[14px] text-foreground bg-muted/50 hover:bg-muted/80 px-4 py-2.5 rounded-xl transition-colors"
+                          >
+                            {prompt}
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
                 )}
@@ -495,6 +626,18 @@ export default function AskEmmausConversation() {
                       onDecline={handleMemoryDecline}
                     />
                   )}
+
+                {/* Share — only on the last completed assistant message */}
+                {!msg.isStreaming &&
+                  msg.content &&
+                  msg.id === messages.filter((m) => m.role === 'assistant').at(-1)?.id && (
+                    <ShareButton
+                      payload={{
+                        title: 'Ask Emmaus',
+                        reflection: msg.content,
+                      }}
+                    />
+                  )}
               </div>
             )}
           </div>
@@ -503,11 +646,47 @@ export default function AskEmmausConversation() {
         <div aria-hidden="true" className="h-1" />
       </main>
 
+      {/* P2-6: Pastoral handoff banner — soft nudge, not full-screen */}
+      {isPastoralMode && !isCrisisMode && (
+        <div className="flex-shrink-0 px-4 pt-2 max-w-[560px] mx-auto w-full">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 space-y-1">
+            <p className="text-[13px] font-semibold text-amber-800">A gentle note</p>
+            <p className="text-[13px] text-amber-700 leading-relaxed">
+              This sounds like something your pastor would love to walk through with you.
+              Emmaus is here too — but a conversation with someone from church could go deeper.
+            </p>
+            <button
+              onClick={() => setIsPastoralMode(false)}
+              className="text-[12px] text-amber-600 hover:text-amber-800 underline mt-0.5"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {retrievalFailure && !isStreaming && (
+        <div className="flex-shrink-0 px-4 pt-2 max-w-[560px] mx-auto w-full">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-[13px] text-amber-800">
+              I couldn’t reach all of the trusted sources for this answer.
+            </p>
+            <button
+              type="button"
+              onClick={handleRetryRetrieval}
+              className="mt-2 text-[13px] font-medium text-amber-900 underline"
+            >
+              Try the search again
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Follow-up composer — hidden while streaming */}
       {!isStreaming && messages.length > 0 && (
         <div
           className="flex-shrink-0 border-t border-border/50 bg-background/95 backdrop-blur-sm"
-          style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}
         >
           <div className="px-4 py-3 max-w-[560px] mx-auto">
             <label htmlFor="follow-up-input" className="sr-only">

@@ -1,0 +1,93 @@
+BACK NAVIGATION + MY ROOMS UX POLISH
+
+This is a UI/UX refinement only. Do not change any Room functionality, LiveKit integration, routing logic, database schema, permissions, or APIs.
+
+1. Add Back Navigation
+
+The My Rooms screen must have a standard Emmaus back arrow in the top-left of the header.
+
+Requirements:
+
+Display a left arrow beside the page title.
+Tapping Back must return the user to the page they navigated from (history.back / router.back).
+Do not hardcode navigation to a specific page.
+If no browser history exists, return to My Journey as a safe fallback.
+
+The header should be:
+
+← My Rooms
+
+Walk journeys together with family or friends.
+
+2. Rename the section
+
+Change:
+
+ROOMS I BELONG TO
+
+to
+
+YOUR ROOMS
+
+This is shorter, simpler and more personal.
+
+3. Improve the Room card
+
+Replace
+
+"1 member • Admin: Room Admin"
+
+with something more natural:
+
+Examples:
+
+You are the Admin
+4 members • You are the Admin
+8 members • Member
+
+Never display "Admin: Room Admin".
+
+4. Empty State
+
+If the user has no Rooms, show:
+
+You haven't joined any Rooms yet.
+
+Create a Room to walk through a Bible Study, Walk, Journey or Daily Devotional together.
+
+Then show:
+
+Create a Room
+
+Join a Room
+
+5. Preserve everything else
+
+Do NOT modify:
+
+LiveKit
+Video
+Chat
+Prayer Requests
+Invitations
+Permissions
+Room creation
+Room joining
+Database
+Backend
+APIs
+
+This is purely a navigation and UI polish update.
+
+6. Emmaus Navigation Standard (Apply Everywhere)
+
+Going forward, use this navigation rule consistently across Emmaus:
+
+Bottom navigation pages (Today's Steps, My Bible, Discover, My Journey) do not have a back arrow.
+Every screen opened from those pages does have a back arrow.
+The back arrow always returns the user to the previous page using navigation history.
+If no history exists, return to the appropriate parent screen rather than leaving the user stranded.
+
+This is now the Emmaus navigation standard. No exceptions unless explicitly approved.
+
+When complete, verify that the back button works correctly on desktop and mobile before marking the task complete.

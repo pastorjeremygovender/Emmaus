@@ -1,0 +1,623 @@
+## Emmaus Content Studio — AI Share Image Generation, Editing & Attribution
+
+Extend the **Share Image** feature we have just added to Content Studio.
+
+Do NOT rebuild or redesign the existing Share Image system. Extend the existing reusable implementation so an administrator can either:
+
+1. Upload a Share Image manually, OR
+2. Generate a Share Image with AI inside Emmaus.
+
+This should remain simple enough that a non-technical content creator can use it without understanding prompts, image models, dimensions, or AI settings.
+
+Do not change unrelated Emmaus functionality.
+
+---
+
+# 1. SHARE IMAGE SECTION
+
+The existing Share Image area should now provide two options:
+
+**Upload Image**
+
+**Generate with Emmaus**
+
+Manual image upload must continue working exactly as it does now.
+
+Both manually uploaded and AI-generated images must ultimately populate the same existing:
+
+`shareImageUrl`
+
+Do not create separate member-facing systems for uploaded versus generated images.
+
+---
+
+# 2. GENERATE WITH EMMAUS
+
+When the administrator selects:
+
+**Generate with Emmaus**
+
+expand a simple generation interface inside the existing Share Image section.
+
+Show:
+
+### Text for image
+
+Helper text:
+
+> Paste the thought, quote or Scripture you want to turn into a shareable image.
+
+Provide a multiline text field.
+
+Example:
+
+> Jesus welcomes honest seekers.
+> He doesn't ask you to have all the answers before you come to Him.
+> He simply invites you to begin walking with Him.
+
+Then provide:
+
+**Generate Image**
+
+The administrator should NOT need to write an image-generation prompt.
+
+Emmaus should create the complete generation prompt automatically behind the scenes.
+
+---
+
+# 3. OPENAI IMAGE GENERATION
+
+Use the current recommended OpenAI image-generation API/model available to this project.
+
+Before implementation, verify the current official OpenAI API documentation and use the supported image-generation/editing method rather than relying on outdated API assumptions.
+
+Use the server/backend for OpenAI API requests.
+
+NEVER expose the OpenAI API key in:
+
+* client-side code
+* browser network-accessible configuration
+* source returned to the browser
+* public environment variables
+
+Use the existing Replit secret/environment-variable system.
+
+If an OpenAI API key is already configured in the project, reuse it safely.
+
+Do not alter or interfere with the existing AI/Ask Emmaus configuration.
+
+---
+
+# 4. EMMAUS DESIGN DIRECTION
+
+The administrator supplies the WORDS.
+
+Emmaus supplies the art direction.
+
+Create a reusable server-side Emmaus Share Image generation instruction that guides the image model toward:
+
+* beautiful
+* warm
+* modern
+* emotionally resonant
+* uncluttered
+* premium rather than generic
+* highly readable typography
+* strong visual hierarchy
+* Christian without looking like generic church clip-art
+* suitable for sharing on WhatsApp, Instagram, Facebook and similar platforms
+* consistent with Emmaus's calm, simple visual identity
+
+Default output should be portrait/share-friendly, approximately **4:5** where supported.
+
+The supplied text is important.
+
+Instruct the model to preserve the supplied wording accurately and not rewrite, paraphrase or invent additional devotional statements unless explicitly requested.
+
+Do NOT expose technical AI controls such as:
+
+* model
+* seed
+* temperature
+* prompt
+* quality parameters
+* API settings
+
+The administrator should simply provide the words.
+
+---
+
+# 5. FIRST GENERATION
+
+After generation, show the resulting image directly inside Content Studio as a preview.
+
+Do NOT immediately publish/use the image.
+
+Show simple actions:
+
+**Use Image**
+
+**Regenerate**
+
+**Edit Image**
+
+**Start Over**
+
+### Use Image
+
+Accepts the image and saves the final result into the existing `shareImageUrl`.
+
+### Regenerate
+
+Creates another interpretation using the same text and Emmaus design direction.
+
+### Start Over
+
+Discards the current generation session and returns to the initial Text for Image field.
+
+Do not remove an already saved Share Image unless the administrator explicitly replaces/removes it.
+
+---
+
+# 6. CONVERSATIONAL IMAGE EDITING
+
+This is important.
+
+After an image has been generated, the administrator must be able to describe what they want changed using normal language.
+
+Selecting:
+
+**Edit Image**
+
+should reveal:
+
+### What would you like to change?
+
+Helper text:
+
+> Tell Emmaus what you would like changed about this image.
+
+Provide a multiline text field.
+
+Example:
+
+> I don't want the face of Jesus visible. Regenerate this with Jesus shown from behind.
+
+Other examples the system should naturally support include:
+
+> Make the image less dramatic.
+
+> Keep the layout but change the background.
+
+> Make the typography simpler.
+
+> Remove the person.
+
+> Use a peaceful sunrise instead.
+
+> Keep everything else but make the image feel warmer.
+
+> Make the text larger.
+
+> Don't depict Jesus directly.
+
+Then:
+
+**Apply Changes**
+
+Where supported by the current OpenAI image API, use the existing generated image together with the administrator's editing instruction so the edit retains as much of the existing composition as appropriate.
+
+Do NOT treat every edit as an unrelated brand-new image if the API supports image editing/reference-image workflows.
+
+After editing, show the revised preview.
+
+The administrator must be able to continue giving further edit instructions until satisfied.
+
+Conceptually:
+
+Generate
+→ Preview
+→ Edit
+→ Preview
+→ Edit again
+→ Preview
+→ Use Image
+
+Keep this experience simple and conversational.
+
+---
+
+# 7. ATTRIBUTION / SIGNATURE
+
+Add an optional attribution system for Share Images.
+
+This should NOT require the administrator to manually add attribution to the pasted image text every time.
+
+Provide an **Attribution** setting.
+
+Options:
+
+### Emmaus Ministry
+
+Display:
+
+**Shared from Emmaus**
+*A discipleship ministry of Isipingo Community Church*
+
+### Author
+
+Display:
+
+**Jeremy Govender**
+
+### None
+
+No attribution displayed.
+
+Allow a sensible default attribution to be configured and allow the administrator to override it for an individual Share Image.
+
+Do not force attribution if **None** is selected.
+
+---
+
+# 8. IMPORTANT — ATTRIBUTION SHOULD BE RELIABLE
+
+Where technically practical, do NOT rely solely on the AI image model to correctly generate the attribution text or Emmaus branding inside the artwork.
+
+The AI model should primarily create:
+
+* artwork
+* imagery
+* primary devotional message/layout
+
+Emmaus should then apply the attribution/footer programmatically after generation where possible.
+
+This is important because ministry names, author names and branding need exact spelling and consistent presentation.
+
+The attribution layer should use normal application rendering/image composition so:
+
+* spelling is exact
+* typography is consistent
+* placement is consistent
+* ministry attribution is never hallucinated
+* branding does not become distorted
+* future branding changes can be implemented consistently
+
+Keep the attribution visually subtle.
+
+It should identify the source without dominating the devotional thought.
+
+---
+
+# 9. DO NOT ALTER THE USER'S ORIGINAL TEXT
+
+Keep separate values for:
+
+1. Original text entered by administrator
+2. AI generation instructions
+3. Edit instructions
+4. Attribution
+5. Final generated image
+
+Do not permanently append attribution text to the administrator's original devotional text.
+
+For example, if the administrator enters:
+
+"Jesus welcomes honest seekers..."
+
+that original text should remain exactly that.
+
+Attribution is a separate property/layer.
+
+---
+
+# 10. SAVING
+
+Only when the administrator selects:
+
+**Use Image**
+
+should the accepted final image become the content item's Share Image.
+
+Store the final accepted image using the existing media/storage architecture and populate:
+
+`shareImageUrl`
+
+The member-facing **Take this with you** component should therefore require no special knowledge of how the image was created.
+
+It simply receives `shareImageUrl` as it already does.
+
+Manual upload:
+
+Upload → `shareImageUrl`
+
+AI generation:
+
+Generate → Edit → Approve → `shareImageUrl`
+
+Same result.
+
+---
+
+# 11. EXISTING SHARE IMAGE BEHAVIOUR MUST REMAIN
+
+Do not change the member-facing behaviour we have already built.
+
+If a Share Image exists:
+
+**Take this with you**
+
+[IMAGE]
+
+**Save Image**     **Share**
+
+If `shareImageUrl` is null/empty, render absolutely nothing.
+
+AI generation must remain completely optional.
+
+---
+
+# 12. APPLY ACROSS CONTENT STUDIO
+
+Because Share Image is already intended as a reusable content capability, **Generate with Emmaus** should be available wherever the existing Share Image field is available, including:
+
+* Daily Rhythm entries
+* Daily Devotional entries
+* Walk Steps
+* Journey Steps/content
+* Sermons
+
+Do not build separate AI generators for every content type.
+
+Build one reusable Share Image Generator component/service.
+
+---
+
+# 13. ARCHITECTURE
+
+Keep responsibilities separated.
+
+Conceptually:
+
+`ShareImageField`
+
+handles:
+
+* existing image
+* upload
+* Generate with Emmaus
+* replace
+* remove
+
+`ShareImageGenerator`
+
+handles:
+
+* text input
+* attribution choice
+* generation
+* preview
+* regeneration
+* editing
+* approval
+
+Server-side image service handles:
+
+* OpenAI image-generation API
+* image-edit API/workflow
+* secure API credentials
+* generation instructions
+
+Final image processing handles:
+
+* attribution/footer where appropriate
+* storage
+* final `shareImageUrl`
+
+Use names consistent with the existing codebase if different names are more appropriate.
+
+---
+
+# 14. COST CONTROL
+
+Image generation costs money.
+
+Do NOT generate automatically when:
+
+* opening Content Studio
+* saving content
+* publishing content
+* editing devotional text
+* loading previews
+
+An API generation request should happen ONLY when the administrator explicitly selects:
+
+* Generate Image
+* Regenerate
+* Apply Changes
+
+Prevent accidental duplicate requests from double-clicks/taps.
+
+While generation is happening:
+
+* disable the generation button
+* show a simple loading state
+* prevent duplicate submissions
+
+Do not create background generations.
+
+---
+
+# 15. ERROR HANDLING
+
+If generation fails:
+
+* do not lose the administrator's text
+* do not remove the existing Share Image
+* show a simple understandable error
+* allow Retry
+
+If an edit fails:
+
+* retain the previous successful image
+* retain the edit instruction
+* allow Retry
+
+Never leave the content item without its previously saved Share Image because an AI request failed.
+
+---
+
+# 16. MOBILE AND DESKTOP ADMIN
+
+Although Content Studio is primarily an administrative interface, make the generator usable on both desktop and mobile.
+
+Do not allow the image preview or editing controls to overflow their container.
+
+Keep the interface visually consistent with the existing Content Studio.
+
+Do not redesign Content Studio.
+
+---
+
+# 17. FUTURE-PROOFING — DO NOT BUILD YET
+
+Structure this so we could later add:
+
+**Suggest from this content**
+
+This would allow Emmaus to read the existing devotional/Step/sermon and suggest the strongest shareable thought before generating the image.
+
+DO NOT implement that feature in this task.
+
+Likewise, do NOT currently build:
+
+* automatic generation for every devotional
+* bulk AI image generation
+* scheduled image generation
+* social-media posting
+* Canva integration
+* template libraries
+* advanced graphic-design tools
+
+This task is specifically:
+
+**Paste text → Generate → Preview → Conversational Edit/Regenerate → Approve → Share Image**
+
+---
+
+# 18. PROTECT EXISTING EMMAUS
+
+Do not modify unrelated functionality.
+
+In particular, do not change:
+
+* existing devotional content
+* existing content schemas beyond the minimum necessary
+* publishing
+* progress tracking
+* Daily Rhythm behaviour
+* Daily Devotional behaviour
+* Walk behaviour
+* Journey behaviour
+* Sermon processing
+* Bulk Import
+* Bible
+* Ask Emmaus
+* Emmaus Voice
+* navigation
+* user profiles
+* existing share functionality
+* existing uploaded Share Images
+
+Do not perform unrelated refactoring or cleanup.
+
+---
+
+# 19. TEST
+
+Before reporting completion, test:
+
+### Manual upload
+
+Upload Image → existing workflow still works.
+
+### Basic AI generation
+
+Paste text → Generate Image → image preview appears.
+
+### Regeneration
+
+Regenerate → new image is produced without losing original text.
+
+### Conversational editing
+
+Generate image → Edit Image → enter:
+
+"I don't want the face of Jesus visible. Regenerate without showing His face."
+
+→ revised image is generated.
+
+### Multiple edits
+
+Edit the resulting image again → successful.
+
+### Attribution
+
+Test:
+
+* Emmaus Ministry
+* Jeremy Govender
+* None
+
+Verify exact spelling.
+
+### Approval
+
+Select Use Image → final image is stored and `shareImageUrl` populated.
+
+### Member side
+
+Open content → accepted image appears in existing **Take this with you** section.
+
+### Removal
+
+Remove Share Image → entire member-facing section disappears.
+
+### Existing content
+
+Content with no Share Image remains completely unchanged.
+
+### Failure protection
+
+Force/test a failed generation and verify existing saved Share Image and entered text are not lost.
+
+### Duplicate protection
+
+Rapidly click Generate and confirm only one generation request occurs.
+
+Test the reusable implementation with:
+
+* Daily Rhythm
+* Daily Devotional
+* Walk Step
+* Journey Step/content
+* Sermon
+
+---
+
+Before changing code, inspect the Share Image implementation that already exists and extend it using the **smallest safe implementation**.
+
+Do not rebuild functionality that already exists.
+
+Create a checkpoint before implementation.
+
+After implementation, report exactly:
+
+1. What files/schema were changed.
+2. How image generation works.
+3. How image editing works.
+4. How attribution is applied.
+5. Where generated images are stored.
+6. Which Content Studio content types now support it.
+7. Confirmation that existing manually uploaded Share Images still work.
+8. Confirmation that no unrelated Emmaus functionality was changed.

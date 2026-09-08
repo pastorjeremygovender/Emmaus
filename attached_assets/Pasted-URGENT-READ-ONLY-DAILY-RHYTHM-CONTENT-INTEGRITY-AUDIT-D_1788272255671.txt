@@ -1,0 +1,173 @@
+URGENT READ-ONLY DAILY RHYTHM CONTENT-INTEGRITY AUDIT.
+
+Do not edit code.
+
+Do not modify, create, publish, unpublish, archive, delete, relink, reorder or restore any Daily Rhythm content.
+
+Do not modify any database record.
+
+Do not commit, publish or deploy.
+
+Do not run the Group Leadership media-permission task or Pastoral Briefing Rules task yet.
+
+OBSERVED PRODUCTION ADMIN CONTRADICTION
+
+The published Emmaus administrator screen shows:
+
+* Header: `10 Minutes with Jesus · 5 days authored`
+* Daily Rhythm group: `Day 1–30: The Gospel of John`
+* Group count/status: `30 days · Draft`
+* The All tab is selected.
+* Only Days 1–5 render in the list.
+* Days 1–5 individually show Published.
+* Scrolling reaches Day 5 and no further.
+
+Thirty Daily Rhythm days were previously authored and published. Establish exactly what happened to Days 6–30.
+
+READ-ONLY INVESTIGATION
+
+Inspect the authoritative Daily Rhythm records used by the currently published `emmaus.co.za` application.
+
+Do not expose credentials, tokens, secrets or full devotional content.
+
+Report the following:
+
+1. Authoritative records
+
+For canonical Days 1–30, report:
+
+* Day number
+* Record ID
+* Title
+* Publication status
+* Archived/deleted state, if applicable
+* Daily Rhythm programme ID
+* Group ID or group association
+* Canonical ordering value
+* Creation/update timestamps
+* Whether the record is returned by the admin API
+* Whether the record is returned by the user-facing Daily Rhythm API when eligible
+
+2. Exact counts
+
+Report counts for:
+
+* Total Daily Rhythm day records
+* Published
+* Draft
+* Archived
+* Deleted/soft-deleted
+* Ungrouped
+* Grouped under `Day 1–30: The Gospel of John`
+* Duplicate canonical day numbers
+* Missing canonical day numbers between 1 and 30
+
+3. Group contradiction
+
+Determine why the group displays:
+
+* 30 days
+* Draft
+
+while the page displays:
+
+* 5 days authored
+* Five Published day cards
+
+Confirm whether the group’s “30 days” value is:
+
+* A stored metadata value
+* A calculated record count
+* A configured range label
+* Or stale/incorrect data
+
+Confirm whether “Draft” belongs to:
+
+* The group itself
+* Its child days
+* A separate content entity
+* Or an incorrect UI mapping
+
+4. API/query path
+
+Trace the complete read path:
+
+* Database/source query
+* API route
+* Response mapping
+* Frontend loader/query
+* Client filtering
+* Sorting
+* Pagination or limits
+* Rendering
+
+Look specifically for:
+
+* `limit 5`
+* Default page size of 5
+* Missing pagination
+* Status filters
+* Group filters
+* Incorrect programme ID
+* Incorrect content-type classification
+* Query regression introduced when restoring/integrating Content Studio
+* Client slicing such as `.slice(0, 5)`
+* A stale cached response
+* Days 6–30 stored in a different table/source
+* Days 6–30 linked to the wrong programme or group
+* Draft group metadata hiding published child records
+
+5. Production user safety
+
+Without changing progress, confirm:
+
+* The highest canonical Daily Rhythm day currently available to eligible users.
+* Whether a user completing Day 5 can receive Day 6 on the next authoritative day.
+* Whether Days 6–30 remain accessible through their direct IDs/routes.
+* Whether any active user progress references Days 6–30.
+* Whether the current issue is display-only or will interrupt users after Day 5.
+
+6. History
+
+Use read-only Git/file/checkpoint history to determine:
+
+* When the admin page began returning only five records.
+* Whether the current query/loader differs from the last version that displayed all 30.
+* Whether any code commit changed publication status or linkage.
+* Do not restore or switch anything.
+
+STRICT SAFETY
+
+Do not:
+
+* Recreate Days 6–30
+* Bulk import anything
+* Republish existing days
+* Change group status
+* Correct data
+* Run migrations
+* Restore a database/checkpoint
+* Switch branches
+* Fetch, pull, push, merge, rebase or reset
+* Modify user progress
+
+FINAL REPORT
+
+Provide:
+
+* Whether all 30 authored days still exist
+* Exact location and status of Days 6–30
+* Whether the problem is data loss, status/linkage, API pagination, filtering or frontend rendering
+* Exact root cause
+* First commit where the problem appears
+* Whether active users are at risk of stopping after Day 5
+* Smallest safe repair plan
+* Exact files or records that would require change
+* Whether any data mutation would be necessary
+* Final verdict:
+
+  * SAFE DISPLAY-ONLY REPAIR
+  * CONTENT DATA REPAIR REQUIRES APPROVAL
+  * or BLOCKED, with the exact reason
+
+Stop after reporting. Make no changes.

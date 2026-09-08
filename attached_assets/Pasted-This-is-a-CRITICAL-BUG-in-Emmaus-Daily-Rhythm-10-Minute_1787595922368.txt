@@ -1,0 +1,494 @@
+This is a CRITICAL BUG in Emmaus Daily Rhythm / 10 Minutes with Jesus.
+
+Do not make another UI patch.
+
+Audit the entire Daily Rhythm progression architecture and fix the underlying state logic.
+
+10 Minutes with Jesus is the focal point of Emmaus. Its daily progression rule and Emmaus's first-opening behaviour are core product rules and must be enforced reliably for every user.
+
+CORE RULE 1 — ONLY ONE NEW 10 MINUTES WITH JESUS STEP PER DAY
+
+A user must NEVER be able to unlock more than one new 10 Minutes with Jesus Step on the same calendar day.
+
+Navigation must NEVER advance Daily Rhythm progress.
+
+Completing a Step must NEVER immediately increment the current Step.
+
+"Back to Today's Steps", browser back, page refresh, reopening the card, logging out/in, changing devices, reopening the PWA, or any other navigation action must not change the user's current Daily Rhythm Step.
+
+Required behaviour
+
+1. A brand-new user starts on Day 1.
+
+2. When Day 1 is first made available, persist the date on which it was unlocked.
+
+3. Completing Day 1 only records Day 1 as completed.
+
+4. Completing Day 1 does NOT set the user's current day to Day 2.
+
+5. For the remainder of that calendar day, Day 1 remains the user's current Daily Rhythm Step, even though it is completed.
+
+6. Day 2 can only become available on a LATER calendar date AND only if Day 1 was completed.
+
+7. If Day 1 was not completed, it remains the current Step the following day. Users must proceed sequentially.
+
+8. Previous Days are review-only. Opening, closing, completing, or navigating through Previous Days must NEVER alter the current Daily Rhythm position.
+
+9. The server/database must be the authority for progression.
+
+Do not rely on:
+
+- React state
+- localStorage
+- sessionStorage
+- route state
+- query parameters
+- card index
+- array position
+- browser/device date
+- client-side "currentDay + 1" logic
+
+to determine which new Daily Rhythm Step is available.
+
+10. Store timestamps in the database and determine the user's calendar date consistently.
+
+Emmaus currently operates in South Africa, so use Africa/Johannesburg unless the user has an explicitly stored timezone.
+
+Do not allow manipulation of the browser/device clock to bypass the daily restriction.
+
+11. Progression must be completely user-specific.
+
+One user's completion, unlock, or Daily Rhythm position must NEVER affect another user.
+
+---
+
+CORE RULE 2 — DAILY RHYTHM IS THE DEFAULT FIRST OPENING OF EMMAUS EACH DAY
+
+This is an important existing Emmaus product rule and must be reinforced.
+
+The FIRST time a user opens Emmaus on a new calendar day, Emmaus should default directly to that user's current 10 Minutes with Jesus Daily Rhythm experience.
+
+The intended flow is:
+
+FIRST OPEN OF EMMAUS TODAY
+→ Open directly into today's/current 10 Minutes with Jesus Daily Rhythm Step.
+
+AFTER THAT FIRST DAILY OPEN
+→ Normal Emmaus opening behaviour returns.
+→ Open to Today's Steps.
+
+Therefore:
+
+- Daily Rhythm is the default first opening screen of Emmaus each new day.
+- This should happen ONCE per calendar day per user.
+- Subsequent opens of Emmaus on the same calendar day should open to Today's Steps.
+- Do not repeatedly force the user back into Daily Rhythm every time they open Emmaus that day.
+
+Persist this state reliably per user.
+
+Do NOT implement this solely using localStorage.
+
+The system needs to know whether that authenticated user has already had their first Emmaus opening for that calendar date.
+
+This must also work across devices.
+
+Example:
+
+User opens Emmaus on phone at 7:00 AM.
+
+→ Daily Rhythm opens automatically.
+
+User closes Emmaus.
+
+User opens Emmaus again at 10:00 AM.
+
+→ Today's Steps opens.
+
+User opens Emmaus on laptop at 2:00 PM.
+
+→ Today's Steps opens because the user's first daily opening has already occurred.
+
+The next calendar day:
+
+User opens Emmaus.
+
+→ Daily Rhythm opens automatically again.
+
+After that:
+
+→ Today's Steps.
+
+---
+
+IMPORTANT INTERACTION BETWEEN THESE TWO RULES
+
+Do NOT confuse "first daily opening" with "unlock next Step."
+
+They are separate concepts.
+
+Example:
+
+Monday:
+
+User opens Emmaus for the first time.
+
+→ Day 1 Daily Rhythm opens.
+
+User completes Day 1.
+
+→ Day 1 becomes completed.
+
+User taps "Back to Today's Steps."
+
+→ Today's Steps opens.
+
+→ Day 2 MUST NOT appear or become available.
+
+User opens Emmaus again Monday evening.
+
+→ Today's Steps opens.
+
+→ Day 1 remains today's completed Daily Rhythm Step.
+
+Tuesday:
+
+User opens Emmaus for the first time that day.
+
+The server checks whether Day 1 was completed and whether the calendar date is later than Day 1's unlock date.
+
+If yes:
+
+→ Day 2 becomes available.
+
+→ Emmaus opens directly into Day 2.
+
+User completes Day 2.
+
+→ Day 2 remains the current completed Step for the rest of Tuesday.
+
+Wednesday:
+
+→ Same process for Day 3.
+
+---
+
+IF THE USER DOES NOT COMPLETE TODAY'S STEP
+
+Example:
+
+Monday:
+
+→ Day 1 opens.
+
+User does not complete Day 1.
+
+Tuesday first opening:
+
+→ Daily Rhythm still opens automatically because this is the first Emmaus opening of Tuesday.
+
+BUT:
+
+→ It opens Day 1 again.
+
+It must NOT open Day 2 simply because a new calendar day has started.
+
+The rule is:
+
+NEXT STEP UNLOCKS ONLY WHEN:
+
+1. The current Step is completed
+
+AND
+
+2. Today's calendar date is later than the date the current Step was unlocked.
+
+Both conditions must be true.
+
+---
+
+COMPLETED CARD BEHAVIOUR
+
+After today's 10 Minutes with Jesus Step has been completed, Today's Steps should continue showing that same Step.
+
+For example:
+
+10 Minutes with Jesus
+
+Day 1 — Complete ✓
+
+Come back tomorrow to continue
+
+The user may tap the completed Step to review/read it again.
+
+Reviewing it must not affect progression.
+
+Do not display Day 2 as today's Step.
+
+Do not create the impression that another Daily Rhythm Step is available today.
+
+---
+
+AUDIT THE ENTIRE CODEBASE
+
+Find EVERY place that can alter Daily Rhythm progress, including:
+
+- Complete Step
+- Back to Today's Steps
+- Daily Rhythm close
+- card opening
+- card closing
+- Previous Days
+- next/previous navigation
+- route changes
+- login/session restoration
+- onboarding
+- initial user creation
+- Today page loading
+- PWA startup
+- authentication callback
+- API calls
+- database triggers
+- localStorage
+- sessionStorage
+- optimistic UI updates
+- first-daily-open logic
+
+Remove every progression side effect from navigation.
+
+---
+
+SERVER-SIDE AUTHORITY
+
+I want ONE authoritative server-side progression mechanism.
+
+Conceptually:
+
+"getCurrentDailyRhythmStep(user)"
+
+Reads persisted progress and returns the current Step.
+
+"completeDailyRhythmStep(user, step)"
+
+Marks that Step complete but DOES NOT advance the current Step.
+
+"maybeUnlockNextDailyRhythmStep(user)"
+
+May advance only when:
+
+- current Step is completed
+- today's calendar date is later than "current_step_unlocked_date"
+- the next Step has not already been unlocked
+
+There should also be authoritative logic conceptually equivalent to:
+
+"getDailyStartupDestination(user)"
+
+This determines:
+
+IF this is the user's first Emmaus opening on this calendar date:
+
+→ Daily Rhythm
+
+ELSE:
+
+→ Today's Steps
+
+Do not make routing/navigation responsible for determining progression.
+
+---
+
+DATABASE CONCURRENCY PROTECTION
+
+Make the unlock operation atomic/idempotent.
+
+If two requests hit the server simultaneously, the user must still advance by no more than one Step.
+
+Examples:
+
+- rapid refresh
+- two browser tabs
+- phone and laptop simultaneously
+- repeated API request
+- poor network causing request retries
+
+must NEVER result in multiple Steps being unlocked.
+
+Use appropriate transaction/locking/unique constraint protection.
+
+---
+
+BACKEND ACCESS PROTECTION
+
+Do NOT simply hide or disable Day 2 in the UI.
+
+If the user attempts to access a future locked Step directly by:
+
+- URL
+- API
+- modified client state
+- browser tools
+
+the backend must reject the request as locked.
+
+The server/database is the final authority.
+
+---
+
+CRITICAL: FIND THE CURRENT BUG BEFORE FIXING IT
+
+Before changing code, identify and report exactly WHY tapping "Back to Today's Steps" currently causes Day 2 to appear.
+
+Find the actual:
+
+- function
+- state transition
+- API call
+- database update
+- route effect
+- completion handler
+
+responsible.
+
+Do not guess.
+
+Tell me exactly what was advancing the Daily Rhythm.
+
+Then fix the architecture.
+
+---
+
+AUTOMATED TESTS REQUIRED
+
+Test this with BRAND-NEW NORMAL USER ACCOUNTS, not only my existing admin/test account.
+
+TEST 1:
+New user → first Emmaus opening → Day 1 Daily Rhythm opens automatically.
+
+TEST 2:
+Complete Day 1 → Back to Today's Steps → still Day 1 as today's completed Step.
+
+TEST 3:
+Complete Day 1 → refresh → still Day 1.
+
+TEST 4:
+Complete Day 1 → logout/login same day → Today's Steps opens and Day 1 remains current.
+
+TEST 5:
+Complete Day 1 → reopen Daily Rhythm same day → Day 1.
+
+TEST 6:
+Complete Day 1 → directly request Day 2 URL/API same day → denied/locked.
+
+TEST 7:
+Complete Day 1 → simulate next calendar day → first opening goes directly to Day 2.
+
+TEST 8:
+Do NOT complete Day 1 → simulate next calendar day → first opening goes directly to Day 1 again.
+
+TEST 9:
+Complete Day 1 → open Previous Days → return → current Step unchanged.
+
+TEST 10:
+Open Emmaus simultaneously in two browser tabs → complete Day 1 → no duplicate advancement.
+
+TEST 11:
+Two separate users → progression remains completely independent.
+
+TEST 12:
+New account with no Daily Rhythm records → Day 1 and no inherited/admin/test-user progress.
+
+TEST 13:
+Complete Day 1 at 10:00 AM → reopen at 11:00 PM same date → Today's Steps opens and Day 1 remains current.
+
+TEST 14:
+After midnight Africa/Johannesburg → next Step becomes available only if previous Step was completed.
+
+TEST 15:
+Manipulating the device clock must not unlock the next Step.
+
+TEST 16:
+First opening Monday → Daily Rhythm automatically.
+Close app → reopen Monday → Today's Steps.
+
+TEST 17:
+First opening Monday on phone → Daily Rhythm.
+Later Monday open on laptop → Today's Steps, not forced Daily Rhythm again.
+
+TEST 18:
+First opening Tuesday → Daily Rhythm automatically again.
+
+TEST 19:
+Tuesday first opening with Monday's Step incomplete → Daily Rhythm automatically opens the SAME incomplete Step.
+
+TEST 20:
+Complete today's Step → repeatedly navigate between Today's Steps and Daily Rhythm → no progression occurs.
+
+TEST 21:
+Use browser back/forward repeatedly → no progression occurs.
+
+TEST 22:
+Refresh immediately while completing a Step → no duplicate advancement.
+
+TEST 23:
+Send multiple simultaneous completion/unlock requests → only one valid state change occurs.
+
+TEST 24:
+Future locked Step cannot be accessed through a manually constructed URL/API request.
+
+TEST 25:
+Brand-new normal user sees their own clean Daily Rhythm state and does not inherit content/progress state from an admin or another test account.
+
+---
+
+DO NOT DECLARE THIS FIXED JUST BECAUSE IT COMPILES
+
+This issue appeared during the first real test with users other than the admin account.
+
+I need evidence that the architecture now enforces these rules.
+
+When finished, report:
+
+1. The exact root cause of today's Day 1 → Day 2 bug.
+
+2. The files/functions that were changed.
+
+3. The database fields used to track:
+   
+   - current Daily Rhythm Step
+   - completion
+   - Step unlock date
+   - user's last first-daily-opening date
+
+4. How the backend prevents more than one new Step per day.
+
+5. How the backend prevents direct access to future Steps.
+
+6. How the first-opening-per-day routing works.
+
+7. How concurrency/multiple-device requests are protected.
+
+8. Results of ALL 25 tests above.
+
+Do not tell me "this should now work."
+
+Do not mark this task complete until all 25 tests pass.
+
+These are permanent Emmaus product rules:
+
+DAILY RHYTHM / 10 MINUTES WITH JESUS:
+ONE NEW STEP MAXIMUM PER CALENDAR DAY.
+
+COMPLETION DOES NOT ADVANCE THE STEP.
+
+NAVIGATION NEVER ADVANCES PROGRESS.
+
+FIRST OPENING OF EMMAUS EACH NEW DAY:
+OPEN DAILY RHYTHM.
+
+SUBSEQUENT OPENINGS THAT SAME DAY:
+OPEN TODAY'S STEPS.
+
+IF TODAY'S STEP IS NOT COMPLETED:
+THE NEXT STEP REMAINS LOCKED EVEN ON THE NEXT DAY.
+
+THE SERVER/DATABASE, NOT THE CLIENT UI, IS THE AUTHORITY FOR ALL OF THESE RULES.

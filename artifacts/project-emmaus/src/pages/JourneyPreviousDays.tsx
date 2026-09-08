@@ -14,8 +14,9 @@
 
 import { useParams, useLocation } from 'wouter';
 import { useJourney } from '@/contexts/JourneyContext';
-import { resolveReturn } from '@/lib/return-context';
+import { goBackOrFallback, resolveReturn } from '@/lib/return-context';
 import { PreviousDaysScreen, type PreviousDayEntry } from '@/components/PreviousDaysScreen';
+import { getStepLabel } from '@/lib/step-label';
 
 export default function JourneyPreviousDays() {
   const params = useParams<{ journeyId: string }>();
@@ -23,23 +24,34 @@ export default function JourneyPreviousDays() {
   const { journeys, getStepsForJourney, progress, loading } = useJourney();
 
   const journeyId = params.journeyId;
-  const from = new URLSearchParams(window.location.search).get('from');
-  const { path: backPath, label: backLabel } = resolveReturn(from, null, '/journeys?tab=walks');
+  const qs = new URLSearchParams(window.location.search);
+  // Accept both ?source= (current) and legacy ?from= so old links and bookmarks keep working.
+  const from     = qs.get('source') ?? qs.get('from');
+  const displayOrigin = qs.get('displayOrigin');
+  const displayOriginSuffix =
+    displayOrigin === 'walk' || displayOrigin === 'journey'
+      ? `&displayOrigin=${encodeURIComponent(displayOrigin)}`
+      : '';
+  const sourceId = qs.get('sourceId');
+  const { path: backPath, label: backLabel } = resolveReturn(from, sourceId, '/journeys?tab=walks');
 
   const journey = journeys.find(j => j.id === journeyId);
   const prog = journeyId ? progress[journeyId] : undefined;
   const currentDay = prog?.currentDay ?? 1;
   const completedSet = new Set(prog?.completedDays ?? []);
 
+  // Show ALL published steps — nothing locked or restricted.
+  // Members can access any step at any time.
   const entries: PreviousDayEntry[] = journey
-    ? getStepsForJourney(journey.id)
-        .filter(s => s.status === 'Published' && s.day < currentDay)
-        .sort((a, b) => b.day - a.day)
+      ? getStepsForJourney(journey.id)
+        .filter(s => s.status === 'Published' && !s.isCompletionStep && s.day < currentDay)
+        .sort((a, b) => a.day - b.day)
         .map(s => ({
           dayNumber: s.day,
+          label: getStepLabel(s, journey),
           title: s.title,
           subtitle: s.scripture || undefined,
-          status: completedSet.has(s.day) ? 'completed' : 'current',
+           status: completedSet.has(s.day) ? 'completed' : 'available',
         }))
     : [];
 
@@ -48,8 +60,8 @@ export default function JourneyPreviousDays() {
       contentTitle={journey?.title ?? 'Walk'}
       entries={entries}
       loading={loading}
-      onBack={() => setLocation(backPath)}
-      onReviewDay={(day) => setLocation(`/journey/${journeyId}/day/${day}?from=previous`)}
+      onBack={() => goBackOrFallback(backPath, setLocation)}
+      onReviewDay={(day) => setLocation(`/journey/${journeyId}/day/${day}?source=journeyPrevious&sourceId=${journeyId}${displayOriginSuffix}`)}
       backLabel={backLabel}
       emptyMessage="No previous days are available yet."
     />

@@ -22,8 +22,13 @@ import {
   getAllVideos, getVideoById, upsertVideo, updateVideo,
   getAllSegments, getSegmentsForVideo, replaceSegments, updateSegment,
   getAllJobs, createJob, updateJob,
+  getJob,
+  getIndexingCheckpoint, saveIndexingCheckpoint, clearIndexingCheckpoint,
+  type IndexingCheckpoint, type ImportJob,
   getArchiveStats, type YoutubeVideoRecord,
 } from "../lib/sermon-store.js";
+import { isQuotaExhaustion, isSafeBatchCandidate, hasActiveSafeBatch, advanceCheckpoint, pauseCheckpoint } from "../lib/safe-indexing-policy.js";
+import { readArchiveState, writeArchiveState } from "../lib/archive-state-store.js";
 import {
   getYoutubeConfig, getChannelInfo, getPlaylistVideoIds,
   getVideoMetadata, listCaptionTracks, downloadCaptionTrack,
@@ -34,10 +39,12 @@ import {
   clearOAuthCredentials, getOAuthStatus,
   addPendingState, verifyAndConsumePendingState,
 } from "../lib/oauth-store.js";
-import { classifyVideo, shouldAutoApprove } from "../lib/sermon-classifier.js";
+import { classifyVideo } from "../lib/sermon-classifier.js";
+import { requireAdmin } from "../emmaus/auth.js";
 import { processCaption } from "../lib/transcript-segmenter.js";
 import { enrichSegment, enrichSermon } from "../lib/sermon-enricher.js";
 import { invalidateIndex, searchByScripture } from "../lib/sermon-search.js";
+import { listPublishedSermons } from "../lib/canonical-sermon-store.js";
 import { detectSermonStartFromSegments, getFinalSermonStart } from "../lib/sermon-start-detector.js";
 import {
   generateSermonAudio, getAudioFilePath, getAudioFileUrl, AUDIO_DIR,
@@ -48,6 +55,59 @@ import { readFile, writeFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
 const router = Router();
+
+// ─── Authorization allowlist ────────────────────────────────────────────────
+//
+// Only a small set of member/public routes may be reached unauthenticated.
+// Every other youtube-archive route — status, video/job/segment listings,
+// OAuth management, and every mutation/pipeline/process endpoint — requires a
+// verified DB role of admin or superAdmin (req.user.role is populated from the
+// user's profile by authMiddleware, never from client-supplied headers).
+//
+// The allowlist is matched by method + exact path so that a new route added
+// later is admin-gated by default (fails closed).
+const PUBLIC_ALLOWLIST: ReadonlyArray<{ method: string; path: string }> = [
+  { method: "POST", path: "/youtube-archive/search" },
+  { method: "GET", path: "/youtube-archive/preached-here" },
+  // The callback is protected by the one-time state created by the
+  // admin-authenticated /oauth/start route. The browser may return from
+  // Google without the original session cookie after a hostname transition.
+  { method: "GET", path: "/youtube-archive/oauth/callback" },
+  // Audio streaming is matched by prefix below (path carries the :id param).
+];
+
+function isPublicArchiveRoute(method: string, path: string): boolean {
+  // Preflight requests are always allowed (no state change, no data access).
+  if (method === "OPTIONS") return true;
+  // GET /youtube-archive/audio/:id — public audio streaming.
+  if (method === "GET" && /^\/youtube-archive\/audio\/[^/]+\/?$/.test(path)) {
+    return true;
+  }
+  return PUBLIC_ALLOWLIST.some(
+    (r) => r.method === method && r.path === path.replace(/\/$/, ""),
+  );
+}
+
+async function isJobCancelled(jobId: string): Promise<boolean> {
+  const job = await getJob(jobId);
+  return job?.status === "cancelled";
+}
+
+router.use((req: Request, res: Response, next) => {
+  // Only guard youtube-archive routes; leave anything else this router might
+  // carry untouched (defensive — every route here is /youtube-archive/*).
+  if (!req.path.startsWith("/youtube-archive/")) {
+    next();
+    return;
+  }
+  if (isPublicArchiveRoute(req.method, req.path)) {
+    next();
+    return;
+  }
+  // requireAdmin sends 401 (unauthenticated) or 403 (wrong role) itself.
+  if (!requireAdmin(req, res)) return;
+  next();
+});
 
 // OAuth state is now persisted to disk via oauth-store so it survives
 // hot-reloads and process restarts (see addPendingState / verifyAndConsumePendingState).
@@ -128,9 +188,10 @@ router.post("/youtube-archive/sync", async (req: Request, res: Response) => {
           for (const meta of metadataList) {
             try {
               const cls = classifyVideo(meta.title, meta.description, meta.durationSeconds);
-              const reviewStatus = shouldAutoApprove(cls.sermonLikelihood, meta.durationSeconds)
-                ? "auto-approved"
-                : "pending";
+              // New videos are ALWAYS persisted as pending. Approval is an
+              // explicit, manual admin action (PATCH reviewStatus) — sync must
+              // never auto-approve, regardless of classification confidence.
+              const reviewStatus = "pending" as const;
 
               await upsertVideo({
                 youtubeVideoId: meta.videoId,
@@ -219,6 +280,7 @@ router.patch("/youtube-archive/videos/:id", async (req: Request, res: Response) 
     "scriptureReferences", "scriptureBookIds", "scriptureChapters",
     "topics", "keywords", "summary", "contentType",
     "manualSermonStartSeconds", "sermonStartVerified",
+    "manualSermonEndSeconds",
   ] as const;
   type AllowedKey = typeof allowed[number];
 
@@ -308,6 +370,7 @@ async function processVideoInternal(
     // ── Step 1: Import captions ──────────────────────────────────────────────
     let captionContent: string | null = null;
     let captionKind = "unknown";
+    let captionFailure: string | null = null;
 
     const accessToken = await getValidAccessToken();
 
@@ -327,12 +390,15 @@ async function processVideoInternal(
           });
         }
       } catch (err) {
+        captionFailure = String(err);
         logger.warn({ videoId: video.youtubeVideoId, err: String(err) }, "Caption download failed");
       }
     }
 
     if (!captionContent) {
-      const reason = accessToken
+      const reason = captionFailure && isQuotaExhaustion(captionFailure)
+        ? `YouTube quota exhausted: ${captionFailure}`
+        : accessToken
         ? "No usable caption track found"
         : "OAuth not connected — cannot access captions";
       await updateVideo(videoId, {
@@ -446,20 +512,154 @@ async function processVideoInternal(
   }
 }
 
-// ─── Bulk pipeline (auto-approve + process all) ───────────────────────────────
+// ─── Bulk pipeline (process approved only) ─────────────────────────────────────
+
+async function startSafeBatch(res: Response, resume: boolean): Promise<void> {
+  const existing = await getIndexingCheckpoint();
+  const activeJobs = await getAllJobs();
+  if (hasActiveSafeBatch(activeJobs)) {
+    const activeJob = activeJobs.find(job =>
+      (job.status === "running" || job.status === "queued") &&
+      job.options?.mode === "safe-batch"
+    );
+    if (!activeJob) {
+      res.status(409).json({ error: "A safe indexing batch is already running." });
+      return;
+    }
+    res.status(409).json({ error: "A safe indexing batch is already running.", jobId: activeJob.id });
+    return;
+  }
+  if (resume && !existing) {
+    res.status(404).json({ error: "No resumable checkpoint exists. Start Safe Indexing Batch." });
+    return;
+  }
+  if (!resume && existing?.status === "paused") {
+    res.status(409).json({ error: "A paused indexing checkpoint exists. Resume it before starting another batch." });
+    return;
+  }
+
+  const videos = await getAllVideos();
+  const videoIds = resume
+    ? existing!.videoIds
+    : videos.filter(isSafeBatchCandidate).map(v => v.id);
+  const job = await createJob("pipeline-run", { mode: "safe-batch", resume });
+  const checkpoint: IndexingCheckpoint = resume
+    ? { ...existing!, jobId: job.id, status: "running", pauseReason: undefined, updatedAt: new Date().toISOString() }
+    : {
+        version: 1, jobId: job.id, videoIds, position: 0, completedVideoIds: [],
+        completedCount: 0, remainingCount: videoIds.length, status: "running",
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      };
+  await saveIndexingCheckpoint(checkpoint);
+  res.json({ jobId: job.id, message: resume ? "Safe indexing resumed" : "Safe indexing batch started", checkpoint });
+
+  setImmediate(async () => {
+    await updateJob(job.id, { status: "running" });
+    let current = checkpoint;
+    try {
+      for (let i = current.position; i < current.videoIds.length; i++) {
+        const currentVideo = (await getAllVideos()).find(v => v.id === current.videoIds[i]);
+        if (!currentVideo || !isSafeBatchCandidate(currentVideo)) {
+          current = { ...current, position: i + 1, remainingCount: Math.max(0, current.videoIds.length - i - 1), updatedAt: new Date().toISOString() };
+          await saveIndexingCheckpoint(current);
+          continue;
+        }
+        if (await isJobCancelled(job.id)) {
+          current = pauseCheckpoint({ ...current, position: i }, "Stopped by an administrator.");
+          await saveIndexingCheckpoint(current);
+          return;
+        }
+        await updateJob(job.id, { progress: { total: current.videoIds.length, done: current.completedCount, failed: 0, skipped: i - current.completedCount, currentItem: currentVideo.title } });
+        const result = await processVideoInternal(currentVideo.id);
+        if (result.error && isQuotaExhaustion(result.error)) {
+          current = pauseCheckpoint({ ...current, position: i }, result.error);
+          await saveIndexingCheckpoint(current);
+          await updateJob(job.id, { status: "paused", error: result.error });
+          return;
+        }
+        current = advanceCheckpoint({ ...current, position: i }, currentVideo.id, result.success);
+        await saveIndexingCheckpoint(current);
+        invalidateIndex();
+      }
+      await updateJob(job.id, { status: "completed", progress: { total: current.videoIds.length, done: current.completedCount, failed: 0, skipped: 0, currentItem: `${current.completedCount} indexed` } });
+      await clearIndexingCheckpoint();
+    } catch (err) {
+      const reason = String(err);
+      current = pauseCheckpoint(current, reason);
+      await saveIndexingCheckpoint(current);
+      await updateJob(job.id, { status: isQuotaExhaustion(reason) ? "paused" : "failed", error: reason });
+    }
+  });
+}
+
+router.get("/youtube-archive/pipeline/checkpoint", async (_req: Request, res: Response) => {
+  const checkpoint = await getIndexingCheckpoint();
+  const activeJob = (await getAllJobs()).find(job =>
+    job.id === checkpoint?.jobId && (job.status === "running" || job.status === "queued")
+  );
+  // A process restart can leave a durable cursor marked running. If there is
+  // no live job, expose it as paused so the admin can safely resume it.
+  if (checkpoint?.status === "running" && !activeJob) {
+    const paused = { ...checkpoint, status: "paused" as const, pauseReason: "The previous indexing process stopped before completion." };
+    await saveIndexingCheckpoint(paused);
+    res.json({ checkpoint: paused });
+    return;
+  }
+  res.json({ checkpoint });
+});
+
+router.post("/youtube-archive/pipeline/safe-batch", async (_req: Request, res: Response) => {
+  await startSafeBatch(res, false);
+});
+
+router.post("/youtube-archive/pipeline/resume", async (_req: Request, res: Response) => {
+  await startSafeBatch(res, true);
+});
+
+router.post("/youtube-archive/jobs/:id/cancel", async (req: Request, res: Response) => {
+  const job = await getJob(String(req.params.id));
+  if (!job) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+  if (job.status !== "queued" && job.status !== "running") {
+    res.status(409).json({ error: `Job is already ${job.status}`, job });
+    return;
+  }
+
+  await updateJob(job.id, {
+    status: "cancelled",
+    error: "Stopped by an administrator.",
+  });
+
+  if (job.options?.mode === "safe-batch") {
+    const checkpoint = await getIndexingCheckpoint();
+    if (checkpoint?.jobId === job.id) {
+      await saveIndexingCheckpoint(
+        pauseCheckpoint(checkpoint, "Stopped by an administrator."),
+      );
+    }
+  }
+
+  res.json({ job: await getJob(job.id) });
+});
 
 /**
  * POST /api/youtube-archive/pipeline/run
  *
- * Phase 1 — Auto-approve: every pending video with contentType === "sermon"
- *            or sermonLikelihood >= 0.6 is approved and assigned to
- *            "Pastor Jeremy Govender" (unless a speaker is already set).
+ * Processes every video that has ALREADY been explicitly approved by an admin
+ * (reviewStatus === "approved") and has no transcript yet. Each is processed
+ * sequentially: caption download → segmentation → OpenAI enrichment → search
+ * index rebuild.
  *
- * Phase 2 — Process: every approved/auto-approved video that has no transcript
- *            is processed sequentially: caption download → segmentation →
- *            OpenAI enrichment → search index rebuild.
+ * This pipeline NEVER approves videos. Approval is a manual admin action via
+ * PATCH /youtube-archive/videos/:id — pending items are left untouched.
  */
 router.post("/youtube-archive/pipeline/run", async (_req: Request, res: Response) => {
+  if (_req.body?.confirmFullRebuild !== true) {
+    res.status(400).json({ error: "Full rebuild is an advanced action. Explicit confirmation is required." });
+    return;
+  }
   const job = await createJob("pipeline-run", {});
   res.json({ jobId: job.id, message: "Pipeline started" });
 
@@ -467,31 +667,11 @@ router.post("/youtube-archive/pipeline/run", async (_req: Request, res: Response
     try {
       await updateJob(job.id, { status: "running" });
 
-      // ── Phase 1: Auto-approve pending sermon videos ──────────────────────
+      // ── Process explicitly-approved videos without transcripts ───────────
+      // Only records an admin has manually approved (reviewStatus === "approved")
+      // are eligible. Pending / rejected videos are never processed or approved.
       const allVideos = await getAllVideos();
-      const toApprove = allVideos.filter(
-        (v) =>
-          v.reviewStatus === "pending" &&
-          (v.contentType === "sermon" || v.sermonLikelihood >= 0.6)
-      );
-
-      let autoApproved = 0;
-      for (const video of toApprove) {
-        await updateVideo(video.id, {
-          reviewStatus: "auto-approved",
-          speaker: video.speaker || "Pastor Jeremy Govender",
-        });
-        autoApproved++;
-      }
-
-      if (autoApproved > 0) {
-        invalidateIndex();
-        logger.info({ autoApproved }, "Pipeline: auto-approved sermon videos");
-      }
-
-      // ── Phase 2: Process approved without transcripts ────────────────────
-      const freshVideos = await getAllVideos();
-      const toProcess = freshVideos.filter(
+      const toProcess = allVideos.filter(
         (v) =>
           (v.reviewStatus === "approved" || v.reviewStatus === "auto-approved") &&
           (v.transcriptStatus === "none" || v.transcriptStatus === "failed")
@@ -502,15 +682,17 @@ router.post("/youtube-archive/pipeline/run", async (_req: Request, res: Response
           total: toProcess.length,
           done: 0,
           failed: 0,
-          currentItem: `Auto-approved ${autoApproved} videos`,
+          currentItem: `${toProcess.length} approved videos queued`,
         },
       });
 
       let done = 0;
       let failed = 0;
       let totalSegments = 0;
+      const failures: NonNullable<ImportJob["progress"]["failures"]> = [];
 
       for (const video of toProcess) {
+        if (await isJobCancelled(job.id)) return;
         await updateJob(job.id, {
           progress: {
             total: toProcess.length,
@@ -520,13 +702,25 @@ router.post("/youtube-archive/pipeline/run", async (_req: Request, res: Response
           },
         });
 
-        const result = await processVideoInternal(video.id);
+        let result: Awaited<ReturnType<typeof processVideoInternal>>;
+        try {
+          result = await processVideoInternal(video.id);
+        } catch (err) {
+          result = { success: false, segmentCount: 0, error: String(err) };
+        }
 
         if (result.success) {
           done++;
           totalSegments += result.segmentCount;
         } else {
           failed++;
+          failures.push({
+            itemId: video.id,
+            itemTitle: video.title,
+            stage: "process-video",
+            error: result.error ?? "Unknown processing failure",
+            at: new Date().toISOString(),
+          });
         }
 
         // Invalidate after each so partial index is queryable
@@ -542,12 +736,14 @@ router.post("/youtube-archive/pipeline/run", async (_req: Request, res: Response
           total: toProcess.length,
           done,
           failed,
-          currentItem: `${autoApproved} approved · ${done} indexed · ${totalSegments} segments`,
+          skipped: 0,
+          currentItem: `${done} indexed · ${totalSegments} segments`,
+          failures,
         },
       });
 
       logger.info(
-        { autoApproved, done, failed, totalSegments, total: toProcess.length },
+        { done, failed, totalSegments, total: toProcess.length },
         "Pipeline job completed"
       );
 
@@ -726,7 +922,7 @@ router.post("/youtube-archive/search", async (req: Request, res: Response) => {
 // Used by the chapter-level "Preached Here" badge in the Bible reader.
 
 router.get("/youtube-archive/preached-here", async (req: Request, res: Response) => {
-  const bookId = String(req.query.bookId ?? "").trim();
+  const bookId  = String(req.query.bookId ?? "").trim();
   const chapter = req.query.chapter
     ? parseInt(String(req.query.chapter), 10)
     : undefined;
@@ -736,7 +932,83 @@ router.get("/youtube-archive/preached-here", async (req: Request, res: Response)
     return;
   }
 
-  const { chapterSermons, bookSermons } = await searchByScripture(bookId, chapter, 10);
+  // ── 1. Canonical DB sermons — priority source ─────────────────────────────
+  //
+  // Match published canonical sermons by scripture_book_ids (+ chapter when provided).
+  // These are returned first, and their youtube_video_id suppresses archive duplicates.
+
+  const suppressedVideoIds = new Set<string>();
+  let canonicalChapterSermons: object[] = [];
+  let canonicalBookSermons:    object[] = [];
+
+  try {
+    const published = await listPublishedSermons();
+    const normBook  = bookId.toLowerCase();
+
+    const chapterMatches = published.filter(s =>
+      s.scriptureBookIds.some(id => id.toLowerCase() === normBook) &&
+      (chapter === undefined || s.scriptureChapters.includes(chapter))
+    );
+    const bookMatches = published.filter(s =>
+      s.scriptureBookIds.some(id => id.toLowerCase() === normBook) &&
+      !chapterMatches.includes(s)
+    );
+
+    // Build response objects compatible with the frontend's SermonSearchResult shape
+    function toPreachedHereShape(s: typeof published[0]) {
+      if (s.youtubeVideoId) suppressedVideoIds.add(s.youtubeVideoId);
+      return {
+        sermonId:           s.id,
+        segmentId:          s.id,
+        title:              s.title,
+        speaker:            s.speaker,
+        sermonDate:         s.sermonDate,
+        series:             s.series || undefined,
+        scriptureReference: s.scriptureReference,
+        youtubeUrl:         s.youtubeUrl,
+        timestampedUrl:     s.youtubeUrl,
+        startTimeSeconds:   0,
+        endTimeSeconds:     0,
+        timestampLabel:     "",
+        transcriptEvidence: s.summary,
+        summary:            s.summary,
+        relevanceScore:     20,
+        absoluteStartSeconds: 0,
+        relativeStartSeconds: 0,
+        source:             "canonical",
+      };
+    }
+
+    canonicalChapterSermons = chapterMatches.map(toPreachedHereShape);
+    canonicalBookSermons    = bookMatches.map(toPreachedHereShape);
+  } catch (err) {
+    logger.warn({ err }, "preached-here: canonical lookup failed (non-fatal)");
+  }
+
+  // ── 2. YouTube archive — legacy fallback (deduplicated) ───────────────────
+
+  let archiveChapter: object[] = [];
+  let archiveBook:    object[] = [];
+
+  try {
+    const { chapterSermons, bookSermons } = await searchByScripture(bookId, chapter, 10);
+    archiveChapter = chapterSermons.filter(
+      (s: { sermonId?: string; youtubeVideoId?: string }) =>
+        !suppressedVideoIds.has(s.youtubeVideoId ?? "") &&
+        !suppressedVideoIds.has(s.sermonId ?? "")
+    );
+    archiveBook = bookSermons.filter(
+      (s: { sermonId?: string; youtubeVideoId?: string }) =>
+        !suppressedVideoIds.has(s.youtubeVideoId ?? "") &&
+        !suppressedVideoIds.has(s.sermonId ?? "")
+    );
+  } catch (err) {
+    logger.warn({ err }, "preached-here: archive lookup failed (non-fatal)");
+  }
+
+  const chapterSermons = [...canonicalChapterSermons, ...archiveChapter];
+  const bookSermons    = [...canonicalBookSermons,    ...archiveBook];
+
   // `sermons` kept for backward compatibility (chapter-specific only)
   res.json({ sermons: chapterSermons, chapterSermons, bookSermons });
 });
@@ -766,8 +1038,12 @@ router.post("/youtube-archive/pipeline/embed", async (_req: Request, res: Respon
       // Load existing embeddings to support resumption
       let existing: Record<string, number[]> = {};
       try {
-        if (existsSync(EMBEDDINGS_FILE)) {
+        const durable = await readArchiveState<Record<string, number[]>>("embeddings");
+        if (durable) {
+          existing = durable;
+        } else if (existsSync(EMBEDDINGS_FILE)) {
           existing = JSON.parse(await readFile(EMBEDDINGS_FILE, "utf-8")) as Record<string, number[]>;
+          await writeArchiveState("embeddings", existing);
         }
       } catch { /* start fresh */ }
 
@@ -789,6 +1065,7 @@ router.post("/youtube-archive/pipeline/embed", async (_req: Request, res: Respon
 
       let done = 0;
       let failed = 0;
+      const failures: NonNullable<ImportJob["progress"]["failures"]> = [];
       const BATCH_SIZE = 10;
 
       for (let i = 0; i < todo.length; i += BATCH_SIZE) {
@@ -827,12 +1104,29 @@ router.post("/youtube-archive/pipeline/embed", async (_req: Request, res: Respon
               }
             }
           } else {
-            logger.warn({ status: response.status }, "Embedding API error");
+            const errorBody = await response.text().catch(() => "");
+            const error = `OpenAI embeddings HTTP ${response.status}${errorBody ? `: ${errorBody.slice(0, 240)}` : ""}`;
+            logger.warn({ status: response.status, error, batchSize: batch.length }, "Embedding API error");
             failed += batch.length;
+            failures.push(...batch.map((segment) => ({
+              itemId: segment.id,
+              itemTitle: `Segment ${segment.sequenceNumber}`,
+              stage: "embed",
+              error,
+              at: new Date().toISOString(),
+            })));
           }
         } catch (err) {
-          logger.warn({ err: String(err) }, "Embedding batch failed");
+          const error = String(err);
+          logger.warn({ err: error, batchSize: batch.length }, "Embedding batch failed");
           failed += batch.length;
+          failures.push(...batch.map((segment) => ({
+            itemId: segment.id,
+            itemTitle: `Segment ${segment.sequenceNumber}`,
+            stage: "embed",
+            error,
+            at: new Date().toISOString(),
+          })));
         }
 
         // Atomic write after each batch so progress survives interruption
@@ -840,15 +1134,30 @@ router.post("/youtube-archive/pipeline/embed", async (_req: Request, res: Respon
         await writeFile(tmp, JSON.stringify(existing), "utf-8");
         const { rename } = await import("node:fs/promises");
         await rename(tmp, EMBEDDINGS_FILE);
+        await writeArchiveState("embeddings", existing);
 
         await updateJob(job.id, {
-          progress: { total: todo.length, done, failed },
+          progress: {
+            total: todo.length,
+            done,
+            failed,
+            skipped: segments.length - todo.length,
+            currentItem: `${done}/${todo.length} embeddings`,
+            failures,
+          },
         });
       }
 
       await updateJob(job.id, {
         status: failed > 0 && done === 0 ? "failed" : "completed",
-        progress: { total: todo.length, done, failed },
+        progress: {
+          total: todo.length,
+          done,
+          failed,
+          skipped: segments.length - todo.length,
+          currentItem: `${done} indexed · ${failed} failed`,
+          failures,
+        },
       });
 
       logger.info({ done, failed }, "Embedding job complete");
@@ -1016,6 +1325,7 @@ router.post("/youtube-archive/videos/:id/generate-audio", async (req: Request, r
     try {
       await updateJob(job.id, { status: "running" });
       const sermonStart = video.finalSermonStartSeconds ?? 0;
+      const sermonEnd = video.manualSermonEndSeconds;
 
       // Always re-download when triggered from the admin — ensures a changed
       // sermon start (manualSermonStartSeconds) produces a fresh trim.
@@ -1024,6 +1334,7 @@ router.post("/youtube-archive/videos/:id/generate-audio", async (req: Request, r
         youtubeVideoId: video.youtubeVideoId,
         youtubeUrl: video.youtubeUrl,
         sermonStartSeconds: sermonStart,
+        sermonEndSeconds: sermonEnd,
         force: true,
         onProgress: (pct) => {
           updateJob(job.id, { progress: { total: 100, done: pct, failed: 0 } }).catch(() => {});

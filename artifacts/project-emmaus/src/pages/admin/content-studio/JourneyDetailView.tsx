@@ -13,6 +13,7 @@ import {
 import { useJourney } from '@/contexts/JourneyContext';
 import type { Journey, Step } from '@/lib/journeys-api';
 import { StatusBadge, AdminBtn } from '../shared';
+import { getStepLabel } from '@/lib/step-label';
 
 // ─── Props ─────────────────────────────────────────────────────────────────────
 
@@ -168,7 +169,7 @@ export default function JourneyDetailView({
               onClick={() => onAddDay(journeyId)}
               className="mt-5 px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 transition-colors"
             >
-              + Add Day 1
+              + Add {getStepLabel({ day: 1 }, journey)}
             </button>
           </div>
         ) : (
@@ -190,7 +191,7 @@ export default function JourneyDetailView({
                     <p className="text-sm font-medium text-gray-900 truncate">
                       {step.title
                         ? step.title
-                        : <span className="text-gray-400 italic">Day {step.day} — untitled</span>}
+                        : <span className="text-gray-400 italic">{getStepLabel(step, journey)} — untitled</span>}
                     </p>
                     <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                       {step.scripture && (
@@ -221,7 +222,7 @@ export default function JourneyDetailView({
               onClick={() => onAddDay(journeyId)}
               className="mt-3 w-full flex items-center justify-center gap-2 py-3 border border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-teal-400 hover:text-teal-600 hover:bg-teal-50/30 transition-colors"
             >
-              <Plus size={14} /> Add Day {days.length + 1}
+              <Plus size={14} /> Add {getStepLabel({ day: days.length + 1 }, journey)}
             </button>
           </div>
         )}

@@ -1,0 +1,231 @@
+Fix the Sermon Companion user flow completely. Do not patch the existing click handler only. Replace the old Sermon Companion presentation and routing with the following locked structure.
+
+IMPORTANT:
+The Sermon Companion shown under Next Steps and the active Sermon Companion shown on Today’s Steps are NOT the same card and do NOT have the same action.
+
+==================================================
+1. NEXT STEPS — SERMON COMPANION TAB
+==================================================
+
+The Sermon Companion tab under Next Steps is a discovery area where the user sees the current weekly sermon companion before starting it.
+
+Remove the old completed-progress card currently showing:
+
+- “5 of 5 completed”
+- “5 Days”
+
+Do not use the user’s previous completion status as the primary presentation in the discovery card.
+
+Create a new sermon discovery card with this structure:
+
+Label:
+THIS WEEK’S SERMON
+
+Title:
+Jesus at the Center
+
+Subtitle or description:
+5 Days of Intentional Living
+
+Additional information:
+A five-step companion based on this week’s sermon.
+
+Display the sermon date if available.
+
+Primary action:
+- “Start Companion” if the user has not started this sermon companion.
+- “Continue Companion” if it has already been started but is incomplete.
+- “Review Companion” if it has been completed.
+
+The entire card must be tappable.
+
+Tapping the discovery card must open a NEW Sermon Companion Overview screen.
+
+==================================================
+2. NEW SERMON COMPANION OVERVIEW SCREEN
+==================================================
+
+Do not open the old “Previous Days” list when the user taps the Next Steps discovery card.
+
+Create a proper overview screen containing:
+
+- Back arrow returning to the Sermon Companion tab in Next Steps
+- Label: THIS WEEK’S SERMON
+- Sermon title: Jesus at the Center
+- Companion title: 5 Days of Intentional Living
+- Sermon date, if available
+- Main Scripture, if available
+- Main Theme
+- A short description of what the five-step companion will help the user reflect on
+- Progress status only if the user has already started it
+- A clear primary button:
+  - “Start Companion”
+  - “Continue Companion”
+  - or “Review Companion”
+  depending on the user’s real progress
+
+Below this, show a clean list of the five steps:
+
+Step 1 — Re-centering the Heart
+Step 2 — Choosing the Cross Daily
+Step 3 — Let the Word Set the Standard
+Step 4 — Abide to Bear Fruit
+Step 5 — As for Me and My House
+
+Before the companion has been started, the step list may be visible as an overview, but later steps must not behave as completed previous entries.
+
+After the user starts the companion, add it to Today’s Steps automatically.
+
+==================================================
+3. TODAY’S STEPS — ACTIVE SERMON COMPANION CARD
+==================================================
+
+The Sermon Companion card on Today’s Steps represents the user’s active or completed companion.
+
+Make the entire card tappable.
+
+The current problem is that tapping it only refreshes Today’s Steps. This must be fixed at the routing level.
+
+The card must never navigate to:
+- Today’s Steps itself
+- the current route
+- a blank route
+- a generic journey route without the sermon companion ID
+
+Use the actual sermon companion ID and the user’s progress when navigating.
+
+Routing behaviour:
+
+A. If the companion is incomplete:
+Tapping the Today’s Steps card must open the next incomplete sermon companion step directly.
+
+Example:
+If Steps 1 and 2 are complete, open Step 3.
+
+B. If the companion is complete:
+Tapping the Today’s Steps card must open the Sermon Companion Overview screen in completed/review mode.
+
+The completed card must not simply refresh Today’s Steps.
+
+Update the Today’s Steps card action text:
+
+- Incomplete: “Continue”
+- Completed: “Review Companion”
+
+The card can show:
+- Sermon title
+- Companion title
+- “X of 5 completed”
+- Continue or Review Companion
+
+Do not show a Continue action after all five steps are complete.
+
+==================================================
+4. PREVIOUS DAYS / REVIEW SCREEN
+==================================================
+
+The existing screen listing Days 1–5 is currently being used as the main landing page. Stop using it as the landing page.
+
+This screen should only be opened when the user explicitly selects:
+- “View Previous Steps”
+- “Review Steps”
+- or an individual completed step from the overview screen
+
+Rename all user-facing sermon companion references from “Days” to “Steps” where appropriate:
+
+- Previous Days → Previous Steps
+- Day 1 → Step 1
+- Day 2 → Step 2
+- etc.
+
+The Sermon Companion is a five-step Walk based on a sermon, not merely a list of old daily entries.
+
+==================================================
+5. ROUTING REQUIREMENTS
+==================================================
+
+Audit and correct every Sermon Companion route.
+
+Use stable routes containing the correct sermon companion ID, for example:
+
+/sermon-companions/:companionId
+/sermon-companions/:companionId/steps/:stepNumber
+/sermon-companions/:companionId/review
+
+Adapt these to the existing application architecture, but preserve the destination behaviour.
+
+Do not use navigation such as:
+navigate('/today')
+navigate(location.pathname)
+window.location.reload()
+or any action that reloads the current screen.
+
+Ensure click events are not being swallowed by:
+- the three-dot menu
+- an overlay
+- a nested button
+- preventDefault()
+- stopPropagation()
+- a transparent element above the card
+
+The three-dot menu must remain separate from the main card tap target.
+
+==================================================
+6. DATA AND COMPLETION STATE
+==================================================
+
+Use the newly generated sermon companion record and its associated five steps.
+
+Do not load an older cached companion merely because it has the same sermon title.
+
+The active companion must be identified by its unique ID.
+
+Progress must be stored against:
+
+userId + sermonCompanionId + stepId
+
+Do not merge completion data from an older sermon companion with the new one.
+
+If this sermon companion was completed during testing, it may remain completed, but the new discovery and review experience must still display correctly.
+
+Do not delete genuine user progress.
+
+==================================================
+7. REQUIRED ACCEPTANCE TEST
+==================================================
+
+Test all of the following before reporting completion:
+
+TEST 1:
+Open Next Steps → Sermon Companion.
+The new discovery card appears, not the old generic completed card.
+
+TEST 2:
+Tap the discovery card.
+The new Sermon Companion Overview screen opens.
+It does not open directly to Previous Steps.
+
+TEST 3:
+Start or continue the companion.
+It appears on Today’s Steps.
+
+TEST 4:
+Tap the incomplete card on Today’s Steps.
+The next incomplete sermon companion step opens.
+
+TEST 5:
+Complete all five steps and return to Today’s Steps.
+The card displays completed status and “Review Companion.”
+
+TEST 6:
+Tap the completed card on Today’s Steps.
+The completed overview/review screen opens.
+Today’s Steps does not refresh.
+
+TEST 7:
+Use the back arrow from every screen.
+It returns to the screen from which the user entered:
+- Next Steps if entered through Next Steps
+- Today’s Steps if entered through Today’s Steps
+
+Do not report this as fixed until all seven tests pass on the published mobile version.

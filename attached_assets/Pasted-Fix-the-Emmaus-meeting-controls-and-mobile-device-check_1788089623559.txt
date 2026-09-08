@@ -1,0 +1,241 @@
+Fix the Emmaus meeting controls and mobile device-check UI. This is a functional correction, not merely a visual polish.
+
+CURRENT PROBLEMS CONFIRMED BY SCREENSHOTS
+
+1. The “Check your devices” panel does not fit on mobile:
+   - The Join gathering button extends beyond the right edge.
+   - Content is too wide.
+   - Ask Emmaus overlaps the panel.
+   - Controls do not adapt to narrow screens.
+
+2. An audio-only meeting is unnecessarily checking and previewing the camera.
+
+3. Once inside the audio meeting, the user cannot mute the microphone.
+
+4. There are empty white control boxes in the live-audio panel. These appear to be microphone and device controls, but their content is invisible and/or disabled.
+
+5. Microphone, camera and hand-raise controls are not available on all meeting screens. When the participant opens the Bible, all meeting controls disappear.
+
+REQUIRED FIX
+
+A. MAKE DEVICE CHECK MODE-AWARE
+
+Determine the meeting type before rendering or requesting permissions.
+
+For an AUDIO meeting:
+- Show only:
+  - Mic on / Mic off
+  - Listen only
+  - Microphone selector when available
+  - Microphone level test
+  - Speaker/output check where supported
+- Do not request camera permission.
+- Do not enumerate camera devices.
+- Do not display a camera selector.
+- Do not start a camera preview.
+- Do not require camera permission before joining.
+- “Check devices” must check audio devices only.
+- A user choosing “Listen only” must be able to join without granting microphone or camera permission.
+
+For a VIDEO meeting:
+- Show microphone and camera controls.
+- Check microphone and camera separately.
+- Allow the user to join with the camera off.
+- Camera permission must not be required when joining camera-off.
+- Clearly report each permission independently.
+
+For a TEXT meeting:
+- Do not request microphone or camera permissions.
+
+Never call getUserMedia with video enabled for an audio-only meeting.
+
+B. RESTORE WORKING MICROPHONE CONTROL
+
+The microphone button must work before and after joining.
+
+Required states:
+- Mic on
+- Mic muted
+- Permission needed
+- Microphone unavailable
+- Listen only
+
+When tapped:
+- Mic on → immediately mute the published local audio track.
+- Mic muted → immediately unmute or republish the existing local audio track.
+- Do not recreate the entire meeting connection for every mute/unmute action.
+- Keep the visible state synchronized with the actual LiveKit/local participant track state.
+- Do not permanently disable the button merely because device check has completed.
+- If permission was denied, display a clear “Allow microphone in device settings” message instead of an empty or disabled button.
+
+Verify whether the control has accidentally inherited:
+- `disabled`
+- `pointer-events: none`
+- low opacity
+- white text/icon on a white background
+- an invisible overlay blocking taps
+- an incorrect condition tied to camera permission
+- an incorrect condition tied to meeting type
+
+C. FIX THE EMPTY WHITE BOXES
+
+Identify the purpose of every control currently rendered as an empty white box.
+
+Do not leave icon-only white controls with invisible white icons.
+
+Use clear labelled controls:
+- “Mute” / “Unmute”
+- “Devices”
+- “Camera off” / “Camera on” in video meetings only
+- “Lower hand” / “Raise hand”
+
+Every control must have:
+- a visible icon
+- a visible text label where space permits
+- sufficient contrast
+- a minimum 44 × 44px touch target
+- a clear active/inactive state
+- an accessible label
+- a tooltip or title on larger screens
+
+Do not hide a control’s meaning through colour alone.
+
+D. ADD UNIVERSAL MEETING CONTROLS
+
+While a participant is connected to an active meeting, show a persistent compact meeting-control dock on EVERY screen they can access during the meeting, including:
+
+- meeting overview
+- chat
+- Group Notes
+- Today’s Study
+- presented content
+- shared images or slides
+- My Bible
+- Bible chapter reader
+- Bible Study view
+- Ask Emmaus
+- any full-screen or expanded meeting view
+
+The persistent dock must contain:
+
+For AUDIO meetings:
+- Mute / Unmute microphone
+- Raise / Lower hand
+- Return to meeting
+- Leave meeting
+
+For VIDEO meetings:
+- Mute / Unmute microphone
+- Camera on / Camera off
+- Raise / Lower hand
+- Return to meeting
+- Leave meeting
+
+For LISTEN-ONLY participants:
+- Join microphone / remain listen-only
+- Raise / Lower hand
+- Return to meeting
+- Leave meeting
+
+The controls must operate on the same shared meeting state and LiveKit room instance. Do not create a second connection when navigating between screens.
+
+The dock must remain visible when the Bible is opened. Screenshot 4 confirms that it is currently completely absent from the Bible screen.
+
+Use a global meeting-controls component mounted at the authenticated app layout or meeting-aware root level—not inside only the meeting card or one meeting route.
+
+It must survive route changes and must not unmount/reconnect the participant when navigating.
+
+E. MOBILE LAYOUT
+
+Correct the device-check layout for narrow screens.
+
+At widths below 480px:
+- All content must remain within the viewport.
+- Use `width: 100%` with appropriate inner padding.
+- Use `max-width: 100%`.
+- Use `box-sizing: border-box`.
+- Prevent horizontal page overflow.
+- Stack action buttons vertically if they cannot fit comfortably in one row.
+- The Join gathering button must be fully visible and tappable.
+- Mic on and Listen only may wrap or become a two-column grid only if both fit.
+- Device selectors must use the available width.
+- Preview areas must scale responsively.
+- Long labels must wrap safely.
+- The panel must not sit underneath the fixed bottom navigation.
+
+Do not solve the overflow by shrinking text or touch targets excessively.
+
+F. PREVENT FLOATING-UI COLLISIONS
+
+Ask Emmaus is overlapping the device check and meeting content.
+
+While a device-check panel, modal, or persistent meeting dock is present:
+- reposition or temporarily collapse the Ask Emmaus floating button
+- ensure it does not cover Join, Cancel, Check devices, microphone controls, hand raise or Leave
+- account for both the app bottom navigation and Android safe-area inset
+
+Use coordinated bottom offsets rather than unrelated hard-coded positions.
+
+G. PRESERVE MEETING TYPE
+
+Do not silently turn an audio meeting into a video-capable device check.
+
+Carry the meeting mode consistently through:
+- scheduled meeting record
+- join screen
+- permission request
+- device check
+- LiveKit track publication
+- in-meeting controls
+- persistent control dock
+
+Acceptance tests:
+
+1. AUDIO MEETING
+- Open an audio meeting on a narrow Android screen.
+- No camera permission is requested.
+- No camera selector or preview is shown.
+- Check devices checks microphone/audio only.
+- Join button fits fully within the screen.
+- Join with Mic on.
+- Tap Mute: the participant is actually muted and the label changes to Unmute.
+- Tap Unmute: audio resumes and the label changes to Mute.
+- Navigate to My Bible: the compact meeting controls remain visible.
+- Mute/unmute and raise/lower hand from the Bible screen.
+- Return to the meeting without reconnecting.
+- Leave successfully.
+
+2. LISTEN ONLY
+- Choose Listen only.
+- Join without granting microphone or camera permission.
+- No fake microphone-on state is shown.
+- Allow the participant to activate the microphone later, requesting permission only then.
+
+3. VIDEO MEETING
+- Microphone and camera controls are shown.
+- Join with camera off.
+- Toggle camera and microphone independently.
+- Both controls remain accessible while viewing the Bible or other shared content.
+
+4. TEXT MEETING
+- No audio or camera permission prompt appears.
+
+5. MOBILE UI
+Test at 320px, 360px, 390px and 412px widths:
+- no horizontal overflow
+- no clipped Join button
+- no empty controls
+- no overlap from Ask Emmaus
+- no overlap with bottom navigation
+- all controls have visible labels or clearly visible icons
+
+6. STATE
+- Navigating between meeting, Bible and content screens does not disconnect or create duplicate LiveKit participants.
+- Microphone, camera and hand state remains accurate across every screen.
+
+Before finishing:
+- Search for all meeting-control implementations and remove conflicting duplicate local state.
+- Identify exactly what created the two empty white boxes.
+- Report the root cause of the broken mute button.
+- List the files changed.
+- Report the result of every acceptance test.

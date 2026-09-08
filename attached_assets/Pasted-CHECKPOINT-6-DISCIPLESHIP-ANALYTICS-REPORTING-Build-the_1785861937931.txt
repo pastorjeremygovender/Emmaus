@@ -1,0 +1,419 @@
+CHECKPOINT 6 — DISCIPLESHIP ANALYTICS & REPORTING
+
+Build the Emmaus Analytics Centre.
+
+This is not another dashboard.
+
+This is a reporting and trend-analysis system.
+
+Every graph and report must answer:
+
+"What is happening in our church?"
+
+and
+
+"Why?"
+
+----------------------------------------------------
+
+SECTION 1
+
+CHURCH HEALTH OVERVIEW
+
+Display KPI cards.
+
+Members
+
+Active this week
+
+Attendance %
+
+Daily Rhythm %
+
+Walk Completion %
+
+Room Participation %
+
+Prayer Requests
+
+New Believers
+
+Serving
+
+Baptisms
+
+Each card opens detailed analytics.
+
+----------------------------------------------------
+
+SECTION 2
+
+ATTENDANCE TRENDS
+
+Graphs
+
+Weekly attendance
+
+Monthly attendance
+
+Yearly attendance
+
+Visitors
+
+First-time visitors
+
+Returning visitors
+
+Average attendance
+
+Attendance by meeting
+
+Attendance by demographic
+
+Retention %
+
+Trend indicators
+
+↑
+
+↓
+
+=
+
+----------------------------------------------------
+
+SECTION 3
+
+DISCIPLESHIP ANALYTICS
+
+Show
+
+Walk Starts
+
+Walk Completions
+
+Average completion %
+
+Most abandoned Walks
+
+Most completed Walks
+
+Average days to completion
+
+Daily Rhythm completion
+
+Devotional engagement
+
+Bible Study engagement
+
+Sermon Companion engagement
+
+Room participation
+
+Prayer activity
+
+----------------------------------------------------
+
+SECTION 4
+
+RETENTION
+
+Measure movement.
+
+Visitors
+
+↓
+
+New Accounts
+
+↓
+
+Started Coming to Jesus
+
+↓
+
+Completed Coming to Jesus
+
+↓
+
+Started Prayer Walk
+
+↓
+
+Joined Room
+
+↓
+
+Started Serving
+
+↓
+
+Baptised
+
+↓
+
+Active after 6 months
+
+Display this as a conversion funnel.
+
+----------------------------------------------------
+
+SECTION 5
+
+SPIRITUAL GROWTH
+
+Show trends.
+
+People growing
+
+People plateauing
+
+People disengaging
+
+Average Spiritual Rhythm score
+
+Walk completion score
+
+Attendance consistency
+
+Prayer consistency
+
+Room participation
+
+Timeline of growth
+
+----------------------------------------------------
+
+SECTION 6
+
+ROOM ANALYTICS
+
+Most active Rooms
+
+Inactive Rooms
+
+Average participation
+
+Messages
+
+Prayer activity
+
+Walks completed
+
+Average attendance
+
+Growth over time
+
+----------------------------------------------------
+
+SECTION 7
+
+SERMON ANALYTICS
+
+Views
+
+Listens
+
+Reads
+
+Companion completions
+
+Average completion
+
+Most referenced sermon
+
+Ask Emmaus references
+
+Top Bible passages
+
+Top questions asked
+
+----------------------------------------------------
+
+SECTION 8
+
+BIBLE ANALYTICS
+
+Most read books
+
+Most studied books
+
+Most highlighted verses
+
+Most shared verses
+
+Reading streaks
+
+Completion %
+
+----------------------------------------------------
+
+SECTION 9
+
+PASTORAL CARE ANALYTICS
+
+Open Care Signals
+
+Resolved Care Signals
+
+Average response time
+
+Attendance alerts
+
+Walk abandonment alerts
+
+Prayer follow-ups
+
+New believer follow-ups
+
+Follow-up completion %
+
+----------------------------------------------------
+
+SECTION 10
+
+EXPORTS
+
+Generate
+
+PDF Reports
+
+Excel
+
+CSV
+
+Print-friendly
+
+Weekly
+
+Monthly
+
+Quarterly
+
+Yearly
+
+----------------------------------------------------
+
+SECTION 11
+
+FILTERS
+
+Entire church
+
+Campus
+
+Meeting
+
+Age
+
+Gender
+
+Room
+
+Journey
+
+Date range
+
+Volunteer
+
+Leader
+
+----------------------------------------------------
+
+SECTION 12
+
+PREDICTIVE INSIGHTS
+
+Using existing data only.
+
+Do NOT invent AI predictions.
+
+Use historical trends.
+
+Examples:
+
+Attendance has increased for five consecutive weeks.
+
+Daily Rhythm engagement has fallen 18%.
+
+Prayer requests have doubled this month.
+
+New believer retention is improving.
+
+Most people abandon Prayer Walk on Day 3.
+
+Made Free completion has increased.
+
+Highlight unusual trends.
+
+----------------------------------------------------
+
+SECTION 13
+
+SAVED REPORTS
+
+Allow pastors to save favourite reports.
+
+Example
+
+Sunday Leadership Report
+
+Monthly Elders Report
+
+Board Report
+
+Youth Report
+
+Women's Ministry
+
+----------------------------------------------------
+
+SECTION 14
+
+AUTOMATIC REPORTS
+
+Generate
+
+Weekly summary
+
+Monthly summary
+
+Quarterly summary
+
+Yearly summary
+
+Available for download from Admin.
+
+(No email sending yet.)
+
+----------------------------------------------------
+
+SECTION 15
+
+PERFORMANCE
+
+Every graph loads independently.
+
+Lazy-load heavy reports.
+
+Cache expensive calculations.
+
+Do not block the page while generating reports.
+
+----------------------------------------------------
+
+MOBILE
+
+Collapse charts into swipeable cards.
+
+Large reports become stacked sections.
+
+Export buttons remain available.
+
+----------------------------------------------------
+
+Do not use placeholder data.
+
+Use Attendance, Walks, Daily Rhythm, Devotionals, Bible Studies, Rooms, Sermons, Prayer Requests and Care Signals already present in Emmaus.
+
+This becomes the permanent Emmaus Analytics Centre.

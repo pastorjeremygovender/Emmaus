@@ -1,0 +1,92 @@
+Complete the outstanding Ask Emmaus production-quality release gate now. Do not defer this work to Task #719 or another follow-up.
+
+The response normalizer is implemented, but it must now be proven against authenticated, database-backed Emmaus data and rendered browser responses.
+
+1. Run the full golden evaluation suite requested in the previous brief, including all specified questions and natural paraphrases.
+
+2. Use production-equivalent database fixtures containing real:
+
+* sermons and sermon segments;
+* devotionals;
+* Bible Studies;
+* Walks;
+* Journeys;
+* Daily Rhythm eligibility;
+* Bible progress;
+* Walk and Journey progress;
+* published, unpublished and inaccessible resources.
+
+3. Verify that unsupported-claim neutralization uses the complete canonical catalogue and user eligibility—not merely the search results returned for the current question.
+
+A resource must not be removed simply because:
+
+* search timed out;
+* the index is stale;
+* the current retrieval query did not return it;
+* it was not included in the limited model context.
+
+Distinguish explicitly between:
+
+* verified resource;
+* verified nonexistent or ineligible resource;
+* temporarily unresolved resource.
+
+Never present temporarily unresolved content as verified, but do not falsely conclude that it does not exist.
+
+4. Test the current production examples:
+
+* Psalm 91:1–2;
+* Hebrews 11:1;
+* John 20:30–31;
+* Genesis 50:1–14;
+* Luke 15:11–32;
+* numbered Bible books;
+* abbreviations;
+* repeated Scripture references within one answer.
+
+Confirm every valid occurrence is correctly capitalized, linked and routed to the exact passage.
+
+5. Verify resource grounding and deduplication:
+
+* one inline link and one supporting card per sermon;
+* no duplicate Preached Here and Sermon cards;
+* verified timestamp;
+* exact sermon destination;
+* no generic or invented Walk/Journey references;
+* legitimate real Walks and Journeys are not removed;
+* unsupported claims cannot reach the user.
+
+6. Evaluate answer quality, not only schema validity.
+
+For each golden response record:
+
+* intent accuracy;
+* factual grounding;
+* Scripture-first behaviour;
+* relevance of local-church material;
+* concision;
+* warmth;
+* excessive name usage;
+* unnecessary repetition;
+* unsupported claims;
+* duplicate resources;
+* working links and actions;
+* quality of `displayAnswer`;
+* naturalness and brevity of `speakableAnswer`.
+
+7. Render and manually inspect the golden responses in authenticated desktop and mobile browser flows. Click every Scripture and resource link.
+
+8. Record latency for direct actions and general questions. Confirm that buffering until normalization has not made Ask Emmaus unacceptably slow. Report time to first visible response and total response time.
+
+9. Do not modify Voice. Voice is not part of this release gate.
+
+10. Provide before-and-after rendered examples for:
+
+* “devotional”;
+* “What is faith?”;
+* “Prodigal”;
+* “I’m afraid”;
+* “Where can I find devotionals?”;
+* “What have we preached about the prodigal son?”
+
+Do not recommend publication until the database-backed golden suite passes and the authenticated rendered flows have been verified. If authentication prevents verification, report the build as awaiting production verification—not ready for release.

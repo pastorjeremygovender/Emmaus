@@ -1,0 +1,202 @@
+STOP.
+
+Do not add any new features until the following architectural issues are fixed. This is now a UI/UX stabilization pass.
+
+====================================================
+GROUPS / NAVIGATION STABILIZATION
+====================================================
+
+These are mandatory fixes.
+
+-----------------------------------
+1. MEETING TOOLS SCREEN
+-----------------------------------
+
+The current Meeting Tools bottom sheet is not acceptable.
+
+Problems:
+- It is cut off.
+- It has its own scrollbar.
+- Some options are hidden.
+- It feels cramped.
+
+Replace it with ONE of these approaches:
+
+Option A (preferred)
+• Open a full screen "Meeting Tools" page.
+
+Option B
+• Use a full-height bottom sheet that expands almost the full screen.
+
+Requirements:
+- Large title.
+- Close button.
+- No hidden controls.
+- No clipped content.
+- No nested scrolling unless absolutely necessary.
+
+The leader must be able to access every meeting tool comfortably.
+
+-----------------------------------
+2. REMOVE PERSONAL JOURNEY DEPENDENCIES
+-----------------------------------
+
+Groups are NOT part of the user's personal discipleship journey.
+
+Remove ALL personal progression requirements from Groups.
+
+For example:
+
+❌ Complete today's 10 Minutes with Jesus
+
+must NEVER appear inside a Group.
+
+Users must always be able to:
+
+• join a Group
+• prepare
+• read the assigned study
+• attend the meeting
+
+regardless of their own journey progress.
+
+Groups are independent.
+
+-----------------------------------
+3. FIX BACK NAVIGATION
+-----------------------------------
+
+The Back button must NEVER navigate to a hardcoded page.
+
+Examples:
+
+Discover
+→ Group
+← returns to Discover
+
+Today's Steps
+→ Group
+← returns to Today's Steps
+
+Journey
+→ Group
+← returns to Journey
+
+Admin
+→ Group
+← returns to Admin
+
+If a user opens a Group from a Journey and presses Back, they must return to that Journey—not Discover or Next Steps.
+
+Use actual navigation history everywhere.
+
+Search the entire codebase and remove every hardcoded:
+
+- Back to Discover
+- Back to Next Steps
+- router.push('/discover')
+- router.push('/next-steps')
+
+where these are acting as generic Back buttons.
+
+Use proper history navigation.
+
+-----------------------------------
+4. OPEN ROOM FROM JOURNEY
+-----------------------------------
+
+Current behaviour:
+
+Journey
+↓
+
+Open Room
+↓
+
+Back
+↓
+
+Discover
+
+Incorrect.
+
+Required behaviour:
+
+Journey
+↓
+
+Open Room
+↓
+
+Back
+↓
+
+Journey
+
+-----------------------------------
+5. REMOVE DUPLICATE STATES
+-----------------------------------
+
+There must only ever be ONE active meeting state.
+
+Never show duplicates such as:
+
+- two Start Meeting buttons
+- two Meeting in Progress banners
+- two Ask Emmaus cards
+
+There must be a single source of truth for meeting state.
+
+-----------------------------------
+6. GLOBAL NAVIGATION AUDIT
+-----------------------------------
+
+Search the app.
+
+Confirm:
+
+✓ every Back button returns to the previous page
+
+✓ browser Back works correctly
+
+✓ no navigation loops
+
+✓ no hardcoded Discover destinations
+
+✓ no hardcoded Next Steps destinations
+
+✓ Groups preserve navigation context
+
+-----------------------------------
+7. QA BEFORE MARKING COMPLETE
+-----------------------------------
+
+Do NOT mark this task complete until all of the following have been manually tested:
+
+✓ Open Group from Discover
+
+Back returns to Discover.
+
+✓ Open Group from Journey
+
+Back returns to Journey.
+
+✓ Open Group from Today's Steps
+
+Back returns to Today's Steps.
+
+✓ Meeting Tools opens fully.
+
+✓ No clipped UI.
+
+✓ No nested scrollbars.
+
+✓ No duplicated meeting controls.
+
+✓ No personal journey requirements appear inside Groups.
+
+Provide a short QA report listing each scenario tested and the result.
+
+Do not add any new functionality during this task.
+
+This is purely a navigation, architecture and UX stabilization pass.

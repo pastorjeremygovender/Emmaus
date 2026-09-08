@@ -8,7 +8,7 @@
  *   dailyDevotionals       – all published devotional series (at least 1 published entry)
  *   journeyCollections     – published collections with their published journeys
  *   standaloneJourneys     – published journeys with no collection
- *   currentSermonCompanion – companion marked as This Week's (or most-recent)
+ *   currentSermonCompanion – companion explicitly marked as This Week's
  *   previousSermonCompanions – all other published companions, newest first
  *
  * Query params:
@@ -20,7 +20,17 @@ import * as journeyStore from "../lib/journey-store.js";
 import * as devStore from "../lib/devotional-store.js";
 import * as collectionsStore from "../lib/collections-store.js";
 import * as sermonCompanionStore from "../lib/sermon-companion-store.js";
+import {
+  listPublishedGroups,
+} from "../lib/content-groups-store.js";
+import { db } from "@workspace/db";
+import {
+  contentGroupItemsTable,
+} from "@workspace/db/schema";
+import { inArray } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
+import { computeBadge, type Badge } from "../lib/badge.js";
+import { extractUserId } from "../emmaus/auth.js";
 
 const router = Router();
 
@@ -29,6 +39,7 @@ const router = Router();
 export type MemberProgressState = "not-started" | "in-progress" | "completed" | "paused";
 export type ContentType =
   | "journey"
+  | "daily-rhythm"
   | "bible-study"
   | "sermon-devotional"
   | "daily-devotional";
@@ -45,10 +56,14 @@ export interface NextStepsItem {
     scriptureReference?: string;
     coverImageUrl?: string;
     collectionId?: string;
+    /** Stable creation timestamp used to match Content Studio's default tie-breaker. */
+    createdAt?: string;
     publishedAt?: string;
     subtitle?: string;
+      topic?: string;
     /** For daily-devotional items: the member's current day (next to complete). */
     currentDay?: number;
+    displayOrder?: number;
   };
   /** Member-facing route, e.g. /journey/:id/day/:n or /devotional/:id/day/:n */
   route: string;
@@ -57,6 +72,8 @@ export interface NextStepsItem {
    * null means the content is fully complete — no primary action should be shown.
    */
   primaryActionLabel: string | null;
+  /** Smart Content Indicator badge — 'NEW' | 'UPDATED' | null */
+  badge?: Badge;
 }
 
 export interface JourneyCollectionGroup {
@@ -66,12 +83,24 @@ export interface JourneyCollectionGroup {
   journeys: NextStepsItem[];
 }
 
+/** A content group entry in the Next Steps response — personalised, eligibility-checked. */
+export interface ContentGroupEntry {
+  id: string;
+  title: string;
+  description?: string;
+  coverImageUrl?: string;
+  displayOrder: number;
+  items: NextStepsItem[];
+}
+
 export interface NextStepsResponse {
   dailyDevotionals: NextStepsItem[];
   journeyCollections: JourneyCollectionGroup[];
   standaloneJourneys: NextStepsItem[];
   currentSermonCompanion: NextStepsItem | null;
   previousSermonCompanions: NextStepsItem[];
+  /** Content groups (Task #614): published groups with eligible, personalised items. */
+  contentGroups: ContentGroupEntry[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -93,9 +122,17 @@ function primaryActionLabel(_contentType: ContentType, state: MemberProgressStat
 function journeyProgressState(
   j: journeyStore.FrontendJourney,
   allProgress: Record<string, journeyStore.FrontendProgress>,
+  expectedOrigin?: journeyStore.JourneyDisplayOrigin,
 ): MemberProgressState {
   const p = allProgress[j.id];
   if (!p) return "not-started";
+  // New rows carry an explicit origin. Legacy rows use the only stable
+  // compatibility signal available: collection membership for Walk-shaped
+  // content, and journey type for standalone growth content.
+  const legacyOrigin: journeyStore.JourneyDisplayOrigin =
+    j.journeyType === "walk" && !j.collectionId ? "walk" : "journey";
+  const effectiveOrigin = p.displayOrigin ?? legacyOrigin;
+  if (expectedOrigin && effectiveOrigin !== expectedOrigin) return "not-started";
   if (j.durationDays > 0 && p.completedDays.length >= j.durationDays) return "completed";
   return "in-progress";
 }
@@ -118,9 +155,15 @@ function buildJourneyItem(
   allProgress: Record<string, journeyStore.FrontendProgress>,
   journeyIdsWithIntro: Set<string> = new Set(),
   publishedSteps?: journeyStore.FrontendStep[],
+  expectedOrigin?: journeyStore.JourneyDisplayOrigin,
 ): NextStepsItem {
-  const state = journeyProgressState(j, allProgress);
-  const p = allProgress[j.id];
+  const state = journeyProgressState(j, allProgress, expectedOrigin);
+  const rawProgress = allProgress[j.id];
+  const legacyOrigin: journeyStore.JourneyDisplayOrigin =
+    j.journeyType === "walk" && !j.collectionId ? "walk" : "journey";
+  const p = rawProgress && (rawProgress.displayOrigin ?? legacyOrigin) === expectedOrigin
+    ? rawProgress
+    : expectedOrigin ? undefined : rawProgress;
 
   // For not-started walks: route to day/0 (Walk Introduction) when one exists,
   // otherwise day/1. This avoids hard-coding day 1 and satisfies the spec
@@ -169,10 +212,14 @@ function buildJourneyItem(
       coverImageUrl: j.coverImageUrl || undefined,
       collectionId: j.collectionId || undefined,
       publishedAt: j.publishedAt || undefined,
+      displayOrder: j.displayOrder ?? 0,
       subtitle: j.subtitle || undefined,
     },
-    route: `/journey/${j.id}/day/${currentDay}`,
+    route: contentType === "daily-rhythm"
+      ? `/daily-rhythm/day/${currentDay}`
+      : `/journey/${j.id}/day/${currentDay}`,
     primaryActionLabel: primaryActionLabel(contentType, state),
+    badge: computeBadge(j.notifyPublishedAt, p?.lastOpenedAt, !!p),
   };
 }
 
@@ -209,14 +256,23 @@ function buildDevotionalItem(
   const nextEntry = publishedEntries.find(e => e.dayNumber === currentDay);
   const nextEntryTitle = nextEntry?.title || undefined;
 
+  // Convert the raw dayNumber into a 1-based positional index within the
+  // sorted published entries. dayNumbers may be calendar-based (e.g. 3–16 for
+  // January 3–16), so displaying the raw dayNumber against publishedEntryCount
+  // (14) would produce "Day 16 of 14". The route still uses the raw dayNumber
+  // for correct navigation; only the display label uses the position.
+  const nextEntryIdx = allComplete
+    ? publishedEntryCount
+    : Math.max(publishedEntries.findIndex(e => e.dayNumber === currentDay) + 1, 1);
+
   // Mirror the description formula used by Walk.tsx > DevotionalCard so both
   // screens always show exactly the same progress string.
   const description = allComplete
     ? `${publishedEntryCount} of ${publishedEntryCount} completed`
     : completedCount > 0
       ? nextEntryTitle
-        ? `Day ${currentDay} of ${publishedEntryCount} · ${nextEntryTitle}`
-        : `Day ${currentDay} of ${publishedEntryCount}`
+        ? `Day ${nextEntryIdx} of ${publishedEntryCount} · ${nextEntryTitle}`
+        : `Day ${nextEntryIdx} of ${publishedEntryCount}`
       : publishedEntryCount > 0
         ? `Day 1 of ${publishedEntryCount}`
         : "Day 1";
@@ -230,10 +286,12 @@ function buildDevotionalItem(
     metadata: {
       durationDays: publishedEntryCount || undefined,
       publishedAt: s.publishedAt?.toISOString?.() ?? (s.publishedAt as unknown as string) ?? undefined,
-      currentDay,
+      displayOrder: s.displayOrder ?? 0,
+      currentDay: nextEntryIdx, // positional (1-based) for display; route uses raw dayNumber
     },
     route: `/devotional/${s.id}/day/${currentDay}`,
     primaryActionLabel: primaryActionLabel("daily-devotional", state),
+    badge: computeBadge(s.notifyPublishedAt ?? null, p?.lastOpenedAt ?? null, devProgressMap.has(s.id)),
   };
 }
 
@@ -241,19 +299,20 @@ function buildDevotionalItem(
 
 router.get("/next-steps", async (req: Request, res: Response) => {
   try {
-    const userId =
-      (req.headers["x-user-id"] as string | undefined) ||
-      (req.query.userId as string | undefined) ||
-      null;
+    // Resolve user identity via the trusted auth helper — falls back to null
+    // when the request is unauthenticated (public catalog mode).
+    const userId = extractUserId(req);
 
     // ── Fetch catalog + progress in parallel ────────────────────────────────
 
-    const [publishedJourneys, devSeries, allCollections, scTableCompanions] = await Promise.all([
+    const [publishedJourneys, devSeries, allCollections, scTableCompanions, publishedContentGroups] = await Promise.all([
       journeyStore.listPublishedJourneys(),
       devStore.listPublishedSeries(),
       collectionsStore.listCollections(),
       // Sermon companions from the sermon_companion table (AI-generated pipeline)
       sermonCompanionStore.listPublishedSermonCompanions(),
+      // Content groups (Task #614)
+      listPublishedGroups(),
     ]);
 
     // Batch-check which published journeys have a Walk Introduction step (day=0).
@@ -296,25 +355,13 @@ router.get("/next-steps", async (req: Request, res: Response) => {
     // ("Day N of M · Entry Title") that mirrors Today's Steps exactly.
     const companionEntriesMap = new Map<string, sermonCompanionStore.CompanionEntry[]>();
 
-    // Fetch published steps per journey-source companion.
-    // Used by buildJourneyItem to compute the same progress-aware description
-    // for companions stored in the journeys table (legacy/manual companions).
-    const journeyCompanionStepsMap = new Map<string, journeyStore.FrontendStep[]>();
-
-    await Promise.all([
-      ...scTableCompanions.map(async c => {
+    await Promise.all(
+      scTableCompanions.map(async c => {
         const entries = await sermonCompanionStore.getEntriesForCompanion(c.id);
         const published = entries.filter(e => e.status === "Published");
         companionEntriesMap.set(c.id, published);
       }),
-      ...publishedJourneys
-        .filter(j => j.journeyType === "companion")
-        .map(async j => {
-          const steps = await journeyStore.listSteps(j.id);
-          const published = steps.filter(s => s.status === "Published");
-          journeyCompanionStepsMap.set(j.id, published);
-        }),
-    ]);
+    );
 
     // ── Daily Devotionals ────────────────────────────────────────────────────
 
@@ -323,67 +370,21 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       .map(s => buildDevotionalItem(s, seriesEntriesMap.get(s.id) ?? [], devProgressMap));
 
     // ── Sermon Companions ──────────────────────────────────────────────────────
-    // Two sources are merged into one list:
-    //   1. journeys table (journeyType='companion') — manually created / legacy
-    //   2. sermon_companion table — AI-generated via the sermon generation pipeline
+    // Single source of truth: the sermon_companion table, managed exclusively via
+    // Admin → Content Studio → Sermons. Legacy journeys with journeyType='companion'
+    // are excluded — the sermons table is the sole authoritative content source.
     //
-    // Eligibility for both: Published status AND at least one published entry.
-    // listPublishedJourneys() already enforces Published status; the journey-step
-    // count is not re-checked here because the journey editor controls entry status.
-    // listPublishedSermonCompanions() enforces both status and published entry count.
+    // listPublishedSermonCompanions() enforces Published status and at least one
+    // published entry. Results are already sorted newest-published first.
 
-    type UnifiedCompanion =
-      | { source: "journey"; data: journeyStore.FrontendJourney }
-      | { source: "sermon-table"; data: sermonCompanionStore.Companion & { publishedEntryCount: number } };
+    // Current means explicitly marked is_current_week = true. A published
+    // companion must never become Today's Steps content merely because it is
+    // the newest record; admins choose the highlighted sermon intentionally.
+    const currentCompanion = scTableCompanions.find(c => c.isCurrentWeek) ?? null;
+    const previousCompanions = scTableCompanions.filter(c => c.id !== currentCompanion?.id);
 
-    const seenIds = new Set<string>();
-    const allCompanions: UnifiedCompanion[] = [];
-
-    for (const j of publishedJourneys.filter(j => j.journeyType === "companion")) {
-      if (seenIds.has(j.id)) continue;
-      seenIds.add(j.id);
-      allCompanions.push({ source: "journey", data: j });
-    }
-    for (const c of scTableCompanions) {
-      if (seenIds.has(c.id)) continue;
-      seenIds.add(c.id);
-      allCompanions.push({ source: "sermon-table", data: c });
-    }
-
-    // Sort newest-published first so the fallback current-companion is consistent.
-    allCompanions.sort((a, b) => {
-      const aDate = a.source === "journey" ? (a.data.publishedAt ?? "") : (a.data.publishedAt ?? "");
-      const bDate = b.source === "journey" ? (b.data.publishedAt ?? "") : (b.data.publishedAt ?? "");
-      return bDate.localeCompare(aDate);
-    });
-
-    // Current = companion explicitly marked is_current_week = true in the DB.
-    // Falls back to the most-recently-published companion (first in the sorted list)
-    // when no companion has the flag set — covers the window between the column
-    // being added (startup migration) and the admin clicking Set as This Week's Sermon.
-    const sermonTableCompanions = allCompanions.filter(c => c.source === "sermon-table");
-    const currentCompanionUnified =
-      sermonTableCompanions.find(
-        c => (c.data as sermonCompanionStore.Companion).isCurrentWeek,
-      ) ??
-      (sermonTableCompanions[0] ?? null);
-    const previousCompanionsUnified = allCompanions.filter(
-      c => c.data.id !== currentCompanionUnified?.data.id,
-    );
-
-    // Build NextStepsItem from either source type.
-    function buildCompanionItem(u: UnifiedCompanion): NextStepsItem {
-      if (u.source === "journey") {
-        return buildJourneyItem(
-          u.data,
-          "sermon-devotional",
-          journeyProgress,
-          new Set(), // no intro-step routing needed for companions
-          journeyCompanionStepsMap.get(u.data.id),
-        );
-      }
-      // sermon-table companion
-      const c = u.data;
+    // Build a NextStepsItem from a sermon_companion table record.
+    function buildCompanionItem(c: sermonCompanionStore.Companion & { publishedEntryCount: number }): NextStepsItem {
       const prog = scProgressMap[c.id];
 
       // Use the actual published entry count as the final-day threshold.
@@ -409,12 +410,13 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       // check used by the Today's Steps card (currentDay > numberOfDays).
       const isAllComplete = publishedEntryCount > 0 && currentDay > publishedEntryCount;
 
-      // Strip any subtitle appended to the companion title by AI generation
-      // (e.g. "Jesus at the Center: 5 Days of Intentional Living" → "Jesus at the Center").
-      const title = c.title.includes(": ") ? c.title.split(": ")[0].trim() : c.title;
+      // Strip subtitle appended to companion title by AI generation
+      // e.g. "Jesus at the Center: 5 Days of Intentional Living" → title + subtitle
+      const hasSeparator = c.title.includes(": ");
+      const title    = hasSeparator ? c.title.split(": ")[0].trim() : c.title;
+      const subtitle = hasSeparator ? c.title.split(": ").slice(1).join(": ").trim() : undefined;
 
-      // Progress-aware description — mirrors the formula in buildDevotionalItem and
-      // Walk.tsx > DevotionalCard so Today's Steps and Next Steps always agree.
+      // Progress-aware description for Today's Steps card
       const publishedEntries = companionEntriesMap.get(c.id) ?? [];
       const completedCount = prog?.completedDays.length ?? 0;
       const allComplete = publishedEntryCount > 0 && completedCount >= publishedEntryCount;
@@ -422,14 +424,19 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       const nextEntryTitle = nextEntry?.title || undefined;
 
       const description = allComplete
-        ? `${publishedEntryCount} of ${publishedEntryCount} completed`
+        ? `${publishedEntryCount} of ${publishedEntryCount} steps completed`
         : completedCount > 0
           ? nextEntryTitle
-            ? `Day ${currentDay} of ${publishedEntryCount} · ${nextEntryTitle}`
-            : `Day ${currentDay} of ${publishedEntryCount}`
+            ? `Step ${currentDay} of ${publishedEntryCount} · ${nextEntryTitle}`
+            : `Step ${currentDay} of ${publishedEntryCount}`
           : publishedEntryCount > 0
-            ? `Day 1 of ${publishedEntryCount}`
-            : "Day 1";
+            ? `Step 1 of ${publishedEntryCount}`
+            : "Step 1";
+
+      // Action label — complete companions now show "Review Companion" instead of no button.
+      const actionLabel = allComplete
+        ? "Review Companion"
+        : primaryActionLabel("sermon-devotional", state);
 
       return {
         id: c.id,
@@ -439,23 +446,23 @@ router.get("/next-steps", async (req: Request, res: Response) => {
         memberProgressState: state,
         metadata: {
           durationDays: c.numberOfDays,
+          createdAt: c.createdAt || undefined,
           publishedAt: c.publishedAt ?? undefined,
+          displayOrder: c.displayOrder ?? 0,
+          // subtitle lets the Next Steps discovery card show "5 Days of Intentional Living"
+          // instead of the progress-based description.
+          subtitle: subtitle || undefined,
         },
-        // When all days are complete, point to the previous-days page rather than
-        // a nonexistent next day; the primary button will be absent so navigation
-        // from the card only happens via "View Previous Reflections →".
-        route: isAllComplete
-          ? `/sermon-companion/${c.id}/previous`
-          : `/sermon-companion/${c.id}/day/${currentDay}`,
-        // null → EmmausContentCard renders no primary button (no "Continue").
-        primaryActionLabel: isAllComplete ? null : primaryActionLabel("sermon-devotional", state),
+        // All cards route to the overview; the overview decides whether to
+        // open step 1 / current step / review based on progress.
+        route: `/sermon-companion/${c.id}/overview`,
+        primaryActionLabel: actionLabel,
+        badge: computeBadge(c.notifyPublishedAt ?? null, prog?.lastOpenedAt ?? null, !!prog),
       };
     }
 
-    const currentSermonCompanion = currentCompanionUnified
-      ? buildCompanionItem(currentCompanionUnified)
-      : null;
-    const previousSermonCompanions = previousCompanionsUnified.map(buildCompanionItem);
+    const currentSermonCompanion = currentCompanion ? buildCompanionItem(currentCompanion) : null;
+    const previousSermonCompanions = previousCompanions.map(buildCompanionItem);
 
     // ── Journey grouping ──────────────────────────────────────────────────────
     // Exclude companion and daily-rhythm types — they live in their own tabs.
@@ -483,15 +490,104 @@ router.get("/next-steps", async (req: Request, res: Response) => {
         id: c.id,
         title: c.title,
         description: c.description || undefined,
+        displayOrder: c.displayOrder ?? 0,
         journeys: (byCollection.get(c.id) ?? []).map(j =>
-          buildJourneyItem(j, j.journeyType === "bible-study" ? "bible-study" : "journey", journeyProgress, journeyIdsWithIntro),
+          buildJourneyItem(j, j.journeyType === "bible-study" ? "bible-study" : "journey", journeyProgress, journeyIdsWithIntro, undefined, "journey"),
         ),
       }));
 
     // Standalone journeys (no collection, not companion/daily-rhythm)
     const standaloneJourneys = standaloneRaw.map(j =>
-      buildJourneyItem(j, j.journeyType === "bible-study" ? "bible-study" : "journey", journeyProgress, journeyIdsWithIntro),
+      buildJourneyItem(j, j.journeyType === "bible-study" ? "bible-study" : "journey", journeyProgress, journeyIdsWithIntro, undefined, "walk"),
     );
+
+    // ── Content Groups (Task #614) ────────────────────────────────────────────
+    // Build personalised NextStepsItem arrays for each published content group.
+    // Each group's items are drawn from eligible, published targets only.
+    // Daily Rhythm journeys are allowed here (excluded from the legacy lists above).
+    // Uses the same buildJourneyItem / buildDevotionalItem builders for consistency.
+
+    const contentGroups: ContentGroupEntry[] = [];
+
+    if (publishedContentGroups.length > 0) {
+      // publishedJourneys already includes all journey types (including daily-rhythm).
+      // The JOURNEY_EXCLUDE set above only filters the legacy standaloneJourneys / journeyCollections
+      // grouping — daily-rhythm IS in publishedJourneys and can appear in content groups.
+      const fullJourneyMap = new Map(publishedJourneys.map(j => [j.id, j]));
+
+      // Fetch all group items in one batch query, then index by groupId
+      const groupIds = publishedContentGroups.map(g => g.id);
+      const allGroupItems = await db
+        .select()
+        .from(contentGroupItemsTable)
+        .where(inArray(contentGroupItemsTable.groupId, groupIds));
+
+      const itemsByGroup = new Map<string, typeof allGroupItems>();
+      for (const item of allGroupItems) {
+        if (!itemsByGroup.has(item.groupId)) itemsByGroup.set(item.groupId, []);
+        itemsByGroup.get(item.groupId)!.push(item);
+      }
+
+      // Ensure seriesEntriesMap covers any devotionals referenced by groups but not
+      // already in the published series list (edge case: group holds a series that
+      // was recently unpublished but membership row is still present).
+      const groupDevotionalIds = allGroupItems
+        .filter(i => i.targetType === "daily-devotional")
+        .map(i => i.targetId);
+      const missingDevotionalIds = groupDevotionalIds.filter(id => !seriesEntriesMap.has(id));
+
+      await Promise.all(
+        missingDevotionalIds.map(async (seriesId) => {
+          const full = await devStore.getSeriesById(seriesId);
+          if (full) {
+            const published = full.entries.filter(
+              (e: devStore.DevotionalEntry) => e.status === "Published",
+            );
+            seriesEntriesMap.set(seriesId, published);
+          }
+        }),
+      );
+
+      for (const group of publishedContentGroups) {
+        const rawItems = (itemsByGroup.get(group.id) ?? [])
+          .sort((a, b) => a.displayOrder - b.displayOrder);
+
+        const builtItems: NextStepsItem[] = [];
+
+        for (const item of rawItems) {
+          if (item.targetType === "journey" || item.targetType === "daily-rhythm") {
+            const j = fullJourneyMap.get(item.targetId);
+            if (!j) continue; // journey not published or not found
+            const contentType: ContentType =
+              item.targetType === "daily-rhythm"
+                ? "daily-rhythm"
+                : j.journeyType === "bible-study"
+                  ? "bible-study"
+                  : "journey";
+            builtItems.push(
+              buildJourneyItem(j, contentType, journeyProgress, journeyIdsWithIntro),
+            );
+          } else if (item.targetType === "daily-devotional") {
+            const entries = seriesEntriesMap.get(item.targetId);
+            if (!entries || entries.length === 0) continue; // no published entries
+            const series = devSeries.find(s => s.id === item.targetId);
+            if (!series) continue;
+            builtItems.push(buildDevotionalItem(series, entries, devProgressMap));
+          }
+        }
+
+        if (builtItems.length > 0) {
+          contentGroups.push({
+            id: group.id,
+            title: group.title,
+            description: group.description || undefined,
+            coverImageUrl: group.coverImageUrl ?? undefined,
+            displayOrder: group.displayOrder,
+            items: builtItems,
+          });
+        }
+      }
+    }
 
     // ── Respond ──────────────────────────────────────────────────────────────
 
@@ -501,6 +597,7 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       standaloneJourneys,
       currentSermonCompanion,
       previousSermonCompanions,
+      contentGroups,
     };
 
     res.set("Cache-Control", "no-store");

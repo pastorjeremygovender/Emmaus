@@ -7,6 +7,7 @@
 
 /** True once the unique index on user_journey_progress(user_id, journey_id) exists. */
 let _startSharedReady = false;
+let _dailyRhythmOpeningReady = false;
 
 export function setStartSharedReady(): void {
   _startSharedReady = true;
@@ -14,4 +15,12 @@ export function setStartSharedReady(): void {
 
 export function isStartSharedReady(): boolean {
   return _startSharedReady;
+}
+
+export function setDailyRhythmOpeningReady(): void {
+  _dailyRhythmOpeningReady = true;
+}
+
+export function isDailyRhythmOpeningReady(): boolean {
+  return _dailyRhythmOpeningReady;
 }

@@ -1,0 +1,280 @@
+EMMAUS VOICE — PHASE 3.1
+BIBLE TRANSLATION INTEGRATION
+
+IMPORTANT:
+Phase 1, Phase 2 and Phase 3 of Emmaus Voice are working and have passed QA.
+
+DO NOT redesign, refactor or replace the existing Voice architecture.
+DO NOT change the working transcription, TTS, VAD, interrupt handling, conversation loop, intent classifier, content reader, Voice UI, Ask Emmaus pipeline or navigation behaviour.
+
+This is a contained correction to Bible reading only.
+
+PROBLEM
+
+The Phase 3 QA report identifies:
+
+“Bible reading uses BSB only”
+
+This must not become the permanent architecture.
+
+Emmaus Voice must use the same Bible translation system and user translation preference as the existing Emmaus Bible reader wherever technically/licensing permitted.
+
+The Voice system must NOT maintain its own independent BSB-only Bible implementation.
+
+GOAL
+
+There must be ONE Bible content/translation source of truth shared by:
+
+• My Bible
+• Ask Emmaus where Bible text is required
+• Emmaus Voice Bible reading
+
+Voice is simply another interface into the existing Emmaus Bible system.
+
+STEP 1 — AUDIT BEFORE MODIFYING
+
+Before changing code, inspect the existing Bible implementation and report:
+
+1. Where Bible passages are currently fetched.
+2. What Bible service/API/data source is currently being used.
+3. Which translations are currently available in the Emmaus visual Bible reader.
+4. How the currently selected translation is stored.
+5. Whether the preference is:
+   • per-user
+   • local/browser state
+   • database persisted
+   • URL/query state
+   • another mechanism.
+6. Whether there is already a shared Bible service/helper that Voice can reuse.
+7. Why the current Voice implementation is BSB-only.
+8. Whether any available translations have licensing/API restrictions that prevent TTS/audio reading.
+
+Do NOT assume all displayed translations can legally or technically be used for generated audio.
+
+If licensing/API terms are uncertain, identify that clearly rather than guessing.
+
+STEP 2 — REMOVE THE BSB-SPECIFIC VOICE DEPENDENCY
+
+Voice Bible reading should not directly depend on a BSB-specific implementation if the existing Bible layer can provide the passage.
+
+Architecture should become:
+
+Voice request
+→ Bible intent
+→ Emmaus shared Bible service
+→ resolve translation
+→ retrieve passage
+→ VoiceContentReader/TTS
+
+NOT:
+
+Voice request
+→ BSB-specific fetch
+→ TTS
+
+Reuse existing Bible infrastructure wherever possible.
+
+Do not create a second Bible translation system.
+
+STEP 3 — TRANSLATION RESOLUTION
+
+For Bible-reading requests, resolve translation in this order:
+
+1. Translation explicitly requested in the voice command.
+2. User's currently selected/default Emmaus Bible translation.
+3. Existing Emmaus Bible default translation.
+
+Example:
+
+User's normal Bible translation = NIV.
+
+User says:
+
+“Read Psalm 23.”
+
+Emmaus should read Psalm 23 using NIV IF that translation is available and permitted for TTS.
+
+User says:
+
+“Read Psalm 23 in the BSB.”
+
+Emmaus should use BSB for that request.
+
+An explicit translation request should NOT permanently change the user's default translation unless the user specifically asks Emmaus to change their Bible translation.
+
+STEP 4 — UNSUPPORTED TRANSLATIONS
+
+Never silently substitute one translation for another.
+
+If the user requests a translation that Emmaus cannot access or cannot legally/technically use for Voice, Emmaus should respond naturally.
+
+Example:
+
+“I can't read that translation aloud at the moment. I can read the passage using [available translation].”
+
+Do not silently fall back to BSB.
+
+If the user's saved translation is unavailable for Voice, explain the fallback before reading.
+
+STEP 5 — VOICE CONTEXT
+
+Add the resolved Bible translation to the existing Voice Bible context.
+
+Bible context should include, where available:
+
+book
+chapter
+verse/range
+translation identifier
+translation display name
+
+This means contextual requests continue to work correctly.
+
+Example:
+
+User:
+“Read Romans 8:28.”
+
+Emmaus reads it using the resolved translation.
+
+User:
+“What does that mean?”
+
+The existing Emmaus conversation pipeline receives Romans 8:28 AND the translation context.
+
+STEP 6 — VISUAL/VOICE CONSISTENCY
+
+If the user is currently viewing John 3 in My Bible using an available Voice-compatible translation and starts Emmaus Voice:
+
+“Read this chapter.”
+
+Voice should understand:
+
+book = John
+chapter = 3
+translation = currently selected translation
+
+Do not independently default to BSB.
+
+Likewise:
+
+“Continue reading”
+“Next chapter”
+“Previous chapter”
+
+must preserve the current translation.
+
+STEP 7 — DO NOT BREAK EXISTING PHASE 3 BEHAVIOUR
+
+Regression-test all existing Phase 3 functionality.
+
+At minimum verify:
+
+• “Read Psalm 23”
+• “Read John 3”
+• “Read Romans 8:28”
+• “Continue reading”
+• “Next chapter”
+• “Previous chapter”
+• “Pause”
+• “Continue”
+• “Repeat that”
+• “Explain that”
+• “Pray with me”
+• “What’s on today’s steps?”
+• Daily Rhythm reading
+• Daily Devotional reading
+• Sermon Companion reading
+• Walk reading
+• normal Ask Emmaus conversation
+• Voice interrupt behaviour
+• automatic listening restart
+
+Phase 1–3 behaviour must remain intact.
+
+STEP 8 — TEST TRANSLATION BEHAVIOUR
+
+Test these cases using translations actually available in the current Emmaus Bible system:
+
+TEST A
+Select translation A in My Bible.
+Say:
+“Read Psalm 23.”
+
+Expected:
+Voice uses translation A if Voice-compatible.
+
+TEST B
+While translation A remains the user's preference, say:
+“Read Psalm 23 in [translation B].”
+
+Expected:
+Voice uses translation B for that request if Voice-compatible.
+
+TEST C
+Say:
+“Read Psalm 23.”
+
+Expected:
+Voice returns to the user's normal selected translation A.
+
+TEST D
+While viewing a Bible chapter say:
+“Read this chapter.”
+
+Expected:
+Voice uses the current book, chapter and selected translation.
+
+TEST E
+Say:
+“Next chapter.”
+
+Expected:
+Next chapter uses the SAME translation.
+
+TEST F
+Request an unavailable/unsupported translation.
+
+Expected:
+Emmaus explains that it cannot read that translation and offers an available alternative.
+It must NOT silently substitute BSB.
+
+STEP 9 — QA REPORT
+
+Before marking complete, provide a short QA report containing:
+
+• existing Bible source/API discovered
+• translations currently available
+• translations confirmed usable for Voice/TTS
+• any licensing/API restrictions found
+• where user translation preference is stored
+• shared Bible service/helper reused
+• any code paths that were previously BSB-specific
+• changes made
+• translation resolution logic
+• regression test results
+• translation tests performed
+• any remaining limitations
+
+IMPORTANT FINAL CONSTRAINT
+
+Do not expand this task into Phase 4.
+
+Do NOT implement:
+
+• persistent Voice across navigation
+• background audio
+• lock-screen controls
+• Bluetooth controls
+• car mode
+• wake word
+• always-listening
+• native audio services
+
+Those belong to later phases.
+
+This task is ONLY to make Emmaus Voice Bible reading correctly integrate with the existing Emmaus Bible translation architecture while preserving everything already working in Phases 1–3.
+
+Make a checkpoint before modifying working Voice code.
+
+Audit first, then implement the smallest safe change.

@@ -1,0 +1,177 @@
+# EMMAUS ROOMS — LEADER AUTHORIZATION & PERMISSIONS
+
+Update the Rooms permission model.
+
+CORE RULE:
+
+EVERY authenticated Emmaus user may create a Room.
+
+Examples:
+- married couple
+- family
+- friends
+- two people doing a Walk together
+- small informal devotional group
+
+Creating a Room does NOT require leader authorization.
+
+However, advanced interactive ministry tools are restricted to authorized church leaders.
+
+--------------------------------------------------
+ROOM CREATOR
+--------------------------------------------------
+
+Any authenticated user can:
+
+- Create a Room
+- Invite people
+- Attach a Walk
+- Attach a Journey
+- Attach a Daily Devotional
+- Attach a Bible Study
+- Attach a Sermon Companion
+- Discuss together
+- Add prayer requests
+- View shared progress
+- Use Ask Emmaus in the Room
+- Leave or delete their own Room where permitted
+
+A normal Room creator is NOT automatically an Authorized Leader.
+
+--------------------------------------------------
+AUTHORIZED LEADER
+--------------------------------------------------
+
+Create a separate user permission:
+
+authorizedRoomLeader
+
+or equivalent role-based permission.
+
+Authorized Leaders can additionally:
+
+- Start LiveKit video / Gather Together
+- End a Gathering
+- Use Guide Group controls
+- Open Scripture for everyone
+- Navigate the group to the current Step
+- Use future synchronized navigation
+- Use future shared highlighting
+- Launch polls
+- Moderate participants
+- Access future attendance tools
+- Access future leader-only collaboration features
+
+Do not grant these capabilities simply because someone created the Room.
+
+--------------------------------------------------
+ADMIN AUTHORIZATION
+--------------------------------------------------
+
+Add leader authorization to:
+
+Admin → People
+
+For each person, provide a clear leadership access control.
+
+Example:
+
+Leadership Access
+
+[ ] Authorized Group Leader
+
+When enabled:
+
+- User receives authorizedRoomLeader permission.
+- Interactive Room tools become available in Rooms they lead.
+
+When disabled:
+
+- Interactive leader tools disappear immediately.
+- Existing Rooms remain intact.
+- Their discussion, prayer and shared progress remain unaffected.
+- They cannot start new video gatherings.
+
+Pastors and Church Admins should automatically have Authorized Leader capability unless explicitly restricted by system design.
+
+--------------------------------------------------
+ROOM UI
+--------------------------------------------------
+
+NORMAL USER / PERSONAL HOST:
+
+Show:
+
+- Invite Someone
+- Today's Study
+- Discuss Together
+- Prayer Requests
+- Shared Progress
+- Ask Emmaus
+
+Do NOT show:
+
+- Gather Together
+- Guide Group
+- Video
+- Poll controls
+- Synchronised navigation controls
+- Other leader-only tools
+
+AUTHORIZED LEADER:
+
+Show the same Room experience PLUS:
+
+- Gather Together
+- Guide Group
+- Leader-only collaborative tools
+
+Do not create a separate Room design for leaders.
+
+The Room should simply reveal additional controls based on permission.
+
+--------------------------------------------------
+VIDEO RULE
+--------------------------------------------------
+
+LiveKit participant/video usage must be permission controlled.
+
+Only an Authorized Leader may START a LiveKit video gathering.
+
+Any invited Room member may JOIN a gathering once an Authorized Leader has started it.
+
+Ordinary Room creators must never be able to start LiveKit sessions unless they are separately authorized as leaders.
+
+This is important for:
+
+- church oversight
+- safeguarding
+- cost control
+- preventing uncontrolled video usage
+
+--------------------------------------------------
+FUTURE MULTI-CHURCH SUPPORT
+--------------------------------------------------
+
+Leader authorization must belong to the user's church/organization context.
+
+A person authorized as a leader in Church A must not automatically become a leader in Church B.
+
+Design this permission to support multiple churches later.
+
+--------------------------------------------------
+SUCCESS TEST
+--------------------------------------------------
+
+Test the following:
+
+1. Normal member creates a Room.
+2. Room works for discussion, prayer and shared progress.
+3. Normal member cannot see/start video.
+4. Admin authorizes that same person as Group Leader.
+5. User refreshes/reopens Room.
+6. Gather Together and leader tools now appear.
+7. User can start video.
+8. Admin removes leader authorization.
+9. Video/leader controls disappear again.
+10. Room content and history remain intact.

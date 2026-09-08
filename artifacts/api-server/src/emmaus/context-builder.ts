@@ -8,6 +8,7 @@
  */
 
 import type { EntryPoint, EmmausMemory } from "./firestore-model.js";
+import type { VoiceContextEnvelope } from "./voice-contracts.js";
 
 // ─── Input Types ──────────────────────────────────────────────────────────────
 
@@ -48,6 +49,96 @@ export interface EmmausContextInput {
   bibleContext?: BibleContext;
   journeyContext?: JourneyContext;
   sermonContext?: SermonContext;
+
+  /**
+   * Phase 3: Voice Mode passes a plain-text block describing the user's
+   * current app state and active reading content.  Injected verbatim into
+   * the system context so Emmaus can answer voice navigation/reading
+   * questions without the user being on the relevant page.
+   */
+  voiceAppContext?: string;
+  /** Server-generated envelope for Voice requests; never supplied as prose by the model. */
+  voiceContextEnvelope?: VoiceContextEnvelope;
+}
+
+/** Flat context accepted from web clients and translated before orchestration. */
+export interface FlatEmmausContext {
+  entryPoint?: string;
+  conversationId?: string;
+  userName?: string;
+  bookId?: string;
+  bookName?: string;
+  chapter?: number;
+  chapterHeading?: string;
+  verseText?: string;
+  journeyId?: string;
+  journeyTitle?: string;
+  currentDay?: number;
+  sermonId?: string;
+  sermonTitle?: string;
+  scriptureReference?: string;
+  voiceAppContext?: string;
+}
+
+const VALID_ENTRY_POINTS = new Set<EntryPoint>([
+  "bible",
+  "walk",
+  "journeys",
+  "sermons",
+  "personal",
+  "standalone",
+]);
+
+/**
+ * Converts the browser's flat context into the canonical nested shape.
+ * Identity is supplied by the authenticated server session, never the body.
+ */
+export function toEmmausContextInput(
+  flat: FlatEmmausContext | undefined,
+  userId: string,
+): EmmausContextInput {
+  const entryPoint =
+    typeof flat?.entryPoint === "string" && VALID_ENTRY_POINTS.has(flat.entryPoint as EntryPoint)
+      ? flat.entryPoint as EntryPoint
+      : "standalone";
+
+  const ctx: EmmausContextInput = {
+    entryPoint,
+    userId,
+    conversationId: flat?.conversationId,
+    userName: flat?.userName,
+  };
+
+  if (flat?.bookId || flat?.bookName || flat?.chapter) {
+    ctx.bibleContext = {
+      bookId: flat.bookId ?? "",
+      bookName: flat.bookName ?? flat.bookId ?? "",
+      chapter: Number.isInteger(flat.chapter) && flat.chapter! > 0 ? flat.chapter! : 1,
+      chapterHeading: flat.chapterHeading,
+      verseText: flat.verseText,
+      journeyId: flat.journeyId,
+      journeyTitle: flat.journeyTitle,
+    };
+  }
+
+  if (flat?.journeyId && !flat?.bookId) {
+    ctx.journeyContext = {
+      journeyId: flat.journeyId,
+      journeyTitle: flat.journeyTitle ?? flat.journeyId,
+      currentDay: Number.isInteger(flat.currentDay) && flat.currentDay! > 0 ? flat.currentDay! : 1,
+    };
+  }
+
+  if (flat?.sermonId) {
+    ctx.sermonContext = {
+      sermonId: flat.sermonId,
+      sermonTitle: flat.sermonTitle ?? flat.sermonId,
+      scriptureReference: flat.scriptureReference,
+    };
+  }
+
+  if (flat?.voiceAppContext) ctx.voiceAppContext = flat.voiceAppContext;
+  return ctx;
 }
 
 export interface BuiltContext {
@@ -97,7 +188,8 @@ export function buildContext(input: EmmausContextInput): BuiltContext {
     if (jc.stepTheme) {
       lines.push(`  Today's theme: ${jc.stepTheme}`);
     }
-    lines.push(`\nRelevant path for recommendations: /bible/journey/${jc.journeyId}`);
+    // Routes come only from the live, validated resource catalogue. Do not
+    // expose a client-derived path as a recommendation hint.
   }
 
   // Sermon context
@@ -109,6 +201,24 @@ export function buildContext(input: EmmausContextInput): BuiltContext {
     if (sc.scriptureReference) lines.push(`  Scripture: ${sc.scriptureReference}`);
     if (sc.sermonDate) lines.push(`  Preached: ${sc.sermonDate}`);
     lines.push(`\nIf appropriate, recommend engaging further with this sermon or its Scripture passage.`);
+  }
+
+  // Phase 3: Voice Mode app-state context (what the user has active today)
+  if (input.voiceAppContext) {
+    lines.push(`\n[Voice Mode context — user's current Emmaus state]\n${input.voiceAppContext}`);
+  }
+
+  if (input.voiceContextEnvelope) {
+    const envelope = input.voiceContextEnvelope;
+    lines.push(
+      `\n[Verified Voice context envelope]`,
+      `  Schema: ${envelope.schemaVersion}`,
+      `  Church: ${envelope.church.name} (${envelope.church.id})`,
+      `  Verified role: ${envelope.verifiedUser.role}`,
+      `  Current route: ${envelope.location?.pathname ?? "unknown"}`,
+      `  Current activity: ${envelope.activity.isReading ? "reading aloud" : "not reading aloud"}`,
+      `  Content, safety, and routes: server-authoritative`,
+    );
   }
 
   // User memories (only approved ones are passed in)
@@ -125,16 +235,8 @@ export function buildContext(input: EmmausContextInput): BuiltContext {
     lines.push(`\n${epGuidance}`);
   }
 
-  // Available church resources for recommendations
-  lines.push(`
-Available resources for recommendations:
-  Journeys:
-    - Walk Through John (21 chapters) → /bible/journey/walk-through-john
-    - 10 Minutes With Jesus (daily rhythm) → /journey/15-minutes-with-jesus/day/1
-  Sermons: Verified sermon retrieval runs automatically. Do not fabricate sermon recommendations in metadata.
-  Emmaus Rooms: Community groups for shared journeys → /rooms
-  Pastoral contact: Recommend connecting with a pastor for personal, marriage, bereavement, or safeguarding needs.
-`);
+  // Note: Available published journeys, devotionals, sermon companions, and room membership
+  // are injected dynamically by conversation-service.ts from live DB data — not hardcoded here.
 
   const systemContextBlock = lines.join("\n");
   const conversationTitle = generateTitle(input);
