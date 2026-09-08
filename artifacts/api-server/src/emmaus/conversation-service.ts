@@ -15,7 +15,7 @@
  *   OPENAI_API_KEY             — enables OpenAI; absent → mock provider
  *   EMMAUS_MAX_OUTPUT_TOKENS   — fast-path token cap (default: 900)
  *   EMMAUS_DEEP_MAX_TOKENS     — deep-path token cap (default: 1400)
- *   EMMAUS_REASONING_EFFORT    — fast-path effort for o1/o3 models (default: low)
+ *   EMMAUS_REASONING_EFFORT    — fast-path reasoning effort (default: low)\n *   EMMAUS_FAST_MODEL           — ordinary conversation model (default: gpt-5.6-luna)\n *   EMMAUS_DEEP_MODEL           — complex pastoral/theology model (default: gpt-6-astra)
  *   EMMAUS_SERMON_MIN_SCORE    — minimum retrieval score (default: 5)
  *
  *   Firestore persistence (when absent, in-memory store is used):
@@ -332,7 +332,7 @@ function routeSettings(route: Route) {
       reasoningEffort: "medium" as const,
       // EMMAUS_DEEP_MODEL overrides the provider default for deep-path requests.
       // Falls back to the provider's configured model when absent.
-      model: process.env.EMMAUS_DEEP_MODEL,
+      model: process.env.EMMAUS_DEEP_MODEL ?? "gpt-6-astra",
     };
   }
   return {
@@ -345,7 +345,7 @@ function routeSettings(route: Route) {
     // EMMAUS_FAST_MODEL overrides the provider default for fast-path requests.
       // Use a low-latency default for ordinary questions while keeping the
       // configured provider model available for the deep path.
-      model: process.env.EMMAUS_FAST_MODEL ?? "gpt-4o-mini",
+      model: process.env.EMMAUS_FAST_MODEL ?? "gpt-5.6-luna",
   };
 }
 
