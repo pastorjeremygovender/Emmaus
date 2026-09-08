@@ -7932,15 +7932,15 @@
     "classificationReason": "duration 25min ≥ 10min; non-sermon title signal:\"highlight\""
   },
   {
-    "id": "2b42befb-d3b8-42e1-adc2-f773982da892",
-    "title": "__TEST__ Harbour Light Archive 1788896130516-41281",
+    "id": "938cc046-6ab6-4b94-af69-c4ad57f6991b",
+    "title": "__TEST__ Harbour Light Archive 1788897591483-56976",
     "series": "Parity Regression",
     "topics": [
       "harbour"
     ],
     "speaker": "Pastor Archive",
     "summary": "A verified archive teaching about a harbour light.",
-    "audioUrl": "/api/youtube-archive/audio/2b42befb-d3b8-42e1-adc2-f773982da892",
+    "audioUrl": "/api/youtube-archive/audio/938cc046-6ab6-4b94-af69-c4ad57f6991b",
     "keywords": [
       "harbour",
       "light"
@@ -7957,7 +7957,7 @@
     "thumbnailUrl": "",
     "aiIndexStatus": "indexed",
     "privacyStatus": "public",
-    "youtubeVideoId": "parityarchive281",
+    "youtubeVideoId": "parityarchive976",
     "durationSeconds": 3600,
     "scriptureBookIds": [
       "matthew"
