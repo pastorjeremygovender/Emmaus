@@ -73,6 +73,7 @@ async function startServer(): Promise<void> {
     { getCanonicalPublicOrigin },
     { runDailyRhythmProductionCorrection },
     { markApplicationReady },
+    { ensureJarvisConversationSchema },
   ] = await Promise.all([
     import("./app.js"),
     import("./lib/logger.js"),
@@ -81,6 +82,7 @@ async function startServer(): Promise<void> {
     import("./lib/public-origin.js"),
     import("./lib/daily-rhythm-production-correction.js"),
     import("./lib/startup-readiness.js"),
+    import("./lib/startup-migrations.js"),
   ]);
 
   startupLogger = logger;
@@ -94,6 +96,14 @@ async function startServer(): Promise<void> {
   logger.info(
     { durationMs: Date.now() - authSchemaStartedAt },
     "Startup phase complete: ensure authentication schema",
+  );
+
+  const jarvisSchemaStartedAt = Date.now();
+  logger.info("Startup phase beginning: ensure Jarvis conversation schema");
+  await ensureJarvisConversationSchema();
+  logger.info(
+    { durationMs: Date.now() - jarvisSchemaStartedAt },
+    "Startup phase complete: ensure Jarvis conversation schema",
   );
 
   const dailyRhythmCorrectionStartedAt = Date.now();
