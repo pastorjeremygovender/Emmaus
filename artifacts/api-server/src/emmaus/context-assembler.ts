@@ -47,9 +47,7 @@ async function readDisplayName(userId: string): Promise<string | undefined> {
   const profile = result.rows[0];
   const preferred = profile?.preferred_name?.trim();
   if (profile?.app_role === "admin" || profile?.app_role === "superAdmin") {
-    return preferred && !/^(pastor govender|jeremy govender|the pastor|the user)$/i.test(preferred)
-      ? preferred
-      : "Pastor Jeremy";
+    return "Pastor Jeremy";
   }
   return preferred || undefined;
 }
