@@ -253,6 +253,16 @@ async function resolveActiveProgress(userId: string): Promise<EmmausResponseMeta
     resourceId: item.resourceId!,
     reason: "The signed-in user's active progress.",
   }));
+  metadata.resourceActions = active.slice(0, 4).flatMap(({ journey, currentDay }) => {
+    const type = journey.journeyType === "walk" || journey.journeyType === "core"
+      ? "walk"
+      : "journey";
+    const route = `/journey/${journey.id}/day/${currentDay}`;
+    return [
+      actionForCapabilityResource("OPEN", type, journey.id, route),
+      actionForCapabilityResource("CONTINUE", type, journey.id, route),
+    ];
+  });
   metadata.nextStep = {
     action: `Continue ${active[0].journey.title} at Day ${active[0].currentDay}.`,
     primaryButtonText: "Continue",
