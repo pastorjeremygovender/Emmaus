@@ -7,7 +7,6 @@ import type {
   EmmausResponseMetadata,
   EmmausSafetyFlag,
   EntryPoint,
-  HandoffType,
   MessageRole,
 } from "./firestore-model.js";
 
@@ -91,7 +90,7 @@ export class PostgresConversationStore implements ConversationStore {
 
   async getConversation(id: string): Promise<EmmausConversation | null> {
     const result = await pool.query<ConversationRow>(
-      "SELECT * FROM emmaus_conversations WHERE id = $1 LIMIT 1",
+      "SELECT * FROM emmaus_conversations WHERE id::text = $1 LIMIT 1",
       [id],
     );
     return result.rows[0] ? conversationFromRow(result.rows[0]) : null;
@@ -168,7 +167,7 @@ export class PostgresConversationStore implements ConversationStore {
   async getMessages(conversationId: string): Promise<EmmausMessage[]> {
     const result = await pool.query<MessageRow>(
       `SELECT * FROM emmaus_messages
-       WHERE conversation_id = $1
+       WHERE conversation_id::text = $1
        ORDER BY created_at ASC, id ASC`,
       [conversationId],
     );
@@ -212,7 +211,7 @@ export class PostgresConversationStore implements ConversationStore {
 
   async deleteMemory(id: string, userId: string): Promise<void> {
     await pool.query(
-      "DELETE FROM emmaus_memories WHERE id = $1 AND user_id = $2",
+      "DELETE FROM emmaus_memories WHERE id::text = $1 AND user_id = $2",
       [id, userId],
     );
   }
@@ -227,7 +226,7 @@ export class PostgresConversationStore implements ConversationStore {
         data.conversationId,
         data.messageContent,
         JSON.stringify(data.triggerKeywords),
-        data.responseType satisfies Exclude<HandoffType, null>,
+        data.responseType,
       ],
     );
   }
