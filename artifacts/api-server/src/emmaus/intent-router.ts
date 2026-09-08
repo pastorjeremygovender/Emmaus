@@ -119,7 +119,7 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
 
   if (/^(?:what(?:'s| is)|show me)\s+(?:in|on)\s+(?:my\s+)?(?:journey|walk)\b/.test(value)
     || /^what am i currently (?:doing|working through)\b/.test(value)
-    || /^which (?:walk|journey) am i (?:currently )?(?:on|doing)\b/.test(value)) {
+    || /^which (?:walk|journey|walk or journey|journey or walk) am i (?:currently )?(?:on|doing)\b/.test(value)) {
     return {
       intent: "DIRECT_ACTION",
       requestedCapability: "active-progress",
