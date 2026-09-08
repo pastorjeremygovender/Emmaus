@@ -42,6 +42,7 @@ describe("Jarvis context assembly", () => {
     assert.equal(envelope.scope, "authenticated-user");
     assert.equal(envelope.context.identity.displayName, "Member");
     assert.deepEqual(envelope.context.activeProgress, []);
+    assert.deepEqual(envelope.context.completedProgress, []);
     assert.equal(envelope.context.bible, undefined);
     assert.equal(statuses.get("daily-rhythm"), "unavailable");
     assert.equal(statuses.get("bible"), "unavailable");
@@ -49,6 +50,60 @@ describe("Jarvis context assembly", () => {
     assert.equal(statuses.get("sermon"), "empty");
     assert.equal(JSON.stringify(envelope).includes("unavailable"), true);
     assert.equal(JSON.stringify(envelope).includes("daily rhythm unavailable"), false);
+  });
+
+  it("includes active legacy core Walks and completed discipleship activity", async () => {
+    const readers = healthyReaders();
+    readers.listPublishedJourneys = async () => ([
+      {
+        id: "legacy-core-walk",
+        title: "Coming to Jesus",
+        journeyType: "core",
+        durationDays: 5,
+      },
+      {
+        id: "completed-journey",
+        title: "Growing in Christ",
+        journeyType: "journey",
+        durationDays: 3,
+      },
+    ] as never);
+    readers.getProgress = async (_userId, journeyId) => ({
+      status: "active",
+      currentDay: journeyId === "legacy-core-walk" ? 2 : 3,
+      completedDays: journeyId === "legacy-core-walk" ? [1] : [1, 2, 3],
+    } as never);
+    readers.listSteps = async (journeyId) => ([
+      {
+        id: `${journeyId}-day-2`,
+        day: 2,
+        title: "Who is Jesus?",
+        status: "Published",
+        isCompletionStep: false,
+      },
+    ] as never);
+
+    const envelope = await assembleJarvisContext("member-a", undefined, readers);
+
+    assert.deepEqual(envelope.context.activeProgress, [{
+      journeyId: "legacy-core-walk",
+      journeyType: "walk",
+      title: "Coming to Jesus",
+      currentDay: 2,
+      stepId: "legacy-core-walk-day-2",
+      stepTitle: "Who is Jesus?",
+      route: "/journey/legacy-core-walk/day/2",
+    }]);
+    assert.deepEqual(envelope.context.completedProgress, [{
+      journeyId: "completed-journey",
+      journeyType: "journey",
+      title: "Growing in Christ",
+      route: "/journeys/completed-journey",
+    }]);
+    assert.equal(
+      envelope.context.sourceStatuses.find((source) => source.source === "active-progress")?.status,
+      "ok",
+    );
   });
 
   it("passes the authenticated subject to every owner-scoped reader", async () => {
