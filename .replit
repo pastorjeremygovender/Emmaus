@@ -24,6 +24,10 @@ args = "data-safety: content integrity"
 task = "workflow.run"
 args = "emmaus-member-flow-regressions"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Emmaus APK download (temporary)"
+
 [[workflows.workflow]]
 name = "data-safety: content integrity"
 author = "agent"
@@ -45,6 +49,18 @@ isValidation = true
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/project-emmaus exec vitest run --config vitest.config.ts src/lib/__tests__/startup-routing.test.ts src/lib/__tests__/daily-launch-regression.test.ts src/pages/__tests__/Welcome.daily-open.test.tsx src/pages/__tests__/ExploreJourneys.discovery-start.test.tsx src/pages/__tests__/Journeys.discovery-actions.test.tsx && pnpm --filter @workspace/project-emmaus run build"
+
+[[workflows.workflow]]
+name = "Emmaus APK download (temporary)"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node /tmp/emmaus-apk-download-server.mjs"
+waitForPort = 8008
+
+[workflows.workflow.metadata]
+outputType = "webview"
 
 [agent]
 stack = "PNPM_WORKSPACE"
