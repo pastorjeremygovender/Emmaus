@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  canonicalFailureMetadata,
   resolveCanonicalAskRequest,
   resolveCurrentDevotionalEntry,
   resolveDateAllocatedDevotionalEntry,
@@ -78,5 +79,20 @@ describe("canonical Ask Emmaus tools", () => {
     );
 
     assert.equal(entry?.dayNumber, 2);
+  });
+
+  it("fails closed when a canonical Emmaus action source is unavailable", () => {
+    const metadata = canonicalFailureMetadata({
+      intent: "DIRECT_ACTION",
+      requestedCapability: "walks",
+      requestedOperation: "CONTINUE",
+      confidence: 0.99,
+      clarificationRequired: false,
+    });
+
+    assert.match(metadata.answer ?? "", /couldn't safely access/i);
+    assert.deepEqual(metadata.retrievalFailures, ["walks"]);
+    assert.equal(metadata.nextStep, null);
+    assert.equal(metadata.recommendations.length, 0);
   });
 });
