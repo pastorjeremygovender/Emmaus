@@ -54,13 +54,13 @@ args = "pnpm --filter @workspace/project-emmaus exec vitest run --config vitest.
 name = "Emmaus APK download (temporary)"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "node /tmp/emmaus-apk-download-server.mjs"
-waitForPort = 8008
-
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=3000 node /tmp/emmaus-apk-download-server.mjs"
+waitForPort = 3000
 
 [agent]
 stack = "PNPM_WORKSPACE"
@@ -82,3 +82,8 @@ EMMAUS_PUBLIC_ORIGIN = "https://emmaus.co.za"
 
 [nix]
 channel = "stable-25_05"
+
+[[ports]]
+localPort = 3000
+externalPort = 3000
+exposeLocalhost = false
