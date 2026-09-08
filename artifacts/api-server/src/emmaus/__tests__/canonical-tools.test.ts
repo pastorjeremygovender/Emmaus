@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   canonicalFailureMetadata,
   resolveCanonicalAskRequest,
+  resolveContextualFollowUp,
   resolveCurrentDevotionalEntry,
   resolveDateAllocatedDevotionalEntry,
 } from "../canonical-tools.ts";
@@ -79,6 +80,81 @@ describe("canonical Ask Emmaus tools", () => {
     );
 
     assert.equal(entry?.dayNumber, 2);
+  });
+
+  it("resolves a pronoun follow-up only from a previous verified resource action", async () => {
+    const metadata = await resolveContextualFollowUp("Open it", {
+      scripture: null,
+      nextStep: {
+        action: "Untrusted legacy path",
+        primaryButtonText: "Wrong",
+        path: "https://example.com/wrong",
+      },
+      nextSteps: [],
+      recommendations: [{
+        type: "walk",
+        title: "Coming to Jesus",
+        resourceId: "walk-1",
+        path: "/journey/walk-1/day/2",
+      }],
+      resourceRecommendations: [{
+        resourceType: "walk",
+        resourceId: "walk-1",
+        reason: "Previously verified result.",
+      }],
+      resourceActions: [{
+        kind: "OPEN",
+        resourceType: "walk",
+        resourceId: "walk-1",
+        route: "/journey/walk-1/day/2",
+      }],
+      followUpPrompts: [],
+      handoffType: null,
+    });
+
+    assert.equal(metadata?.nextStep?.path, "/journey/walk-1/day/2");
+    assert.equal(metadata?.resourceActions?.[0]?.resourceId, "walk-1");
+    assert.equal(metadata?.recommendations[0]?.title, "Coming to Jesus");
+  });
+
+  it("does not turn client or model prose paths into contextual actions", async () => {
+    const metadata = await resolveContextualFollowUp("Open it", {
+      scripture: null,
+      nextStep: {
+        action: "Open an unverified destination",
+        primaryButtonText: "Open",
+        path: "/admin",
+      },
+      nextSteps: [],
+      recommendations: [],
+      followUpPrompts: [],
+      handoffType: null,
+    });
+
+    assert.equal(metadata, null);
+  });
+
+  it("uses the previous verified Scripture reference for next-chapter follow-ups", async () => {
+    const metadata = await resolveContextualFollowUp("Read the next chapter", {
+      scripture: {
+        reference: "John 3",
+        book: "john",
+        chapter: 3,
+      },
+      scriptureReferences: [{
+        reference: "John 3",
+        book: "john",
+        chapter: 3,
+      }],
+      nextStep: null,
+      nextSteps: [],
+      recommendations: [],
+      followUpPrompts: [],
+      handoffType: null,
+    });
+
+    assert.equal(metadata?.scripture?.reference, "John 4");
+    assert.equal(metadata?.nextStep?.path, "/bible/read/john/4");
   });
 
   it("fails closed when a canonical Emmaus action source is unavailable", () => {
