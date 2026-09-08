@@ -243,6 +243,9 @@ export function buildContext(input: EmmausContextInput): BuiltContext {
         `${progress.stepTitle ? `, "${progress.stepTitle}"` : ""}`,
       );
     }
+    for (const progress of jc.completedProgress.slice(0, 6)) {
+      lines.push(`  Completed ${progress.journeyType}: "${progress.title}"`);
+    }
     if (jc.bible) {
       lines.push(`  Saved Bible position: ${jc.bible.bookName} ${jc.bible.chapter}`);
     }
