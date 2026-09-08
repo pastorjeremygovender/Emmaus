@@ -10,7 +10,7 @@ const requiredFiles = [
   'android/variables.gradle',
   'android/app/build.gradle',
   'android/app/src/main/AndroidManifest.xml',
-  'android/app/src/main/res/drawable/ic_emmaus_launcher.xml',
+  'android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml',
 ];
 
 const fail = message => {
@@ -45,7 +45,7 @@ const requiredSnippets = [
   [manifest, 'android.permission.POST_NOTIFICATIONS', 'notification permission'],
   [manifest, 'android:exported="true"', 'exported launcher activity'],
   [manifest, 'android:autoVerify="true"', 'verified app link'],
-  [manifest, 'android:icon="@drawable/ic_emmaus_launcher"', 'Emmaus launcher icon'],
+  [manifest, 'android:icon="@mipmap/ic_launcher"', 'Emmaus launcher icon'],
 ];
 
 for (const [content, snippet, label] of requiredSnippets) {
