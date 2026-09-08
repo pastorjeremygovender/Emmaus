@@ -1,18 +1,12 @@
 /**
- * Emmaus Firestore Data Model
+ * Emmaus conversation data model.
  *
- * Defines TypeScript interfaces for all Emmaus conversation data and provides
- * a ConversationStore interface with two implementations:
- *   - InMemoryConversationStore  → always available; used in dev/mock mode
- *   - FirestoreConversationStore → used when FIREBASE_PROJECT_ID env var is set
+ * Defines the shared ConversationStore contract and the isolated in-memory
+ * implementation used by tests. Runtime storage uses Emmaus's existing
+ * PostgreSQL database through PostgresConversationStore so conversations,
+ * approved memories, and safety flags survive restarts and multiple workers.
  *
- * Required env vars for Firestore mode:
- *   FIREBASE_PROJECT_ID
- *   GOOGLE_APPLICATION_CREDENTIALS (service account JSON path)
- *   OR FIREBASE_SERVICE_ACCOUNT_KEY (inline JSON string)
- *
- * When these are absent, the service silently falls back to in-memory storage.
- * No startup errors are thrown.
+ * The filename is retained for compatibility with existing imports.
  */
 
 import type { JarvisIntent, JarvisResponseContract } from "./jarvis-contract.js";
