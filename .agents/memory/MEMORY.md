@@ -90,5 +90,6 @@
 - [Pastoral briefing rules](pastoral-briefing-rules.md) — Today uses a separate church-scoped, read-only evaluation policy; it must not create persisted pastoral side effects.
 - [Pastoral dashboard error boundaries](pastoral-dashboard-error-boundaries.md) — distinguish valid empty pastoral data from failed aggregates and preserve healthy sections.
 - [Member Personal Details](member-personal-details.md) — self-service profile fields stay on the auth-subject profile row and sync directly to Church Register.
+- [Supabase auth error contracts](supabase-auth-error-contracts.md) — GoTrue may return error=invalid_grant and request IDs may be numeric; normalize both before diagnostics.
 - [API artifact health path](api-artifact-health-path.md) — Replit promotion probes the API artifact preview path as well as the explicit health endpoint.
 - [Native Android build environment](android-phase1-build.md) — Capacitor 8 Android builds need standard OpenJDK 21 plus Android SDK 36; GraalVM is incompatible with the JDK image transform.
