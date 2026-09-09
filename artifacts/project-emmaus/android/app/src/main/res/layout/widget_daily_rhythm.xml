@@ -93,10 +93,11 @@
             android:textSize="27sp" />
     </LinearLayout>
 
-    <View
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#1A54746E" />
+        android:background="#1A54746E"
+        android:text="" />
 
     <TextView
         android:id="@+id/widget_invitation"
