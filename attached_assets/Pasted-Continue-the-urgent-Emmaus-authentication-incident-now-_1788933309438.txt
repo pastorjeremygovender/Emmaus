@@ -1,0 +1,117 @@
+Continue the urgent Emmaus authentication incident now.
+
+The investigation was useful, but “the provider rejected the login” is a boundary, not a resolution. Emmaus is live and multiple established users are locked out.
+
+You are authorized to make and republish the smallest safe authentication repair described below. Do not change unrelated features.
+
+PHASE 1 — CAPTURE THE REAL SUPABASE FAILURE SAFELY
+
+Update the server-side login route so that Supabase authentication failures are logged in a redacted structured format containing only:
+
+- timestamp
+- route
+- HTTP/provider status
+- Supabase Auth error code
+- sanitized error category
+- request/correlation ID
+- whether the submitted email matched an existing production identity
+- deployment/build identifier
+
+Never log:
+
+- email address
+- password
+- access token
+- refresh token
+- session cookie
+- authorization header
+- password hash
+- DATABASE_URL
+- Supabase keys
+
+Keep the public-facing error generic and secure.
+
+Before deployment, test that no sensitive fields appear in logs. Republish this diagnostic change with a clearly identified rollback checkpoint.
+
+PHASE 2 — REPAIR THE CONFIRMED SESSION FAILURE
+
+All 18 stored production sessions have expired Supabase access tokens. Emmaus must refresh sessions automatically while the Supabase refresh token remains valid.
+
+Audit and repair the complete refresh lifecycle:
+
+- persist the Supabase refresh token securely
+- refresh the access token before or when it expires
+- update the stored access token, refresh token and expiry atomically
+- renew the local session cookie appropriately
+- preserve authentication across app closure, phone restart and server restart
+- do not use an in-memory-only session store
+- do not generate or rotate SESSION_SECRET at startup
+- configure trust proxy and secure production cookies correctly
+- distinguish an expired access token from an invalid refresh token
+- clear the session only when refresh genuinely cannot succeed
+- prevent concurrent refresh attempts from invalidating each other
+
+Do not extend security beyond Supabase’s valid refresh lifecycle and do not manufacture authentication locally.
+
+PHASE 3 — IDENTIFY THE PASSWORD-LOGIN REJECTION
+
+After diagnostic deployment, perform a controlled login attempt using an authorized affected test account and immediately inspect the redacted provider response.
+
+Then determine the precise category:
+
+A. invalid login credentials/password mismatch
+B. account has no password identity or password provider is unavailable
+C. email confirmation/account state issue
+D. request/configuration/provider mismatch
+E. rate limiting or abuse protection
+F. another documented Supabase Auth failure
+
+Do not report only “Supabase returned 401.” Report the actual redacted Supabase error code and its meaning.
+
+Compare the deployed login request with Supabase’s required password sign-in flow. Verify:
+
+- correct production Supabase project URL and public key
+- email normalization
+- no whitespace or hidden-character corruption
+- correct `signInWithPassword` request
+- password is passed exactly once and not transformed
+- no stale client or incompatible custom request format
+- password provider is enabled for the established identities
+- production and Supabase identity subjects still match
+
+PHASE 4 — SAFE RECOVERY
+
+If the code or configuration is responsible, repair it and verify existing users can sign in without resetting passwords.
+
+If Supabase proves that particular password credentials are invalid or missing, verify the password-reset flow end-to-end before asking affected users to use it:
+
+- reset email is delivered
+- link opens www.emmaus.co.za correctly
+- token is accepted
+- user sets a new password
+- user signs in
+- profile, progress and content remain attached to the same account
+- reset links do not redirect to development or Replit domains
+
+Do not bulk-reset users. Do not recreate identities.
+
+REQUIRED REGRESSION TESTS
+
+Test and report:
+
+1. Existing valid user can sign in.
+2. Incorrect password is rejected.
+3. Session survives page refresh.
+4. Session survives closing and reopening Emmaus.
+5. Expired access token refreshes silently using a valid refresh token.
+6. Server restart does not log users out.
+7. Concurrent requests during refresh do not destroy the session.
+8. Invalid refresh token returns the user safely to sign-in.
+9. Password reset preserves the existing account and user data.
+10. No secrets or personal information appear in logs.
+11. Production remains connected to the established 9-user database.
+12. Existing production user/content counts remain unchanged.
+
+Report the exact root cause, repair, tests, deployment checkpoint, rollback checkpoint and live health result.
+
+Do not stop again at a generic provider response. If another technical boundary is reached, collect the documented Supabase error code and the evidence needed to resolve it.
