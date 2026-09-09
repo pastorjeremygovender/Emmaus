@@ -9,9 +9,9 @@
     android:gravity="center_vertical"
     android:orientation="vertical"
     android:paddingStart="20dp"
-    android:paddingTop="16dp"
-    android:paddingEnd="16dp"
-    android:paddingBottom="14dp">
+    android:paddingTop="15dp"
+    android:paddingEnd="18dp"
+    android:paddingBottom="13dp">
 
     <TextView
         android:id="@+id/widget_wordmark"
@@ -20,30 +20,29 @@
         android:fontFamily="sans-serif-medium"
         android:letterSpacing="0.22"
         android:text="EMMAUS"
-        android:textColor="#26323A"
+        android:textColor="#263A36"
         android:textSize="11sp" />
 
     <TextView
         android:id="@+id/widget_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="7dp"
+        android:layout_marginTop="6dp"
         android:ellipsize="end"
-        android:fontFamily="serif"
+        android:fontFamily="sans-serif-medium"
         android:maxLines="1"
-        android:textColor="#20272F"
-        android:textSize="22sp"
-        android:textStyle="bold" />
+        android:textColor="#1F302C"
+        android:textSize="21sp" />
 
     <TextView
         android:id="@+id/widget_day_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
+        android:layout_marginTop="3dp"
         android:ellipsize="end"
         android:fontFamily="sans-serif-medium"
         android:maxLines="1"
-        android:textColor="#54746E"
+        android:textColor="#426B63"
         android:textSize="14sp" />
 
     <LinearLayout
@@ -65,38 +64,40 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
-                android:fontFamily="serif"
+                android:fontFamily="sans-serif"
                 android:maxLines="2"
-                android:textColor="#4F6B66"
+                android:textColor="#385A54"
                 android:textSize="15sp" />
 
             <TextView
                 android:id="@+id/widget_reference"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:fontFamily="sans-serif"
-                android:textColor="#5F7772"
+                android:layout_marginTop="3dp"
+                android:fontFamily="sans-serif-medium"
+                android:textColor="#4F716A"
                 android:textSize="12sp" />
         </LinearLayout>
 
         <TextView
             android:id="@+id/widget_open"
-            android:layout_width="46dp"
-            android:layout_height="46dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
             android:layout_marginStart="12dp"
             android:background="@drawable/widget_daily_rhythm_action"
             android:contentDescription="@string/widget_open_today"
+            android:fontFamily="sans-serif"
             android:gravity="center"
-            android:text="→"
+            android:includeFontPadding="false"
+            android:text="›"
             android:textColor="#FFFFFF"
-            android:textSize="27sp" />
+            android:textSize="25sp" />
     </LinearLayout>
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#1A54746E"
+        android:background="#3054786E"
         android:text="" />
 
     <TextView
@@ -107,6 +108,6 @@
         android:ellipsize="end"
         android:fontFamily="sans-serif"
         android:maxLines="1"
-        android:textColor="#66807B"
+        android:textColor="#4F716A"
         android:textSize="12sp" />
 </LinearLayout>
