@@ -71,26 +71,37 @@ async function callSupabase<T>(
         body: options.body == null ? undefined : JSON.stringify(options.body),
       });
     } else {
-      // ReplitConnectors.proxy retries every 401 as a connector-auth failure.
-      // Supabase uses 401 for password failures in some environments, so that
-      // retry can discard the original GoTrue response and its error code.
-      // Use the SDK's lower-level primitives for a single provider request.
       const proxyPath = path.startsWith("/") ? path : `/${path}`;
-      const headers = {
-        ...(await connectors.getProxyHeaders(SUPABASE_CONNECTOR)),
-        ...(options.body == null ? {} : { "content-type": "application/json" }),
-        ...options.headers,
+      const fetchProxyOnce = async (): Promise<Response> => {
+        const headers = {
+          ...(await connectors.getProxyHeaders(SUPABASE_CONNECTOR)),
+          ...(options.body == null
+            ? {}
+            : { "content-type": "application/json" }),
+          ...options.headers,
+        };
+        return fetch(`${connectors.getProxyUrl()}${proxyPath}`, {
+          method: options.method ?? "GET",
+          headers,
+          body:
+            options.body == null
+              ? undefined
+              : typeof options.body === "string"
+                ? options.body
+                : JSON.stringify(options.body),
+        });
       };
-      response = await fetch(`${connectors.getProxyUrl()}${proxyPath}`, {
-        method: options.method ?? "GET",
-        headers,
-        body:
-          options.body == null
-            ? undefined
-            : typeof options.body === "string"
-              ? options.body
-              : JSON.stringify(options.body),
-      });
+
+      // The SDK's proxy() retries every 401 as a connector-auth failure.
+      // Supabase can use 401 for password failures, so retry only when the
+      // first response has no recognizable provider error code to preserve.
+      response = await fetchProxyOnce();
+      if (response.status === 401) {
+        const firstPayload = await response.clone().json().catch(() => null);
+        if (!getSupabaseErrorCode(firstPayload)) {
+          response = await fetchProxyOnce();
+        }
+      }
     }
   } catch {
     throw new SupabaseAuthError(
