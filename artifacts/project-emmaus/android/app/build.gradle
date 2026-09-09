@@ -32,9 +32,10 @@ android {
     }
     buildTypes {
         debug {
-            applicationIdSuffix = ".widgettest2"
-            versionNameSuffix = "-widget-test-2"
-            resValue "string", "app_name", "Emmaus Widget Test"
+            applicationIdSuffix = ".widgettest3"
+            versionNameSuffix = "-widget-test-3"
+            resValue "string", "app_name", "Emmaus Widget Preview"
+            resValue "string", "title_activity_main", "Emmaus Widget Preview"
         }
         release {
             minifyEnabled = true
