@@ -32,8 +32,8 @@ android {
     }
     buildTypes {
         debug {
-            applicationIdSuffix = ".widgettest"
-            versionNameSuffix = "-widget-test"
+            applicationIdSuffix = ".widgettest2"
+            versionNameSuffix = "-widget-test-2"
             resValue "string", "app_name", "Emmaus Widget Test"
         }
         release {
