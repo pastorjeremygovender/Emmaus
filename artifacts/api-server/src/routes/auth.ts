@@ -16,7 +16,7 @@ import {
   getSessionId,
   PASSWORD_RECOVERY_TTL_SECONDS,
   SESSION_COOKIE,
-  SESSION_TTL,
+  SESSION_COOKIE_OPTIONS,
   type SessionData,
 } from "../lib/oidc-auth.js";
 import { getCanonicalPublicOrigin } from "../lib/public-origin.js";
@@ -38,13 +38,7 @@ import { logger } from "../lib/logger.js";
 export const authRouter = Router();
 
 function setSessionCookie(res: Response, sid: string): void {
-  res.cookie(SESSION_COOKIE, sid, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: SESSION_TTL,
-  });
+  res.cookie(SESSION_COOKIE, sid, SESSION_COOKIE_OPTIONS);
 }
 
 function claimString(
@@ -434,6 +428,104 @@ function writeAuthError(res: Response, error: unknown): void {
   res.status(400).json({ error: "We could not complete that account request." });
 }
 
+type SupabaseAuthFailureCategory =
+  | "invalid_credentials"
+  | "email_confirmation"
+  | "rate_limited"
+  | "provider_unavailable"
+  | "provider_rejected"
+  | "unknown";
+
+function classifySupabaseAuthFailure(
+  error: SupabaseAuthError,
+): SupabaseAuthFailureCategory {
+  const code = error.code?.toLowerCase() ?? "";
+  if (
+    code.includes("invalid_credentials") ||
+    code.includes("invalid_login_credentials") ||
+    code === "invalid_grant"
+  ) {
+    return "invalid_credentials";
+  }
+  if (
+    code.includes("email_not_confirmed") ||
+    code.includes("email_confirmation") ||
+    error.status === 403
+  ) {
+    return "email_confirmation";
+  }
+  if (error.status === 429 || code.includes("rate")) {
+    return "rate_limited";
+  }
+  if (error.status >= 500) return "provider_unavailable";
+  if (error.status === 400 || error.status === 401) {
+    return "provider_rejected";
+  }
+  return "unknown";
+}
+
+export function createSupabaseLoginFailureLog(input: {
+  route: string;
+  providerStatus: number;
+  providerCode?: string;
+  category: SupabaseAuthFailureCategory;
+  correlationId: string;
+  existingProductionIdentity: "matched" | "not_found" | "lookup_failed";
+  buildId: string;
+}): Record<string, string | number> {
+  return {
+    event: "auth_login_provider_failure",
+    route: input.route,
+    providerStatus: input.providerStatus,
+    providerCode: input.providerCode ?? "unknown",
+    category: input.category,
+    correlationId: input.correlationId,
+    existingProductionIdentity: input.existingProductionIdentity,
+    buildId: input.buildId,
+  };
+}
+
+function getAuthBuildId(): string {
+  return (
+    process.env.REPLIT_DEPLOYMENT_ID ??
+    process.env.REPLIT_BUILD_ID ??
+    process.env.REPLIT_COMMIT_SHA ??
+    "unknown"
+  );
+}
+
+async function getExistingProductionIdentity(
+  email: string,
+): Promise<"matched" | "not_found" | "lookup_failed"> {
+  try {
+    const [profile] = await db
+      .select({ authSubject: userProfilesTable.authSubject })
+      .from(userProfilesTable)
+      .where(eq(userProfilesTable.email, email))
+      .limit(1);
+    return profile?.authSubject ? "matched" : "not_found";
+  } catch {
+    return "lookup_failed";
+  }
+}
+
+async function logSupabaseLoginFailure(
+  req: Request,
+  email: string,
+  error: SupabaseAuthError,
+): Promise<void> {
+  const log = createSupabaseLoginFailureLog({
+    route: req.originalUrl.split("?")[0],
+    providerStatus: error.status,
+    providerCode: error.code,
+    category: classifySupabaseAuthFailure(error),
+    correlationId: typeof req.id === "string" ? req.id : "unknown",
+    existingProductionIdentity: await getExistingProductionIdentity(email),
+    buildId: getAuthBuildId(),
+  });
+  logger.warn(log, "Supabase password login rejected");
+}
+
 authRouter.get(
   "/auth/user",
   async (req: Request, res: Response): Promise<void> => {
@@ -544,6 +636,9 @@ authRouter.post(
       await establishSession(req, res, session);
       res.status(200).json({ ok: true });
     } catch (error) {
+      if (error instanceof SupabaseAuthError) {
+        await logSupabaseLoginFailure(req, email, error);
+      }
       writeAuthError(res, error);
     }
   },

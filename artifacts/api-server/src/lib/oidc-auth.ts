@@ -2,11 +2,21 @@ import crypto from "node:crypto";
 import { db, pool, sessionsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import type { Request, Response } from "express";
-import { refreshSupabaseSession } from "./supabase-auth.js";
+import {
+  refreshSupabaseSession,
+  SupabaseAuthError,
+} from "./supabase-auth.js";
 
 export const SESSION_COOKIE = "sid";
 export const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
 export const PASSWORD_RECOVERY_TTL_SECONDS = 15 * 60;
+export const SESSION_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: true,
+  sameSite: "lax" as const,
+  path: "/",
+  maxAge: SESSION_TTL,
+};
 
 export type SessionUser = {
   id: string;
@@ -133,7 +143,17 @@ export async function consumePasswordRecoveryAuthorization(
  */
 export type SessionRefreshResult =
   | { status: "valid"; session: SessionData }
-  | { status: "invalid" };
+  | {
+      status: "invalid";
+      reason:
+        | "session_missing"
+        | "malformed_session"
+        | "missing_refresh_token"
+        | "provider_rejected"
+        | "provider_unavailable";
+      providerStatus?: number;
+      providerCode?: string;
+    };
 
 function isExpired(session: SessionData, nowSeconds: number): boolean {
   return typeof session.expires_at === "number" && nowSeconds > session.expires_at;
@@ -193,17 +213,17 @@ export async function refreshSessionIfExpired(
 
     if (!locked) {
       // Session was deleted (e.g. logout) while we waited for the lock.
-      return { status: "invalid" };
+      return { status: "invalid", reason: "session_missing" };
     }
     if (locked.expire < new Date()) {
       await tx.delete(sessionsTable).where(eq(sessionsTable.sid, sid));
-      return { status: "invalid" };
+      return { status: "invalid", reason: "session_missing" };
     }
 
     const current = parseStoredSession(locked.sess);
     if (!current?.user?.id) {
       await tx.delete(sessionsTable).where(eq(sessionsTable.sid, sid));
-      return { status: "invalid" };
+      return { status: "invalid", reason: "malformed_session" };
     }
 
     const lockNow = Math.floor(Date.now() / 1000);
@@ -216,7 +236,7 @@ export async function refreshSessionIfExpired(
 
     if (!current.refresh_token) {
       await tx.delete(sessionsTable).where(eq(sessionsTable.sid, sid));
-      return { status: "invalid" };
+      return { status: "invalid", reason: "missing_refresh_token" };
     }
 
     try {
@@ -241,13 +261,29 @@ export async function refreshSessionIfExpired(
         })
         .where(eq(sessionsTable.sid, sid));
       return { status: "valid", session: refreshed };
-    } catch {
+    } catch (error) {
       // Delete while retaining the row lock. A stale middleware request can no
       // longer delete a session that a concurrent request just refreshed.
       await tx.delete(sessionsTable).where(eq(sessionsTable.sid, sid));
-      return { status: "invalid" };
+      if (error instanceof SupabaseAuthError) {
+        return {
+          status: "invalid",
+          reason:
+            error.status === 400 || error.status === 401
+              ? "provider_rejected"
+              : "provider_unavailable",
+          providerStatus: error.status,
+          providerCode: error.code,
+        };
+      }
+      return { status: "invalid", reason: "provider_unavailable" };
     }
   });
+}
+
+/** Roll the opaque browser session cookie forward without changing its SID. */
+export function renewSessionCookie(res: Response, sid: string): void {
+  res.cookie(SESSION_COOKIE, sid, SESSION_COOKIE_OPTIONS);
 }
 
 export async function clearSession(

@@ -4,8 +4,10 @@ import {
   getSession,
   getSessionId,
   refreshSessionIfExpired,
+  renewSessionCookie,
   type AuthenticatedUser,
 } from "../lib/oidc-auth.js";
+import { logger } from "../lib/logger.js";
 import { isPermanentlyDeletedAccount } from "../lib/account-lifecycle-store.js";
 import { getUserProfileBySubject } from "../lib/user-role-store.js";
 
@@ -56,6 +58,22 @@ export async function authMiddleware(
 
   const result = await refreshSessionIfExpired(sid, session);
   if (result.status !== "valid") {
+    logger.warn(
+      {
+        event: "auth_session_refresh_failed",
+        route: req.path,
+        correlationId: typeof req.id === "string" ? req.id : "unknown",
+        reason: result.reason,
+        providerStatus: result.providerStatus,
+        providerCode: result.providerCode,
+        buildId:
+          process.env.REPLIT_DEPLOYMENT_ID ??
+          process.env.REPLIT_BUILD_ID ??
+          process.env.REPLIT_COMMIT_SHA ??
+          "unknown",
+      },
+      "Supabase session refresh failed",
+    );
     await clearSession(res, sid);
     next();
     return;
@@ -85,6 +103,7 @@ export async function authMiddleware(
       "",
     role: profile?.appRole ?? "user",
   };
+  renewSessionCookie(res, sid);
 
   const expectedSubject = req.get(EXPECTED_SUBJECT_HEADER)?.trim();
   if (

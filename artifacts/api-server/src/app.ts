@@ -16,6 +16,7 @@ import { isCanonicalRequestOrigin } from "./lib/public-origin.js";
 import { isApplicationReady } from "./lib/startup-readiness.js";
 
 const app: Express = express();
+app.set("trust proxy", 1);
 
 app.use(
   pinoHttp({
