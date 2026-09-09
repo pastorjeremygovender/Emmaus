@@ -71,7 +71,26 @@ async function callSupabase<T>(
         body: options.body == null ? undefined : JSON.stringify(options.body),
       });
     } else {
-      response = await connectors.proxy(SUPABASE_CONNECTOR, path, options);
+      // ReplitConnectors.proxy retries every 401 as a connector-auth failure.
+      // Supabase uses 401 for password failures in some environments, so that
+      // retry can discard the original GoTrue response and its error code.
+      // Use the SDK's lower-level primitives for a single provider request.
+      const proxyPath = path.startsWith("/") ? path : `/${path}`;
+      const headers = {
+        ...(await connectors.getProxyHeaders(SUPABASE_CONNECTOR)),
+        ...(options.body == null ? {} : { "content-type": "application/json" }),
+        ...options.headers,
+      };
+      response = await fetch(`${connectors.getProxyUrl()}${proxyPath}`, {
+        method: options.method ?? "GET",
+        headers,
+        body:
+          options.body == null
+            ? undefined
+            : typeof options.body === "string"
+              ? options.body
+              : JSON.stringify(options.body),
+      });
     }
   } catch {
     throw new SupabaseAuthError(
