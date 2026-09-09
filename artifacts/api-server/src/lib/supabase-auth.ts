@@ -21,6 +21,7 @@ export type SupabaseSession = {
 type SupabaseErrorPayload = {
   error?: string;
   error_code?: string;
+  error_description?: string;
   msg?: string;
   message?: string;
 };
@@ -34,6 +35,14 @@ export class SupabaseAuthError extends Error {
     super(message);
     this.name = "SupabaseAuthError";
   }
+}
+
+export function getSupabaseErrorCode(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== "object") return undefined;
+  const error = payload as SupabaseErrorPayload;
+  if (typeof error.error_code === "string") return error.error_code;
+  if (typeof error.error === "string") return error.error;
+  return undefined;
 }
 
 async function callSupabase<T>(
@@ -77,8 +86,12 @@ async function callSupabase<T>(
     const error = payload as SupabaseErrorPayload | null;
     throw new SupabaseAuthError(
       response.status,
-      error?.message ?? error?.msg ?? error?.error ?? "Account request failed.",
-      error?.error_code,
+      error?.message ??
+        error?.msg ??
+        error?.error_description ??
+        error?.error ??
+        "Account request failed.",
+      getSupabaseErrorCode(error),
     );
   }
   return payload as T;

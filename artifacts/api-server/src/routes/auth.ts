@@ -519,7 +519,8 @@ async function logSupabaseLoginFailure(
     providerStatus: error.status,
     providerCode: error.code,
     category: classifySupabaseAuthFailure(error),
-    correlationId: typeof req.id === "string" ? req.id : "unknown",
+    correlationId:
+      req.id === undefined || req.id === null ? "unknown" : String(req.id),
     existingProductionIdentity: await getExistingProductionIdentity(email),
     buildId: getAuthBuildId(),
   });
