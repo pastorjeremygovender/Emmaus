@@ -19,6 +19,7 @@ export type SupabaseSession = {
 };
 
 type SupabaseErrorPayload = {
+  code?: string;
   error?: string;
   error_code?: string;
   error_description?: string;
@@ -41,6 +42,7 @@ export function getSupabaseErrorCode(payload: unknown): string | undefined {
   if (!payload || typeof payload !== "object") return undefined;
   const error = payload as SupabaseErrorPayload;
   if (typeof error.error_code === "string") return error.error_code;
+  if (typeof error.code === "string") return error.code;
   if (typeof error.error === "string") return error.error;
   return undefined;
 }

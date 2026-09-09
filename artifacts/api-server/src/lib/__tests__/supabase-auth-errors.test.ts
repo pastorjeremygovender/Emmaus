@@ -23,6 +23,16 @@ describe("Supabase Auth error parsing", () => {
     );
   });
 
+  it("accepts the connector's code field when error_code is absent", () => {
+    assert.equal(
+      getSupabaseErrorCode({
+        code: "invalid_credentials",
+        msg: "Invalid login credentials",
+      }),
+      "invalid_credentials",
+    );
+  });
+
   it("does not turn arbitrary payload values into a logged provider code", () => {
     assert.equal(getSupabaseErrorCode(null), undefined);
     assert.equal(getSupabaseErrorCode({ error: 401 }), undefined);
