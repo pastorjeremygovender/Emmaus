@@ -1,0 +1,78 @@
+URGENT PRODUCTION INCIDENT — EMMAUS USERS ARE LOCKED OUT
+
+Published app: https://www.emmaus.co.za
+
+Symptoms:
+1. Users were forced to sign in again every day this week.
+2. Multiple existing users can now no longer sign in.
+3. Known-correct credentials return: “Email or password is incorrect.”
+4. This is confirmed across different user accounts and devices. Do not treat it as typing error.
+
+Fix the authentication failure now, with the smallest safe production change.
+
+STRICT SAFETY RULES:
+- Do not delete, recreate, overwrite, or migrate user accounts.
+- Do not reset passwords.
+- Do not create a new database.
+- Do not expose DATABASE_URL, SESSION_SECRET, passwords, hashes, tokens, or other credentials.
+- Do not make unrelated UI or feature changes.
+- Preserve all production data.
+- Before republishing, identify the exact cause and provide evidence.
+
+INVESTIGATE IN THIS ORDER:
+
+1. PRODUCTION DATABASE IDENTITY
+Determine safely which database www.emmaus.co.za is currently using.
+Compare its non-secret fingerprint with the database that contains the established Emmaus users.
+Confirm whether the latest deployment was accidentally connected to a development, preview, empty, or replacement database.
+Check whether affected email addresses exist in the production users table, reporting only existence and internal non-sensitive identifiers—never password hashes or credentials.
+
+If production is connected to the wrong database:
+- Restore the published deployment’s connection to the established production database.
+- Do not copy, merge, recreate, or migrate accounts.
+- Confirm all existing production data remains intact.
+
+2. PASSWORD VERIFICATION
+If the correct database is connected, inspect the login code and stored password-hash format.
+Confirm the deployed authentication code still uses the same hashing algorithm and comparison method used when existing passwords were created.
+Check for double hashing, changed bcrypt/argon settings, malformed hash retrieval, email normalization changes, whitespace, case handling, or a query/schema mismatch.
+Repair compatibility without changing existing password hashes.
+
+3. SESSION PERSISTENCE
+Find why users were signed out daily.
+Confirm SESSION_SECRET is a fixed production secret and is not generated at startup, changed on deployment, or falling back to a random value.
+Confirm the production cookie/session configuration:
+- secure enabled in production
+- httpOnly enabled
+- sameSite appropriate for www.emmaus.co.za
+- correct domain/path
+- persistent maxAge
+- rolling renewal or automatic session refresh
+- trust proxy enabled where required by Replit’s reverse proxy
+- session store is persistent and not in-memory
+
+Do not invalidate every user session unnecessarily.
+
+4. MISLEADING ERROR HANDLING
+Confirm whether database or server failures are being incorrectly returned as “Email or password is incorrect.”
+Keep the public response secure, but record the real failure category in redacted server logs.
+
+VERIFICATION BEFORE REPUBLISHING:
+- Test at least two existing accounts against the same production configuration, without revealing credentials.
+- Confirm correct passwords authenticate.
+- Confirm an incorrect password is rejected.
+- Confirm the authenticated session survives refresh, closing/reopening the app, and a server restart.
+- Confirm www.emmaus.co.za is connected to the established production database.
+- Confirm existing user and content counts remain unchanged.
+- Run authentication tests and relevant typechecks.
+
+Then republish only the verified authentication fix.
+
+Report back:
+- exact root cause
+- files/configuration changed
+- database fingerprint comparison without secrets
+- verification results
+- deployment result and health check
+
+Do not ask users to reset their passwords unless testing proves that an individual account—not the production authentication system—is damaged.
