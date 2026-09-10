@@ -13,8 +13,8 @@ import {
 import type { EmmausResource } from "./resource-catalogue.js";
 import { buildJarvisResponseContract } from "./jarvis-contract.js";
 
-const MAX_DISPLAY_CHARS = 1600;
-const MAX_SPEAKABLE_CHARS = 560;
+const MAX_DISPLAY_CHARS = 1200;
+const MAX_SPEAKABLE_CHARS = 480;
 
 type ResourceForGrounding = Pick<
   EmmausResource,
@@ -262,7 +262,7 @@ function normalizeFollowUps(prompts: string[]): string[] {
       seen.add(key);
       return true;
     })
-    .slice(0, 2);
+    .slice(0, 1);
 }
 
 export function normalizeEmmausResponse(input: {
@@ -316,7 +316,7 @@ export function normalizeEmmausResponse(input: {
       `${step.type ?? "step"}:${step.path ?? step.text}`,
       step,
     ])).values(),
-  ).slice(0, 4);
+  ).slice(0, 2);
   metadata.followUpPrompts = normalizeFollowUps(metadata.followUpPrompts ?? []);
   dedupeActions(metadata);
 
