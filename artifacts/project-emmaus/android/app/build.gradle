@@ -7,8 +7,8 @@ android {
         applicationId = "za.co.emmaus.app"
         minSdk = rootProject.ext.minSdkVersion
         targetSdk = rootProject.ext.targetSdkVersion
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0-rc1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -31,12 +31,6 @@ android {
         }
     }
     buildTypes {
-        debug {
-            applicationIdSuffix = ".widgettest3"
-            versionNameSuffix = "-widget-test-3"
-            resValue "string", "app_name", "Emmaus Widget Preview"
-            resValue "string", "title_activity_main", "Emmaus Widget Preview"
-        }
         release {
             minifyEnabled = true
             shrinkResources = true
