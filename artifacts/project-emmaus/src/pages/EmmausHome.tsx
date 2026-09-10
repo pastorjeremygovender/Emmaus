@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useLocation } from 'wouter';
-import { BookOpen, ChevronRight, Headphones, Leaf, MessageCircle, Send } from 'lucide-react';
+import { ChevronRight, Headphones, Leaf, MessageCircle, Send } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
 import { BottomNav } from '@/components/BottomNav';
@@ -167,14 +167,6 @@ export default function EmmausHome() {
           </div>
         </section>
 
-        <button
-          type="button"
-          onClick={() => setLocation('/bible')}
-          className="mx-auto flex min-h-[52px] w-[min(15rem,80%)] items-center justify-center gap-2 rounded-full border border-primary/40 bg-primary/[0.035] px-5 text-[16px] font-semibold text-primary"
-        >
-          <BookOpen size={20} aria-hidden="true" />
-          My Bible
-        </button>
       </main>
       <BottomNav />
     </div>
