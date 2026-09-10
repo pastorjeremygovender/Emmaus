@@ -21,4 +21,4 @@ jobs:
       - name: Run Jarvis response tests
         run: pnpm --filter @workspace/api-server exec node --test --import=tsx/esm src/emmaus/__tests__/system-instructions.test.ts src/emmaus/__tests__/response-normalization.test.ts
       - name: Typecheck API server
-        run: pnpm --filter @workspace/api-server run typecheck
+        run: pnpm run typecheck
