@@ -15,7 +15,7 @@
  *   OPENAI_API_KEY             — enables OpenAI; absent → mock provider
  *   EMMAUS_MAX_OUTPUT_TOKENS   — fast-path token cap (default: 900)
  *   EMMAUS_DEEP_MAX_TOKENS     — deep-path token cap (default: 1400)
- *   EMMAUS_REASONING_EFFORT    — fast-path effort for o1/o3 models (default: low)
+ *   EMMAUS_REASONING_EFFORT    — fast-path reasoning effort (default: low)\n *   EMMAUS_FAST_MODEL           — ordinary conversation model (default: gpt-5.6-luna)\n *   EMMAUS_DEEP_MODEL           — complex pastoral/theology model (default: gpt-6-astra)
  *   EMMAUS_SERMON_MIN_SCORE    — minimum retrieval score (default: 5)
  *
  *   Firestore persistence (when absent, in-memory store is used):
@@ -116,11 +116,7 @@ async function getTrustedDisplayName(userId: string): Promise<string | undefined
     const profile = result.rows[0];
     const preferred = profile?.preferred_name?.trim();
     if (profile?.app_role === "admin" || profile?.app_role === "superAdmin") {
-      // ICC's administrator account is addressed by the ministry name, not the
-      // account's legal/display identity.
-      return preferred && !/^(pastor govender|jeremy govender|the pastor|the user)$/i.test(preferred)
-        ? preferred
-        : "Pastor Jeremy";
+      return "Pastor Jeremy";
     }
     return preferred || undefined;
   } catch (err) {
@@ -332,7 +328,7 @@ function routeSettings(route: Route) {
       reasoningEffort: "medium" as const,
       // EMMAUS_DEEP_MODEL overrides the provider default for deep-path requests.
       // Falls back to the provider's configured model when absent.
-      model: process.env.EMMAUS_DEEP_MODEL,
+      model: process.env.EMMAUS_DEEP_MODEL ?? "gpt-6-astra",
     };
   }
   return {
@@ -345,7 +341,7 @@ function routeSettings(route: Route) {
     // EMMAUS_FAST_MODEL overrides the provider default for fast-path requests.
       // Use a low-latency default for ordinary questions while keeping the
       // configured provider model available for the deep path.
-      model: process.env.EMMAUS_FAST_MODEL ?? "gpt-4o-mini",
+      model: process.env.EMMAUS_FAST_MODEL ?? "gpt-5.6-luna",
   };
 }
 
@@ -434,8 +430,6 @@ function defaultMetadata(): EmmausResponseMetadata {
     nextSteps: [],
     recommendations: [],
     followUpPrompts: [
-      "Help me pray through this.",
-      "Show me a Journey.",
       "What does Scripture say about this?",
     ],
     handoffType: null,
@@ -638,6 +632,25 @@ export async function handleConversation(
   pipelineTimings.contextMs = Date.now() - t0 - pipelineTimings.routingMs;
   logger.info(`[emmaus:${reqId}] context_built ms=${ms()}`);
 
+  // A short follow-up such as "open it" may only inherit a structured action
+  // from the latest assistant message in this authenticated conversation.
+  // Never use client-supplied history as an action authority.
+  let previousCanonicalMetadata: EmmausResponseMetadata | undefined;
+  if (contextInput.conversationId) {
+    try {
+      const existing = await store.getConversation(contextInput.conversationId);
+      if (existing && isOwner(userId, existing.userId)) {
+        const storedMessages = await store.getMessages(contextInput.conversationId);
+        previousCanonicalMetadata = [...storedMessages]
+          .reverse()
+          .find((message) => message.role === "assistant" && message.metadata)
+          ?.metadata;
+      }
+    } catch (error) {
+      logger.warn({ err: String(error) }, "emmaus: previous canonical context unavailable");
+    }
+  }
+
   // ── 3. Canonical typed request router ─────────────────────────────────────
   //
   // Safety remains the first authority. For safe, high-confidence requests we
@@ -647,7 +660,11 @@ export async function handleConversation(
   // Voice deliberately remains on the existing shared retrieval pipeline.
   // Its authenticated envelope is the transport boundary, not a user hint.
   if (!contextInput.voiceContextEnvelope && checkSafetyKeywordsOnly(req.message).isSafe) {
-    const canonical = await resolveCanonicalAskRequest(req.message, userId);
+    const canonical = await resolveCanonicalAskRequest(
+      req.message,
+      userId,
+      previousCanonicalMetadata,
+    );
     if (canonical.handled) {
       logger.info(
         `[emmaus:${reqId}] canonical_resolved intent=${routeAskEmmausRequest(req.message).intent} ms=${ms()}`
