@@ -31,6 +31,12 @@ android {
         }
     }
     buildTypes {
+        debug {
+            applicationIdSuffix = ".widgettest3"
+            versionNameSuffix = "-widget-test-3"
+            resValue "string", "app_name", "Emmaus Widget Preview"
+            resValue "string", "title_activity_main", "Emmaus Widget Preview"
+        }
         release {
             minifyEnabled = true
             shrinkResources = true
