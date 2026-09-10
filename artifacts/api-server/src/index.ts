@@ -82,7 +82,7 @@ async function startServer(): Promise<void> {
     import("./lib/public-origin.js"),
     import("./lib/daily-rhythm-production-correction.js"),
     import("./lib/startup-readiness.js"),
-    import("./lib/startup-migrations.js"),
+    import("./lib/jarvis-conversation-schema.js"),
   ]);
 
   startupLogger = logger;
