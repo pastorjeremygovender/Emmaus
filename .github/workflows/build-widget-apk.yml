@@ -10,6 +10,9 @@ on:
 permissions:
   contents: read
 
+env:
+  EMMAUS_ANDROID_BUILD: release-candidate
+
 jobs:
   build-debug-apk:
     runs-on: ubuntu-latest
