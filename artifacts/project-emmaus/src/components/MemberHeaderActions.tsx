@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { Info, Moon, Settings, Sun, User } from 'lucide-react';
 import { ShareEmmausButton } from '@/components/ShareEmmausButton';
 import { DailyRemindersSettings } from '@/components/DailyRemindersSettings';
+import { WelcomeAssistSettings } from '@/components/WelcomeAssistSettings';
 
 export function MemberHeaderActions({ compact = false }: { compact?: boolean }) {
   const [location] = useLocation();
@@ -91,6 +92,7 @@ export function MemberHeaderActions({ compact = false }: { compact?: boolean }) 
             <h2 className="text-sm font-semibold">Settings</h2>
           </div>
           <DailyRemindersSettings />
+          <WelcomeAssistSettings />
           <div className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-card px-3.5 py-2.5">
             <div className="flex items-center gap-2.5">
               {theme === 'dark'
