@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - codex/jarvis-completion
+      - codex/jarvis-layout-release
+  pull_request:
+    branches:
+      - codex/jarvis-completion
   workflow_dispatch:
 
 permissions:
@@ -22,3 +26,7 @@ jobs:
         run: pnpm --filter @workspace/api-server exec node --test --import=tsx/esm src/emmaus/__tests__/system-instructions.test.ts src/emmaus/__tests__/response-normalization.test.ts
       - name: Typecheck API server
         run: pnpm run typecheck:libs && pnpm --filter @workspace/api-server run typecheck
+      - name: Verify single-toggle navigation
+        run: pnpm --filter @workspace/project-emmaus exec vitest run src/components/__tests__/BottomNav.navigation.test.tsx
+      - name: Build member app
+        run: pnpm --filter @workspace/project-emmaus run build

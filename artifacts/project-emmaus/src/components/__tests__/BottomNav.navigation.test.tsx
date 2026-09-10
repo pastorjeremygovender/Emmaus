@@ -9,45 +9,43 @@ vi.mock('wouter', () => ({
   useLocation: () => [currentLocation, setLocation],
 }));
 
-vi.mock('@/lib/emmaus-pending', () => ({
-  getReturnDestination: () => null,
-}));
-
 describe('BottomNav navigation', () => {
   beforeEach(() => {
     currentLocation = '/daily-rhythm/day/1';
     setLocation.mockClear();
   });
 
-  it('links directly from an incomplete Daily Rhythm to My Bible', () => {
+  it('shows only My Bible while inside Emmaus', () => {
     render(<BottomNav />);
 
     expect(screen.getByTestId('nav-bible')).toHaveAttribute('href', '/bible');
+    expect(screen.queryByTestId('nav-walk')).not.toBeInTheDocument();
   });
 
-  it("links directly from an incomplete Daily Rhythm to Today's Steps", () => {
+  it('shows only Emmaus while inside My Bible', () => {
+    currentLocation = '/bible';
     render(<BottomNav />);
 
     expect(screen.getByTestId('nav-walk')).toHaveAttribute('href', '/walk');
+    expect(screen.getByTestId('nav-walk')).toHaveTextContent('Emmaus');
+    expect(screen.queryByTestId('nav-bible')).not.toBeInTheDocument();
   });
 
-  it('uses client-side navigation for My Bible without following the document link', () => {
+  it('uses client-side navigation to open My Bible', () => {
     currentLocation = '/walk';
     render(<BottomNav />);
 
-    const bibleLink = screen.getByTestId('nav-bible');
-    fireEvent.click(bibleLink);
+    fireEvent.click(screen.getByTestId('nav-bible'));
 
     expect(window.location.pathname).toBe('/');
     expect(setLocation).toHaveBeenCalledWith('/bible');
   });
 
-  it("uses client-side navigation for Today's Steps without following the document link", () => {
+  it('uses client-side navigation to return to Emmaus', () => {
     currentLocation = '/bible';
     render(<BottomNav />);
 
-    const walkLink = screen.getByTestId('nav-walk');
-    fireEvent.click(walkLink);
+    fireEvent.click(screen.getByTestId('nav-walk'));
 
     expect(window.location.pathname).toBe('/');
     expect(setLocation).toHaveBeenCalledWith('/walk');
