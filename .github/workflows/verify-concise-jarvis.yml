@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - codex/jarvis-completion
+      - codex/jarvis-layout-release
   workflow_dispatch:
 
 permissions:
@@ -22,3 +23,7 @@ jobs:
         run: pnpm --filter @workspace/api-server exec node --test --import=tsx/esm src/emmaus/__tests__/system-instructions.test.ts src/emmaus/__tests__/response-normalization.test.ts
       - name: Typecheck API server
         run: pnpm run typecheck:libs && pnpm --filter @workspace/api-server run typecheck
+      - name: Typecheck member app
+        run: pnpm --filter @workspace/project-emmaus run typecheck
+      - name: Build member app
+        run: pnpm --filter @workspace/project-emmaus run build
