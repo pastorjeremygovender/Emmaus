@@ -1,5 +1,7 @@
 package za.co.emmaus.app;
 
+import android.content.Intent;
+
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -12,6 +14,14 @@ import org.json.JSONObject;
 
 @CapacitorPlugin(name = "GeofenceProof")
 public final class GeofenceProofPlugin extends Plugin {
+    @PluginMethod
+    public void openDiagnostics(PluginCall call) {
+        Intent intent = new Intent(getContext(), GeofenceProofActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(intent);
+        call.resolve();
+    }
+
     @PluginMethod
     public void configure(PluginCall call) {
         try {
