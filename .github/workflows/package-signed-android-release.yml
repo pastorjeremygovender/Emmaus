@@ -2,6 +2,11 @@ name: Package signed Emmaus Android release
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - codex/android-release-candidate
+    paths:
+      - ".github/workflows/package-signed-android-release.yml"
 
 permissions:
   contents: read
