@@ -176,11 +176,6 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
             views.setTextViewText(R.id.widget_day_title, "Today • " + content.title);
             views.setTextViewText(R.id.widget_scripture, displayVerse(content.verse));
             views.setTextViewText(R.id.widget_reference, content.reference);
-            views.setTextViewText(
-                R.id.widget_invitation,
-                content.completed ? "Today’s rhythm complete" : "Ready when you are"
-            );
-
             Uri uri = Uri.parse(
                 BASE_URL + "/daily-rhythm/day/" + content.day + "?source=widget"
             );
