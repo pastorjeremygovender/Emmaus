@@ -138,9 +138,11 @@ describe("buildSystemPrompt — userName personalisation", () => {
     const prompt = buildSystemPrompt(CONTEXT_BLOCK);
 
     assert.match(prompt, /Lead with the direct answer in the first sentence/i);
-    assert.match(prompt, /Usually 70–120 words/i);
+    assert.match(prompt, /Usually 35–80 words/i);
     assert.match(prompt, /at most TWO resource recommendations/i);
     assert.match(prompt, /Prefer one excellent match/i);
+    assert.match(prompt, /Do not force an action/i);
+    assert.match(prompt, /at most ONE concise follow-up/i);
   });
 });
 
