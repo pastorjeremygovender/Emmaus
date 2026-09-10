@@ -142,9 +142,33 @@ describe("Ask Emmaus final response normalization", () => {
       metadata: { ...baseMetadata(), recommendations: [] },
       resources: [],
     });
-    assert.ok(result.displayAnswer.length <= 1600);
-    assert.ok(result.speakableAnswer.length <= 560);
+    assert.ok(result.displayAnswer.length <= 1200);
+    assert.ok(result.speakableAnswer.length <= 480);
     assert.doesNotMatch(result.displayAnswer, /https?:\/\//);
     assert.doesNotMatch(result.speakableAnswer, /https?:\/\//);
+  });
+
+  it("limits action cards and follow-up prompts", () => {
+    const result = normalizeEmmausResponse({
+      answer: "Jesus invites us to trust Him today.",
+      metadata: {
+        ...baseMetadata(),
+        recommendations: [],
+        sermonRecommendations: [],
+        nextSteps: [
+          { type: "read", text: "John 10:27", path: "/bible/read/john/10" },
+          { type: "pray", text: "Jesus, help me recognise and follow Your voice." },
+          { type: "continue", text: "Continue the Journey", path: "/journeys/example" },
+        ],
+        followUpPrompts: [
+          "How can I recognise Jesus’ voice?",
+          "Which Scripture should I read next?",
+        ],
+      },
+      resources: [],
+    });
+
+    assert.equal(result.metadata.nextSteps.length, 2);
+    assert.equal(result.metadata.followUpPrompts?.length, 1);
   });
 });
