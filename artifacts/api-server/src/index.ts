@@ -71,7 +71,6 @@ async function startServer(): Promise<void> {
     { runSignalsEngine, logEngineRun },
     { ensureAuthSchema },
     { getCanonicalPublicOrigin },
-    { runDailyRhythmProductionCorrection },
     { markApplicationReady },
     { ensureJarvisConversationSchema },
   ] = await Promise.all([
@@ -80,7 +79,6 @@ async function startServer(): Promise<void> {
     import("./lib/pastoral-store.js"),
     import("./lib/ensure-auth-schema.js"),
     import("./lib/public-origin.js"),
-    import("./lib/daily-rhythm-production-correction.js"),
     import("./lib/startup-readiness.js"),
     import("./lib/jarvis-conversation-schema.js"),
   ]);
@@ -104,14 +102,6 @@ async function startServer(): Promise<void> {
   logger.info(
     { durationMs: Date.now() - jarvisSchemaStartedAt },
     "Startup phase complete: ensure Jarvis conversation schema",
-  );
-
-  const dailyRhythmCorrectionStartedAt = Date.now();
-  logger.info("Startup phase beginning: Daily Rhythm production correction");
-  await runDailyRhythmProductionCorrection();
-  logger.info(
-    { durationMs: Date.now() - dailyRhythmCorrectionStartedAt },
-    "Startup phase complete: Daily Rhythm production correction",
   );
 
   markApplicationReady();
