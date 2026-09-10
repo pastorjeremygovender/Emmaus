@@ -134,6 +134,14 @@ describe("buildSystemPrompt — userName personalisation", () => {
     assert.match(prompt, /Scripture remains the centre/i);
     assert.match(prompt, /Daily Rhythm is locked and unavailable/i);
   });
+  it("requires concise direct answers and selective resource recommendations", () => {
+    const prompt = buildSystemPrompt(CONTEXT_BLOCK);
+
+    assert.match(prompt, /Lead with the direct answer in the first sentence/i);
+    assert.match(prompt, /Usually 70–120 words/i);
+    assert.match(prompt, /at most TWO resource recommendations/i);
+    assert.match(prompt, /Prefer one excellent match/i);
+  });
 });
 
 // ─── conversation-service wiring note ────────────────────────────────────────
