@@ -102,7 +102,49 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
                 }
             }
         }
+        if (verse.isEmpty() && !reference.isEmpty()) {
+            try {
+                verse = loadVerseExcerpt(reference);
+            } catch (Exception ignored) {
+                // The reference remains visible if the Bible excerpt is unavailable.
+            }
+        }
         return new WidgetContent(day, title, verse, reference, completed);
+    }
+
+    private static String loadVerseExcerpt(String reference) throws Exception {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+            .compile("^(.+?)\\s+(\\d+)(?::(\\d+)(?:[-–—](\\d+))?)?.*$")
+            .matcher(reference);
+        if (!matcher.matches()) return "";
+
+        String bookId = matcher.group(1)
+            .toLowerCase(java.util.Locale.ROOT)
+            .replaceAll("[^a-z0-9]+", "-")
+            .replaceAll("(^-|-$)", "");
+        int chapter = Integer.parseInt(matcher.group(2));
+        int startVerse = matcher.group(3) == null ? 1 : Integer.parseInt(matcher.group(3));
+        int endVerse = matcher.group(4) == null ? startVerse : Integer.parseInt(matcher.group(4));
+
+        JSONObject chapterBody = requestJson(
+            "/api/bible/bsb/" + Uri.encode(bookId) + "/" + chapter
+        );
+        JSONArray verses = chapterBody.optJSONArray("verses");
+        if (verses == null) return "";
+
+        StringBuilder excerpt = new StringBuilder();
+        for (int index = 0; index < verses.length(); index++) {
+            JSONObject item = verses.optJSONObject(index);
+            if (item == null) continue;
+            int number = item.optInt("verse", -1);
+            if (number < startVerse || number > endVerse) continue;
+            String text = clean(item.optString("text", ""));
+            if (text.isEmpty()) continue;
+            if (excerpt.length() > 0) excerpt.append(" ");
+            excerpt.append(text);
+            if (excerpt.length() >= 150) break;
+        }
+        return excerpt.toString();
     }
 
     private static JSONObject requestJson(String path) throws Exception {
@@ -158,7 +200,7 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
         return new WidgetContent(
             Math.max(1, prefs.getInt(KEY_DAY, 1)),
             prefs.getString(KEY_TITLE, "Today's Daily Rhythm"),
-            prefs.getString(KEY_VERSE, "Open Emmaus for today's Scripture."),
+            prefs.getString(KEY_VERSE, ""),
             prefs.getString(KEY_REFERENCE, ""),
             prefs.getBoolean(KEY_COMPLETED, false)
         );
@@ -195,7 +237,8 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
 
     private static String displayVerse(String verse) {
         String safe = clean(verse);
-        if (safe.isEmpty()) return "Open Emmaus for today’s Scripture.";
+        if (safe.isEmpty()) return "Today’s Scripture";
+        if (safe.length() > 150) safe = safe.substring(0, 147).trim() + "…";
         if (safe.startsWith("“") || safe.startsWith("\"")) return safe;
         return "“" + safe + "”";
     }
