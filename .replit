@@ -75,7 +75,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /tmp/emmaus-codex-jarvis-1f66e467/artifacts/api-server && APP_ENV=development NODE_ENV=development PORT=3000 pnpm exec tsx ../project-emmaus/.jarvis-preview-server.mjs"
+args = "cd /tmp/emmaus-jarvis-77c9237/artifacts/api-server && APP_ENV=development NODE_ENV=development PORT=3000 pnpm exec tsx ../../.jarvis-preview-server.mjs"
 waitForPort = 3000
 
 [agent]

@@ -93,3 +93,4 @@
 - [Supabase auth error contracts](supabase-auth-error-contracts.md) — GoTrue may return error=invalid_grant and request IDs may be numeric; normalize both before diagnostics.
 - [API artifact health path](api-artifact-health-path.md) — Replit promotion probes the API artifact preview path as well as the explicit health endpoint.
 - [Native Android build environment](android-phase1-build.md) — Capacitor 8 Android builds need standard OpenJDK 21 plus Android SDK 36; GraalVM is incompatible with the JDK image transform.
+- [Temporary preview port routing](preview-port-routing.md) — isolated non-artifact workflows may require the explicit `:<port>` development-domain URL.
