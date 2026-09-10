@@ -47,9 +47,7 @@ async function readDisplayName(userId: string): Promise<string | undefined> {
   const profile = result.rows[0];
   const preferred = profile?.preferred_name?.trim();
   if (profile?.app_role === "admin" || profile?.app_role === "superAdmin") {
-    return preferred && !/^(pastor govender|jeremy govender|the pastor|the user)$/i.test(preferred)
-      ? preferred
-      : "Pastor Jeremy";
+    return "Pastor Jeremy";
   }
   return preferred || undefined;
 }
@@ -80,21 +78,32 @@ const productionReaders: JarvisContextReaders = {
   getPublishedSermonById,
 };
 
-async function readActiveProgress(
+async function readJourneyProgress(
   userId: string,
   journeys: FrontendJourney[],
   readers: JarvisContextReaders,
-) {
-  const active: JarvisContext["activeProgress"] = [];
+): Promise<Pick<JarvisContext, "activeProgress" | "completedProgress">> {
+  const activeProgress: JarvisContext["activeProgress"] = [];
+  const completedProgress: JarvisContext["completedProgress"] = [];
+
   for (const journey of journeys) {
-    if (journey.journeyType === "daily-rhythm" || journey.journeyType === "core") continue;
+    if (journey.journeyType === "daily-rhythm" || journey.journeyType === "companion") continue;
     const progress = await readers.getProgress(userId, journey.id);
-    if (
-      !progress
-      || progress.status === "paused"
-      || progress.status === "hidden"
-      || progress.completedDays.length >= journey.durationDays
-    ) continue;
+    if (!progress || progress.status === "paused" || progress.status === "hidden") continue;
+
+    const journeyType = journey.journeyType === "walk" || journey.journeyType === "core"
+      ? "walk"
+      : "journey";
+    if (progress.completedDays.length >= journey.durationDays) {
+      completedProgress.push({
+        journeyId: journey.id,
+        journeyType,
+        title: journey.title,
+        route: `/journeys/${journey.id}`,
+      });
+      continue;
+    }
+
     const currentDay = Math.max(1, progress.currentDay);
     const steps = await readers.listSteps(journey.id);
     const step = steps.find((candidate) =>
@@ -102,9 +111,9 @@ async function readActiveProgress(
       && candidate.status === "Published"
       && !candidate.isCompletionStep,
     );
-    active.push({
+    activeProgress.push({
       journeyId: journey.id,
-      journeyType: journey.journeyType === "walk" ? "walk" : "journey",
+      journeyType,
       title: journey.title,
       currentDay,
       ...(step?.id ? { stepId: step.id } : {}),
@@ -112,7 +121,10 @@ async function readActiveProgress(
       route: `/journey/${journey.id}/day/${currentDay}`,
     });
   }
-  return active;
+  return {
+    activeProgress: activeProgress.slice(0, 8),
+    completedProgress: completedProgress.slice(0, 8),
+  };
 }
 
 async function readDevotionalContext(userId: string, readers: JarvisContextReaders) {
@@ -181,14 +193,17 @@ export async function assembleJarvisContext(
         }),
       readers.listPublishedJourneys()
         .then(async (journeys) => {
-          const active = await readActiveProgress(userId, journeys, readers);
-          sourceStatuses.push(status("active-progress", active.length > 0 ? "ok" : "empty"));
-          return active;
+          const progress = await readJourneyProgress(userId, journeys, readers);
+          sourceStatuses.push(status(
+            "active-progress",
+            progress.activeProgress.length > 0 || progress.completedProgress.length > 0 ? "ok" : "empty",
+          ));
+          return progress;
         })
         .catch((error) => {
           logger.warn({ err: String(error) }, "emmaus: Jarvis active progress source unavailable");
           sourceStatuses.push(status("active-progress", "unavailable"));
-          return [];
+          return { activeProgress: [], completedProgress: [] };
         }),
       readers.getBibleData(userId)
         .then((data) => {
@@ -248,7 +263,8 @@ export async function assembleJarvisContext(
     context: {
       identity,
       ...(dailyRhythm ? { dailyRhythm } : {}),
-      activeProgress: journeysResult,
+      activeProgress: journeysResult.activeProgress,
+      completedProgress: journeysResult.completedProgress,
       ...(bibleResult
         ? {
             bible: {
