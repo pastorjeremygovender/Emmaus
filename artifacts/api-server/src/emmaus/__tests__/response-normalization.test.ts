@@ -142,8 +142,8 @@ describe("Ask Emmaus final response normalization", () => {
       metadata: { ...baseMetadata(), recommendations: [] },
       resources: [],
     });
-    assert.ok(result.displayAnswer.length <= 2400);
-    assert.ok(result.speakableAnswer.length <= 720);
+    assert.ok(result.displayAnswer.length <= 1600);
+    assert.ok(result.speakableAnswer.length <= 560);
     assert.doesNotMatch(result.displayAnswer, /https?:\/\//);
     assert.doesNotMatch(result.speakableAnswer, /https?:\/\//);
   });
