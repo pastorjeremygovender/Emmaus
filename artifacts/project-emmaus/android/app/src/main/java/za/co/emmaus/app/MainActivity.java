@@ -17,6 +17,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(GeofenceProofPlugin.class);
+        registerPlugin(WelcomeAssistBluetoothPlugin.class);
         super.onCreate(savedInstanceState);
     }
 
