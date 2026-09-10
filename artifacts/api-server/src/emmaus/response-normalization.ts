@@ -13,8 +13,8 @@ import {
 import type { EmmausResource } from "./resource-catalogue.js";
 import { buildJarvisResponseContract } from "./jarvis-contract.js";
 
-const MAX_DISPLAY_CHARS = 2400;
-const MAX_SPEAKABLE_CHARS = 720;
+const MAX_DISPLAY_CHARS = 1600;
+const MAX_SPEAKABLE_CHARS = 560;
 
 type ResourceForGrounding = Pick<
   EmmausResource,
@@ -71,7 +71,7 @@ function dedupeRecommendations(items: Recommendation[]): Recommendation[] {
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
-  }).slice(0, 4);
+  }).slice(0, 2);
 }
 
 function dedupeSermons(items: SermonRecommendation[]): SermonRecommendation[] {
@@ -82,7 +82,7 @@ function dedupeSermons(items: SermonRecommendation[]): SermonRecommendation[] {
       bySermon.set(item.sermonId, item);
     }
   }
-  return Array.from(bySermon.values()).slice(0, 3);
+  return Array.from(bySermon.values()).slice(0, 1);
 }
 
 function dedupeActions(metadata: EmmausResponseMetadata): void {
@@ -262,7 +262,7 @@ function normalizeFollowUps(prompts: string[]): string[] {
       seen.add(key);
       return true;
     })
-    .slice(0, 3);
+    .slice(0, 2);
 }
 
 export function normalizeEmmausResponse(input: {
@@ -290,6 +290,9 @@ export function normalizeEmmausResponse(input: {
 
   metadata.recommendations = dedupeRecommendations(metadata.recommendations ?? []);
   metadata.sermonRecommendations = dedupeSermons(metadata.sermonRecommendations ?? []);
+  if (metadata.sermonRecommendations.length > 0) {
+    metadata.recommendations = metadata.recommendations.slice(0, 1);
+  }
   metadata.resourceRecommendations = metadata.recommendations
     .filter((recommendation) => recommendation.resourceId)
     .map((recommendation) => {
