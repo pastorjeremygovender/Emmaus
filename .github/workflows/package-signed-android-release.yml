@@ -2,9 +2,6 @@ name: Package signed Emmaus Android release
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - codex/android-release-candidate
 
 permissions:
   contents: read
@@ -61,7 +58,7 @@ jobs:
       - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: emmaus-android-1.2.0-rc1-apk
+          name: emmaus-unified-1.2.0-rc2-apk
           path: artifacts/project-emmaus/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
@@ -69,7 +66,7 @@ jobs:
       - name: Upload Google Play bundle
         uses: actions/upload-artifact@v4
         with:
-          name: emmaus-android-1.2.0-rc1-aab
+          name: emmaus-unified-1.2.0-rc2-aab
           path: artifacts/project-emmaus/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
