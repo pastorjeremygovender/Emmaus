@@ -6,12 +6,19 @@ import android.content.Context;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Bundle;
 
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     private static final String WIDGET_PROMPT_PREFS = "emmaus_widget_prompt";
     private static final String KEY_PROMPT_REQUESTED = "daily_rhythm_prompt_requested";
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(GeofenceProofPlugin.class);
+        super.onCreate(savedInstanceState);
+    }
 
     @Override
     public void onResume() {
