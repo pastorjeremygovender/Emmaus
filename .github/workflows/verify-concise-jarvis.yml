@@ -1,20 +1,20 @@
-name: Verify concise Jarvis responses
+name: Verify unified Emmaus release
 
 on:
   push:
     branches:
-      - codex/jarvis-completion
-      - codex/jarvis-layout-release
+      - release/emmaus-unified
+      - main
   pull_request:
     branches:
-      - codex/jarvis-completion
+      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  verify-jarvis:
+  verify-emmaus:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
