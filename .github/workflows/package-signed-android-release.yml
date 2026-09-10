@@ -5,8 +5,6 @@ on:
   push:
     branches:
       - codex/android-release-candidate
-    paths:
-      - ".github/workflows/package-signed-android-release.yml"
 
 permissions:
   contents: read
