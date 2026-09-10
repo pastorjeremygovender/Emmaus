@@ -1,9 +1,10 @@
-name: Build Emmaus widget APK
+name: Build Emmaus Android release candidate
 
 on:
   push:
     branches:
       - codex/android-daily-rhythm-widget
+      - codex/android-release-candidate
   workflow_dispatch:
 
 permissions:
@@ -14,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Check out widget branch
+      - name: Check out Android branch
         uses: actions/checkout@v4
 
       - name: Set up Java 21
@@ -45,7 +46,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: emmaus-daily-rhythm-widget-debug
+          name: emmaus-android-release-candidate-debug
           path: artifacts/project-emmaus/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
