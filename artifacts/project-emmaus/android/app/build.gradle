@@ -18,15 +18,15 @@ android {
     }
     signingConfigs {
         release {
-            def keystorePath = System.getenv("EMMAUS_ANDROID_KEYSTORE_PATH")
-            def keystorePassword = System.getenv("EMMAUS_ANDROID_KEYSTORE_PASSWORD")
-            def keyAlias = System.getenv("EMMAUS_ANDROID_KEY_ALIAS")
-            def keyPassword = System.getenv("EMMAUS_ANDROID_KEY_PASSWORD")
-            if (keystorePath && keystorePassword && keyAlias && keyPassword) {
-                storeFile = rootProject.file(keystorePath)
-                storePassword = keystorePassword
-                this.keyAlias = keyAlias
-                this.keyPassword = keyPassword
+            def configuredKeystorePath = System.getenv("EMMAUS_ANDROID_KEYSTORE_PATH")
+            def configuredKeystorePassword = System.getenv("EMMAUS_ANDROID_KEYSTORE_PASSWORD")
+            def configuredKeyAlias = System.getenv("EMMAUS_ANDROID_KEY_ALIAS")
+            def configuredKeyPassword = System.getenv("EMMAUS_ANDROID_KEY_PASSWORD")
+            if (configuredKeystorePath && configuredKeystorePassword && configuredKeyAlias && configuredKeyPassword) {
+                storeFile = rootProject.file(configuredKeystorePath)
+                storePassword = configuredKeystorePassword
+                keyAlias = configuredKeyAlias
+                keyPassword = configuredKeyPassword
             }
         }
     }
