@@ -5,6 +5,9 @@ on:
     branches:
       - codex/jarvis-completion
       - codex/jarvis-layout-release
+  pull_request:
+    branches:
+      - codex/jarvis-completion
   workflow_dispatch:
 
 permissions:
