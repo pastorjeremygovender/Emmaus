@@ -98,17 +98,9 @@ export async function ensureAuthSchema(): Promise<void> {
       deleted_at timestamptz NOT NULL DEFAULT now(),
       deleted_by varchar NOT NULL
     );
-    -- Repair any identity that could have been recreated by an older server
-    -- during a provider-login vs permanent-purge race.
-    DELETE FROM sessions s
-    USING permanently_deleted_accounts p
-    WHERE s.sess -> 'user' ->> 'id' = p.account_id;
-    DELETE FROM user_profiles up
-    USING permanently_deleted_accounts p
-    WHERE up.auth_subject = p.account_id;
-    DELETE FROM users u
-    USING permanently_deleted_accounts p
-    WHERE u.id = p.account_id;
+    -- Account cleanup is never executed automatically at server startup.
+    -- Permanent-deletion tombstones remain authoritative and any repair must
+    -- run as a separately reviewed, auditable maintenance operation.
 
     DO $$ BEGIN
       IF NOT EXISTS (
