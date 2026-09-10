@@ -73,6 +73,7 @@ async function startServer(): Promise<void> {
     { getCanonicalPublicOrigin },
     { markApplicationReady },
     { ensureJarvisConversationSchema },
+    { ensureDailyRhythmOpeningSchema },
   ] = await Promise.all([
     import("./app.js"),
     import("./lib/logger.js"),
@@ -81,6 +82,7 @@ async function startServer(): Promise<void> {
     import("./lib/public-origin.js"),
     import("./lib/startup-readiness.js"),
     import("./lib/jarvis-conversation-schema.js"),
+    import("./lib/daily-rhythm-opening-schema.js"),
   ]);
 
   startupLogger = logger;
@@ -102,6 +104,14 @@ async function startServer(): Promise<void> {
   logger.info(
     { durationMs: Date.now() - jarvisSchemaStartedAt },
     "Startup phase complete: ensure Jarvis conversation schema",
+  );
+
+  const openingSchemaStartedAt = Date.now();
+  logger.info("Startup phase beginning: ensure Daily Rhythm opening schema");
+  await ensureDailyRhythmOpeningSchema();
+  logger.info(
+    { durationMs: Date.now() - openingSchemaStartedAt },
+    "Startup phase complete: ensure Daily Rhythm opening schema",
   );
 
   markApplicationReady();
