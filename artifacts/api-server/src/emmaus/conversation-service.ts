@@ -430,8 +430,6 @@ function defaultMetadata(): EmmausResponseMetadata {
     nextSteps: [],
     recommendations: [],
     followUpPrompts: [
-      "Help me pray through this.",
-      "Show me a Journey.",
       "What does Scripture say about this?",
     ],
     handoffType: null,
