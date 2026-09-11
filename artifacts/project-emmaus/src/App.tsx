@@ -44,7 +44,7 @@ import CollectionPage from '@/pages/journeys/CollectionPage';
 import ContentGroupPage from '@/pages/ContentGroupPage';
 import Personal from '@/pages/Personal';
 import PersonalDetails from '@/pages/PersonalDetails';
-import Admin from '@/pages/Admin';
+import AdminRoute from '@admin-route';
 import NotFound from '@/pages/not-found';
 
 // Ask Emmaus
@@ -175,7 +175,7 @@ function Router() {
       <Route path="/personal/ask-emmaus/conversation" component={AskEmmausConversation} />
       <Route path="/personal/ask-emmaus/conversation/:id" component={AskEmmausConversation} />
       <Route path="/personal/ask-emmaus/history/:id" component={AskEmmausHistory} />
-      <Route path="/admin" component={Admin} />
+      <Route path="/admin" component={AdminRoute} />
 
       {/* Rooms */}
       <Route path="/rooms" component={Rooms} />
