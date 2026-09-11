@@ -32,6 +32,7 @@ import { readBiblePassage } from "../lib/bible-verse-search.js";
 import { logger } from "../lib/logger.js";
 import { buildEmmausResourceCatalogue, type EmmausResource } from "./resource-catalogue.js";
 import { actionsForResource } from "./action-registry.js";
+import { listPublishedSermons } from "../lib/canonical-sermon-store.js";
 
 export type CanonicalToolResolution =
   | { handled: true; metadata: EmmausResponseMetadata }
