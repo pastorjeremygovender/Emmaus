@@ -636,8 +636,8 @@ export async function handleConversation(
   // from the latest assistant message in this authenticated conversation.
   // Never use client-supplied history as an action authority.
   let previousCanonicalMetadata: EmmausResponseMetadata | undefined;
-  if (contextInput.conversationId) {
-    try {
+  try {
+    if (contextInput.conversationId) {
       const existing = await store.getConversation(contextInput.conversationId);
       if (existing && isOwner(userId, existing.userId)) {
         const storedMessages = await store.getMessages(contextInput.conversationId);
@@ -646,9 +646,34 @@ export async function handleConversation(
           .find((message) => message.role === "assistant" && message.metadata)
           ?.metadata;
       }
-    } catch (error) {
-      logger.warn({ err: String(error) }, "emmaus: previous canonical context unavailable");
     }
+
+    // A member may return through a fresh Ask Emmaus screen and still expect
+    // “the Walk you recommended earlier” to mean the last verified resource
+    // Emmaus showed them. Search only this authenticated member's recent
+    // conversations, and inherit structured server metadata—not model prose.
+    if (!previousCanonicalMetadata && userId !== "anonymous") {
+      const recentConversations = (await store.listConversations(userId)).slice(0, 10);
+      for (const conversation of recentConversations) {
+        if (conversation.id === contextInput.conversationId) continue;
+        const storedMessages = await store.getMessages(conversation.id);
+        previousCanonicalMetadata = [...storedMessages]
+          .reverse()
+          .find((message) =>
+            message.role === "assistant"
+            && Boolean(message.metadata)
+            && (
+              (message.metadata?.resourceActions?.length ?? 0) > 0
+              || (message.metadata?.capabilityActions?.length ?? 0) > 0
+              || Boolean(message.metadata?.scripture)
+            )
+          )
+          ?.metadata;
+        if (previousCanonicalMetadata) break;
+      }
+    }
+  } catch (error) {
+    logger.warn({ err: String(error) }, "emmaus: previous canonical context unavailable");
   }
 
   // ── 3. Canonical typed request router ─────────────────────────────────────
