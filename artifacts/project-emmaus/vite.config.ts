@@ -17,6 +17,7 @@ if (Number.isNaN(port) || port <= 0) {
 // BASE_PATH controls the Vite `base` option (public URL prefix for all assets).
 // Default to '/' — the value the deployment platform sets at runtime anyway.
 const basePath = process.env.BASE_PATH ?? '/';
+const isMemberBuild = process.env.VITE_EMMAUS_BUILD_TARGET === 'member';
 
 export default defineConfig({
   base: basePath,
@@ -47,6 +48,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),
+      '@admin-route': path.resolve(
+        import.meta.dirname,
+        'src',
+        'routes',
+        isMemberBuild ? 'AdminRoute.member.tsx' : 'AdminRoute.web.tsx',
+      ),
       '@assets': path.resolve(
         import.meta.dirname,
         '..',
