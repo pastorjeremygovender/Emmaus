@@ -236,6 +236,18 @@ export function buildContext(input: EmmausContextInput): BuiltContext {
         `${jc.dailyRhythm.completedToday ? " (completed today)" : ""}` +
         `${jc.dailyRhythm.locked ? ` (next step unlocks ${jc.dailyRhythm.unlockDate ?? "later"})` : ""}`,
       );
+      if (jc.dailyRhythm.scriptureReference) {
+        lines.push(`  Today's Scripture: ${jc.dailyRhythm.scriptureReference}`);
+      }
+      if (jc.dailyRhythm.teachingExcerpt) {
+        lines.push(`  Today's Emmaus teaching: ${jc.dailyRhythm.teachingExcerpt}`);
+      }
+      if (jc.dailyRhythm.reflectionQuestion) {
+        lines.push(`  Today's reflection: ${jc.dailyRhythm.reflectionQuestion}`);
+      }
+      if (jc.dailyRhythm.prayerPrompt) {
+        lines.push(`  Today's prayer direction: ${jc.dailyRhythm.prayerPrompt}`);
+      }
     }
     for (const progress of jc.activeProgress.slice(0, 6)) {
       lines.push(
