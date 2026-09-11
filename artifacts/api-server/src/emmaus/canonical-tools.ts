@@ -829,16 +829,23 @@ export async function resolveContextualFollowUp(
     });
   }
 
+  const recommendationRecall = value.match(
+    /^(?:open|show me|take me to)\s+(?:the\s+)?(?:(walk|journey|devotional|sermon)\s+)?(?:you\s+)?recommended(?:\s+(?:to me))?(?:\s+(?:yesterday|before|earlier|last time))?[.!?]*$/,
+  );
   const followUp = value.match(/^(open|continue|resume|read|show me|take me there|go there)(?:\s+(?:it|that|this|there))?[.!?]*$/);
-  if (!followUp) return null;
-  const requestedKind = /continue|resume/.test(followUp[1])
-    ? "CONTINUE"
-    : /read|show me/.test(followUp[1])
-      ? "READ"
-      : "OPEN";
+  if (!followUp && !recommendationRecall) return null;
+  const requestedKind = recommendationRecall
+    ? "OPEN"
+    : /continue|resume/.test(followUp![1])
+      ? "CONTINUE"
+      : /read|show me/.test(followUp![1])
+        ? "READ"
+        : "OPEN";
+  const requestedResourceType = recommendationRecall?.[1];
 
   const resourceActions = (previousMetadata.resourceActions ?? [])
-    .filter((action) => safeStoredRoute(action.route));
+    .filter((action) => safeStoredRoute(action.route))
+    .filter((action) => !requestedResourceType || action.resourceType === requestedResourceType);
   const resourceAction = resourceActions.find((action) => action.kind === requestedKind)
     ?? resourceActions[0];
   if (resourceAction) {
