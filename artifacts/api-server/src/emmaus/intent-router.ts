@@ -97,7 +97,7 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
     };
   }
 
-  if (/^(?:continue|resume)\s+(?:where i (?:left|stopped) off|from where i (?:left|stopped) off)\b/.test(value)) {
+  if (/^(?:continue|resume)\s+(?:where i (?:left|stopped)(?: off)?|from where i (?:left|stopped)(?: off)?)\b/.test(value)) {
     return {
       intent: "DIRECT_ACTION",
       requestedCapability: "active-progress",
