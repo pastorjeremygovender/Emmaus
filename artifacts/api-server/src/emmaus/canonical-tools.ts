@@ -900,7 +900,7 @@ export async function resolveContextualFollowUp(
   const pendingAction = previousMetadata.pendingMemberAction;
   if (pendingAction?.kind === "COMPLETE_DAILY_RHYTHM") {
     const metadata = emptyMetadata();
-    if (/^(?:yes|yes please|please do|do it|confirm|mark it complete)[.!?]*$/.test(value)) {
+    if (/^(?:yes|yes,? please|please do|do it|confirm|mark it complete)[.!?]*$/.test(value)) {
       if (!userId) {
         metadata.answer = "I couldn't safely confirm which member's progress to update. Nothing has been changed.";
         return metadata;
@@ -910,7 +910,7 @@ export async function resolveContextualFollowUp(
       metadata.pendingMemberAction = null;
       return metadata;
     }
-    if (/^(?:no|no thanks|not yet|cancel|don't|do not)[.!?]*$/.test(value)) {
+    if (/^(?:no|no,? thanks|no,? not yet|not yet|cancel|don't|do not)[.!?]*$/.test(value)) {
       metadata.answer = "Nothing has been changed. Take the time you need.";
       metadata.pendingMemberAction = null;
       return metadata;
@@ -949,7 +949,7 @@ export async function resolveContextualFollowUp(
   const discipleship = previousMetadata.discipleshipConversation;
   if (discipleship?.kind === "DAILY_RHYTHM") {
     const reflectionRequest = /^(?:help me reflect(?: on this)?|let(?:'s| us) reflect|reflection)[.!?]*$/.test(value);
-    const prayerRequest = /^(?:pray(?: with me)?(?: about this)?|let(?:'s| us) pray|yes(?: please)?)[.!?]*$/.test(value)
+    const prayerRequest = /^(?:pray(?: with me)?(?: about this)?|let(?:'s| us) pray|yes(?:,? please)?)[.!?]*$/.test(value)
       && (discipleship.phase === "PRAYER_OFFER" || /pray/.test(value));
 
     if (reflectionRequest && discipleship.reflectionQuestion) {
