@@ -23,7 +23,7 @@ This file overrides older branch notes and status claims when they conflict. His
 |---|---|---|---|
 | Live member web app | User reverted the rejected large single-screen layout in Replit | **Live, but not Git-aligned** | Capture/compare the live UI source before any future publish |
 | Jarvis foundation | `codex/jarvis-completion` checkpoint `1f66e467...`; 91 tests / 18 suites reported | **Preserved; do not rebuild** | Use as historical acceptance baseline |
-| Jarvis in unified branch | Complete focused foundation workflow now runs routing, canonical tools, context, normalization and instructions; 37/37 passed | **Technically verified, not user-accepted** | Create an isolated authenticated preview and run real member scenarios |
+| Jarvis in unified branch | Complete focused foundation workflow runs routing, canonical tools, context, normalization and instructions; 38/38 passed | **Technically verified, not user-accepted** | Create an isolated authenticated preview and run real member scenarios |
 | Jarvis continuity additions | Direct current sermon, cross-conversation verified recommendation recall, current Daily Rhythm Scripture/teaching context | **Added and focused tests pass** | Include in the same real preview; do not publish separately |
 | Rejected single-screen UI | `EmmausHome.tsx` and related navigation changes are present in unified Git history; user rejected and reverted live | **Blocked** | Never publish as-is; reconcile/remove only after live-source capture |
 | Android wrapper | Package `za.co.emmaus.app`; version `1.2.0-rc2`; native verification checks exist | **Buildable candidate, not final release** | Use unified signed APK workflow after UI reconciliation |
@@ -48,6 +48,14 @@ Do not recreate these:
 - Concise display/speakable normalization.
 - Resource recommendation limits.
 - Safety and pastoral handoff structure.
+
+## Jarvis headless delivery progress
+
+- **Verified:** “What should I do next?” can return the actual eligible Daily Rhythm inside the conversation.
+- **Verified:** The conversational response includes the published title, Scripture/reference, available verse text, teaching and reflection.
+- **Verified:** The visible route remains optional; the same response is suitable for later speech output.
+- **Not yet verified:** conversational confirmation and execution of completion, reflection saving, prayer continuation and human handoff.
+- **Not yet user-accepted:** isolated authenticated preview.
 
 ## Jarvis: current real acceptance gate
 
