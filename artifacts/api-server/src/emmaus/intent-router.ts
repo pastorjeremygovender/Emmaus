@@ -86,7 +86,8 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
     };
   }
 
-  if (/^what should i do today\b/.test(value) || /^what(?:'s| is) on my (?:steps|walk) today\b/.test(value)) {
+  if (/^what should i do (?:today|next)\b/.test(value)
+    || /^what(?:'s| is) on my (?:steps|walk) today\b/.test(value)) {
     return {
       intent: "DIRECT_ACTION",
       requestedCapability: "todays-steps",
@@ -96,10 +97,10 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
     };
   }
 
-  if (/^(?:continue|resume)\s+(?:where i left off|from where i left off)\b/.test(value)) {
+  if (/^(?:continue|resume)\s+(?:where i (?:left|stopped) off|from where i (?:left|stopped) off)\b/.test(value)) {
     return {
-      intent: "BIBLE_CONTINUE",
-      requestedCapability: "saved-bible-position",
+      intent: "DIRECT_ACTION",
+      requestedCapability: "active-progress",
       requestedOperation: "CONTINUE",
       confidence: 0.98,
       clarificationRequired: false,
@@ -212,6 +213,28 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
     };
   }
 
+  if (/^(?:open|play|show me|take me to)\s+(?:this|the current)\s+week(?:'s|s)?\s+sermon\b/.test(routingValue)) {
+    return {
+      intent: "DIRECT_ACTION",
+      requestedCapability: "sermons",
+      requestedOperation: "OPEN",
+      resourceQuery: "this week's sermon",
+      confidence: 0.99,
+      clarificationRequired: false,
+    };
+  }
+
+  if (/^what (?:was|is) pastor jeremy (?:teaching|preaching|saying) about\b/.test(routingValue)) {
+    return {
+      intent: "RESOURCE_SEARCH",
+      requestedCapability: "sermons",
+      requestedOperation: "FIND",
+      resourceQuery: message.trim(),
+      confidence: 0.98,
+      clarificationRequired: false,
+    };
+  }
+
   if (/^(?:what have we preached|find|search|show me).*\b(?:sermon|sermons|preached|preaching)\b/.test(routingValue)
     || /^(?:show me|find|search for)\b.*\b(?:teaching|message|talk)\b.*\b(?:in|on)\b/.test(routingValue)
     || /^has .*\bpreached on\b/.test(routingValue)
@@ -284,6 +307,14 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
       bibleReference: shared.bibleRef,
       confidence: shared.bibleRef ? 0.99 : 0.88,
       clarificationRequired: !shared.bibleRef,
+    };
+  }
+
+  if (/^i (?:did not|didn't|dont|don't) understand (?:today(?:'s|s) )?(?:scripture|passage|reading)\b/.test(value)) {
+    return {
+      intent: "GENERAL_BIBLICAL_QUESTION",
+      confidence: 0.96,
+      clarificationRequired: false,
     };
   }
 
