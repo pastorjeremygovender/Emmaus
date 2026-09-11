@@ -1,3 +1,4 @@
+- [Emmaus single source of truth](../../docs/EMMAUS_SINGLE_SOURCE_OF_TRUTH.md) — AUTHORITATIVE CURRENT STATUS. Read first. Overrides older status notes when they conflict; prevents duplicate work and unsafe publishing.
 - [Bible Study Foundation](bible-study-foundation.md) — Stages 1–3: user_bible_data + bible_study_notes DB tables; 8-action verse sheet; VerseStudyPanel; admin Bible Study section.
 - [gpt-5 OpenAI compatibility](gpt5-openai-compat.md) — gpt-5 rejects temperature + max_tokens; needs max_completion_tokens ≥5000; ~90–150s/call; background seeder required.
 - [Sermon generation pipeline](sermon-generation-pipeline.md) — sermon-aware detection added; SERMON_CONFIRMATION_REQUIRED flow; THEME_CONFIRMATION_REQUIRED flow; parseVttTimed; detectSermonSection; redetectSermon; ConfirmSermonPhase/AdjustSermonPhase/ConfirmThemePhase.
