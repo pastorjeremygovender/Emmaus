@@ -171,6 +171,17 @@ export interface EmmausResponseMetadata {
     label: string;
     route: string;
   }>;
+  /** Server-owned state for a headless Daily Rhythm conversation. */
+  discipleshipConversation?: {
+    kind: "DAILY_RHYTHM";
+    phase: "TEACHING" | "REFLECTION" | "PRAYER_OFFER" | "PRAYER";
+    journeyId: string;
+    stepId: string;
+    day: number;
+    title: string;
+    reflectionQuestion?: string;
+    prayerPrompt?: string;
+  };
   /** A server-verified member action awaiting an explicit yes/no response. */
   pendingMemberAction?: {
     kind: "COMPLETE_DAILY_RHYTHM";
