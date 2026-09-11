@@ -23,6 +23,8 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Run complete Jarvis foundation tests
+        env:
+          DATABASE_URL: postgresql://test:test@127.0.0.1:1/test
         run: >-
           pnpm --filter @workspace/api-server exec node --test --import=tsx/esm
           src/emmaus/__tests__/system-instructions.test.ts
