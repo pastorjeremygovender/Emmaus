@@ -117,6 +117,37 @@ describe("canonical Ask Emmaus tools", () => {
     assert.equal(metadata?.recommendations[0]?.title, "Coming to Jesus");
   });
 
+  it("recalls a previously verified Walk recommendation in natural member language", async () => {
+    const metadata = await resolveContextualFollowUp("Show me the Walk you recommended yesterday.", {
+      scripture: null,
+      nextStep: null,
+      nextSteps: [],
+      recommendations: [{
+        type: "walk",
+        title: "Coming to Jesus",
+        resourceId: "walk-1",
+        path: "/journey/walk-1/day/2",
+      }],
+      resourceRecommendations: [{
+        resourceType: "walk",
+        resourceId: "walk-1",
+        reason: "Previously verified result.",
+      }],
+      resourceActions: [{
+        kind: "OPEN",
+        resourceType: "walk",
+        resourceId: "walk-1",
+        route: "/journey/walk-1/day/2",
+      }],
+      followUpPrompts: [],
+      handoffType: null,
+    });
+
+    assert.equal(metadata?.nextStep?.path, "/journey/walk-1/day/2");
+    assert.equal(metadata?.recommendations[0]?.title, "Coming to Jesus");
+    assert.equal(metadata?.resourceActions?.[0]?.resourceType, "walk");
+  });
+
   it("does not turn client or model prose paths into contextual actions", async () => {
     const metadata = await resolveContextualFollowUp("Open it", {
       scripture: null,
