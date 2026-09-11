@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildDailyRhythmConversation,
   canonicalFailureMetadata,
   resolveCanonicalAskRequest,
   resolveContextualFollowUp,
@@ -34,6 +35,59 @@ describe("canonical Ask Emmaus tools", () => {
     if (!result.handled) return;
     assert.equal(result.metadata.nextStep, null);
     assert.match(result.metadata.answer ?? "", /validate/i);
+  });
+
+  it("delivers today's discipleship experience without requiring a screen", () => {
+    const metadata = buildDailyRhythmConversation(
+      {
+        journeyId: "10-minutes-with-jesus",
+        progress: null,
+        currentStepId: "rhythm-day-20",
+        currentDayNumber: 20,
+        currentStepTitle: "You Can Trust His Voice",
+        currentStepCompleted: false,
+        completedStepIds: [],
+        availableStepIds: ["rhythm-day-20"],
+        reviewableStepIds: [],
+        nextStepLocked: false,
+        nextEligibleUnlockDate: null,
+        todayAvailableDay: 20,
+        assignedDay: 20,
+        openingState: "OPENING_REQUIRED",
+        localTimezone: "Africa/Johannesburg",
+        localDate: "2026-09-11",
+      },
+      {
+        id: "rhythm-day-20",
+        journeyId: "10-minutes-with-jesus",
+        day: 20,
+        title: "You Can Trust His Voice",
+        status: "Published",
+        mentorIntro: "Let us listen carefully to Jesus today.",
+        scripture: "John 10:27–30",
+        devotional: "Jesus knows His sheep and leads them securely.",
+        reflectionQuestion: "Where is Jesus asking you to trust His voice?",
+        prayerPrompt: "Jesus, help me recognise and trust Your voice.",
+        actionStep: "",
+        scriptureReferences: [{
+          reference: "John 10:27–30",
+          translation: "BSB",
+          verseText: "My sheep listen to My voice; I know them, and they follow Me.",
+        }],
+      } as never,
+    );
+
+    assert.match(metadata.answer ?? "", /Today: You Can Trust His Voice/);
+    assert.match(metadata.answer ?? "", /John 10:27–30/);
+    assert.match(metadata.answer ?? "", /My sheep listen to My voice/);
+    assert.match(metadata.answer ?? "", /Jesus knows His sheep/);
+    assert.match(metadata.answer ?? "", /Reflection:/);
+    assert.equal(metadata.scriptureReferences?.[0]?.reference, "John 10:27–30");
+    assert.equal(metadata.resourceActions?.[0]?.route, "/daily-rhythm/day/20");
+    assert.deepEqual(metadata.followUpPrompts, [
+      "Help me reflect on this.",
+      "Pray with me about this.",
+    ]);
   });
 
   it("resolves a devotional to the first published day not yet completed", () => {
