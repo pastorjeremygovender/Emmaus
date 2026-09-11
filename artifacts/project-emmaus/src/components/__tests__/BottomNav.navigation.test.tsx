@@ -22,12 +22,12 @@ describe('BottomNav navigation', () => {
     expect(screen.queryByTestId('nav-walk')).not.toBeInTheDocument();
   });
 
-  it('shows only Emmaus while inside My Bible', () => {
+  it('shows only Today\'s Steps while inside My Bible', () => {
     currentLocation = '/bible';
     render(<BottomNav />);
 
     expect(screen.getByTestId('nav-walk')).toHaveAttribute('href', '/walk');
-    expect(screen.getByTestId('nav-walk')).toHaveTextContent('Emmaus');
+    expect(screen.getByTestId('nav-walk')).toHaveTextContent("Today's Steps");
     expect(screen.queryByTestId('nav-bible')).not.toBeInTheDocument();
   });
 
@@ -41,7 +41,7 @@ describe('BottomNav navigation', () => {
     expect(setLocation).toHaveBeenCalledWith('/bible');
   });
 
-  it('uses client-side navigation to return to Emmaus', () => {
+  it('uses client-side navigation to return to Today\'s Steps', () => {
     currentLocation = '/bible';
     render(<BottomNav />);
 

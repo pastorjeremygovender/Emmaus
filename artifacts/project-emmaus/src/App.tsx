@@ -22,7 +22,6 @@ import Auth from '@/pages/Auth';
 import AuthCallback from '@/pages/AuthCallback';
 import CheckIn from '@/pages/CheckIn';
 import Walk from '@/pages/Walk';
-import EmmausHome from '@/pages/EmmausHome';
 import { StepNavigatorPage } from '@/pages/StepNavigatorPage';
 import { DevotionalNavigatorPage } from '@/pages/DevotionalNavigatorPage';
 import { SermonCompanionNavigatorPage } from '@/pages/SermonCompanionNavigatorPage';
@@ -124,7 +123,8 @@ function Router() {
       <Route path="/auth" component={Auth} />
       <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/checkin" component={CheckIn} />
-      <Route path="/walk" component={EmmausHome} />
+      <Route path="/walk" component={Walk} />
+      {/* Keep the previous Library URL as a compatibility alias for Today's Steps. */}
       <Route path="/library" component={Walk} />
       {/* Canonical Daily Rhythm routes */}
       <Route path="/daily-rhythm/navigate">

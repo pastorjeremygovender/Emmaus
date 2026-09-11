@@ -7,7 +7,8 @@
  *   3. Daily Devotionals               (self-paced series the member has started)
  *   4. Your Journeys                   (started growth journeys)
  *
- * Ask Emmaus floats above the nav — not part of this hierarchy.
+ * Ask Emmaus is available from its dedicated screen, not as a floating action
+ * on Today's Steps.
  */
 
 import { useLocation, Link } from 'wouter';
@@ -164,6 +165,7 @@ function CompactCard({
   badge,
   trailing,
   imageUrl,
+  showActionIcon = true,
   className,
 }: {
   title: string;
@@ -174,6 +176,7 @@ function CompactCard({
   badge?: 'UPDATED' | 'NEW' | null;
   trailing?: ReactNode;
   imageUrl?: string;
+  showActionIcon?: boolean;
   className?: string;
 }) {
   const clickable = !!onAction;
@@ -209,7 +212,7 @@ function CompactCard({
             </p>
           )}
         </div>
-        {onAction && !done && !trailing && (
+        {onAction && !done && !trailing && showActionIcon && (
           <X size={15} className="shrink-0 text-muted-foreground/40" aria-hidden="true" />
         )}
         {trailing && (
@@ -245,6 +248,30 @@ export default function Walk() {
   const { getState } = useEnrollment();
   const { getMyRooms, loadRooms } = useRooms();
   const [, setLocation] = useLocation();
+  const [discoverMoreAtBottom, setDiscoverMoreAtBottom] = useState(false);
+
+  useEffect(() => {
+    const updateBottomState = () => {
+      const distanceFromBottom =
+        document.documentElement.scrollHeight - (window.scrollY + window.innerHeight);
+      setDiscoverMoreAtBottom(distanceFromBottom <= 8);
+    };
+
+    updateBottomState();
+    window.addEventListener('scroll', updateBottomState, { passive: true });
+    window.addEventListener('resize', updateBottomState);
+
+    const resizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(updateBottomState)
+      : null;
+    resizeObserver?.observe(document.documentElement);
+
+    return () => {
+      window.removeEventListener('scroll', updateBottomState);
+      window.removeEventListener('resize', updateBottomState);
+      resizeObserver?.disconnect();
+    };
+  }, []);
 
   // Hooks must all be called before early returns.
   const publishedJourneys = useMemo(
@@ -621,21 +648,13 @@ export default function Walk() {
 
       <main className="relative px-4 pt-10 pb-4 max-w-[480px] mx-auto space-y-3.5">
 
-        {/* ── My Library header ─────────────────────────────────────────────── */}
+        {/* ── Today's Steps header ──────────────────────────────────────────── */}
         <header className="px-1 pb-1">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={() => setLocation('/walk')}
-              className="min-h-[44px] rounded-full px-1 text-[14px] font-semibold text-primary"
-              aria-label="Back to Emmaus"
-            >
-              ← Emmaus
-            </button>
+          <div className="mb-3 flex justify-end">
             <MemberHeaderActions compact />
           </div>
           <h1 className="text-[28px] font-semibold tracking-tight text-foreground">
-            My Library
+            Today's Steps
           </h1>
           <p className="mt-1 text-[13px] text-muted-foreground">
             Continue what you've started or discover something new.
@@ -654,6 +673,7 @@ export default function Walk() {
               ctaLabel={drCtaLabel}
               onAction={handleDrAction}
               done={drState === 'uptodate'}
+              showActionIcon={false}
               className={drState !== 'uptodate' ? 'daily-rhythm-actionable-card' : undefined}
             />
           </SectionWrapper>
@@ -926,12 +946,17 @@ export default function Walk() {
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.13 }}
-          className="pb-24"
+          className="relative h-16"
         >
           <button
             type="button"
             onClick={() => setLocation('/journeys')}
-            className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)] left-1/2 z-40 flex w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 items-center justify-center gap-2.5 rounded-full border border-border bg-card px-4 py-3 text-[14px] text-muted-foreground/50 shadow-sm transition-all hover:border-primary/25 hover:shadow-md"
+            className={cn(
+              'flex items-center justify-center gap-2.5 rounded-full border border-border bg-card px-4 py-3 text-[14px] text-muted-foreground/50 shadow-sm transition-all hover:border-primary/25 hover:shadow-md',
+              discoverMoreAtBottom
+                ? 'absolute inset-x-0 top-0 w-full'
+                : 'fixed bottom-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)] left-1/2 z-40 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2',
+            )}
             aria-label="Discover More"
           >
             <Compass size={15} className="shrink-0 text-muted-foreground/50" strokeWidth={1.8} />

@@ -66,3 +66,7 @@ EMMAUS_PUBLIC_ORIGIN = "https://emmaus.co.za"
 
 [nix]
 channel = "stable-25_05"
+
+[[ports]]
+localPort = 3000
+externalPort = 3000

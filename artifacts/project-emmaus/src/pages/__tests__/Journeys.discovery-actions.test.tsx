@@ -164,6 +164,14 @@ describe('Discovery content activation contract', () => {
     expect(startJourney).not.toHaveBeenCalled();
   });
 
+  it('provides a back navigation to Today\'s Steps', () => {
+    render(<Journeys />);
+
+    fireEvent.click(screen.getByRole('button', { name: "Back to Today's Steps" }));
+
+    expect(setLocation).toHaveBeenCalledWith('/walk');
+  });
+
   it('shows no Daily Rhythm completion lock on discovered content', async () => {
     render(<Journeys />);
     await screen.findByText(walk.title);

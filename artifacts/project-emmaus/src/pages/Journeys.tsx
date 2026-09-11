@@ -27,7 +27,7 @@ import JourneyStartSheet from '@/components/JourneyStartSheet';
 import { useRooms } from '@/contexts/RoomsContext';
 import { apiStartShared } from '@/lib/rooms-api';
 import {
-  X, ChevronRight,
+  ArrowLeft, X, ChevronRight,
   BookHeart, Mic2, Map as MapIcon,
 } from 'lucide-react';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
@@ -836,7 +836,16 @@ export default function Journeys() {
 
         {/* Header */}
         <header className="space-y-1">
-          <div className="mb-1 flex justify-end">
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setLocation('/walk')}
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-1 text-[14px] font-semibold text-primary"
+              aria-label="Back to Today's Steps"
+            >
+              <ArrowLeft size={17} aria-hidden="true" />
+              Today's Steps
+            </button>
             <MemberHeaderActions compact />
           </div>
           <div className="min-w-0">

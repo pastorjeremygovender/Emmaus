@@ -1,7 +1,8 @@
 /**
  * FloatingEmmausButton — neutral translucent pill FAB.
  *
- * Hidden on: /, /auth, /checkin, /join-room/*, /admin, /admin/*,
+ * Hidden on: /, /auth, /checkin, /walk, /library, /journeys, /bible,
+ *            /join-room/*, /admin, /admin/*,
  *            /personal/ask-emmaus, /personal/ask-emmaus/*,
  *            /personal (My Walk) and all /personal/* child screens.
  *
@@ -41,7 +42,7 @@ const HIDDEN_PREFIXES = [
 ];
 
 // Primary screens use the inline AskEmmausBar instead of the FAB
-const HIDDEN_EXACT = new Set(['/', '/auth', '/checkin', '/walk', '/journeys', '/bible', '/personal']);
+const HIDDEN_EXACT = new Set(['/', '/auth', '/checkin', '/walk', '/library', '/journeys', '/bible', '/personal']);
 
 function isHidden(path: string): boolean {
   if (HIDDEN_EXACT.has(path)) return true;

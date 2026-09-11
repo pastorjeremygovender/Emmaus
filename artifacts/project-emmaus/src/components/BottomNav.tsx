@@ -6,7 +6,7 @@ export function BottomNav() {
   const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   const inBible = location === '/bible' || location.startsWith('/bible/');
   const destination = inBible
-    ? { path: '/walk', label: 'Emmaus', icon: Footprints }
+    ? { path: '/walk', label: "Today's Steps", icon: Footprints }
     : { path: '/bible', label: 'My Bible', icon: BookOpen };
   const Icon = destination.icon;
 
