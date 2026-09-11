@@ -90,6 +90,125 @@ describe("canonical Ask Emmaus tools", () => {
     ]);
   });
 
+  it("requires explicit confirmation before completing today's Daily Rhythm", async () => {
+    const calls: Array<{ userId: string; journeyId: string; day: number }> = [];
+    const executors = {
+      completeStep: (async (userId: string, journeyId: string, day: number) => {
+        calls.push({ userId, journeyId, day });
+        return {} as never;
+      }) as never,
+    };
+    const previous = {
+      scripture: null,
+      nextStep: null,
+      nextSteps: [],
+      recommendations: [],
+      resourceActions: [{
+        kind: "READ" as const,
+        resourceType: "daily_rhythm" as const,
+        resourceId: "rhythm-day-20",
+        parentId: "10-minutes-with-jesus",
+        route: "/daily-rhythm/day/20",
+      }],
+      followUpPrompts: [],
+      handoffType: null,
+    };
+
+    const confirmation = await resolveContextualFollowUp(
+      "I'm finished",
+      previous,
+      "member-1",
+      executors,
+    );
+
+    assert.equal(calls.length, 0);
+    assert.equal(confirmation?.pendingMemberAction?.kind, "COMPLETE_DAILY_RHYTHM");
+    assert.match(confirmation?.answer ?? "", /would you like me/i);
+
+    const completed = await resolveContextualFollowUp(
+      "Yes, please.",
+      confirmation!,
+      "member-1",
+      executors,
+    );
+
+    assert.deepEqual(calls, [{
+      userId: "member-1",
+      journeyId: "10-minutes-with-jesus",
+      day: 20,
+    }]);
+    assert.equal(completed?.pendingMemberAction, null);
+    assert.match(completed?.answer ?? "", /complete/i);
+  });
+
+  it("cancels a pending completion without changing progress", async () => {
+    let calls = 0;
+    const metadata = await resolveContextualFollowUp(
+      "No, not yet.",
+      {
+        scripture: null,
+        nextStep: null,
+        nextSteps: [],
+        recommendations: [],
+        followUpPrompts: [],
+        handoffType: null,
+        pendingMemberAction: {
+          kind: "COMPLETE_DAILY_RHYTHM",
+          journeyId: "10-minutes-with-jesus",
+          stepId: "rhythm-day-20",
+          day: 20,
+          label: "Mark today's Daily Rhythm complete",
+          requiresConfirmation: true,
+        },
+      },
+      "member-1",
+      {
+        completeStep: (async () => {
+          calls += 1;
+          return {} as never;
+        }) as never,
+      },
+    );
+
+    assert.equal(calls, 0);
+    assert.equal(metadata?.pendingMemberAction, null);
+    assert.match(metadata?.answer ?? "", /nothing has been changed/i);
+  });
+
+  it("never treats review language as progress confirmation", async () => {
+    let calls = 0;
+    const metadata = await resolveContextualFollowUp(
+      "Review today",
+      {
+        scripture: null,
+        nextStep: null,
+        nextSteps: [],
+        recommendations: [],
+        followUpPrompts: [],
+        handoffType: null,
+        pendingMemberAction: {
+          kind: "COMPLETE_DAILY_RHYTHM",
+          journeyId: "10-minutes-with-jesus",
+          stepId: "rhythm-day-20",
+          day: 20,
+          label: "Mark today's Daily Rhythm complete",
+          requiresConfirmation: true,
+        },
+      },
+      "member-1",
+      {
+        completeStep: (async () => {
+          calls += 1;
+          return {} as never;
+        }) as never,
+      },
+    );
+
+    assert.equal(calls, 0);
+    assert.equal(metadata?.pendingMemberAction?.kind, "COMPLETE_DAILY_RHYTHM");
+    assert.match(metadata?.answer ?? "", /say yes|say no/i);
+  });
+
   it("resolves a devotional to the first published day not yet completed", () => {
     const entries = [
       { status: "Published", dayNumber: 240, scripture: "Psalm 91" },
