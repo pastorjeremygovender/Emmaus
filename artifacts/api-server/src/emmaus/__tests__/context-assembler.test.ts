@@ -52,6 +52,37 @@ describe("Jarvis context assembly", () => {
     assert.equal(JSON.stringify(envelope).includes("daily rhythm unavailable"), false);
   });
 
+  it("grounds today's Scripture questions in the member's published Daily Rhythm step", async () => {
+    const readers = healthyReaders();
+    readers.getDailyRhythmState = async () => ({
+      journeyId: "10-minutes-with-jesus",
+      currentStepId: "rhythm-day-20",
+      currentDayNumber: 20,
+      currentStepTitle: "You Can Trust His Voice",
+      currentStepCompleted: false,
+      nextStepLocked: false,
+      nextEligibleUnlockDate: null,
+    } as never);
+    readers.listSteps = async () => ([{
+      id: "rhythm-day-20",
+      day: 20,
+      title: "You Can Trust His Voice",
+      status: "Published",
+      scripture: "John 10:27–30",
+      devotional: "Jesus describes His people as those who hear His voice and follow Him.",
+      reflectionQuestion: "Where is Jesus inviting you to trust Him?",
+      prayerPrompt: "Jesus, help me recognise and trust Your voice.",
+      isCompletionStep: false,
+    }] as never);
+
+    const envelope = await assembleJarvisContext("member-a", undefined, readers);
+
+    assert.equal(envelope.context.dailyRhythm?.scriptureReference, "John 10:27–30");
+    assert.match(envelope.context.dailyRhythm?.teachingExcerpt ?? "", /hear His voice/i);
+    assert.match(envelope.context.dailyRhythm?.reflectionQuestion ?? "", /trust Him/i);
+    assert.match(envelope.context.dailyRhythm?.prayerPrompt ?? "", /recognise/i);
+  });
+
   it("includes active legacy core Walks and completed discipleship activity", async () => {
     const readers = healthyReaders();
     readers.listPublishedJourneys = async () => ([
