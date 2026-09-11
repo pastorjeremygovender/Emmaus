@@ -74,6 +74,10 @@ export interface JarvisContext {
     currentDay: number;
     stepId?: string;
     stepTitle?: string;
+    scriptureReference?: string;
+    teachingExcerpt?: string;
+    reflectionQuestion?: string;
+    prayerPrompt?: string;
     completedToday: boolean;
     locked: boolean;
     unlockDate?: string;
