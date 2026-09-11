@@ -4,7 +4,9 @@ import {
   getDailyRhythmState,
   listPublishedJourneys,
   listSteps,
+  type DailyRhythmState,
   type FrontendJourney,
+  type FrontendStep,
 } from "../lib/journey-store.js";
 import {
   getAllProgressForUser,
@@ -27,7 +29,11 @@ import type {
   SermonRecommendation,
   ScriptureRef,
 } from "./firestore-model.js";
-import { buildScriptureRoute, canonicalBibleBookName } from "./citation-validation.js";
+import {
+  buildScriptureRoute,
+  canonicalBibleBookName,
+  extractValidatedScriptureReferences,
+} from "./citation-validation.js";
 import { readBiblePassage } from "../lib/bible-verse-search.js";
 import { logger } from "../lib/logger.js";
 import { buildEmmausResourceCatalogue, type EmmausResource } from "./resource-catalogue.js";
@@ -599,6 +605,61 @@ async function resolveBibleContinue(userId: string): Promise<EmmausResponseMetad
   return metadata;
 }
 
+export function buildDailyRhythmConversation(
+  state: DailyRhythmState,
+  step: FrontendStep,
+): EmmausResponseMetadata {
+  const metadata = emptyMetadata();
+  const path = `/daily-rhythm/day/${state.currentDayNumber}`;
+  const title = state.currentStepTitle ?? step.title ?? `Daily Rhythm — Day ${state.currentDayNumber}`;
+  const authoredReferences = [
+    step.scripture,
+    ...(step.scriptureReferences ?? []).map((item) => item.reference),
+  ].filter((value): value is string => Boolean(value?.trim()));
+  const scriptureReferences = extractValidatedScriptureReferences(authoredReferences.join("; "));
+  const verseText = step.scriptureReferences?.find((item) => item.verseText?.trim())?.verseText?.trim();
+
+  const sections = [
+    `Today: ${title}`,
+    step.scripture ? `Scripture: ${step.scripture}${verseText ? ` — “${verseText}”` : ""}` : "",
+    step.mentorIntro?.trim() ?? "",
+    step.devotional?.trim() ?? "",
+    step.reflectionQuestion?.trim()
+      ? `Reflection: ${step.reflectionQuestion.trim()}`
+      : "",
+  ].filter(Boolean);
+
+  metadata.answer = sections.join("\n\n");
+  metadata.scripture = scriptureReferences[0] ?? null;
+  metadata.scriptureReferences = scriptureReferences;
+  metadata.recommendations = [{
+    type: "daily_rhythm",
+    resourceId: state.currentStepId!,
+    title,
+    description: step.scripture || "Today's available Daily Rhythm step.",
+    path,
+  }];
+  metadata.resourceRecommendations = [{
+    resourceType: "daily_rhythm",
+    resourceId: state.currentStepId!,
+    reason: "The signed-in member's eligible published Daily Rhythm step.",
+  }];
+  metadata.resourceActions = [
+    actionForCapabilityResource("OPEN", "daily_rhythm", state.currentStepId!, path),
+    actionForCapabilityResource("READ", "daily_rhythm", state.currentStepId!, path),
+  ];
+  metadata.nextStep = {
+    action: `Continue Daily Rhythm Day ${state.currentDayNumber} in Emmaus.`,
+    primaryButtonText: "Open today's step",
+    path,
+  };
+  metadata.followUpPrompts = [
+    "Help me reflect on this.",
+    "Pray with me about this.",
+  ];
+  return metadata;
+}
+
 async function resolveDailyRhythm(userId: string): Promise<EmmausResponseMetadata> {
   const metadata = emptyMetadata();
   const state = await getDailyRhythmState(userId);
@@ -617,31 +678,20 @@ async function resolveDailyRhythm(userId: string): Promise<EmmausResponseMetadat
     return metadata;
   }
 
-  const path = `/daily-rhythm/day/${state.currentDayNumber}`;
-  const resource: Recommendation = {
-    type: "daily_rhythm",
-    resourceId: state.currentStepId,
-    title: state.currentStepTitle ?? `Daily Rhythm — Day ${state.currentDayNumber}`,
-    description: `Today's available Daily Rhythm step.`,
-    path,
-  };
-  metadata.answer = `Today's Daily Rhythm is Day ${state.currentDayNumber}${state.currentStepTitle ? `, “${state.currentStepTitle}”` : ""}.`;
-  metadata.recommendations = [resource];
-  metadata.resourceRecommendations = [{
-    resourceType: "daily_rhythm",
-    resourceId: state.currentStepId,
-    reason: "The signed-in user's eligible Daily Rhythm step.",
-  }];
-  metadata.resourceActions = [
-    actionForCapabilityResource("OPEN", "daily_rhythm", state.currentStepId, path),
-    actionForCapabilityResource("READ", "daily_rhythm", state.currentStepId, path),
-  ];
-  metadata.nextStep = {
-    action: `Read Daily Rhythm Day ${state.currentDayNumber}.`,
-    primaryButtonText: "Read today's step",
-    path,
-  };
-  return metadata;
+  const steps = await listSteps(state.journeyId);
+  const step = steps.find((candidate) =>
+    candidate.id === state.currentStepId
+    && candidate.status === "Published"
+    && !candidate.isCompletionStep
+  );
+  if (!step) {
+    metadata.answer = "Today's Daily Rhythm content is not available right now.";
+    metadata.retrievalFailures = ["daily-rhythm"];
+    metadata.followUpPrompts = ["Try again."];
+    return metadata;
+  }
+
+  return buildDailyRhythmConversation(state, step);
 }
 
 async function resolveTodaySteps(userId: string): Promise<EmmausResponseMetadata> {
