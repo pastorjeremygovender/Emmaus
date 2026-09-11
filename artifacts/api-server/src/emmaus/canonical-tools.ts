@@ -2,6 +2,7 @@ import { getBibleData } from "../bible/store.js";
 import {
   getProgress,
   getDailyRhythmState,
+  completeStep,
   listPublishedJourneys,
   listSteps,
   type DailyRhythmState,
@@ -39,6 +40,12 @@ import { logger } from "../lib/logger.js";
 import { buildEmmausResourceCatalogue, type EmmausResource } from "./resource-catalogue.js";
 import { actionsForResource } from "./action-registry.js";
 import { listPublishedSermons } from "../lib/canonical-sermon-store.js";
+
+export interface CanonicalActionExecutors {
+  completeStep: typeof completeStep;
+}
+
+const productionActionExecutors: CanonicalActionExecutors = { completeStep };
 
 export type CanonicalToolResolution =
   | { handled: true; metadata: EmmausResponseMetadata }
@@ -635,6 +642,7 @@ export function buildDailyRhythmConversation(
   metadata.recommendations = [{
     type: "daily_rhythm",
     resourceId: state.currentStepId!,
+    parentId: state.journeyId,
     title,
     description: step.scripture || "Today's available Daily Rhythm step.",
     path,
@@ -642,11 +650,12 @@ export function buildDailyRhythmConversation(
   metadata.resourceRecommendations = [{
     resourceType: "daily_rhythm",
     resourceId: state.currentStepId!,
+    parentId: state.journeyId,
     reason: "The signed-in member's eligible published Daily Rhythm step.",
   }];
   metadata.resourceActions = [
-    actionForCapabilityResource("OPEN", "daily_rhythm", state.currentStepId!, path),
-    actionForCapabilityResource("READ", "daily_rhythm", state.currentStepId!, path),
+    actionForCapabilityResource("OPEN", "daily_rhythm", state.currentStepId!, path, state.journeyId),
+    actionForCapabilityResource("READ", "daily_rhythm", state.currentStepId!, path, state.journeyId),
   ];
   metadata.nextStep = {
     action: `Continue Daily Rhythm Day ${state.currentDayNumber} in Emmaus.`,
@@ -859,9 +868,60 @@ function safeStoredRoute(route: string): boolean {
 export async function resolveContextualFollowUp(
   message: string,
   previousMetadata?: EmmausResponseMetadata,
+  userId?: string,
+  executors: CanonicalActionExecutors = productionActionExecutors,
 ): Promise<EmmausResponseMetadata | null> {
   if (!previousMetadata) return null;
   const value = message.toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, " ").trim();
+
+  const pendingAction = previousMetadata.pendingMemberAction;
+  if (pendingAction?.kind === "COMPLETE_DAILY_RHYTHM") {
+    const metadata = emptyMetadata();
+    if (/^(?:yes|yes please|please do|do it|confirm|mark it complete)[.!?]*$/.test(value)) {
+      if (!userId) {
+        metadata.answer = "I couldn't safely confirm which member's progress to update. Nothing has been changed.";
+        return metadata;
+      }
+      await executors.completeStep(userId, pendingAction.journeyId, pendingAction.day);
+      metadata.answer = "Today's Daily Rhythm is complete. We can continue tomorrow.";
+      metadata.pendingMemberAction = null;
+      return metadata;
+    }
+    if (/^(?:no|no thanks|not yet|cancel|don't|do not)[.!?]*$/.test(value)) {
+      metadata.answer = "Nothing has been changed. Take the time you need.";
+      metadata.pendingMemberAction = null;
+      return metadata;
+    }
+    metadata.answer = "Please say yes to mark today's Daily Rhythm complete, or no to leave it unchanged.";
+    metadata.pendingMemberAction = pendingAction;
+    metadata.followUpPrompts = ["Yes, mark it complete.", "No, not yet."];
+    return metadata;
+  }
+
+  const completionIntent = /^(?:i(?:'m| am) (?:finished|done)|i(?:'ve| have) finished|finished|done|mark (?:today|it|this)(?:'s daily rhythm)? complete|complete (?:today|this step|daily rhythm))[.!?]*$/.test(value);
+  if (completionIntent) {
+    const dailyAction = (previousMetadata.resourceActions ?? []).find((action) =>
+      action.resourceType === "daily_rhythm"
+      && Boolean(action.parentId)
+      && safeStoredRoute(action.route)
+    );
+    const dayMatch = dailyAction?.route.match(/^\/daily-rhythm\/day\/(\d+)$/);
+    const day = dayMatch ? Number(dayMatch[1]) : NaN;
+    if (dailyAction?.parentId && Number.isSafeInteger(day) && day > 0) {
+      const metadata = emptyMetadata();
+      metadata.answer = "Would you like me to mark today's Daily Rhythm complete?";
+      metadata.pendingMemberAction = {
+        kind: "COMPLETE_DAILY_RHYTHM",
+        journeyId: dailyAction.parentId,
+        stepId: dailyAction.resourceId,
+        day,
+        label: "Mark today's Daily Rhythm complete",
+        requiresConfirmation: true,
+      };
+      metadata.followUpPrompts = ["Yes, mark it complete.", "No, not yet."];
+      return metadata;
+    }
+  }
 
   if (/^(?:read|open|show me)\s+(?:the\s+)?next chapter[.!?]*$/.test(value)) {
     const previous = previousMetadata.scriptureReferences?.[0] ?? previousMetadata.scripture;
@@ -957,8 +1017,9 @@ export async function resolveCanonicalAskRequest(
   message: string,
   userId: string,
   previousMetadata?: EmmausResponseMetadata,
+  executors: CanonicalActionExecutors = productionActionExecutors,
 ): Promise<CanonicalToolResolution> {
-  const contextual = await resolveContextualFollowUp(message, previousMetadata);
+  const contextual = await resolveContextualFollowUp(message, previousMetadata, userId, executors);
   if (contextual) return { handled: true, metadata: contextual };
   const routed = routeAskEmmausRequest(message);
   try {
