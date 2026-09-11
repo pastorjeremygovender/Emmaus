@@ -171,6 +171,15 @@ export interface EmmausResponseMetadata {
     label: string;
     route: string;
   }>;
+  /** A server-verified member action awaiting an explicit yes/no response. */
+  pendingMemberAction?: {
+    kind: "COMPLETE_DAILY_RHYTHM";
+    journeyId: string;
+    stepId: string;
+    day: number;
+    label: string;
+    requiresConfirmation: true;
+  } | null;
   /** Versioned Jarvis foundation response; legacy fields remain for compatibility. */
   jarvis?: JarvisResponseContract;
   /** More specific typed intent used by the versioned Jarvis contract. */
