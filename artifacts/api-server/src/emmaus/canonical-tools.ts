@@ -714,9 +714,50 @@ async function resolveContinueJourney(userId: string, type: "walk" | "journey"):
   return metadata;
 }
 
+async function resolveCurrentSermon(): Promise<EmmausResponseMetadata> {
+  const metadata = emptyMetadata();
+  const sermons = await listPublishedSermons();
+  const sermon = [...sermons].sort((a, b) => {
+    const dateDelta = Date.parse(b.sermonDate) - Date.parse(a.sermonDate);
+    if (Number.isFinite(dateDelta) && dateDelta !== 0) return dateDelta;
+    return (b.publishedAt ?? "").localeCompare(a.publishedAt ?? "");
+  })[0];
+
+  if (!sermon) {
+    metadata.answer = "This week's sermon is not published in Emmaus yet.";
+    metadata.nextStep = capabilityNextStep("sermons");
+    return metadata;
+  }
+
+  const route = `/sermon/${sermon.id}`;
+  metadata.answer = `This week's sermon is “${sermon.title}” by ${sermon.speaker}.`;
+  metadata.recommendations = [{
+    type: "sermon",
+    title: sermon.title,
+    description: sermon.scriptureReference || sermon.summary,
+    path: route,
+    sermonId: sermon.id,
+    speakerName: sermon.speaker,
+  }];
+  metadata.resourceRecommendations = [{
+    resourceType: "sermon",
+    resourceId: sermon.id,
+    reason: "The latest verified published sermon in Emmaus.",
+  }];
+  metadata.resourceActions = [
+    actionForCapabilityResource("OPEN", "sermon", sermon.id, route),
+  ];
+  metadata.nextStep = {
+    action: `Open ${sermon.title}.`,
+    primaryButtonText: "Open sermon",
+    path: route,
+  };
+  return metadata;
+}
+
 async function resolveSermonSearch(message: string): Promise<EmmausResponseMetadata> {
   const metadata = emptyMetadata();
-  const results = await retrieveSermons(message, undefined, undefined, 3);
+  const results = await retrieveSermons(message, undefined, undefined, 2);
   if (results.length === 0) {
     metadata.answer = "I couldn't find a verified published sermon matching that search.";
     metadata.followUpPrompts = ["Search sermons about faith", "Search sermons about hope"];
@@ -887,6 +928,9 @@ export async function resolveCanonicalAskRequest(
         }
         return { handled: true, metadata: await resolveSermonSearch(routed.resourceQuery ?? message) };
       case "DIRECT_ACTION":
+        if (routed.requestedCapability === "sermons" && routed.requestedOperation === "OPEN") {
+          return { handled: true, metadata: await resolveCurrentSermon() };
+        }
         if (routed.requestedCapability === "todays-steps") {
           return { handled: true, metadata: await resolveTodaySteps(userId) };
         }
