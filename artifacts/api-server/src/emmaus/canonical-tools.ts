@@ -662,6 +662,16 @@ export function buildDailyRhythmConversation(
     primaryButtonText: "Open today's step",
     path,
   };
+  metadata.discipleshipConversation = {
+    kind: "DAILY_RHYTHM",
+    phase: "TEACHING",
+    journeyId: state.journeyId,
+    stepId: state.currentStepId!,
+    day: state.currentDayNumber!,
+    title,
+    ...(step.reflectionQuestion?.trim() ? { reflectionQuestion: step.reflectionQuestion.trim() } : {}),
+    ...(step.prayerPrompt?.trim() ? { prayerPrompt: step.prayerPrompt.trim() } : {}),
+  };
   metadata.followUpPrompts = [
     "Help me reflect on this.",
     "Pray with me about this.",
@@ -861,6 +871,19 @@ function safeStoredRoute(route: string): boolean {
   return route.startsWith("/") && !route.startsWith("//") && !/[\r\n]/u.test(route);
 }
 
+function carryDailyRhythmContext(
+  target: EmmausResponseMetadata,
+  source: EmmausResponseMetadata,
+): void {
+  target.recommendations = (source.recommendations ?? []).filter((item) => item.type === "daily_rhythm");
+  target.resourceRecommendations = (source.resourceRecommendations ?? []).filter((item) => item.resourceType === "daily_rhythm");
+  target.resourceActions = (source.resourceActions ?? []).filter((item) =>
+    item.resourceType === "daily_rhythm" && safeStoredRoute(item.route)
+  );
+  target.scripture = source.scripture;
+  target.scriptureReferences = source.scriptureReferences ?? [];
+}
+
 /**
  * Resolve short follow-up commands from the previous server-validated assistant
  * action. Model prose and legacy nextStep paths are deliberately ignored.
@@ -919,6 +942,41 @@ export async function resolveContextualFollowUp(
         requiresConfirmation: true,
       };
       metadata.followUpPrompts = ["Yes, mark it complete.", "No, not yet."];
+      return metadata;
+    }
+  }
+
+  const discipleship = previousMetadata.discipleshipConversation;
+  if (discipleship?.kind === "DAILY_RHYTHM") {
+    const reflectionRequest = /^(?:help me reflect(?: on this)?|let(?:'s| us) reflect|reflection)[.!?]*$/.test(value);
+    const prayerRequest = /^(?:pray(?: with me)?(?: about this)?|let(?:'s| us) pray|yes(?: please)?)[.!?]*$/.test(value)
+      && (discipleship.phase === "PRAYER_OFFER" || /pray/.test(value));
+
+    if (reflectionRequest && discipleship.reflectionQuestion) {
+      const metadata = emptyMetadata();
+      metadata.answer = `Let's take this slowly. ${discipleship.reflectionQuestion}\n\nYou can answer in your own words.`;
+      metadata.discipleshipConversation = { ...discipleship, phase: "REFLECTION" };
+      metadata.followUpPrompts = ["I'd like to share my answer.", "Pray with me about this."];
+      carryDailyRhythmContext(metadata, previousMetadata);
+      return metadata;
+    }
+
+    if (prayerRequest && discipleship.prayerPrompt) {
+      const metadata = emptyMetadata();
+      metadata.answer = `Let's pray.\n\n${discipleship.prayerPrompt}\n\nAmen.`;
+      metadata.prayer = discipleship.prayerPrompt;
+      metadata.discipleshipConversation = { ...discipleship, phase: "PRAYER" };
+      metadata.followUpPrompts = ["I'm finished.", "Help me reflect a little more."];
+      carryDailyRhythmContext(metadata, previousMetadata);
+      return metadata;
+    }
+
+    if (discipleship.phase === "REFLECTION") {
+      const metadata = emptyMetadata();
+      metadata.answer = "Thank you for sharing that. Let's bring it to Jesus. Would you like me to pray with you about it?";
+      metadata.discipleshipConversation = { ...discipleship, phase: "PRAYER_OFFER" };
+      metadata.followUpPrompts = ["Yes, please.", "Not yet."];
+      carryDailyRhythmContext(metadata, previousMetadata);
       return metadata;
     }
   }
