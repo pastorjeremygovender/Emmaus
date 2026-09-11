@@ -32,7 +32,9 @@ describe("typed Ask Emmaus request router", () => {
       "active-progress",
     );
     assert.equal(routeAskEmmausRequest("What should I do today?").requestedCapability, "todays-steps");
-    assert.equal(routeAskEmmausRequest("Continue where I left off").intent, "BIBLE_CONTINUE");
+    assert.equal(routeAskEmmausRequest("What should I do next?").requestedCapability, "todays-steps");
+    assert.equal(routeAskEmmausRequest("Continue where I left off").intent, "DIRECT_ACTION");
+    assert.equal(routeAskEmmausRequest("Continue where I stopped").requestedCapability, "active-progress");
   });
 
   it("requires an explicit read/open command for Bible navigation", () => {
@@ -74,6 +76,25 @@ describe("typed Ask Emmaus request router", () => {
       routeAskEmmausRequest("What did Pastor Jeremy preach about grace?").requestedCapability,
       "sermons",
     );
+  });
+
+  it("understands natural member language without making the member speak in commands", () => {
+    const currentSermon = routeAskEmmausRequest("Open this week's sermon.");
+    assert.equal(currentSermon.intent, "DIRECT_ACTION");
+    assert.equal(currentSermon.requestedCapability, "sermons");
+    assert.equal(currentSermon.requestedOperation, "OPEN");
+
+    const teaching = routeAskEmmausRequest("What was Pastor Jeremy teaching about forgiveness?");
+    assert.equal(teaching.intent, "RESOURCE_SEARCH");
+    assert.equal(teaching.requestedCapability, "sermons");
+
+    const scriptureHelp = routeAskEmmausRequest("I didn't understand today's Scripture.");
+    assert.equal(scriptureHelp.intent, "GENERAL_BIBLICAL_QUESTION");
+    assert.equal(scriptureHelp.clarificationRequired, false);
+
+    const pastoral = routeAskEmmausRequest("I'm struggling and I don't know what I need.");
+    assert.equal(pastoral.intent, "PASTORAL_QUESTION");
+    assert.equal(pastoral.clarificationRequired, false);
   });
 
   it("does not send ordinary application questions to sermon retrieval", () => {
