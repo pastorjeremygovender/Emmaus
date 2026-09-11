@@ -105,3 +105,11 @@ It must not become the actual release until all of the following are true:
 - rollback commit and downloadable artifact recorded.
 
 Until then, the unified branch is an integration candidate—not proof that Emmaus is consolidated.
+
+## Jarvis headless Daily Rhythm checkpoint — 11 September 2026
+
+- Authoritative code checkpoint: `6aa20c68f646cb5bc6238b41abc3678846bd1518` on `release/emmaus-unified`.
+- Unified verification run 100 passed: complete Jarvis foundation tests, API typecheck, single-toggle navigation, and member production build.
+- Jarvis can deliver the eligible published Daily Rhythm content conversationally, then guide reflection and prayer without requiring screen navigation.
+- Progress remains user-controlled: completion language creates a pending server-verified action; only an explicit yes executes `completeStep`. No, review language, replay language, and ambiguous replies do not advance progress.
+- This checkpoint is not published to production. The next gate is an isolated authenticated Talk to Emmaus acceptance test.
