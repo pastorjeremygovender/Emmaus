@@ -243,12 +243,35 @@ export async function assembleJarvisContext(
     sourceStatuses.push(status("sermon", "empty"));
   }
 
+  const dailyRhythmStep = rhythmResult?.currentStepId
+    ? await readers.listSteps(rhythmResult.journeyId)
+        .then((steps) => steps.find((step) =>
+          step.id === rhythmResult.currentStepId
+          && step.status === "Published"
+          && !step.isCompletionStep
+        ))
+        .catch((error) => {
+          logger.warn({ err: String(error) }, "emmaus: current Daily Rhythm content unavailable");
+          return undefined;
+        })
+    : undefined;
+
   const dailyRhythm = rhythmResult
     ? {
         journeyId: rhythmResult.journeyId,
         currentDay: rhythmResult.currentDayNumber,
         ...(rhythmResult.currentStepId ? { stepId: rhythmResult.currentStepId } : {}),
         ...(rhythmResult.currentStepTitle ? { stepTitle: rhythmResult.currentStepTitle } : {}),
+        ...(dailyRhythmStep?.scripture ? { scriptureReference: dailyRhythmStep.scripture } : {}),
+        ...(dailyRhythmStep?.devotional
+          ? { teachingExcerpt: dailyRhythmStep.devotional.slice(0, 1600) }
+          : {}),
+        ...(dailyRhythmStep?.reflectionQuestion
+          ? { reflectionQuestion: dailyRhythmStep.reflectionQuestion }
+          : {}),
+        ...(dailyRhythmStep?.prayerPrompt
+          ? { prayerPrompt: dailyRhythmStep.prayerPrompt }
+          : {}),
         completedToday: rhythmResult.currentStepCompleted,
         locked: rhythmResult.nextStepLocked,
         ...(rhythmResult.nextEligibleUnlockDate
