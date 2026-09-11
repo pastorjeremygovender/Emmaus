@@ -728,7 +728,16 @@ export async function handleConversation(
   // Scripture is deliberately awaited before Emmaus resources. This ordering is
   // part of the safety contract, not merely prompt wording.
   const scriptureStart = Date.now();
-  const biblePassages = await Promise.resolve(searchBibleVerses(req.message, 5))
+  const vagueCurrentScriptureQuestion =
+    /\b(?:today(?:'s|s) scripture|today(?:'s|s) passage|this scripture|this passage|this verse|what does this mean)\b/i.test(req.message);
+  const currentScriptureReference = contextInput.jarvisContext?.context.dailyRhythm?.scriptureReference
+    ?? (contextInput.bibleContext
+      ? `${contextInput.bibleContext.bookName} ${contextInput.bibleContext.chapter}`
+      : undefined);
+  const scriptureQuery = vagueCurrentScriptureQuestion && currentScriptureReference
+    ? `Read ${currentScriptureReference}`
+    : req.message;
+  const biblePassages = await Promise.resolve(searchBibleVerses(scriptureQuery, 5))
     .catch((err): BiblePassage[] => {
       retrievalFailures.push("scripture");
       logger.warn({ err: String(err) }, "emmaus: Scripture retrieval unavailable");
