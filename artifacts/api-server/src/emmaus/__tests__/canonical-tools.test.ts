@@ -141,6 +141,72 @@ describe("canonical Ask Emmaus tools", () => {
     assert.match(completed?.answer ?? "", /complete/i);
   });
 
+  it("guides reflection and prayer before offering completion", async () => {
+    const teaching = buildDailyRhythmConversation(
+      {
+        journeyId: "10-minutes-with-jesus",
+        progress: null,
+        currentStepId: "rhythm-day-20",
+        currentDayNumber: 20,
+        currentStepTitle: "You Can Trust His Voice",
+        currentStepCompleted: false,
+        completedStepIds: [],
+        availableStepIds: ["rhythm-day-20"],
+        reviewableStepIds: [],
+        nextStepLocked: false,
+        nextEligibleUnlockDate: null,
+        todayAvailableDay: 20,
+        assignedDay: 20,
+        openingState: "OPENING_REQUIRED",
+        localTimezone: "Africa/Johannesburg",
+        localDate: "2026-09-11",
+      },
+      {
+        id: "rhythm-day-20",
+        journeyId: "10-minutes-with-jesus",
+        day: 20,
+        title: "You Can Trust His Voice",
+        status: "Published",
+        scripture: "John 10:27–30",
+        devotional: "Jesus knows His sheep.",
+        reflectionQuestion: "Where is Jesus asking you to trust His voice?",
+        prayerPrompt: "Jesus, help me recognise and trust Your voice.",
+      } as never,
+    );
+
+    const reflection = await resolveContextualFollowUp(
+      "Help me reflect on this.",
+      teaching,
+      "member-1",
+    );
+    assert.equal(reflection?.discipleshipConversation?.phase, "REFLECTION");
+    assert.match(reflection?.answer ?? "", /where is Jesus asking/i);
+
+    const prayerOffer = await resolveContextualFollowUp(
+      "I need to trust Him with tomorrow.",
+      reflection!,
+      "member-1",
+    );
+    assert.equal(prayerOffer?.discipleshipConversation?.phase, "PRAYER_OFFER");
+    assert.match(prayerOffer?.answer ?? "", /would you like me to pray/i);
+
+    const prayer = await resolveContextualFollowUp(
+      "Yes, please.",
+      prayerOffer!,
+      "member-1",
+    );
+    assert.equal(prayer?.discipleshipConversation?.phase, "PRAYER");
+    assert.match(prayer?.answer ?? "", /Jesus, help me recognise/i);
+
+    const completion = await resolveContextualFollowUp(
+      "I'm finished.",
+      prayer!,
+      "member-1",
+    );
+    assert.equal(completion?.pendingMemberAction?.kind, "COMPLETE_DAILY_RHYTHM");
+    assert.match(completion?.answer ?? "", /mark today's Daily Rhythm complete/i);
+  });
+
   it("cancels a pending completion without changing progress", async () => {
     let calls = 0;
     const metadata = await resolveContextualFollowUp(
