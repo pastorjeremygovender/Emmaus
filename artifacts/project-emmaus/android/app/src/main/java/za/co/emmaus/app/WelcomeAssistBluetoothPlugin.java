@@ -18,7 +18,6 @@ import android.os.ParcelUuid;
 import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.JSObject;
-import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -90,7 +89,7 @@ public final class WelcomeAssistBluetoothPlugin extends Plugin {
             return;
         }
         try {
-            if (getPermissionState("nearbyDevices") == PermissionState.GRANTED) {
+            if (hasScanPermission() && hasConnectPermission()) {
                 call.resolve();
                 return;
             }
@@ -110,7 +109,7 @@ public final class WelcomeAssistBluetoothPlugin extends Plugin {
     public void permissionResult(PluginCall call) {
         if (!permissionRequest.finish(getContext(), call, "bluetooth.nearby")) return;
         try {
-            if (getPermissionState("nearbyDevices") == PermissionState.GRANTED) {
+            if (hasScanPermission() && hasConnectPermission()) {
                 if (call != null) call.resolve();
             } else if (call != null) {
                 NativePermissionDiagnostics.stage(getContext(), "bluetooth.nearby.denied");
@@ -247,13 +246,7 @@ public final class WelcomeAssistBluetoothPlugin extends Plugin {
     }
 
     private String bluetoothPermission(boolean scanGranted, boolean connectGranted) {
-        if (scanGranted && connectGranted) return "granted";
-        try {
-            PermissionState scan = getPermissionState("nearbyDevices");
-            return scan == PermissionState.DENIED ? "denied" : "prompt";
-        } catch (RuntimeException ignored) {
-            return "prompt";
-        }
+        return scanGranted && connectGranted ? "granted" : "prompt";
     }
 
     static JSObject statusObject(boolean supported, boolean enabled, String permission, boolean scanning) {

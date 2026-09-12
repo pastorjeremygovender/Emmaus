@@ -6,11 +6,13 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.os.Build;
 import android.provider.Settings;
 
+import androidx.core.content.ContextCompat;
+
 import com.getcapacitor.JSObject;
-import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -45,7 +47,7 @@ public final class DailyReminderPlugin extends Plugin {
 
     @PluginMethod public void enable(PluginCall call) {
         try {
-            if (Build.VERSION.SDK_INT >= 33 && getPermissionState("notifications") != PermissionState.GRANTED) {
+            if (!hasNotificationPermission()) {
                 if (!permissionRequest.begin(getContext(), call, "daily-reminders.notification")) return;
                 try {
                     requestPermissionForAlias("notifications", call, "notificationResult");
@@ -64,7 +66,7 @@ public final class DailyReminderPlugin extends Plugin {
     @PermissionCallback public void notificationResult(PluginCall call) {
         if (!permissionRequest.finish(getContext(), call, "daily-reminders.notification")) return;
         try {
-            if (Build.VERSION.SDK_INT >= 33 && getPermissionState("notifications") != PermissionState.GRANTED) {
+            if (!hasNotificationPermission()) {
                 NativePermissionDiagnostics.stage(getContext(), "daily-reminders.notification.denied");
                 if (call != null) call.resolve(statusObject());
                 return;
@@ -130,14 +132,14 @@ public final class DailyReminderPlugin extends Plugin {
         return result;
     }
 
+    private boolean hasNotificationPermission() {
+        return Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(getContext(), Manifest.permission.POST_NOTIFICATIONS)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
     private String permissionState() {
-        if (Build.VERSION.SDK_INT < 33) return "granted";
-        try {
-            PermissionState state = getPermissionState("notifications");
-            return state == PermissionState.GRANTED ? "granted" : state == PermissionState.PROMPT ? "prompt" : "denied";
-        } catch (RuntimeException error) {
-            return "prompt";
-        }
+        return hasNotificationPermission() ? "granted" : "prompt";
     }
     private static String format(int minute) { return String.format(java.util.Locale.US, "%02d:%02d", minute/60, minute%60); }
 }
