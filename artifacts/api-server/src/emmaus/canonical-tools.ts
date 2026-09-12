@@ -223,7 +223,14 @@ async function resolveContextualWalkOpen(
   context?: CanonicalRequestContext,
 ): Promise<EmmausResponseMetadata> {
   const metadata = emptyMetadata();
-  const journeys = await listPublishedJourneys();
+  let journeys: FrontendJourney[];
+  try {
+    journeys = await listPublishedJourneys();
+  } catch {
+    metadata.answer = "Which Walk would you like to open?";
+    metadata.retrievalFailures = ["walks"];
+    return metadata;
+  }
   const visible = context?.journeyContext;
   if (visible) {
     const journey = journeys.find((candidate) =>
