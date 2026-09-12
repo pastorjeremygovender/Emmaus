@@ -47,7 +47,7 @@ public final class GeofenceProofPlugin extends Plugin {
     private void welcomeLocationResult(PluginCall call) { call.resolve(); }
     @PluginMethod
     public void openDiagnostics(PluginCall call) {
-        if (!BuildConfig.DEBUG) {
+        if (!isDebuggableBuild()) {
             call.reject("Diagnostics are available only in debug builds.");
             return;
         }
@@ -55,6 +55,12 @@ public final class GeofenceProofPlugin extends Plugin {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         getContext().startActivity(intent);
         call.resolve();
+    }
+
+    private boolean isDebuggableBuild() {
+        android.content.pm.ApplicationInfo applicationInfo = getContext().getApplicationInfo();
+        return applicationInfo != null
+                && (applicationInfo.flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
     }
 
     @PluginMethod
