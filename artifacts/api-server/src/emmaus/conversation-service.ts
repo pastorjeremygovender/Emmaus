@@ -46,7 +46,7 @@ import {
 import { searchBibleVerses, type BiblePassage } from "../lib/bible-verse-search.js";
 import { getRoomsForUser, type RoomSummary } from "../lib/room-store.js";
 import { buildEmmausResourceCatalogue, type EmmausResourceType as CatalogueResourceType } from "./resource-catalogue.js";
-import { getJourney, getProgress } from "../lib/journey-store.js";
+import { getJourney, getProgress, listSteps } from "../lib/journey-store.js";
 import { getPublishedSermonById } from "../lib/canonical-sermon-store.js";
 import { actionsForResource } from "./action-registry.js";
 import { logger } from "../lib/logger.js";
