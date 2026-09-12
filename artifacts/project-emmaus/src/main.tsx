@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client';
 
 import App from './App';
 import { installAuthRequestGuard } from './lib/auth-request-guard';
+import { installNativeDailyRhythmDeepLink } from './lib/native-daily-rhythm-deep-link';
 import { registerServiceWorker } from './lib/register-service-worker';
 
 import './index.css';
@@ -23,6 +24,11 @@ try {
 }
 
 installAuthRequestGuard();
-createRoot(document.getElementById('root')!).render(<App />);
 
-registerServiceWorker();
+async function bootstrap() {
+  await installNativeDailyRhythmDeepLink();
+  createRoot(document.getElementById('root')!).render(<App />);
+  registerServiceWorker();
+}
+
+void bootstrap();

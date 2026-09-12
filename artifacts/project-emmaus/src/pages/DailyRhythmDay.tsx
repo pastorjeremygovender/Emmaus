@@ -109,6 +109,9 @@ export default function DailyRhythmDay() {
   // NOTE: wouter's useLocation() returns pathname only — search params must come from window.location.search.
   const qs = new URLSearchParams(window.location.search);
   const source = qs.get('source');
+  const widgetJourneyId = source === 'widget' ? qs.get('journeyId') : null;
+  const widgetStepId = source === 'widget' ? qs.get('stepId') : null;
+  const widgetFallback = source === 'widget' && qs.get('widgetFallback') === 'unavailable';
   const legacyFrom = qs.get('from');
   const fromWalk = source === 'walk' || source === 'today' || legacyFrom === 'walk';
   const fromPreviousDays = source === 'dailyRhythmPrevious';
@@ -187,8 +190,15 @@ export default function DailyRhythmDay() {
     currentDay > 1 &&
     steps.some(s => s.status === 'Published' && s.day < currentDay);
 
-  // Resolve the step
-  const step = steps.find(s => s.day === day && s.status === 'Published');
+  // Resolve the step. A widget carries the exact step ID it displayed so a
+  // stale day number can never silently open a different authored entry.
+  const stepForDay = steps.find(s => s.day === day && s.status === 'Published');
+  const widgetStep = widgetStepId
+    ? steps.find(s => (s as { id?: string }).id === widgetStepId && s.status === 'Published')
+    : null;
+  const widgetJourneyMismatch = Boolean(widgetJourneyId) && widgetJourneyId !== journeyId;
+  const widgetStepUnavailable = Boolean(widgetStepId) && !widgetStep || widgetJourneyMismatch;
+  const step = widgetStep ?? stepForDay;
   const isAhead = day > currentDay && !devMode;
 
   // ── Loading guard ─────────────────────────────────────────────────────────
@@ -205,6 +215,15 @@ export default function DailyRhythmDay() {
       <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <p className="text-muted-foreground text-sm">Loading…</p>
       </div>
+    );
+  }
+
+  if (widgetStepUnavailable && !widgetFallback) {
+    return (
+      <RedirectToDailyRhythmCurrent
+        day={currentDay}
+        setLocation={setLocation}
+      />
     );
   }
 
@@ -308,6 +327,16 @@ export default function DailyRhythmDay() {
       {/* Dev mode indicator — shown only to authorised admins with dev mode on */}
       <DevModeBanner />
 
+      {widgetFallback && (
+        <div
+          role="status"
+          className="mx-auto max-w-[480px] px-5 pt-4 text-sm text-muted-foreground"
+        >
+          The entry shown on the widget is no longer available, so today’s current
+          10 Minutes with Jesus is open instead.
+        </div>
+      )}
+
       {/* Sticky nav bar */}
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
@@ -365,6 +394,28 @@ function RedirectToWalk({ setLocation }: { setLocation: (to: string, opts?: { re
   return (
     <div className="min-h-[100dvh] bg-background flex items-center justify-center">
       <p className="text-muted-foreground text-sm">Loading…</p>
+    </div>
+  );
+}
+
+function RedirectToDailyRhythmCurrent({
+  day,
+  setLocation,
+}: {
+  day: number;
+  setLocation: (to: string, opts?: { replace?: boolean }) => void;
+}) {
+  useEffect(() => {
+    const fallback = Math.max(1, day);
+    setLocation(
+      `/daily-rhythm/day/${fallback}?source=widget&widgetFallback=unavailable`,
+      { replace: true },
+    );
+  }, [day, setLocation]);
+
+  return (
+    <div className="min-h-[100dvh] bg-background flex items-center justify-center">
+      <p className="text-muted-foreground text-sm">Opening today’s rhythm…</p>
     </div>
   );
 }

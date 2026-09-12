@@ -11,6 +11,7 @@ const requiredFiles = [
   'android/app/build.gradle',
   'android/app/src/main/AndroidManifest.xml',
   'android/app/src/main/java/za/co/emmaus/app/DailyRhythmWidgetProvider.java',
+  'android/app/src/main/java/za/co/emmaus/app/DailyRhythmDeepLinkPlugin.java',
   'android/app/src/main/java/za/co/emmaus/app/GeofenceProofPlugin.java',
   'android/app/src/main/java/za/co/emmaus/app/WelcomeAssistBluetoothPlugin.java',
   'android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml',

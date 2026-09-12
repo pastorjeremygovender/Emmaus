@@ -36,6 +36,8 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
     private static final String STATE_PATH = "/api/journeys/daily-rhythm/state";
     private static final String PREFS = "emmaus_daily_rhythm_widget";
     private static final String KEY_DAY = "day";
+    private static final String KEY_JOURNEY_ID = "journey_id";
+    private static final String KEY_STEP_ID = "step_id";
     private static final String KEY_TITLE = "title";
     private static final String KEY_VERSE = "verse";
     private static final String KEY_REFERENCE = "reference";
@@ -74,6 +76,7 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
         JSONObject state = requestJson(STATE_PATH);
         int day = Math.max(1, state.optInt("currentDayNumber", 1));
         String journeyId = state.optString("journeyId", "");
+        String stepId = "";
         String title = clean(state.optString("currentStepTitle", "Today's Daily Rhythm"));
         boolean completed = state.optBoolean("currentStepCompleted", false);
 
@@ -88,6 +91,7 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
                 for (int index = 0; index < steps.length(); index++) {
                     JSONObject step = steps.optJSONObject(index);
                     if (step == null || step.optInt("day", -1) != day) continue;
+                    stepId = clean(step.optString("id", ""));
                     title = clean(step.optString("title", title));
                     reference = clean(step.optString("scripture", ""));
                     JSONArray references = step.optJSONArray("scriptureReferences");
@@ -109,7 +113,7 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
                 // The reference remains visible if the Bible excerpt is unavailable.
             }
         }
-        return new WidgetContent(day, title, verse, reference, completed);
+        return new WidgetContent(journeyId, stepId, day, title, verse, reference, completed);
     }
 
     private static String loadVerseExcerpt(String reference) throws Exception {
@@ -187,6 +191,8 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
     private static void cache(Context context, WidgetContent content) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
+            .putString(KEY_JOURNEY_ID, content.journeyId)
+            .putString(KEY_STEP_ID, content.stepId)
             .putInt(KEY_DAY, content.day)
             .putString(KEY_TITLE, content.title)
             .putString(KEY_VERSE, content.verse)
@@ -198,6 +204,8 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
     private static WidgetContent cached(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         return new WidgetContent(
+            prefs.getString(KEY_JOURNEY_ID, ""),
+            prefs.getString(KEY_STEP_ID, ""),
             Math.max(1, prefs.getInt(KEY_DAY, 1)),
             prefs.getString(KEY_TITLE, "Today's Daily Rhythm"),
             prefs.getString(KEY_VERSE, ""),
@@ -218,10 +226,19 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
             views.setTextViewText(R.id.widget_day_title, "Today • " + content.title);
             views.setTextViewText(R.id.widget_scripture, displayVerse(content.verse));
             views.setTextViewText(R.id.widget_reference, content.reference);
-            Uri uri = Uri.parse(
-                BASE_URL + "/daily-rhythm/day/" + content.day + "?source=widget"
-            );
-            Intent open = new Intent(Intent.ACTION_VIEW, uri, context, MainActivity.class);
+            Uri.Builder uri = Uri.parse(BASE_URL).buildUpon()
+                .appendPath("daily-rhythm")
+                .appendPath("day")
+                .appendPath(String.valueOf(content.day))
+                .appendQueryParameter("source", "widget")
+                .appendQueryParameter("version", "1");
+            if (!content.journeyId.isEmpty()) {
+                uri.appendQueryParameter("journeyId", content.journeyId);
+            }
+            if (!content.stepId.isEmpty()) {
+                uri.appendQueryParameter("stepId", content.stepId);
+            }
+            Intent open = new Intent(Intent.ACTION_VIEW, uri.build(), context, MainActivity.class);
             open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             PendingIntent pendingIntent = PendingIntent.getActivity(
                 context,
@@ -249,13 +266,25 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
     }
 
     private static final class WidgetContent {
+        final String journeyId;
+        final String stepId;
         final int day;
         final String title;
         final String verse;
         final String reference;
         final boolean completed;
 
-        WidgetContent(int day, String title, String verse, String reference, boolean completed) {
+        WidgetContent(
+            String journeyId,
+            String stepId,
+            int day,
+            String title,
+            String verse,
+            String reference,
+            boolean completed
+        ) {
+            this.journeyId = journeyId == null ? "" : journeyId;
+            this.stepId = stepId == null ? "" : stepId;
             this.day = day;
             this.title = title == null || title.isEmpty() ? "Today's Daily Rhythm" : title;
             this.verse = verse == null ? "" : verse;

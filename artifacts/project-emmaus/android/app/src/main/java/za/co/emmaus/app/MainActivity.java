@@ -18,6 +18,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(GeofenceProofPlugin.class);
         registerPlugin(WelcomeAssistBluetoothPlugin.class);
+        registerPlugin(DailyRhythmDeepLinkPlugin.class);
         super.onCreate(savedInstanceState);
     }
 
