@@ -76,7 +76,9 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
   const value = clean(message);
   const shared = classifyBibleRange(message);
   const capability = capabilityForText(value);
-  const routingValue = value.replace(/^please\s+/, "");
+  const routingValue = value
+    .replace(/^please\s+/, "")
+    .replace(/^(?:can|could|would)\s+you\s+/, "");
 
   if (/^what can (?:emmaus|you) (?:help me with|do)|^what can emmaus help me with/.test(value)) {
     return {
@@ -257,7 +259,7 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
     };
   }
 
-  if (/^(?:open|play|show me|take me to)\s+(?:the|this|my|current)\s+sermon[.!?]*$/.test(routingValue)) {
+  if (/^(?:open|play|show me|take me to)\s+(?:the|this|my|current)\s+sermon(?:\s+please)?[.!?]*$/.test(routingValue)) {
     return {
       intent: "DIRECT_ACTION",
       requestedCapability: "sermons",

@@ -1136,7 +1136,9 @@ export async function resolveContextualFollowUp(
   const recommendationRecall = value.match(
     /^(?:open|show me|take me to)\s+(?:the\s+)?(?:(walk|journey|devotional|sermon)\s+)?(?:you\s+)?recommended(?:\s+(?:to me))?(?:\s+(?:yesterday|before|earlier|last time))?[.!?]*$/,
   );
-  const followUp = value.match(/^(open|continue|resume|read|show me|take me there|go there)(?:\s+(?:it|that|this|there))?[.!?]*$/);
+  const followUp = value.match(
+    /^(?:(?:can|could|would)\s+you\s+)?(open|continue|resume|read|show me|take me there|go there)(?:\s+(?:it|that|this|there|the\s+(walk|journey|devotional|sermon)))?(?:\s+please)?[.!?]*$/,
+  );
   if (!followUp && !recommendationRecall) return null;
   const requestedKind = recommendationRecall
     ? "OPEN"
@@ -1145,7 +1147,7 @@ export async function resolveContextualFollowUp(
       : /read|show me/.test(followUp![1])
         ? "READ"
         : "OPEN";
-  const requestedResourceType = recommendationRecall?.[1];
+  const requestedResourceType = recommendationRecall?.[1] ?? followUp?.[2];
 
   const resourceActions = (previousMetadata.resourceActions ?? [])
     .filter((action) => safeStoredRoute(action.route))

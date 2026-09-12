@@ -691,7 +691,23 @@ export default function AskEmmausConversation() {
           </div>
         ))}
 
-        <div aria-hidden="true" className="h-1" />
+        {!isStreaming && messages.length > 0 && (
+          <div className="pt-2 pb-4">
+            <label htmlFor="follow-up-input" className="sr-only">
+              Continue the conversation
+            </label>
+            <EmmausComposer
+              id="follow-up-input"
+              value={followUp}
+              onChange={setFollowUp}
+              onSend={handleFollowUp}
+              placeholder="Continue…"
+              isLoading={isStreaming}
+              aria-label="Follow-up message"
+            />
+          </div>
+        )}
+        <div aria-hidden="true" className="h-16" />
       </main>
 
       {/* P2-6: Pastoral handoff banner — soft nudge, not full-screen */}
@@ -730,28 +746,6 @@ export default function AskEmmausConversation() {
         </div>
       )}
 
-      {/* Follow-up composer — hidden while streaming */}
-      {!isStreaming && messages.length > 0 && (
-        <div
-          className="flex-shrink-0 border-t border-border/50 bg-background/95 backdrop-blur-sm"
-          style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}
-        >
-          <div className="px-4 py-3 max-w-[560px] mx-auto">
-            <label htmlFor="follow-up-input" className="sr-only">
-              Continue the conversation
-            </label>
-            <EmmausComposer
-              id="follow-up-input"
-              value={followUp}
-              onChange={setFollowUp}
-              onSend={handleFollowUp}
-              placeholder="Continue…"
-              isLoading={isStreaming}
-              aria-label="Follow-up message"
-            />
-          </div>
-        </div>
-      )}
       <BottomNav />
     </div>
   );

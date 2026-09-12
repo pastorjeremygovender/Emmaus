@@ -105,6 +105,7 @@ describe("typed Ask Emmaus request router", () => {
       ["Open Today's Steps", "todays-steps", "OPEN"],
       ["Read today's Scripture", "daily-rhythm", "READ"],
       ["Play this week's sermon", "sermons", "OPEN"],
+      ["Can you open the sermon", "sermons", "OPEN"],
     ] as const;
 
     for (const [message, capability, operation] of cases) {

@@ -372,7 +372,7 @@ describe("canonical Ask Emmaus tools", () => {
   });
 
   it("resolves a pronoun follow-up only from a previous verified resource action", async () => {
-    const metadata = await resolveContextualFollowUp("Open it", {
+    const metadata = await resolveContextualFollowUp("Open it please", {
       scripture: null,
       nextStep: {
         action: "Untrusted legacy path",
