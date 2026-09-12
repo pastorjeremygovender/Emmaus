@@ -60,10 +60,10 @@ public final class PermissionLifecycleInstrumentedTest {
         revoke("android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION");
         launch();
 
-        String result = callPlugin("GeofenceProof.requestWelcomeAssistAccess()");
-        if (waitForPermissionDialog()) {
-            assertTrue(clickPermissionButton(false));
-        }
+        PluginInvocation request = startPluginCall("GeofenceProof.requestWelcomeAssistAccess()");
+        assertTrue("location permission dialog did not appear", waitForPermissionDialog());
+        assertTrue(clickPermissionButton(false));
+        String result = request.await();
 
         assertTrue("location request did not return: " + result, result.contains("resolved") || result.contains("rejected"));
         assertActivityAlive();
@@ -75,15 +75,15 @@ public final class PermissionLifecycleInstrumentedTest {
         revoke("android.permission.BLUETOOTH_SCAN", "android.permission.BLUETOOTH_CONNECT");
         launch();
 
-        String result = callPlugin(
+        PluginInvocation request = startPluginCall(
             "Promise.allSettled([" +
                 "window.Capacitor.Plugins.WelcomeAssistBluetooth.requestAccess()," +
                 "window.Capacitor.Plugins.WelcomeAssistBluetooth.requestAccess()" +
             "])"
         );
-        if (waitForPermissionDialog()) {
-            assertTrue(clickPermissionButton(false));
-        }
+        assertTrue("Bluetooth permission dialog did not appear", waitForPermissionDialog());
+        assertTrue(clickPermissionButton(false));
+        String result = request.await();
 
         assertTrue("Bluetooth requests did not return: " + result, result.contains("resolved") || result.contains("rejected"));
         assertActivityAlive();
@@ -95,10 +95,54 @@ public final class PermissionLifecycleInstrumentedTest {
         revoke("android.permission.POST_NOTIFICATIONS");
         launch();
 
-        String result = callPlugin("DailyReminder.enable()");
-        if (waitForPermissionDialog()) device.pressBack();
+        PluginInvocation request = startPluginCall("DailyReminder.enable()");
+        assertTrue("notification permission dialog did not appear", waitForPermissionDialog());
+        device.pressBack();
+        String result = request.await();
 
         assertTrue("notification request did not return: " + result, result.contains("resolved") || result.contains("rejected"));
+        assertActivityAlive();
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = 33)
+    public void notificationGrantEnablesReminder() throws Exception {
+        revoke("android.permission.POST_NOTIFICATIONS");
+        launch();
+
+        PluginInvocation request = startPluginCall("DailyReminder.enable()");
+        assertTrue("notification permission dialog did not appear", waitForPermissionDialog());
+        assertTrue(clickPermissionButton(true));
+        assertTrue(request.await().contains("resolved"));
+        assertTrue("reminder did not become enabled", callPlugin("DailyReminder.status()").contains("\\\"enabled\\\":true"));
+        assertActivityAlive();
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = 31)
+    public void bluetoothGrantChangesPermissionState() throws Exception {
+        revoke("android.permission.BLUETOOTH_SCAN", "android.permission.BLUETOOTH_CONNECT");
+        launch();
+
+        PluginInvocation request = startPluginCall("WelcomeAssistBluetooth.requestAccess()");
+        assertTrue("Bluetooth permission dialog did not appear", waitForPermissionDialog());
+        assertTrue(clickPermissionButton(true));
+        assertTrue(request.await().contains("resolved"));
+        assertTrue("Bluetooth permission did not become granted", callPlugin("WelcomeAssistBluetooth.status()").contains("\\\"permission\\\":\\\"granted"));
+        assertActivityAlive();
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = 23)
+    public void locationGrantChangesPermissionState() throws Exception {
+        revoke("android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION");
+        launch();
+
+        PluginInvocation request = startPluginCall("GeofenceProof.requestWelcomeAssistAccess()");
+        assertTrue("location permission dialog did not appear", waitForPermissionDialog());
+        assertTrue(clickPermissionButton(true));
+        assertTrue(request.await().contains("resolved"));
+        assertTrue("location permission did not become granted", callPlugin("GeofenceProof.welcomeAssistStatus()").contains("\\\"permission\\\":\\\"granted"));
         assertActivityAlive();
     }
 
@@ -139,7 +183,7 @@ public final class PermissionLifecycleInstrumentedTest {
         assertActivityAlive();
     }
 
-    private void launch() {
+    private Activity launch() {
         Intent launch = new Intent(
             InstrumentationRegistry.getInstrumentation().getTargetContext(),
             MainActivity.class
@@ -147,9 +191,14 @@ public final class PermissionLifecycleInstrumentedTest {
         activity = instrumentation.startActivitySync(launch);
         assertNotNull(activity);
         assertNotNull(waitForWebView(activity));
+        return activity;
     }
 
     private String callPlugin(String expression) throws Exception {
+        return startPluginCall(expression).await();
+    }
+
+    private PluginInvocation startPluginCall(String expression) throws Exception {
         WebView webView = waitForWebView(activity);
         assertNotNull(webView);
         AtomicReference<String> result = new AtomicReference<>();
@@ -165,8 +214,22 @@ public final class PermissionLifecycleInstrumentedTest {
             result.set(value == null ? "" : value);
             completed.countDown();
         }));
-        assertTrue("permission bridge did not return", completed.await(12, TimeUnit.SECONDS));
-        return result.get();
+        return new PluginInvocation(result, completed);
+    }
+
+    private static final class PluginInvocation {
+        private final AtomicReference<String> result;
+        private final CountDownLatch completed;
+
+        private PluginInvocation(AtomicReference<String> result, CountDownLatch completed) {
+            this.result = result;
+            this.completed = completed;
+        }
+
+        private String await() throws Exception {
+            assertTrue("permission bridge did not return", completed.await(15, TimeUnit.SECONDS));
+            return result.get();
+        }
     }
 
     private boolean waitForPermissionDialog() {
