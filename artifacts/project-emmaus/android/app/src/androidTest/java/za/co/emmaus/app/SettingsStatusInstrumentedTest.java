@@ -12,13 +12,16 @@ import android.view.ViewGroup;
 import android.webkit.WebView;
 
 import androidx.test.platform.app.InstrumentationRegistry;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
 
 import org.junit.Test;
+import org.junit.runner.RunWith;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+@RunWith(AndroidJUnit4.class)
 public final class SettingsStatusInstrumentedTest {
     @Test
     public void productionActivitySurvivesSettingsLifecycleAndIndependentStatusCalls() throws Exception {

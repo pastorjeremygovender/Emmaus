@@ -23,6 +23,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(WelcomeAssistBluetoothPlugin.class);
         registerPlugin(DailyRhythmDeepLinkPlugin.class);
         registerPlugin(DailyReminderPlugin.class);
+        registerPlugin(EmmausDiagnosticsPlugin.class);
         DailyRhythmDeepLinkPlugin.captureIntent(this, getIntent(), "activity_on_create");
         super.onCreate(savedInstanceState);
     }

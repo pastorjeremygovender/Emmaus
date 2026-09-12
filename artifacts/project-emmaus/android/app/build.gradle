@@ -7,8 +7,8 @@ android {
         applicationId = "za.co.emmaus.app"
         minSdk = rootProject.ext.minSdkVersion
         targetSdk = rootProject.ext.targetSdkVersion
-        versionCode = 7
-        versionName = "1.2.0-rc5"
+        versionCode = 8
+        versionName = "1.2.0-rc6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -81,6 +81,7 @@ dependencies {
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     androidTestImplementation "androidx.test:runner:1.7.0"
     androidTestImplementation "androidx.test:rules:1.7.0"
+    androidTestImplementation "androidx.test.uiautomator:uiautomator:2.3.0"
     implementation project(':capacitor-cordova-android-plugins')
 }
 

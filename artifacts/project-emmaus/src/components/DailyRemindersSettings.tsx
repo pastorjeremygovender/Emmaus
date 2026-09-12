@@ -267,9 +267,11 @@ export function DailyRemindersSettings() {
     return 'Off';
   }, [nativeAndroid, state, time]);
 
-  const guidance = isInstalledPwa()
-    ? 'Notifications are managed in this app’s device settings.'
-    : 'For the most reliable reminders, install Emmaus to your home screen.';
+  const guidance = nativeAndroid
+    ? 'Emmaus will remind you on this phone at the selected time.'
+    : isInstalledPwa()
+      ? 'Notifications are managed in this app’s device settings.'
+      : 'For the most reliable reminders, install Emmaus to your home screen.';
 
   return (
     <div className="rounded-xl border border-border/50 bg-card px-3.5 py-3">

@@ -23,6 +23,14 @@ vi.mock('@/components/ShareEmmausButton', () => ({
   ShareEmmausButton: () => <button type="button" aria-label="Share Emmaus">Share</button>,
 }));
 
+vi.mock('@capacitor/core', () => ({
+  Capacitor: {
+    isNativePlatform: () => false,
+    getPlatform: () => 'web',
+  },
+  registerPlugin: () => ({ get: vi.fn() }),
+}));
+
 describe('MemberHeaderActions', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
@@ -65,6 +73,15 @@ describe('MemberHeaderActions', () => {
 
     expect(screen.getByText('Unsupported on this browser')).toBeInTheDocument();
     expect(screen.getByTestId('toggle-notifications')).toBeDisabled();
+  });
+
+  it('shows the rc6 build identity in About Emmaus', async () => {
+    const user = userEvent.setup();
+    render(<MemberHeaderActions compact />);
+
+    await user.click(screen.getByTestId('about-emmaus-trigger'));
+
+    expect(screen.getByText('Android test build · 1.2.0-rc6 · version code 8')).toBeInTheDocument();
   });
 
   it('shows the live text-size preview in Settings', async () => {

@@ -50,6 +50,7 @@ public final class WelcomeAssistBluetoothPlugin extends Plugin {
     private ScanCallback activeCallback;
     private Runnable activeTimeout;
     private PluginCall activeCall;
+    private final PermissionRequestGuard permissionRequest = new PermissionRequestGuard();
 
     @PluginMethod
     public void status(PluginCall call) {
@@ -88,19 +89,36 @@ public final class WelcomeAssistBluetoothPlugin extends Plugin {
             call.resolve();
             return;
         }
-        if (getPermissionState("nearbyDevices") == PermissionState.GRANTED) {
-            call.resolve();
-            return;
+        try {
+            if (getPermissionState("nearbyDevices") == PermissionState.GRANTED) {
+                call.resolve();
+                return;
+            }
+            if (!permissionRequest.begin(getContext(), call, "bluetooth.nearby")) return;
+            try {
+                requestPermissionForAlias("nearbyDevices", call, "permissionResult");
+            } catch (RuntimeException error) {
+                permissionRequest.fail(getContext(), call, "bluetooth.nearby.start", error);
+            }
+        } catch (RuntimeException error) {
+            NativePermissionDiagnostics.exception(getContext(), "bluetooth.nearby", error);
+            call.reject("Bluetooth access could not be requested.");
         }
-        requestPermissionForAlias("nearbyDevices", call, "permissionResult");
     }
 
     @PermissionCallback
-    private void permissionResult(PluginCall call) {
-        if (getPermissionState("nearbyDevices") == PermissionState.GRANTED) {
-            call.resolve();
-        } else {
-            call.reject("Bluetooth access was not granted.");
+    public void permissionResult(PluginCall call) {
+        if (!permissionRequest.finish(getContext(), call, "bluetooth.nearby")) return;
+        try {
+            if (getPermissionState("nearbyDevices") == PermissionState.GRANTED) {
+                if (call != null) call.resolve();
+            } else if (call != null) {
+                NativePermissionDiagnostics.stage(getContext(), "bluetooth.nearby.denied");
+                call.reject("Bluetooth access was not granted.");
+            }
+        } catch (RuntimeException error) {
+            NativePermissionDiagnostics.exception(getContext(), "bluetooth.nearby.callback", error);
+            if (call != null) call.reject("Bluetooth access could not be confirmed.");
         }
     }
 

@@ -18,8 +18,16 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-@CapacitorPlugin(name = "GeofenceProof", permissions = @Permission(alias = "location", strings = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}))
+@CapacitorPlugin(
+        name = "GeofenceProof",
+        permissions = {
+                @Permission(alias = "location", strings = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}),
+                @Permission(alias = "backgroundLocation", strings = {Manifest.permission.ACCESS_BACKGROUND_LOCATION})
+        }
+)
 public final class GeofenceProofPlugin extends Plugin {
+    private final PermissionRequestGuard foregroundPermissionRequest = new PermissionRequestGuard();
+    private final PermissionRequestGuard backgroundPermissionRequest = new PermissionRequestGuard();
     @PluginMethod
     public void welcomeAssistStatus(PluginCall call) {
         JSObject result = new JSObject();
@@ -40,16 +48,88 @@ public final class GeofenceProofPlugin extends Plugin {
 
     @PluginMethod
     public void requestWelcomeAssistAccess(PluginCall call) {
-        if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                || ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            call.resolve();
-        } else {
-            requestPermissionForAlias("location", call, "welcomeLocationResult");
+        try {
+            if (hasForegroundPermission()) {
+                call.resolve();
+                return;
+            }
+            if (!foregroundPermissionRequest.begin(getContext(), call, "location.foreground")) return;
+            try {
+                requestPermissionForAlias("location", call, "welcomeLocationResult");
+            } catch (RuntimeException error) {
+                foregroundPermissionRequest.fail(getContext(), call, "location.foreground.start", error);
+            }
+        } catch (RuntimeException error) {
+            NativePermissionDiagnostics.exception(getContext(), "location.foreground", error);
+            call.reject("Location permission could not be requested.");
         }
     }
 
     @com.getcapacitor.annotation.PermissionCallback
-    private void welcomeLocationResult(PluginCall call) { call.resolve(); }
+    public void welcomeLocationResult(PluginCall call) {
+        if (!foregroundPermissionRequest.finish(getContext(), call, "location.foreground")) return;
+        try {
+            if (hasForegroundPermission()) {
+                if (call != null) call.resolve();
+            } else if (call != null) {
+                NativePermissionDiagnostics.stage(getContext(), "location.foreground.denied");
+                call.reject("Location access was not granted.");
+            }
+        } catch (RuntimeException error) {
+            NativePermissionDiagnostics.exception(getContext(), "location.foreground.callback", error);
+            if (call != null) call.reject("Location access could not be confirmed.");
+        }
+    }
+
+    @PluginMethod
+    public void requestBackgroundAccess(PluginCall call) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            call.resolve();
+            return;
+        }
+        try {
+            if (!hasForegroundPermission()) {
+                call.reject("Foreground location permission is required first.");
+                return;
+            }
+            if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                    == PackageManager.PERMISSION_GRANTED) {
+                call.resolve();
+                return;
+            }
+            if (!backgroundPermissionRequest.begin(getContext(), call, "location.background")) return;
+            try {
+                requestPermissionForAlias("backgroundLocation", call, "backgroundLocationResult");
+            } catch (RuntimeException error) {
+                backgroundPermissionRequest.fail(getContext(), call, "location.background.start", error);
+            }
+        } catch (RuntimeException error) {
+            NativePermissionDiagnostics.exception(getContext(), "location.background", error);
+            call.reject("Background location permission could not be requested.");
+        }
+    }
+
+    @com.getcapacitor.annotation.PermissionCallback
+    public void backgroundLocationResult(PluginCall call) {
+        if (!backgroundPermissionRequest.finish(getContext(), call, "location.background")) return;
+        try {
+            if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                    == PackageManager.PERMISSION_GRANTED) {
+                if (call != null) call.resolve();
+            } else if (call != null) {
+                NativePermissionDiagnostics.stage(getContext(), "location.background.denied");
+                call.reject("Background location access was not granted.");
+            }
+        } catch (RuntimeException error) {
+            NativePermissionDiagnostics.exception(getContext(), "location.background.callback", error);
+            if (call != null) call.reject("Background location access could not be confirmed.");
+        }
+    }
+
+    private boolean hasForegroundPermission() {
+        return ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                || ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
     @PluginMethod
     public void openDiagnostics(PluginCall call) {
         if (!isDebuggableBuild()) {

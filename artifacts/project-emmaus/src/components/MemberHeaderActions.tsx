@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'wouter';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { useAppearance, type AppearanceFontSize } from '@/contexts/AppearanceContext';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -8,11 +10,63 @@ import { ShareEmmausButton } from '@/components/ShareEmmausButton';
 import { DailyRemindersSettings } from '@/components/DailyRemindersSettings';
 import { WelcomeAssistSettings } from '@/components/WelcomeAssistSettings';
 
+interface NativeDiagnostics {
+  available: boolean;
+  stage?: string;
+  exceptionClass?: string;
+  exceptionMessage?: string;
+}
+
+interface EmmausDiagnosticsBridge {
+  get(): Promise<NativeDiagnostics>;
+}
+
+const diagnostics = registerPlugin<EmmausDiagnosticsBridge>('EmmausDiagnostics');
+
 export function MemberHeaderActions({ compact = false }: { compact?: boolean }) {
   const [location] = useLocation();
   const { theme, fontSize, setTheme, setFontSize } = useAppearance();
   const actionSize = compact ? 40 : 44;
   const iconSize = compact ? 17 : 19;
+  const [nativeDiagnostics, setNativeDiagnostics] = useState<NativeDiagnostics | null>(null);
+  const [diagnosticsCopied, setDiagnosticsCopied] = useState(false);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
+    void diagnostics.get().then(setNativeDiagnostics).catch(() => setNativeDiagnostics(null));
+  }, []);
+
+  const diagnosticsText = nativeDiagnostics
+    ? [
+        `available=${nativeDiagnostics.available}`,
+        `stage=${nativeDiagnostics.stage || 'none'}`,
+        `exception=${nativeDiagnostics.exceptionClass || 'none'}`,
+        `message=${nativeDiagnostics.exceptionMessage || 'none'}`,
+      ].join('\n')
+    : '';
+
+  const copyDiagnostics = async () => {
+    if (!diagnosticsText) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(diagnosticsText);
+      } else {
+        throw new Error('Clipboard API unavailable');
+      }
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = diagnosticsText;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+    setDiagnosticsCopied(true);
+    window.setTimeout(() => setDiagnosticsCopied(false), 1600);
+  };
 
   return (
     <div className="flex items-center gap-1">
@@ -54,8 +108,30 @@ export function MemberHeaderActions({ compact = false }: { compact?: boolean }) 
               It’s All About JESUS.
             </p>
             <p className="border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
-               Android test build · 1.2.0-rc5 · version code 7
+               Android test build · 1.2.0-rc6 · version code 8
             </p>
+             {nativeDiagnostics?.available && (
+               <div className="border-t border-border/60 pt-2" data-testid="native-diagnostics">
+                 <p className="text-[11px] font-semibold text-foreground">Test-build diagnostics</p>
+                 <p className="mt-1 text-[11px]">
+                   {nativeDiagnostics.stage
+                     ? `Last native permission stage: ${nativeDiagnostics.stage}`
+                     : 'No native permission event recorded yet.'}
+                 </p>
+                 {nativeDiagnostics.exceptionClass && (
+                   <p className="mt-1 text-[11px]">
+                     {nativeDiagnostics.exceptionClass}: {nativeDiagnostics.exceptionMessage || 'no message'}
+                   </p>
+                 )}
+                 <button
+                   type="button"
+                   className="mt-2 rounded-md border border-border px-2 py-1 text-[11px] text-foreground"
+                   onClick={() => void copyDiagnostics()}
+                 >
+                   {diagnosticsCopied ? 'Diagnostics copied' : 'Copy diagnostics'}
+                 </button>
+               </div>
+             )}
           </div>
         </PopoverContent>
       </Popover>

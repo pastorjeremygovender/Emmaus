@@ -56,7 +56,10 @@ export function WelcomeAssistSettings() {
       const status = await geofence.welcomeAssistStatus();
       if (status.permission !== 'granted') {
         await geofence.requestWelcomeAssistAccess();
-        setMessage('Location permission requested. Tap again when it is granted.');
+        const updated = await geofence.welcomeAssistStatus();
+        setMessage(updated.permission === 'granted'
+          ? 'Location permission is ready. No route is tracked and no coordinates are shown or sent.'
+          : 'Location access was not granted. You can enable it later in phone settings.');
       } else if (!status.locationEnabled) {
         setMessage('Turn on Location in Android settings, then try again.');
       } else {
