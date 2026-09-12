@@ -182,6 +182,19 @@ export interface EmmausResponseMetadata {
     reflectionQuestion?: string;
     prayerPrompt?: string;
   };
+  /** Server-owned conversational focus shared by text, voice, and eyewear clients. */
+  conversationFocus?: {
+    version: 1;
+    resourceType: EmmausResourceType;
+    candidates: Array<{
+      resourceType: EmmausResourceType;
+      resourceId: string;
+      title: string;
+      route: string;
+      parentId?: string;
+    }>;
+    pendingSelection?: boolean;
+  };
   /** A server-verified member action awaiting an explicit yes/no response. */
   pendingMemberAction?: {
     kind: "COMPLETE_DAILY_RHYTHM";

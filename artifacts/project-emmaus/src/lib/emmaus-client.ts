@@ -150,6 +150,18 @@ export interface EmmausMetadata {
     label: string;
     route: string;
   }>;
+  conversationFocus?: {
+    version: 1;
+    resourceType: string;
+    candidates: Array<{
+      resourceType: string;
+      resourceId: string;
+      title: string;
+      route: string;
+      parentId?: string;
+    }>;
+    pendingSelection?: boolean;
+  };
   jarvis?: JarvisResponseContract;
   jarvisIntent?: JarvisIntent;
   pipelineTimings?: {

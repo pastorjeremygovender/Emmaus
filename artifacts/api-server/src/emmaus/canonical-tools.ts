@@ -215,6 +215,11 @@ function buildResolvedResourceMetadata(
     text: title,
     path: route,
   }];
+  metadata.conversationFocus = {
+    version: 1,
+    resourceType: type,
+    candidates: [{ resourceType: type, resourceId: id, title, route }],
+  };
   return metadata;
 }
 
@@ -1005,7 +1010,25 @@ async function resolveSermonSearch(message: string): Promise<EmmausResponseMetad
     timestampSeconds: sermon.watchTimestampSeconds,
     speakerName: sermon.speaker,
   }));
-  metadata.followUpPrompts = ["Search another sermon topic", "What does Scripture say about this?"];
+  const openable = sermons
+    .filter((sermon) => Boolean(sermon.openPath))
+    .map((sermon) => ({
+      resourceType: "sermon" as const,
+      resourceId: sermon.sermonId,
+      title: sermon.title,
+      route: sermon.openPath!,
+    }));
+  metadata.resourceActions = openable.map((candidate) =>
+    actionForCapabilityResource("OPEN", "sermon", candidate.resourceId, candidate.route)
+  );
+  if (openable.length > 0) {
+    metadata.conversationFocus = {
+      version: 1,
+      resourceType: "sermon",
+      candidates: openable,
+    };
+  }
+  metadata.followUpPrompts = ["Open the sermon", "Search another sermon topic", "What does Scripture say about this?"];
   return metadata;
 }
 
@@ -1030,6 +1053,42 @@ function carryDailyRhythmContext(
  * Resolve short follow-up commands from the previous server-validated assistant
  * action. Model prose and legacy nextStep paths are deliberately ignored.
  */
+function normaliseFocusText(value: string): string {
+  return value.toLowerCase().replace(/[’']/g, "'").replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function metadataForFocusedCandidate(
+  candidate: NonNullable<EmmausResponseMetadata["conversationFocus"]>["candidates"][number],
+): EmmausResponseMetadata {
+  const metadata = emptyMetadata();
+  metadata.answer = `Opening “${candidate.title}”.`;
+  metadata.resourceActions = [actionForCapabilityResource(
+    "OPEN",
+    candidate.resourceType,
+    candidate.resourceId,
+    candidate.route,
+    candidate.parentId,
+  )];
+  metadata.recommendations = [{
+    type: candidate.resourceType,
+    title: candidate.title,
+    resourceId: candidate.resourceId,
+    ...(candidate.parentId ? { parentId: candidate.parentId } : {}),
+    path: candidate.route,
+  }];
+  metadata.nextStep = {
+    action: `Open ${candidate.title}.`,
+    primaryButtonText: `Open ${candidate.title}`,
+    path: candidate.route,
+  };
+  metadata.conversationFocus = {
+    version: 1,
+    resourceType: candidate.resourceType,
+    candidates: [candidate],
+  };
+  return metadata;
+}
+
 export async function resolveContextualFollowUp(
   message: string,
   previousMetadata?: EmmausResponseMetadata,
@@ -1038,6 +1097,26 @@ export async function resolveContextualFollowUp(
 ): Promise<EmmausResponseMetadata | null> {
   if (!previousMetadata) return null;
   const value = message.toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, " ").trim();
+  const focus = previousMetadata.conversationFocus;
+
+  // A short title is an answer to Jarvis's clarification, not a new pastoral
+  // question. Resolve it only against the server-owned candidates carried in
+  // the previous assistant message.
+  if (focus?.pendingSelection && focus.candidates.length > 0) {
+    const selectedText = normaliseFocusText(message);
+    const matches = focus.candidates.filter((candidate) => {
+      const title = normaliseFocusText(candidate.title);
+      return selectedText === title || title.includes(selectedText) || selectedText.includes(title);
+    });
+    if (matches.length === 1 && safeStoredRoute(matches[0].route)) {
+      return metadataForFocusedCandidate(matches[0]);
+    }
+    const clarification = emptyMetadata();
+    clarification.answer = `Please choose ${focus.resourceType === "sermon" ? "a sermon" : "a Walk"}: ${focus.candidates.map((candidate) => `“${candidate.title}”`).join(", ")}.`;
+    clarification.conversationFocus = focus;
+    clarification.followUpPrompts = focus.candidates.slice(0, 3).map((candidate) => candidate.title);
+    return clarification;
+  }
 
   const pendingAction = previousMetadata.pendingMemberAction;
   if (pendingAction?.kind === "COMPLETE_DAILY_RHYTHM") {
@@ -1155,6 +1234,25 @@ export async function resolveContextualFollowUp(
         ? "READ"
         : "OPEN";
   const requestedResourceType = recommendationRecall?.[1] ?? followUp?.[2];
+
+  const focusedCandidates = (focus?.candidates ?? [])
+    .filter((candidate) => safeStoredRoute(candidate.route))
+    .filter((candidate) => !requestedResourceType || candidate.resourceType === requestedResourceType);
+  if (focusedCandidates.length === 1) {
+    return metadataForFocusedCandidate(focusedCandidates[0]);
+  }
+  if (focusedCandidates.length > 1) {
+    const clarification = emptyMetadata();
+    clarification.answer = `Which ${focus?.resourceType === "sermon" ? "sermon" : "Walk"} would you like me to open? ${focusedCandidates.map((candidate) => `“${candidate.title}”`).join(", ")}.`;
+    clarification.conversationFocus = {
+      version: 1,
+      resourceType: focus!.resourceType,
+      candidates: focusedCandidates,
+      pendingSelection: true,
+    };
+    clarification.followUpPrompts = focusedCandidates.slice(0, 3).map((candidate) => candidate.title);
+    return clarification;
+  }
 
   const resourceActions = (previousMetadata.resourceActions ?? [])
     .filter((action) => safeStoredRoute(action.route))

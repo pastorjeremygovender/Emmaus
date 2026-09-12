@@ -491,4 +491,55 @@ describe("canonical Ask Emmaus tools", () => {
     assert.equal(metadata.nextStep, null);
     assert.equal(metadata.recommendations.length, 0);
   });
+  it("keeps a verified sermon in focus and opens it from natural follow-ups", async () => {
+    const previous = {
+      scripture: null,
+      nextStep: null,
+      nextSteps: [],
+      recommendations: [],
+      followUpPrompts: [],
+      handoffType: null,
+      conversationFocus: {
+        version: 1 as const,
+        resourceType: "sermon" as const,
+        candidates: [{
+          resourceType: "sermon" as const,
+          resourceId: "prosper-in-the-famine",
+          title: "Prosper in the Famine",
+          route: "/sermon/prosper-in-the-famine",
+        }],
+      },
+    };
+
+    for (const phrase of ["Can you open the sermon", "Please open the sermon", "Open it please"]) {
+      const result = await resolveContextualFollowUp(phrase, previous, "member-1");
+      assert.equal(result?.resourceActions?.[0]?.route, "/sermon/prosper-in-the-famine");
+      assert.match(result?.answer ?? "", /Prosper in the Famine/);
+    }
+  });
+
+  it("treats a title-only reply as the answer to a verified clarification", async () => {
+    const result = await resolveContextualFollowUp("Prosper in the Famine", {
+      scripture: null,
+      nextStep: null,
+      nextSteps: [],
+      recommendations: [],
+      followUpPrompts: [],
+      handoffType: null,
+      conversationFocus: {
+        version: 1,
+        resourceType: "sermon",
+        pendingSelection: true,
+        candidates: [{
+          resourceType: "sermon",
+          resourceId: "prosper-in-the-famine",
+          title: "Prosper in the Famine",
+          route: "/sermon/prosper-in-the-famine",
+        }],
+      },
+    }, "member-1");
+    assert.equal(result?.resourceActions?.[0]?.route, "/sermon/prosper-in-the-famine");
+    assert.match(result?.answer ?? "", /Opening/);
+  });
+
 });
