@@ -8,6 +8,7 @@ const native = vi.hoisted(() => ({
     return { remove: vi.fn() };
   }),
   getPendingDeepLink: vi.fn(async () => native.pending),
+  acknowledgePendingDeepLink: vi.fn(async () => undefined),
 }));
 
 vi.mock('@capacitor/core', () => ({
@@ -26,6 +27,7 @@ describe('native Daily Rhythm widget deep-link handoff', () => {
     native.pending = { path: '/daily-rhythm/day/4?source=widget&version=1&journeyId=daily-rhythm&stepId=step-4' };
     native.addListener.mockClear();
     native.getPendingDeepLink.mockClear();
+    native.acknowledgePendingDeepLink.mockClear();
     window.history.replaceState({}, '', '/walk');
   });
 

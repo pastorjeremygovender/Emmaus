@@ -3,14 +3,17 @@ package za.co.emmaus.app;
 import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Bundle;
+import android.util.Log;
 
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+    private static final String TAG = "EmmausMainActivity";
     private static final String WIDGET_PROMPT_PREFS = "emmaus_widget_prompt";
     private static final String KEY_PROMPT_REQUESTED = "daily_rhythm_prompt_requested";
 
@@ -19,12 +22,21 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(GeofenceProofPlugin.class);
         registerPlugin(WelcomeAssistBluetoothPlugin.class);
         registerPlugin(DailyRhythmDeepLinkPlugin.class);
+        DailyRhythmDeepLinkPlugin.captureIntent(this, getIntent(), "activity_on_create");
         super.onCreate(savedInstanceState);
+    }
+
+    @Override
+    public void onNewIntent(Intent intent) {
+        DailyRhythmDeepLinkPlugin.captureIntent(this, intent, "activity_on_new_intent");
+        setIntent(intent);
+        super.onNewIntent(intent);
     }
 
     @Override
     public void onResume() {
         super.onResume();
+        Log.i(TAG, "stage=activity_resumed");
         DailyRhythmWidgetProvider.refresh(this);
         new Handler(Looper.getMainLooper()).postDelayed(this::offerDailyRhythmWidget, 1200);
     }

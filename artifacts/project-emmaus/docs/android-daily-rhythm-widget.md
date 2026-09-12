@@ -8,8 +8,10 @@ This isolated native widget is based on the Android production baseline. It does
 - Contains no logo and no progress bar.
 - Tapping anywhere on the widget opens a versioned, exact-entry route:
   `/daily-rhythm/day/{day}?source=widget&version=1&journeyId={journeyId}&stepId={stepId}`.
-- The native Capacitor bridge consumes that route on a cold start and emits it
-  on subsequent taps while the existing `singleTask` activity is running.
+- The native Capacitor bridge captures that route from both the initial
+  `MainActivity` intent and subsequent taps while the existing `singleTask`
+  activity is running. It retains the route until the reader validates the
+  displayed entry and explicitly acknowledges successful navigation.
 - If the cached step has been retired or cannot be resolved, the web reader
   replaces the stale destination with the member's current Daily Rhythm entry
   and explains the fallback. Opening the route never completes a step.
@@ -27,6 +29,8 @@ This isolated native widget is based on the Android production baseline. It does
 4. Confirm the widget shows today's title, Scripture/reference, and no logo/progress bar.
 5. Tap the widget and confirm the exact displayed Daily Rhythm entry opens
    directly, including after the app was closed and while it is already open.
+   The corrected test package is version name `1.2.0-rc3`, version code `5`;
+   the build identifier is visible in About Emmaus.
 6. Complete today's rhythm, reopen the app, and confirm the footer changes to **Today’s rhythm complete**.
 7. Disable connectivity and confirm the last safe widget content remains
    visible, the tap target does not complete the step, and the app opens the
@@ -35,8 +39,8 @@ This isolated native widget is based on the Android production baseline. It does
 
 ## Production isolation
 
-Do not merge or publish this branch until authentication is restored and the
-widget passes real-device tap testing. The Android unit tests cover route
-canonicalization, but an emulator or physical Android environment is still
-required to verify the actual launcher tap, offline WebView behavior, and
-back-stack behavior. No schema or data migration is required.
+The Android instrumentation test launches the production widget
+`PendingIntent` into `MainActivity` and verifies the exact route data. A
+physical Android environment is still required to verify the complete
+authenticated launcher tap, offline WebView behavior, and back-stack
+behavior. No schema or data migration is required.

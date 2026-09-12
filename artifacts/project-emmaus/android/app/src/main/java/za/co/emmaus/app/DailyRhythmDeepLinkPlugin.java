@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.util.Log;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -22,6 +23,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  */
 @CapacitorPlugin(name = "DailyRhythmDeepLink")
 public final class DailyRhythmDeepLinkPlugin extends Plugin {
+    private static final String TAG = "EmmausWidgetBridge";
     private static final String PREFS = "emmaus_daily_rhythm_deep_link";
     private static final String KEY_PENDING_ROUTE = "pending_route";
 
@@ -56,6 +58,9 @@ public final class DailyRhythmDeepLinkPlugin extends Plugin {
         if (stepId != null && !stepId.isBlank() && stepId.length() <= 160) {
             route.appendQueryParameter("stepId", stepId);
         }
+        if ("unavailable".equals(data.getQueryParameter("widgetFallback"))) {
+            route.appendQueryParameter("widgetFallback", "unavailable");
+        }
         return route.build().toString();
     }
 
@@ -65,13 +70,34 @@ public final class DailyRhythmDeepLinkPlugin extends Plugin {
             .edit()
             .putString(KEY_PENDING_ROUTE, route)
             .apply();
+        Log.i(TAG, "stage=route_stored route=" + route);
     }
 
-    private static String consume(Context context) {
+    static void captureIntent(Context context, Intent intent, String stage) {
+        String route = routeFromIntent(intent);
+        if (route == null) {
+            Log.i(TAG, "stage=" + stage + " route=none");
+            return;
+        }
+        remember(context, route);
+        Log.i(TAG, "stage=" + stage + " route=" + route);
+    }
+
+    private static String peek(Context context) {
         SharedPreferences preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        String route = preferences.getString(KEY_PENDING_ROUTE, null);
-        preferences.edit().remove(KEY_PENDING_ROUTE).apply();
-        return route;
+        return preferences.getString(KEY_PENDING_ROUTE, null);
+    }
+
+    private static void acknowledge(Context context, String route) {
+        if (route == null || route.isBlank()) return;
+        SharedPreferences preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        String pending = preferences.getString(KEY_PENDING_ROUTE, null);
+        if (route.equals(pending)) {
+            preferences.edit().remove(KEY_PENDING_ROUTE).apply();
+            Log.i(TAG, "stage=route_acknowledged route=" + route);
+        } else {
+            Log.i(TAG, "stage=route_acknowledge_ignored route_match=false");
+        }
     }
 
     @Override
@@ -80,6 +106,7 @@ public final class DailyRhythmDeepLinkPlugin extends Plugin {
         if (route == null) return;
 
         remember(getContext(), route);
+        Log.i(TAG, "stage=listener_delivery route=" + route);
         JSObject payload = new JSObject();
         payload.put("path", route);
         payload.put("source", "widget");
@@ -88,12 +115,19 @@ public final class DailyRhythmDeepLinkPlugin extends Plugin {
 
     @PluginMethod
     public void getPendingDeepLink(PluginCall call) {
-        String route = consume(getContext());
+        String route = peek(getContext());
+        Log.i(TAG, "stage=web_pending_read hasRoute=" + (route != null));
         JSObject result = new JSObject();
         if (route != null) {
             result.put("path", route);
             result.put("source", "widget");
         }
         call.resolve(result);
+    }
+
+    @PluginMethod
+    public void acknowledgePendingDeepLink(PluginCall call) {
+        acknowledge(getContext(), call.getString("path"));
+        call.resolve();
     }
 }

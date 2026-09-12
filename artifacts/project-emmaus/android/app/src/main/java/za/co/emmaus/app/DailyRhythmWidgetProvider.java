@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.util.Log;
 import android.webkit.CookieManager;
 import android.widget.RemoteViews;
 
@@ -32,6 +33,7 @@ import java.util.concurrent.Executors;
  * remains visible and the tap target still opens Emmaus.
  */
 public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
+    private static final String TAG = "EmmausDailyWidget";
     private static final String BASE_URL = "https://emmaus.co.za";
     private static final String STATE_PATH = "/api/journeys/daily-rhythm/state";
     private static final String PREFS = "emmaus_daily_rhythm_widget";
@@ -105,6 +107,9 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
                     break;
                 }
             }
+        }
+        if (journeyId.isEmpty() || stepId.isEmpty()) {
+            throw new IllegalStateException("Daily Rhythm state did not identify an exact entry");
         }
         if (verse.isEmpty() && !reference.isEmpty()) {
             try {
@@ -226,30 +231,59 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
             views.setTextViewText(R.id.widget_day_title, "Today • " + content.title);
             views.setTextViewText(R.id.widget_scripture, displayVerse(content.verse));
             views.setTextViewText(R.id.widget_reference, content.reference);
-            Uri.Builder uri = Uri.parse(BASE_URL).buildUpon()
-                .appendPath("daily-rhythm")
-                .appendPath("day")
-                .appendPath(String.valueOf(content.day))
-                .appendQueryParameter("source", "widget")
-                .appendQueryParameter("version", "1");
-            if (!content.journeyId.isEmpty()) {
-                uri.appendQueryParameter("journeyId", content.journeyId);
-            }
-            if (!content.stepId.isEmpty()) {
-                uri.appendQueryParameter("stepId", content.stepId);
-            }
-            Intent open = new Intent(Intent.ACTION_VIEW, uri.build(), context, MainActivity.class);
-            open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            PendingIntent pendingIntent = PendingIntent.getActivity(
-                context,
-                appWidgetId,
-                open,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-            );
+            Intent open = buildWidgetIntent(context, content.day, content.journeyId, content.stepId);
+            PendingIntent pendingIntent = buildPendingIntent(context, appWidgetId, open);
+            Log.i(TAG, "stage=remote_views_pending_intent appWidgetId=" + appWidgetId
+                + " day=" + content.day
+                + " hasJourneyId=" + !content.journeyId.isEmpty()
+                + " hasStepId=" + !content.stepId.isEmpty());
             views.setOnClickPendingIntent(R.id.widget_root, pendingIntent);
             views.setOnClickPendingIntent(R.id.widget_open, pendingIntent);
             manager.updateAppWidget(appWidgetId, views);
         }
+    }
+
+    static Intent buildWidgetIntent(
+        Context context,
+        int day,
+        String journeyId,
+        String stepId
+    ) {
+        Uri.Builder uri = Uri.parse(BASE_URL).buildUpon()
+            .appendPath("daily-rhythm")
+            .appendPath("day")
+            .appendPath(String.valueOf(day))
+            .appendQueryParameter("source", "widget")
+            .appendQueryParameter("version", "1");
+        if (journeyId != null && !journeyId.isEmpty()) {
+            uri.appendQueryParameter("journeyId", journeyId);
+        }
+        if (stepId != null && !stepId.isEmpty()) {
+            uri.appendQueryParameter("stepId", stepId);
+        }
+        if (journeyId == null || journeyId.isEmpty() || stepId == null || stepId.isEmpty()) {
+            uri.appendQueryParameter("widgetFallback", "unavailable");
+        }
+        return new Intent(Intent.ACTION_VIEW, uri.build(), context, MainActivity.class)
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+    }
+
+    static PendingIntent buildPendingIntent(
+        Context context,
+        int appWidgetId,
+        Intent intent
+    ) {
+        return PendingIntent.getActivity(
+            context,
+            pendingIntentRequestCode(appWidgetId, intent.getData()),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+    }
+
+    private static int pendingIntentRequestCode(int appWidgetId, Uri destination) {
+        int hash = 31 * appWidgetId + (destination == null ? 0 : destination.toString().hashCode());
+        return hash & 0x7fffffff;
     }
 
     private static String displayVerse(String verse) {

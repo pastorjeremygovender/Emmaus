@@ -38,6 +38,14 @@ export function rememberOpeningDestination(path: string): void {
   }
 }
 
+export function peekOpeningDestination(): string | null {
+  try {
+    return safeOpeningDestination(sessionStorage.getItem(PENDING_DESTINATION_KEY));
+  } catch {
+    return null;
+  }
+}
+
 export function consumeOpeningDestination(fallback = '/walk'): string {
   try {
     const safe = safeOpeningDestination(sessionStorage.getItem(PENDING_DESTINATION_KEY));

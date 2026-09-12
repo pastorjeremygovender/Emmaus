@@ -48,4 +48,15 @@ public class DailyRhythmDeepLinkPluginTest {
             ))
         );
     }
+
+    @Test
+    public void widgetFallbackIsPreservedWhenTheNativeEntryIsUnavailable() {
+        assertEquals(
+            "/daily-rhythm/day/4?source=widget&version=1&widgetFallback=unavailable",
+            DailyRhythmDeepLinkPlugin.routeFromIntent(new Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("https://emmaus.co.za/daily-rhythm/day/4?source=widget&version=1&widgetFallback=unavailable")
+            ))
+        );
+    }
 }

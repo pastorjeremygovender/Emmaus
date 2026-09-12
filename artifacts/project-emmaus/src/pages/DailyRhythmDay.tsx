@@ -44,6 +44,7 @@ import { goBackOrFallback } from '@/lib/return-context';
 import { getDailyRhythmState } from '@/lib/journeys-api';
 import { consumeOpeningDestination } from '@/lib/opening-destination';
 import { resolveDailyRhythmCalendar } from '@/lib/daily-rhythm-calendar';
+import { acknowledgeNativeDailyRhythmDeepLink } from '@/lib/native-daily-rhythm-deep-link';
 
 // ─── Ahead-of-rhythm screen (Dev Mode only) ───────────────────────────────────
 // Shown ONLY in Development Mode so admins/testers can diagnose future-day access.
@@ -200,6 +201,28 @@ export default function DailyRhythmDay() {
   const widgetStepUnavailable = Boolean(widgetStepId) && !widgetStep || widgetJourneyMismatch;
   const step = widgetStep ?? stepForDay;
   const isAhead = day > currentDay && !devMode;
+
+  useEffect(() => {
+    if (
+      source !== 'widget' ||
+      !user ||
+      dailyProgressLoading ||
+      !step ||
+      (widgetStepUnavailable && !widgetFallback)
+    ) {
+      return;
+    }
+    // The native route is acknowledged only after this page has accepted the
+    // referenced step, or rendered the explicit stale-entry fallback.
+    acknowledgeNativeDailyRhythmDeepLink();
+  }, [
+    source,
+    user,
+    dailyProgressLoading,
+    step?.day,
+    widgetStepUnavailable,
+    widgetFallback,
+  ]);
 
   // ── Loading guard ─────────────────────────────────────────────────────────
   if (!journey || (!prog && day > 1)) {

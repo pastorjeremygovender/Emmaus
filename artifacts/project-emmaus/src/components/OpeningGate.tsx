@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getDailyRhythmStartup, type DailyRhythmStartup } from '@/lib/journeys-api';
 import {
   consumeOpeningDestination,
+  peekOpeningDestination,
   rememberOpeningDestination,
 } from '@/lib/opening-destination';
 import {
@@ -37,6 +38,15 @@ function isPublicPath(pathname: string): boolean {
 
 function isDailyRhythmTarget(pathname: string, assignedDay: number | null): boolean {
   return assignedDay !== null && pathname === `/daily-rhythm/day/${assignedDay}`;
+}
+
+function isWidgetDestination(path: string | null): boolean {
+  if (!path) return false;
+  try {
+    return new URL(path, window.location.origin).searchParams.get('source') === 'widget';
+  } catch {
+    return false;
+  }
 }
 
 function LoadingOpening() {
@@ -220,18 +230,21 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
     }));
     if (decision.state === 'OPENING_REQUIRED') {
       setStartupResolved(true);
+      const pendingWidgetDestination = isWidgetDestination(peekOpeningDestination())
+        ? consumeOpeningDestination(decision.destination)
+        : null;
       if (hasPresentedDailyRhythmDay(user.id, decision.assignedDay)) {
         if (pathname === '/') {
-          setLocation('/walk', { replace: true });
+          setLocation(pendingWidgetDestination ?? '/walk', { replace: true });
         }
         return;
       }
       rememberPresentedDailyRhythmDay(user.id, decision.assignedDay);
       if (!isDailyRhythmTarget(pathname, decision.assignedDay)) {
-        if (pathname !== '/' && pathname !== '/walk') {
+        if (!pendingWidgetDestination && pathname !== '/' && pathname !== '/walk') {
           rememberOpeningDestination(`${window.location.pathname}${window.location.search}${window.location.hash}`);
         }
-        setLocation(decision.destination, { replace: true });
+        setLocation(pendingWidgetDestination ?? decision.destination, { replace: true });
       }
       return;
     }
