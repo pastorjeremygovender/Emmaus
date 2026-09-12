@@ -141,7 +141,6 @@ export default function AskEmmausConversation() {
   // Context from AskEmmausHome (may include Bible/Walk/Journey entry point from FAB)
   const [initialContext, setInitialContext] = useState<import('@/lib/emmaus-client').FlatContext | null>(null);
   const [followUp, setFollowUp] = useState('');
-  const [composerExpanded, setComposerExpanded] = useState(false);
   const [isCrisisMode, setIsCrisisMode] = useState(false);
   // P2-6: soft pastoral nudge — shown when handoffType === 'pastoral'
   const [isPastoralMode, setIsPastoralMode] = useState(false);
@@ -446,7 +445,6 @@ export default function AskEmmausConversation() {
       { id: userMsgId, role: 'user', content: trimmed },
     ]);
     setFollowUp('');
-    setComposerExpanded(false);
     setMemoryPrompt(null);
     setMemoryDecided(false);
 
@@ -680,31 +678,19 @@ export default function AskEmmausConversation() {
 
         {!isStreaming && messages.length > 0 && (
           <div className="pt-2 pb-4">
-            {composerExpanded ? (
-              <>
-                <label htmlFor="follow-up-input" className="sr-only">
-                  Continue the conversation
-                </label>
-                <EmmausComposer
-                  id="follow-up-input"
-                  value={followUp}
-                  onChange={setFollowUp}
-                  onSend={handleFollowUp}
-                  placeholder="Ask a follow-up…"
-                  isLoading={isStreaming}
-                  aria-label="Follow-up message"
-                />
-              </>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setComposerExpanded(true)}
-                className="w-full min-h-[44px] rounded-full border border-primary/25 bg-background px-4 text-[14px] font-medium text-primary shadow-sm"
-                aria-label="Ask a follow-up question"
-              >
-                Ask a follow-up
-              </button>
-            )}
+            <label htmlFor="follow-up-input" className="sr-only">
+              Continue the conversation
+            </label>
+            <EmmausComposer
+              id="follow-up-input"
+              value={followUp}
+              onChange={setFollowUp}
+              onSend={handleFollowUp}
+              placeholder="Ask a follow-up…"
+              isLoading={isStreaming}
+              compact
+              aria-label="Follow-up message"
+            />
           </div>
         )}
         <div aria-hidden="true" className="h-16" />

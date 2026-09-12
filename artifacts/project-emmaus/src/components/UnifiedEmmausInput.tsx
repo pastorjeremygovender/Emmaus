@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'wouter';
-import { Search, Mic, X, Loader2, ChevronRight } from 'lucide-react';
+import { Search, Mic, X, Loader2, ChevronRight, SendHorizontal } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVoiceEnabled } from '@/hooks/useVoiceEnabled';
 import { useJourney } from '@/contexts/JourneyContext';
@@ -134,9 +134,11 @@ interface UnifiedEmmausInputProps {
    * The mic button still routes directly to voice mode.
    */
   launchOnly?: boolean;
+  /** Send every entry directly to Ask Emmaus without an intermediate search panel. */
+  conversationOnly?: boolean;
 }
 
-export function UnifiedEmmausInput({ className, onActiveChange, launchOnly }: UnifiedEmmausInputProps) {
+export function UnifiedEmmausInput({ className, onActiveChange, launchOnly, conversationOnly }: UnifiedEmmausInputProps) {
   const [location, navigate] = useLocation();
   const { user } = useAuth();
   const voiceEnabled = useVoiceEnabled(user?.id);
@@ -161,7 +163,7 @@ export function UnifiedEmmausInput({ className, onActiveChange, launchOnly }: Un
   // Live search (debounced 350ms) — only fires for search intent
   useEffect(() => {
     const q = query.trim();
-    if (!q || q.length < 2 || intent === 'question') {
+    if (conversationOnly || !q || q.length < 2 || intent === 'question') {
       if (intent === 'question') setResults(null);
       if (!q || q.length < 2) { setResults(null); setLoading(false); }
       return;
@@ -176,7 +178,7 @@ export function UnifiedEmmausInput({ className, onActiveChange, launchOnly }: Un
       finally { setLoading(false); }
     }, 350);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [query, intent]);
+  }, [query, intent, conversationOnly]);
 
   // Click outside → dismiss
   useEffect(() => {
@@ -230,10 +232,10 @@ export function UnifiedEmmausInput({ className, onActiveChange, launchOnly }: Un
       e.preventDefault();
       const q = query.trim();
       if (!q) return;
-      if (intent === 'question') {
+      if (conversationOnly || intent === 'question') {
         submitQuestion(q);
       }
-      // For search: results are already showing, nothing extra needed
+      // In mixed search mode, short search terms keep showing live results
     }
     if (e.key === 'Escape') {
       setIsFocused(false);
@@ -247,7 +249,7 @@ export function UnifiedEmmausInput({ className, onActiveChange, launchOnly }: Un
     navigate(route);
   }
 
-  const showPanel = isFocused && hasQuery;
+  const showPanel = !conversationOnly && isFocused && hasQuery;
 
   if (!user) return null;
 
@@ -337,6 +339,17 @@ export function UnifiedEmmausInput({ className, onActiveChange, launchOnly }: Un
             tabIndex={-1}
           >
             <Mic size={15} className="text-primary" strokeWidth={1.8} />
+          </button>
+        )}
+
+        {conversationOnly && query.trim() && (
+          <button
+            type="button"
+            onClick={() => submitQuestion(query)}
+            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 active:scale-90 transition-all"
+            aria-label="Send to Emmaus"
+          >
+            <SendHorizontal size={15} strokeWidth={2} aria-hidden="true" />
           </button>
         )}
       </div>

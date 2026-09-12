@@ -51,6 +51,8 @@ export interface EmmausComposerProps {
   /** Pass true while a streaming request is in flight */
   isLoading?: boolean;
   autoFocus?: boolean;
+  /** Compact one-line presentation that grows only when the message needs it. */
+  compact?: boolean;
   'aria-label'?: string;
 }
 
@@ -63,6 +65,7 @@ export function EmmausComposer({
   disabled = false,
   isLoading = false,
   autoFocus = false,
+  compact = false,
   'aria-label': ariaLabel,
 }: EmmausComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -191,21 +194,22 @@ export function EmmausComposer({
         aria-label={ariaLabel}
         rows={1}
         className={cn(
-          'w-full resize-none rounded-xl border border-input bg-background',
-          'px-3 pt-[13px] text-[16px] leading-relaxed text-foreground shadow-sm',
+          'w-full resize-none border border-input bg-background text-[16px] leading-relaxed text-foreground shadow-sm',
           'placeholder:text-muted-foreground',
           'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40',
           'disabled:cursor-not-allowed disabled:opacity-50',
-          // min-h matches one row; max-h caps growth; overflow scrolls internally
-          'min-h-[52px] max-h-[160px] overflow-y-auto',
-          // Right padding accounts for mic + send buttons; bottom for both
           textareaPrClass,
-          'pb-10',
+          compact
+            ? 'min-h-[52px] max-h-[120px] overflow-y-auto rounded-full px-4 py-[13px]'
+            : 'min-h-[52px] max-h-[160px] overflow-y-auto rounded-xl px-3 pt-[13px] pb-10',
         )}
       />
 
       {/* Button cluster — absolutely positioned inside the textarea's bottom-right */}
-      <div className="absolute bottom-1.5 right-1.5 flex items-center gap-0.5">
+      <div className={cn(
+        'absolute right-1.5 flex items-center gap-0.5',
+        compact ? 'top-1/2 -translate-y-1/2' : 'bottom-1.5',
+      )}>
         {/* Mic button — hidden when SpeechRecognition is unsupported */}
         {micSupported && (
           <button
