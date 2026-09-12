@@ -69,4 +69,15 @@ describe('DailyRemindersSettings native Android path', () => {
       expect(native.setTime).toHaveBeenCalledWith({ time: '08:15' });
     });
   });
+
+  it('keeps Settings usable when the native status probe rejects', async () => {
+    native.status.mockRejectedValueOnce(new Error('status bridge unavailable'));
+
+    render(<DailyRemindersSettings />);
+
+    await waitFor(() => expect(native.status).toHaveBeenCalledOnce());
+    expect(screen.getByText('Off')).toBeInTheDocument();
+    expect(screen.getByTestId('toggle-notifications')).toBeEnabled();
+    expect(screen.getByLabelText('Daily time')).toBeInTheDocument();
+  });
 });

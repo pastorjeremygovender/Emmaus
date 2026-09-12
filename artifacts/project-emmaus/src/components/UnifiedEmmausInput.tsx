@@ -128,6 +128,8 @@ interface UnifiedEmmausInputProps {
   className?: string;
   /** Called when the input becomes active (query typed) or inactive (cleared). */
   onActiveChange?: (isActive: boolean) => void;
+  /** Called when this input has focus and the visual viewport is reduced by the keyboard. */
+  onKeyboardStateChange?: (isOpen: boolean) => void;
   /**
    * When true the bar is a styled launcher button — same visual appearance but
    * tapping the bar opens the Ask Emmaus home page instead of typing inline.
@@ -138,7 +140,13 @@ interface UnifiedEmmausInputProps {
   conversationOnly?: boolean;
 }
 
-export function UnifiedEmmausInput({ className, onActiveChange, launchOnly, conversationOnly }: UnifiedEmmausInputProps) {
+export function UnifiedEmmausInput({
+  className,
+  onActiveChange,
+  onKeyboardStateChange,
+  launchOnly,
+  conversationOnly,
+}: UnifiedEmmausInputProps) {
   const [location, navigate] = useLocation();
   const { user } = useAuth();
   const voiceEnabled = useVoiceEnabled(user?.id);
@@ -149,9 +157,11 @@ export function UnifiedEmmausInput({ className, onActiveChange, launchOnly, conv
   const [results, setResults]       = useState<GroupedResults | null>(null);
   const [loading, setLoading]       = useState(false);
   const [isFocused, setIsFocused]   = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const inputRef                    = useRef<HTMLInputElement>(null);
   const containerRef                = useRef<HTMLDivElement>(null);
   const timerRef                    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const keyboardBaselineRef         = useRef<number | null>(null);
 
   const intent   = detectIntent(query);
   const hasQuery = query.trim().length >= 2;
@@ -159,6 +169,50 @@ export function UnifiedEmmausInput({ className, onActiveChange, launchOnly, conv
 
   // Notify parent when active state changes
   useEffect(() => { onActiveChange?.(isActive); }, [isActive, onActiveChange]);
+  useEffect(() => { onKeyboardStateChange?.(keyboardOpen); }, [keyboardOpen, onKeyboardStateChange]);
+
+  const updateKeyboardState = useCallback(() => {
+    const input = inputRef.current;
+    if (!input) return;
+
+    const visualViewport = window.visualViewport;
+    const currentHeight = visualViewport?.height ?? window.innerHeight;
+    const observedHeight = Math.max(window.innerHeight, currentHeight);
+    if (
+      keyboardBaselineRef.current === null ||
+      observedHeight > keyboardBaselineRef.current
+    ) {
+      keyboardBaselineRef.current = observedHeight;
+    }
+
+    const baselineHeight = keyboardBaselineRef.current ?? observedHeight;
+    const viewportReduced =
+      baselineHeight - currentHeight >= 100 ||
+      currentHeight <= baselineHeight * 0.8;
+    const nextOpen = document.activeElement === input && viewportReduced;
+    setKeyboardOpen((previous) => previous === nextOpen ? previous : nextOpen);
+  }, []);
+
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    const visualViewport = window.visualViewport;
+
+    input.addEventListener('focus', updateKeyboardState);
+    input.addEventListener('blur', updateKeyboardState);
+    window.addEventListener('resize', updateKeyboardState);
+    visualViewport?.addEventListener('resize', updateKeyboardState);
+    visualViewport?.addEventListener('scroll', updateKeyboardState);
+    updateKeyboardState();
+
+    return () => {
+      input.removeEventListener('focus', updateKeyboardState);
+      input.removeEventListener('blur', updateKeyboardState);
+      window.removeEventListener('resize', updateKeyboardState);
+      visualViewport?.removeEventListener('resize', updateKeyboardState);
+      visualViewport?.removeEventListener('scroll', updateKeyboardState);
+    };
+  }, [updateKeyboardState]);
 
   // Live search (debounced 350ms) — only fires for search intent
   useEffect(() => {
@@ -311,9 +365,13 @@ export function UnifiedEmmausInput({ className, onActiveChange, launchOnly, conv
           placeholder="Ask Emmaus anything, or search…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => setIsFocused(true)}
+           onFocus={() => {
+             setIsFocused(true);
+             updateKeyboardState();
+           }}
+           onBlur={updateKeyboardState}
           onKeyDown={handleKeyDown}
-          className="flex-1 bg-transparent text-[14px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none min-w-0"
+           className="flex-1 min-w-0 scroll-mb-4 bg-transparent text-[14px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
           aria-label="Ask Emmaus or search"
           autoComplete="off"
         />

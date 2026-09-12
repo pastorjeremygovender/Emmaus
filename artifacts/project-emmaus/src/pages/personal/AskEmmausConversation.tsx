@@ -126,14 +126,36 @@ function useVisualViewportHeight(ref: RefObject<HTMLElement | null>) {
 }
 
 function scrollConversationToBottom(main: HTMLElement, behavior: ScrollBehavior) {
+  const top = Math.max(0, main.scrollHeight - main.clientHeight);
   if (typeof main.scrollTo === 'function') {
-    main.scrollTo({ top: main.scrollHeight, behavior });
+    main.scrollTo({ top, behavior });
   } else {
     // jsdom and a few embedded WebViews do not expose Element.scrollTo.
     // Updating scrollTop preserves the same intent without breaking the
     // conversation surface or its tests.
-    main.scrollTop = main.scrollHeight;
+    main.scrollTop = top;
   }
+}
+
+const STREAM_FOLLOW_INTERVAL_MS = 120;
+
+function scheduleAnimationFrame(callback: () => void): number {
+  if (typeof window.requestAnimationFrame === 'function') {
+    return window.requestAnimationFrame(callback);
+  }
+  return window.setTimeout(callback, 0);
+}
+
+function cancelScheduledAnimationFrame(id: number) {
+  if (typeof window.cancelAnimationFrame === 'function') {
+    window.cancelAnimationFrame(id);
+  } else {
+    window.clearTimeout(id);
+  }
+}
+
+function now() {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
 }
 
 // ─── Helper: parse paragraphs ─────────────────────────────────────────────────
@@ -179,7 +201,13 @@ export default function AskEmmausConversation() {
   const streamingMsgRef = useRef<HTMLDivElement>(null);
   const streamingIdRef = useRef<string | null>(null);
   const userScrolledAwayRef = useRef(false);
-  const autoScrollRef = useRef(false);
+  const isStreamingRef = useRef(false);
+  const followStreamingRef = useRef(false);
+  const initialScrollPendingRef = useRef(false);
+  const initialScrollFrameRef = useRef<number | null>(null);
+  const followScrollFrameRef = useRef<number | null>(null);
+  const followScrollTimerRef = useRef<number | null>(null);
+  const lastFollowAtRef = useRef(0);
 
   // Keep the outer container height equal to the visual viewport (keyboard-aware)
   useVisualViewportHeight(rootRef);
@@ -192,51 +220,82 @@ export default function AskEmmausConversation() {
     const main = mainRef.current;
     if (!main) return;
     const onScroll = () => {
-      if (autoScrollRef.current) return;
       const distance = main.scrollHeight - main.scrollTop - main.clientHeight;
-      if (distance > 96) userScrolledAwayRef.current = true;
-      else if (distance <= 24) userScrolledAwayRef.current = false;
+      if (distance > 96) {
+        userScrolledAwayRef.current = true;
+        followStreamingRef.current = false;
+        if (followScrollTimerRef.current !== null) {
+          window.clearTimeout(followScrollTimerRef.current);
+          followScrollTimerRef.current = null;
+        }
+      } else if (distance <= 24) {
+        userScrolledAwayRef.current = false;
+        if (isStreamingRef.current) followStreamingRef.current = true;
+      }
     };
-    // Pointer intent must win over an in-flight smooth scroll. Do not wait for
-    // the next scroll event, otherwise one more streamed chunk can fight the
-    // member's upward gesture.
-    const onUserIntent = () => { userScrolledAwayRef.current = true; };
     main.addEventListener('scroll', onScroll, { passive: true });
-    main.addEventListener('wheel', onUserIntent, { passive: true });
-    main.addEventListener('touchstart', onUserIntent, { passive: true });
     return () => {
       main.removeEventListener('scroll', onScroll);
-      main.removeEventListener('wheel', onUserIntent);
-      main.removeEventListener('touchstart', onUserIntent);
     };
   }, []);
 
   useEffect(() => {
     if (!isStreaming) return;
-    userScrolledAwayRef.current = false;
-    const timer = setTimeout(() => {
+    initialScrollFrameRef.current = scheduleAnimationFrame(() => {
+      initialScrollFrameRef.current = null;
+      initialScrollPendingRef.current = false;
       const main = mainRef.current;
-      if (!main || userScrolledAwayRef.current) return;
-      autoScrollRef.current = true;
-      scrollConversationToBottom(
-        main,
-        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
-      );
-      window.setTimeout(() => { autoScrollRef.current = false; }, 80);
-    }, 0);
-    return () => clearTimeout(timer);
+      if (!main || !followStreamingRef.current || userScrolledAwayRef.current) return;
+      scrollConversationToBottom(main, 'auto');
+      lastFollowAtRef.current = now();
+    });
+    return () => {
+      if (initialScrollFrameRef.current !== null) {
+        cancelScheduledAnimationFrame(initialScrollFrameRef.current);
+        initialScrollFrameRef.current = null;
+      }
+    };
   }, [isStreaming]);
 
   useEffect(() => {
-    const main = mainRef.current;
-    if (!main || !isStreaming || userScrolledAwayRef.current) return;
-    const distance = main.scrollHeight - main.scrollTop - main.clientHeight;
-    if (distance <= 120) {
-      autoScrollRef.current = true;
-      scrollConversationToBottom(main, 'auto');
-      window.setTimeout(() => { autoScrollRef.current = false; }, 40);
-    }
+    if (!isStreaming || !followStreamingRef.current || initialScrollPendingRef.current) return;
+    if (
+      followScrollFrameRef.current !== null ||
+      followScrollTimerRef.current !== null
+    ) return;
+
+    const delay = Math.max(
+      0,
+      STREAM_FOLLOW_INTERVAL_MS - (now() - lastFollowAtRef.current),
+    );
+    followScrollTimerRef.current = window.setTimeout(() => {
+      followScrollTimerRef.current = null;
+      followScrollFrameRef.current = scheduleAnimationFrame(() => {
+        followScrollFrameRef.current = null;
+        if (
+          !isStreamingRef.current ||
+          !followStreamingRef.current ||
+          userScrolledAwayRef.current
+        ) return;
+        const main = mainRef.current;
+        if (!main) return;
+        scrollConversationToBottom(main, 'auto');
+        lastFollowAtRef.current = now();
+      });
+    }, delay);
   }, [messages, isStreaming]);
+
+  useEffect(() => () => {
+    if (initialScrollFrameRef.current !== null) {
+      cancelScheduledAnimationFrame(initialScrollFrameRef.current);
+    }
+    if (followScrollFrameRef.current !== null) {
+      cancelScheduledAnimationFrame(followScrollFrameRef.current);
+    }
+    if (followScrollTimerRef.current !== null) {
+      window.clearTimeout(followScrollTimerRef.current);
+    }
+  }, []);
 
   // ─── Stream a response ──────────────────────────────────────────────────────
 
@@ -254,6 +313,11 @@ export default function AskEmmausConversation() {
       setRetrievalFailure(null);
       const streamingMsgId = `streaming-${Date.now()}`;
       streamingIdRef.current = streamingMsgId;
+       isStreamingRef.current = true;
+       followStreamingRef.current = true;
+       userScrolledAwayRef.current = false;
+       initialScrollPendingRef.current = true;
+       lastFollowAtRef.current = 0;
       setIsStreaming(true);
 
       // Add empty streaming placeholder
@@ -300,6 +364,8 @@ export default function AskEmmausConversation() {
       };
 
       const finishStream = (payload: SseDoneEvent) => {
+        isStreamingRef.current = false;
+        followStreamingRef.current = false;
         setIsStreaming(false);
         setConversationId(payload.conversationId);
         // Update URL to include the conversationId (replace history entry)
@@ -384,6 +450,8 @@ export default function AskEmmausConversation() {
           if (drainTimer !== null) clearTimeout(drainTimer);
           drainTimer = null;
           pendingText = '';
+          isStreamingRef.current = false;
+          followStreamingRef.current = false;
           setIsStreaming(false);
           setMessages((prev) =>
             prev.map((m) =>
@@ -564,7 +632,8 @@ export default function AskEmmausConversation() {
       {/* Conversation */}
       <main
         ref={mainRef}
-        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-6 pb-28 max-w-[560px] mx-auto w-full space-y-8"
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-6 pb-28 max-w-[560px] mx-auto w-full space-y-8"
+          style={{ overflowAnchor: 'none' }}
         aria-live="polite"
         aria-label="Conversation"
       >

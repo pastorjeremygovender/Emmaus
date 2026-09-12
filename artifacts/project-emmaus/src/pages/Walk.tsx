@@ -249,6 +249,7 @@ export default function Walk() {
   const { getMyRooms, loadRooms } = useRooms();
   const [, setLocation] = useLocation();
   const [discoverMoreAtBottom, setDiscoverMoreAtBottom] = useState(false);
+  const [askKeyboardOpen, setAskKeyboardOpen] = useState(false);
 
   useEffect(() => {
     const updateBottomState = () => {
@@ -662,7 +663,10 @@ export default function Walk() {
         </header>
 
         {/* ── Ask Emmaus / Search ───────────────────────────────────────────── */}
-        <UnifiedEmmausInput conversationOnly />
+        <UnifiedEmmausInput
+          conversationOnly
+          onKeyboardStateChange={setAskKeyboardOpen}
+        />
 
         {/* ── 1. Start Here — Daily Rhythm only ─────────────────────────────── */}
         {coreJourney ? (
@@ -942,31 +946,33 @@ export default function Walk() {
         })()}
 
         {/* ── Discover More ─────────────────────────────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.13 }}
-          className="relative h-16"
-        >
-          <button
-            type="button"
-            onClick={() => setLocation('/journeys')}
-            className={cn(
-              'flex items-center justify-center gap-2.5 rounded-full border border-border bg-card px-4 py-3 text-[14px] text-muted-foreground/50 shadow-sm transition-all hover:border-primary/25 hover:shadow-md',
-              discoverMoreAtBottom
-                ? 'absolute inset-x-0 top-0 w-full'
-                : 'fixed bottom-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)] left-1/2 z-40 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2',
-            )}
-            aria-label="Discover More"
+        {!askKeyboardOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.13 }}
+            className="relative h-16"
           >
-            <Compass size={15} className="shrink-0 text-muted-foreground/50" strokeWidth={1.8} />
-            Discover More
-          </button>
-        </motion.div>
+            <button
+              type="button"
+              onClick={() => setLocation('/journeys')}
+              className={cn(
+                'flex items-center justify-center gap-2.5 rounded-full border border-border bg-card px-4 py-3 text-[14px] text-muted-foreground/50 shadow-sm transition-all hover:border-primary/25 hover:shadow-md',
+                discoverMoreAtBottom
+                  ? 'absolute inset-x-0 top-0 w-full'
+                  : 'fixed bottom-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)] left-1/2 z-40 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2',
+              )}
+              aria-label="Discover More"
+            >
+              <Compass size={15} className="shrink-0 text-muted-foreground/50" strokeWidth={1.8} />
+              Discover More
+            </button>
+          </motion.div>
+        )}
 
       </main>
 
-      <BottomNav />
+      {!askKeyboardOpen && <BottomNav />}
 
     </div>
   );

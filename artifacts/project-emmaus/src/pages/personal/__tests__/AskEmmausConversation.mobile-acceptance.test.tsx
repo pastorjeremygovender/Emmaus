@@ -1,9 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const mocks = vi.hoisted(() => ({
   setLocation: vi.fn(),
   startConversation: vi.fn(),
+  streamCallbacks: null as any,
   takePendingMessage: vi.fn(() => ({
     message: 'Open the walk please',
     context: { entryPoint: 'walk' as const, journeyId: 'walk-b', currentDay: 2 },
@@ -81,7 +82,9 @@ import AskEmmausConversation from '../AskEmmausConversation';
 describe('Ask Emmaus authenticated mobile acceptance', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.streamCallbacks = null;
     mocks.startConversation.mockImplementation(({ callbacks }) => {
+      mocks.streamCallbacks = callbacks;
       callbacks.onDone({
         type: 'done',
         conversationId: 'conversation-1',
@@ -134,5 +137,82 @@ describe('Ask Emmaus authenticated mobile acceptance', () => {
     expect(root.className).not.toContain('pb-16');
     expect(main.className).toContain('pb-28');
     expect(container.querySelector('[aria-label="Bottom navigation"]')).toBeInTheDocument();
+  });
+
+  it('does not scroll for every streamed chunk and disengages immediately after upward scrolling', async () => {
+    vi.useFakeTimers();
+    mocks.startConversation.mockImplementation(({ callbacks }) => {
+      mocks.streamCallbacks = callbacks;
+    });
+
+    try {
+      const { container } = render(<AskEmmausConversation />);
+      const main = container.querySelector('main') as HTMLElement;
+      const scrollTo = vi.fn(({ top }: { top: number }) => {
+        main.scrollTop = top;
+      });
+      Object.defineProperties(main, {
+        clientHeight: { configurable: true, value: 600 },
+        scrollHeight: { configurable: true, writable: true, value: 1000 },
+        scrollTop: { configurable: true, writable: true, value: 0 },
+      });
+      Object.defineProperty(main, 'scrollTo', {
+        configurable: true,
+        value: scrollTo,
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(mocks.streamCallbacks).not.toBeNull();
+      await act(async () => {
+        vi.advanceTimersByTime(20);
+      });
+      const initialScrolls = scrollTo.mock.calls.length;
+      expect(initialScrolls).toBe(1);
+
+      await act(async () => {
+        mocks.streamCallbacks.onText('first chunk');
+        mocks.streamCallbacks.onText('second chunk');
+        mocks.streamCallbacks.onText('third chunk');
+        vi.advanceTimersByTime(30);
+      });
+      expect(scrollTo.mock.calls.length - initialScrolls).toBeLessThan(3);
+
+      main.scrollTop = 80;
+      fireEvent.scroll(main);
+      const scrollsAfterUpwardGesture = scrollTo.mock.calls.length;
+
+      await act(async () => {
+        mocks.streamCallbacks.onText('content after the member scrolled up');
+        vi.advanceTimersByTime(500);
+      });
+      expect(scrollTo).toHaveBeenCalledTimes(scrollsAfterUpwardGesture);
+
+      await act(async () => {
+        mocks.streamCallbacks.onDone({
+          type: 'done',
+          conversationId: 'conversation-1',
+          messageId: 'message-1',
+          promptVersion: 'test',
+          metadata: {
+            answer: 'A completed answer.',
+            displayAnswer: 'A completed answer.',
+            nextStep: null,
+            retrievalFailures: [],
+            handoffType: null,
+            resourceActions: [],
+            capabilityActions: [],
+            recommendations: [],
+            followUpPrompts: [],
+            jarvis: null,
+          },
+        });
+        vi.advanceTimersByTime(50);
+      });
+      expect(main.scrollTop).toBe(80);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

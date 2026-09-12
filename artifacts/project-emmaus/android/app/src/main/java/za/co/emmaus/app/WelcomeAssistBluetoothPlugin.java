@@ -53,27 +53,33 @@ public final class WelcomeAssistBluetoothPlugin extends Plugin {
 
     @PluginMethod
     public void status(PluginCall call) {
-        BluetoothAdapter adapter = adapter();
-        JSObject result = new JSObject();
-        boolean supported = adapter != null;
-        boolean scanGranted = hasScanPermission();
-        boolean connectGranted = hasConnectPermission();
-        boolean permissionsGranted = scanGranted && connectGranted;
-        boolean enabled = supported && permissionsGranted && adapter.isEnabled();
-        result.put("supported", supported);
-        result.put("enabled", enabled);
-        String permission = permissionsGranted ? "granted" : "prompt";
-        result.put("permission", permission);
-        result.put(
-            "state",
-            !supported ? "unsupported"
-                : !permissionsGranted ? "permission-needed"
-                : !enabled ? "off"
-                : "ready"
-        );
-        result.put("scanning", activeCallback != null);
-        result.put("automaticScanning", false);
-        call.resolve(result);
+        try {
+            boolean scanGranted = hasScanPermission();
+            boolean connectGranted = hasConnectPermission();
+            boolean permissionsGranted = scanGranted && connectGranted;
+            boolean supported = hasBluetoothFeature();
+            boolean enabled = false;
+
+            // Android 12+ protects getAdapter/isEnabled with BLUETOOTH_CONNECT.
+            // Do not touch the adapter until both permissions are granted.
+            BluetoothAdapter adapter = permissionsGranted || Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+                ? adapter()
+                : null;
+            supported = supported || adapter != null;
+            enabled = supported && permissionsGranted && adapter != null && adapter.isEnabled();
+            call.resolve(statusObject(
+                supported,
+                enabled,
+                bluetoothPermission(scanGranted, connectGranted),
+                activeCallback != null
+            ));
+        } catch (SecurityException ignored) {
+            // A status probe is observational; permission-needed is a safe
+            // result and must never tear down the hosting Activity.
+            call.resolve(statusObject(hasBluetoothFeature(), false, "denied", activeCallback != null));
+        } catch (RuntimeException ignored) {
+            call.resolve(statusObject(hasBluetoothFeature(), false, "prompt", activeCallback != null));
+        }
     }
 
     @PluginMethod
@@ -212,6 +218,41 @@ public final class WelcomeAssistBluetoothPlugin extends Plugin {
         BluetoothManager manager = (BluetoothManager) getContext()
             .getSystemService(Context.BLUETOOTH_SERVICE);
         return manager == null ? null : manager.getAdapter();
+    }
+
+    private boolean hasBluetoothFeature() {
+        try {
+            return getContext().getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE);
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private String bluetoothPermission(boolean scanGranted, boolean connectGranted) {
+        if (scanGranted && connectGranted) return "granted";
+        try {
+            PermissionState scan = getPermissionState("nearbyDevices");
+            return scan == PermissionState.DENIED ? "denied" : "prompt";
+        } catch (RuntimeException ignored) {
+            return "prompt";
+        }
+    }
+
+    static JSObject statusObject(boolean supported, boolean enabled, String permission, boolean scanning) {
+        JSObject result = new JSObject();
+        result.put("supported", supported);
+        result.put("enabled", enabled);
+        result.put("permission", permission);
+        result.put(
+            "state",
+            !supported ? "unsupported"
+                : !"granted".equals(permission) ? "permission-needed"
+                : !enabled ? "off"
+                : "ready"
+        );
+        result.put("scanning", scanning);
+        result.put("automaticScanning", false);
+        return result;
     }
 
     private boolean hasScanPermission() {

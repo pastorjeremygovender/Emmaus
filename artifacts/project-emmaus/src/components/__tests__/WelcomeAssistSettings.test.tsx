@@ -66,4 +66,14 @@ describe('WelcomeAssistSettings native states', () => {
     });
     expect(screen.getByText(/no route is tracked and no coordinates are shown or sent/i)).toBeInTheDocument();
   });
+
+  it('keeps both optional tests available when the Bluetooth status probe rejects', async () => {
+    native.bluetooth.status.mockRejectedValueOnce(new Error('Bluetooth status unavailable'));
+
+    render(<WelcomeAssistSettings />);
+
+    await waitFor(() => expect(native.bluetooth.status).toHaveBeenCalledOnce());
+    expect(screen.getByRole('button', { name: /test location detection/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /check bluetooth readiness/i })).toBeInTheDocument();
+  });
 });

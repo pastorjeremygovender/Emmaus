@@ -22,12 +22,17 @@ import org.json.JSONObject;
 public final class GeofenceProofPlugin extends Plugin {
     @PluginMethod
     public void welcomeAssistStatus(PluginCall call) {
-        boolean location = ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                || ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
-        LocationManager manager = (LocationManager) getContext().getSystemService(android.content.Context.LOCATION_SERVICE);
         JSObject result = new JSObject();
-        result.put("permission", location ? "granted" : "needed");
-        result.put("locationEnabled", manager != null && (Build.VERSION.SDK_INT < 28 || manager.isLocationEnabled()));
+        try {
+            boolean location = ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                    || ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+            LocationManager manager = (LocationManager) getContext().getSystemService(android.content.Context.LOCATION_SERVICE);
+            result.put("permission", location ? "granted" : "needed");
+            result.put("locationEnabled", manager != null && (Build.VERSION.SDK_INT < 28 || manager.isLocationEnabled()));
+        } catch (RuntimeException error) {
+            result.put("permission", "needed");
+            result.put("locationEnabled", false);
+        }
         result.put("tracking", false);
         result.put("privacy", "Location is used only for an optional one-time Welcome Assist test and is not sent.");
         call.resolve(result);

@@ -78,8 +78,29 @@ vi.mock('@/lib/dev-mode', () => ({
   isDevelopmentMode: () => false,
 }));
 
-vi.mock('@/components/BottomNav', () => ({ BottomNav: () => null }));
-vi.mock('@/components/UnifiedEmmausInput', () => ({ UnifiedEmmausInput: () => null }));
+vi.mock('@/components/BottomNav', () => ({
+  BottomNav: () => <nav aria-label="Bottom navigation" />,
+}));
+vi.mock('@/components/UnifiedEmmausInput', () => ({
+  UnifiedEmmausInput: ({
+    onKeyboardStateChange,
+  }: {
+    onKeyboardStateChange?: (open: boolean) => void;
+  }) => {
+    const [open, setOpen] = React.useState(false);
+    return (
+      <button
+        type="button"
+        aria-label="Mock Ask Emmaus input"
+        onClick={() => {
+          const next = !open;
+          setOpen(next);
+          onKeyboardStateChange?.(next);
+        }}
+      />
+    );
+  },
+}));
 vi.mock('@/components/MemberHeaderActions', () => ({ MemberHeaderActions: () => null }));
 vi.mock('@/components/DevModeBanner', () => ({ DevModeBanner: () => null }));
 
@@ -101,5 +122,21 @@ describe("Walk — My Groups dismissal", () => {
 
     expect(screen.queryByText('Tuesday Bible Group')).not.toBeInTheDocument();
     expect(mocks.setLocation).not.toHaveBeenCalled();
+  });
+
+  it('hides the floating controls while the inline input owns the keyboard viewport', () => {
+    render(<Walk />);
+
+    expect(screen.getByRole('button', { name: 'Discover More' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Bottom navigation' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock Ask Emmaus input' }));
+
+    expect(screen.queryByRole('button', { name: 'Discover More' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Bottom navigation' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock Ask Emmaus input' }));
+    expect(screen.getByRole('button', { name: 'Discover More' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Bottom navigation' })).toBeInTheDocument();
   });
 });

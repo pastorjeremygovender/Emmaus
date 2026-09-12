@@ -28,13 +28,18 @@ public final class DailyReminderPlugin extends Plugin {
     private static final int ALARM = 9100;
 
     @PluginMethod public void status(PluginCall call) {
-        SharedPreferences prefs = prefs(getContext());
-        JSObject result = new JSObject();
-        result.put("enabled", prefs.getBoolean(ENABLED, false));
-        result.put("time", format(prefs.getInt(MINUTE, 540)));
-        result.put("permission", permissionState());
-        result.put("supported", true);
-        call.resolve(result);
+        try {
+            call.resolve(statusObject());
+        } catch (RuntimeException error) {
+            // Settings must remain renderable even if an Android permission or
+            // preference provider is temporarily unavailable.
+            JSObject fallback = new JSObject();
+            fallback.put("enabled", false);
+            fallback.put("time", "09:00");
+            fallback.put("permission", "prompt");
+            fallback.put("supported", true);
+            call.resolve(fallback);
+        }
     }
 
     @PluginMethod public void enable(PluginCall call) {
@@ -97,11 +102,24 @@ public final class DailyReminderPlugin extends Plugin {
     private static void cancel(Context c) { AlarmManager a=(AlarmManager)c.getSystemService(Context.ALARM_SERVICE); if(a!=null)a.cancel(pending(c)); }
     private static PendingIntent pending(Context c) { return PendingIntent.getBroadcast(c, ALARM, new Intent(c, DailyReminderReceiver.class), PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0)); }
     private static SharedPreferences prefs(Context c) { return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE); }
+    private JSObject statusObject() {
+        SharedPreferences preferences = prefs(getContext());
+        JSObject result = new JSObject();
+        result.put("enabled", preferences.getBoolean(ENABLED, false));
+        result.put("time", format(preferences.getInt(MINUTE, 540)));
+        result.put("permission", permissionState());
+        result.put("supported", true);
+        return result;
+    }
+
     private String permissionState() {
         if (Build.VERSION.SDK_INT < 33) return "granted";
-        PermissionState state = getPermissionState("notifications");
-        return state == PermissionState.GRANTED ? "granted" : state == PermissionState.PROMPT ? "prompt" : "denied";
+        try {
+            PermissionState state = getPermissionState("notifications");
+            return state == PermissionState.GRANTED ? "granted" : state == PermissionState.PROMPT ? "prompt" : "denied";
+        } catch (RuntimeException error) {
+            return "prompt";
+        }
     }
-    private JSObject statusObject() { JSObject o=new JSObject(); o.put("enabled",isEnabled(getContext())); o.put("time",format(prefs(getContext()).getInt(MINUTE,540))); o.put("permission",permissionState()); o.put("supported",true); return o; }
     private static String format(int minute) { return String.format(java.util.Locale.US, "%02d:%02d", minute/60, minute%60); }
 }

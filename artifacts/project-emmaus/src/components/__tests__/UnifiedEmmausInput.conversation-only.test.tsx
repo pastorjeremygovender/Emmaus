@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -50,6 +50,10 @@ vi.mock('@/lib/voice-audio-unlock', () => ({
 import { UnifiedEmmausInput } from '../UnifiedEmmausInput';
 
 describe('UnifiedEmmausInput conversation-only', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('submits directly with the current screen context rather than opening a launcher', () => {
     render(<UnifiedEmmausInput conversationOnly />);
     const input = screen.getByRole('textbox', { name: 'Ask Emmaus or search' });
@@ -63,5 +67,65 @@ describe('UnifiedEmmausInput conversation-only', () => {
     );
     expect(mocks.navigate).toHaveBeenCalledWith('/personal/ask-emmaus/conversation');
     expect(screen.queryByRole('button', { name: 'Ask Emmaus anything' })).not.toBeInTheDocument();
+  });
+
+  it('reports the Android keyboard only while focused in a reduced visual viewport', () => {
+    const onKeyboardStateChange = vi.fn();
+    const originalInnerWidth = window.innerWidth;
+    const originalInnerHeight = window.innerHeight;
+    const originalVisualViewport = window.visualViewport;
+    const viewportListeners: Record<string, EventListener> = {};
+    const visualViewport = {
+      height: 800,
+      addEventListener: vi.fn((type: string, listener: EventListener) => {
+        viewportListeners[type] = listener;
+      }),
+      removeEventListener: vi.fn(),
+    } as unknown as VisualViewport;
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 360 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: visualViewport,
+    });
+
+    try {
+      render(
+        <UnifiedEmmausInput
+          conversationOnly
+          onKeyboardStateChange={onKeyboardStateChange}
+        />,
+      );
+      const input = screen.getByRole('textbox', { name: 'Ask Emmaus or search' });
+
+      act(() => input.focus());
+      expect(onKeyboardStateChange).toHaveBeenLastCalledWith(false);
+
+      act(() => {
+        Object.defineProperty(visualViewport, 'height', {
+          configurable: true,
+          value: 420,
+        });
+        viewportListeners.resize?.(new Event('resize'));
+      });
+      expect(onKeyboardStateChange).toHaveBeenLastCalledWith(true);
+
+      act(() => input.blur());
+      expect(onKeyboardStateChange).toHaveBeenLastCalledWith(false);
+    } finally {
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        value: originalInnerWidth,
+      });
+      Object.defineProperty(window, 'innerHeight', {
+        configurable: true,
+        value: originalInnerHeight,
+      });
+      Object.defineProperty(window, 'visualViewport', {
+        configurable: true,
+        value: originalVisualViewport,
+      });
+    }
   });
 });
