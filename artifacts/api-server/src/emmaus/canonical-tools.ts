@@ -1089,6 +1089,115 @@ function metadataForFocusedCandidate(
   return metadata;
 }
 
+function collectVerifiedFocusCandidates(
+  metadata: EmmausResponseMetadata,
+  requestedType?: string,
+): NonNullable<EmmausResponseMetadata["conversationFocus"]>["candidates"] {
+  const candidates = new Map<string, NonNullable<EmmausResponseMetadata["conversationFocus"]>["candidates"][number]>();
+  const add = (candidate: NonNullable<EmmausResponseMetadata["conversationFocus"]>["candidates"][number]) => {
+    if (!safeStoredRoute(candidate.route)) return;
+    if (requestedType && candidate.resourceType !== requestedType) return;
+    candidates.set(`${candidate.resourceType}:${candidate.resourceId}:${candidate.route}`, candidate);
+  };
+
+  for (const candidate of metadata.conversationFocus?.candidates ?? []) add(candidate);
+  for (const sermon of metadata.sermonRecommendations ?? []) {
+    if (sermon.openPath) add({
+      resourceType: "sermon",
+      resourceId: sermon.sermonId,
+      title: sermon.title,
+      route: sermon.openPath,
+    });
+  }
+  for (const recommendation of metadata.recommendations ?? []) {
+    const id = recommendation.resourceId ?? recommendation.sermonId;
+    if (!id || !recommendation.path) continue;
+    add({
+      resourceType: recommendation.type as NonNullable<EmmausResponseMetadata["conversationFocus"]>["resourceType"],
+      resourceId: id,
+      title: recommendation.title,
+      route: recommendation.path,
+      ...(recommendation.parentId ? { parentId: recommendation.parentId } : {}),
+    });
+  }
+  for (const action of metadata.resourceActions ?? []) {
+    const recommendation = (metadata.recommendations ?? []).find((item) =>
+      item.path === action.route
+      || item.resourceId === action.resourceId
+      || item.sermonId === action.resourceId
+    );
+    const sermon = (metadata.sermonRecommendations ?? []).find((item) =>
+      item.sermonId === action.resourceId || item.openPath === action.route
+    );
+    add({
+      resourceType: action.resourceType,
+      resourceId: action.resourceId,
+      title: recommendation?.title ?? sermon?.title ?? metadata.nextStep?.primaryButtonText?.replace(/^(?:open|read|continue)\\s+/i, "") ?? "Emmaus resource",
+      route: action.route,
+      ...(action.parentId ? { parentId: action.parentId } : {}),
+    });
+  }
+  return [...candidates.values()];
+}
+
+async function resolveRelatedWalk(
+  previousMetadata: EmmausResponseMetadata,
+  userId: string,
+): Promise<EmmausResponseMetadata> {
+  const metadata = emptyMetadata();
+  const subject = collectVerifiedFocusCandidates(previousMetadata)[0]?.title
+    ?? previousMetadata.sermonRecommendations?.[0]?.title
+    ?? previousMetadata.recommendations?.[0]?.title;
+  if (!subject) {
+    metadata.answer = "What subject or sermon would you like me to find a related Walk for?";
+    return metadata;
+  }
+
+  const catalogue = await buildEmmausResourceCatalogue(subject, undefined, undefined, userId);
+  const walks = catalogue.resources
+    .filter((resource) => resource.type === "walk" && resource.relevance > 0)
+    .filter((resource, index, all) => all.findIndex((item) => item.resourceId === resource.resourceId) === index)
+    .slice(0, 3);
+  if (walks.length === 0) {
+    metadata.answer = `I couldn't find a published Walk that is clearly related to “${subject}”.`;
+    metadata.retrievalFailures = catalogue.sourceFailures;
+    return metadata;
+  }
+
+  metadata.answer = walks.length === 1
+    ? `Yes. “${walks[0].title}” is a published Walk related to “${subject}”.`
+    : `I found these published Walks related to “${subject}”: ${walks.map((walk) => `“${walk.title}”`).join(", ")}.`;
+  metadata.recommendations = walks.map((walk) => ({
+    type: "walk",
+    title: walk.title,
+    description: walk.description ?? walk.provenance,
+    resourceId: walk.resourceId,
+    path: walk.route,
+  }));
+  metadata.resourceActions = walks.map((walk) =>
+    actionForCapabilityResource("OPEN", "walk", walk.resourceId, walk.route)
+  );
+  metadata.resourceRecommendations = walks.map((walk) => ({
+    resourceType: "walk",
+    resourceId: walk.resourceId,
+    reason: `A published Walk matched to “${subject}”.`,
+  }));
+  metadata.conversationFocus = {
+    version: 1,
+    resourceType: "walk",
+    candidates: walks.map((walk) => ({
+      resourceType: "walk",
+      resourceId: walk.resourceId,
+      title: walk.title,
+      route: walk.route,
+    })),
+  };
+  metadata.followUpPrompts = walks.length === 1
+    ? ["Open the Walk"]
+    : walks.map((walk) => walk.title);
+  return metadata;
+}
+
 export async function resolveContextualFollowUp(
   message: string,
   previousMetadata?: EmmausResponseMetadata,
@@ -1098,6 +1207,7 @@ export async function resolveContextualFollowUp(
   if (!previousMetadata) return null;
   const value = message.toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, " ").trim();
   const focus = previousMetadata.conversationFocus;
+  const verifiedCandidates = collectVerifiedFocusCandidates(previousMetadata);
 
   // A short title is an answer to Jarvis's clarification, not a new pastoral
   // question. Resolve it only against the server-owned candidates carried in
@@ -1219,6 +1329,11 @@ export async function resolveContextualFollowUp(
     });
   }
 
+  if (/^(?:is|are) there (?:a|any) walks?(?: for| about| related to)? (?:this|it|that)(?: sermon)?[.!?]*$/.test(value)) {
+    if (!userId) return null;
+    return resolveRelatedWalk(previousMetadata, userId);
+  }
+
   const recommendationRecall = value.match(
     /^(?:open|show me|take me to)\s+(?:the\s+)?(?:(walk|journey|devotional|sermon)\s+)?(?:you\s+)?recommended(?:\s+(?:to me))?(?:\s+(?:yesterday|before|earlier|last time))?[.!?]*$/,
   );
@@ -1235,8 +1350,7 @@ export async function resolveContextualFollowUp(
         : "OPEN";
   const requestedResourceType = recommendationRecall?.[1] ?? followUp?.[2];
 
-  const focusedCandidates = (focus?.candidates ?? [])
-    .filter((candidate) => safeStoredRoute(candidate.route))
+  const focusedCandidates = verifiedCandidates
     .filter((candidate) => !requestedResourceType || candidate.resourceType === requestedResourceType);
   if (focusedCandidates.length === 1) {
     return metadataForFocusedCandidate(focusedCandidates[0]);
@@ -1262,10 +1376,16 @@ export async function resolveContextualFollowUp(
   if (resourceAction) {
     const metadata = emptyMetadata();
     const recommendation = (previousMetadata.recommendations ?? []).find((item) =>
-      item.resourceId === resourceAction.resourceId
+      (item.resourceId === resourceAction.resourceId || item.sermonId === resourceAction.resourceId || item.path === resourceAction.route)
       && (!resourceAction.parentId || item.parentId === resourceAction.parentId),
     );
-    const title = recommendation?.title ?? "that Emmaus resource";
+    const sermonRecommendation = (previousMetadata.sermonRecommendations ?? []).find((item) =>
+      item.sermonId === resourceAction.resourceId || item.openPath === resourceAction.route
+    );
+    const focusedCandidate = verifiedCandidates.find((item) =>
+      item.resourceId === resourceAction.resourceId || item.route === resourceAction.route
+    );
+    const title = recommendation?.title ?? sermonRecommendation?.title ?? focusedCandidate?.title ?? "that Emmaus resource";
     metadata.answer = `I can ${requestedKind === "CONTINUE" ? "continue" : requestedKind === "READ" ? "read" : "open"} “${title}”.`;
     metadata.recommendations = recommendation ? [recommendation] : [];
     metadata.resourceRecommendations = (previousMetadata.resourceRecommendations ?? []).filter((item) =>

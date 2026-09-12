@@ -317,10 +317,15 @@ export default function AskEmmausConversation() {
           setIsPastoralMode(true);
         }
         // Suggest memory if there is a next step worth remembering
+        const isNavigationOnly = Boolean(
+          payload.metadata.resourceActions?.some((action) => action.kind === 'OPEN')
+          || payload.metadata.capabilityActions?.some((action) => action.kind === 'OPEN')
+        );
         if (
           payload.metadata.nextStep &&
           payload.metadata.nextStep.action &&
-          !memoryDecided
+          !memoryDecided &&
+          !isNavigationOnly
         ) {
           setMemoryPrompt(payload.metadata.nextStep.action);
         }

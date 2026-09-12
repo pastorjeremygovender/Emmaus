@@ -542,4 +542,54 @@ describe("canonical Ask Emmaus tools", () => {
     assert.match(result?.answer ?? "", /Opening/);
   });
 
+  it("inherits a verified visible sermon card even when legacy metadata has no focus field", async () => {
+    const previous = {
+      scripture: null,
+      nextStep: null,
+      nextSteps: [],
+      recommendations: [],
+      sermonRecommendations: [{
+        sermonId: "prosper",
+        source: "canonical" as const,
+        title: "Prosper in the Famine",
+        speaker: "Pastor Jeremy",
+        sermonDate: "2026-01-01",
+        excerpt: "Isaac remained in the land.",
+        reason: "Verified sermon",
+        openPath: "/sermon/prosper",
+        listenAvailable: false,
+      }],
+      followUpPrompts: [],
+      handoffType: null,
+    };
+    const opened = await resolveContextualFollowUp("Open the sermon please", previous, "member-1");
+    assert.equal(opened?.resourceActions?.[0]?.route, "/sermon/prosper");
+    assert.match(opened?.answer ?? "", /Prosper in the Famine/);
+  });
+
+  it("keeps the verified title when an existing action is opened by pronoun", async () => {
+    const previous = {
+      scripture: null,
+      nextStep: null,
+      nextSteps: [],
+      recommendations: [{
+        type: "sermon" as const,
+        title: "It Starts With Me",
+        sermonId: "starts",
+        path: "/sermon/starts",
+      }],
+      resourceActions: [{
+        kind: "OPEN" as const,
+        resourceType: "sermon" as const,
+        resourceId: "starts",
+        route: "/sermon/starts",
+      }],
+      followUpPrompts: [],
+      handoffType: null,
+    };
+    const opened = await resolveContextualFollowUp("Open it please", previous, "member-1");
+    assert.equal(opened?.resourceActions?.[0]?.route, "/sermon/starts");
+    assert.match(opened?.answer ?? "", /It Starts With Me/);
+  });
+
 });
