@@ -108,7 +108,7 @@ export function MemberHeaderActions({ compact = false }: { compact?: boolean }) 
               It’s All About JESUS.
             </p>
             <p className="border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
-               Android test build · 1.2.0-rc7 · version code 9
+               Android test build · 1.2.0-rc8 · version code 10
             </p>
              {nativeDiagnostics?.available && (
                <div className="border-t border-border/60 pt-2" data-testid="native-diagnostics">
