@@ -206,6 +206,19 @@ export interface JarvisResponseContract {
   retrievalFailures: string[];
 }
 
+/** Execute only routes that were validated and returned by the Emmaus server. */
+export function executeValidatedEmmausAction(
+  action: { route?: string } | null | undefined,
+  navigate: (route: string) => void,
+): boolean {
+  const route = action?.route;
+  if (!route || !route.startsWith('/') || route.startsWith('//') || /[\r\n]/u.test(route)) {
+    return false;
+  }
+  navigate(route);
+  return true;
+}
+
 export interface ConversationStub {
   id: string;
   userId: string;

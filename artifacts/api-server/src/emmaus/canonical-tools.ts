@@ -127,6 +127,19 @@ function capabilityAction(
   };
 }
 
+function resolveCapabilityOpen(
+  capabilityId: EmmausCapabilityId,
+  operation: "OPEN" | "READ" | "CONTINUE" = "OPEN",
+): EmmausResponseMetadata {
+  const metadata = emptyMetadata();
+  const capability = getEmmausCapability(capabilityId);
+  metadata.answer = `${capability.displayName} is ready.`;
+  metadata.nextStep = capabilityNextStep(capabilityId, operation);
+  metadata.capabilityActions = [capabilityAction(capabilityId, operation)];
+  metadata.followUpPrompts = [`What can I do in ${capability.displayName}?`];
+  return metadata;
+}
+
 function appHelp(capabilityId?: EmmausCapabilityId): EmmausResponseMetadata {
   const metadata = emptyMetadata();
   if (capabilityId) {
@@ -250,6 +263,7 @@ async function resolveActiveProgress(userId: string): Promise<EmmausResponseMeta
   if (active.length === 0) {
     metadata.answer = "You do not have an active Walk or Journey yet. You can browse published content in Discover.";
     metadata.nextStep = capabilityNextStep("discover");
+    metadata.capabilityActions = [capabilityAction("discover")];
     return metadata;
   }
   metadata.answer = active.length === 1
@@ -685,6 +699,7 @@ async function resolveDailyRhythm(userId: string): Promise<EmmausResponseMetadat
   if (!state || !state.currentStepId) {
     metadata.answer = "Today's Daily Rhythm is not available to your account yet.";
     metadata.nextStep = capabilityNextStep("todays-steps");
+    metadata.capabilityActions = [capabilityAction("todays-steps")];
     return metadata;
   }
 
@@ -694,6 +709,7 @@ async function resolveDailyRhythm(userId: string): Promise<EmmausResponseMetadat
       : " Your next step will unlock on a later day.";
     metadata.answer = `You have completed today's Daily Rhythm step.${unlockText}`;
     metadata.nextStep = capabilityNextStep("todays-steps");
+    metadata.capabilityActions = [capabilityAction("todays-steps")];
     return metadata;
   }
 
@@ -707,6 +723,7 @@ async function resolveDailyRhythm(userId: string): Promise<EmmausResponseMetadat
     metadata.answer = "Today's Daily Rhythm content is not available right now.";
     metadata.retrievalFailures = ["daily-rhythm"];
     metadata.followUpPrompts = ["Try again."];
+    metadata.capabilityActions = [capabilityAction("todays-steps")];
     return metadata;
   }
 
@@ -738,11 +755,13 @@ async function resolveContinueJourney(userId: string, type: "walk" | "journey"):
   if (matches.length === 0) {
     metadata.answer = `You do not have an active ${type === "walk" ? "Walk" : "Journey"} to continue yet. You can browse published ${type === "walk" ? "Walks" : "Journeys"} in Discover.`;
     metadata.nextStep = capabilityNextStep(type === "walk" ? "walks" : "journeys");
+    metadata.capabilityActions = [capabilityAction(type === "walk" ? "walks" : "journeys")];
     return metadata;
   }
   if (matches.length > 1) {
     metadata.answer = `You have more than one active ${type === "walk" ? "Walk" : "Journey"}. Which one would you like to continue?`;
     metadata.nextStep = capabilityNextStep(type === "walk" ? "walks" : "journeys");
+    metadata.capabilityActions = [capabilityAction(type === "walk" ? "walks" : "journeys")];
     metadata.followUpPrompts = matches.slice(0, 3).map(({ journey }) => `Continue ${journey.title}`);
     return metadata;
   }
@@ -796,6 +815,7 @@ async function resolveCurrentSermon(): Promise<EmmausResponseMetadata> {
   if (!sermon) {
     metadata.answer = "This week's sermon is not published in Emmaus yet.";
     metadata.nextStep = capabilityNextStep("sermons");
+    metadata.capabilityActions = [capabilityAction("sermons")];
     return metadata;
   }
 
@@ -1109,7 +1129,12 @@ export async function resolveCanonicalAskRequest(
           return { handled: true, metadata: await resolveCurrentSermon() };
         }
         if (routed.requestedCapability === "todays-steps") {
-          return { handled: true, metadata: await resolveTodaySteps(userId) };
+          return {
+            handled: true,
+            metadata: routed.requestedOperation === "OPEN"
+              ? resolveCapabilityOpen("todays-steps", "OPEN")
+              : await resolveTodaySteps(userId),
+          };
         }
         if (routed.requestedCapability === "daily-devotional") {
           return { handled: true, metadata: await resolveTodayDevotional(userId) };

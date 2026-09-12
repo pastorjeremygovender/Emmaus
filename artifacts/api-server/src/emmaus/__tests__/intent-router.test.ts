@@ -97,6 +97,25 @@ describe("typed Ask Emmaus request router", () => {
     assert.equal(pastoral.clarificationRequired, false);
   });
 
+  it("classifies the six release-gate imperatives as canonical actions", () => {
+    const cases = [
+      ["Open the walk please", "todays-steps", "OPEN"],
+      ["Start my Walk", "todays-steps", "OPEN"],
+      ["Continue where I stopped", "active-progress", "CONTINUE"],
+      ["Open Today's Steps", "todays-steps", "OPEN"],
+      ["Read today's Scripture", "daily-rhythm", "READ"],
+      ["Play this week's sermon", "sermons", "OPEN"],
+    ] as const;
+
+    for (const [message, capability, operation] of cases) {
+      const result = routeAskEmmausRequest(message);
+      assert.equal(result.intent, "DIRECT_ACTION", message);
+      assert.equal(result.requestedCapability, capability, message);
+      assert.equal(result.requestedOperation, operation, message);
+      assert.equal(result.clarificationRequired, false, message);
+    }
+  });
+
   it("does not send ordinary application questions to sermon retrieval", () => {
     assert.notEqual(routeAskEmmausRequest("Where can I find devotionals?").intent, "RESOURCE_SEARCH");
     assert.equal(routeAskEmmausRequest("Find sermons about hope").intent, "RESOURCE_SEARCH");

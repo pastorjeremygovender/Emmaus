@@ -97,6 +97,30 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
     };
   }
 
+  if (
+    /^(?:open|go to|take me to)\s+(?:the\s+)?walk(?:\s+please)?[.!?]*$/.test(value)
+    || /^start\s+(?:my\s+)?walk[.!?]*$/.test(value)
+    || /^(?:open|go to|take me to)\s+(?:today's|todays)\s+steps[.!?]*$/.test(value)
+  ) {
+    return {
+      intent: "DIRECT_ACTION",
+      requestedCapability: "todays-steps",
+      requestedOperation: "OPEN",
+      confidence: 0.99,
+      clarificationRequired: false,
+    };
+  }
+
+  if (/^(?:read|open|show me)\s+(?:today's|todays|the current)\s+(?:scripture|reading|passage)[.!?]*$/.test(value)) {
+    return {
+      intent: "DIRECT_ACTION",
+      requestedCapability: "daily-rhythm",
+      requestedOperation: "READ",
+      confidence: 0.99,
+      clarificationRequired: false,
+    };
+  }
+
   if (/^(?:continue|resume)\s+(?:where i (?:left|stopped)(?: off)?|from where i (?:left|stopped)(?: off)?)\b/.test(value)) {
     return {
       intent: "DIRECT_ACTION",

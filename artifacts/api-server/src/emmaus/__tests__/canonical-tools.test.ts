@@ -8,6 +8,7 @@ import {
   resolveCurrentDevotionalEntry,
   resolveDateAllocatedDevotionalEntry,
 } from "../canonical-tools.ts";
+import { normalizeEmmausResponse } from "../response-normalization.ts";
 
 describe("canonical Ask Emmaus tools", () => {
   it("returns a capability-owned location for application help", async () => {
@@ -17,6 +18,55 @@ describe("canonical Ask Emmaus tools", () => {
     assert.equal(result.metadata.nextStep?.path, "/journeys?tab=devotionals");
     assert.equal(result.metadata.capabilityActions?.[0]?.capabilityId, "daily-devotional");
     assert.equal(result.metadata.recommendations[0]?.type, "devotional");
+  });
+
+  it("returns validated in-app actions for the release-gate imperatives", async () => {
+    const walk = await resolveCanonicalAskRequest("Open the walk please", "member-1");
+    assert.equal(walk.handled, true);
+    if (!walk.handled) return;
+    assert.equal(walk.metadata.capabilityActions?.[0]?.capabilityId, "todays-steps");
+    assert.equal(walk.metadata.capabilityActions?.[0]?.route, "/walk");
+    assert.equal(walk.metadata.nextStep?.path, "/walk");
+    assert.equal(
+      normalizeEmmausResponse({ answer: walk.metadata.answer ?? "", metadata: walk.metadata })
+        .metadata.jarvis?.suggestedNextAction?.route,
+      "/walk",
+    );
+
+    const start = await resolveCanonicalAskRequest("Start my Walk", "member-1");
+    assert.equal(start.handled, true);
+    if (!start.handled) return;
+    assert.equal(start.metadata.capabilityActions?.[0]?.route, "/walk");
+
+    const today = await resolveCanonicalAskRequest("Open Today's Steps", "member-1");
+    assert.equal(today.handled, true);
+    if (!today.handled) return;
+    assert.equal(today.metadata.capabilityActions?.[0]?.route, "/walk");
+
+    const continueRequest = await resolveCanonicalAskRequest("Continue where I stopped", "member-1");
+    assert.equal(continueRequest.handled, true);
+    if (!continueRequest.handled) return;
+    assert.ok(
+      continueRequest.metadata.resourceActions?.some((action) =>
+        action.kind === "CONTINUE" || action.kind === "OPEN",
+      ) || continueRequest.metadata.capabilityActions?.length,
+    );
+
+    const scripture = await resolveCanonicalAskRequest("Read today's Scripture", "member-1");
+    assert.equal(scripture.handled, true);
+    if (!scripture.handled) return;
+    assert.ok(
+      scripture.metadata.resourceActions?.length
+      || scripture.metadata.capabilityActions?.some((action) => action.route === "/walk"),
+    );
+
+    const sermon = await resolveCanonicalAskRequest("Play this week's sermon", "member-1");
+    assert.equal(sermon.handled, true);
+    if (!sermon.handled) return;
+    assert.ok(
+      sermon.metadata.resourceActions?.some((action) => action.route.startsWith("/sermon/"))
+      || sermon.metadata.capabilityActions?.some((action) => action.route === "/journeys?tab=sermons"),
+    );
   });
 
   it("reads an exact Bible reference and issues the canonical Bible route", async () => {

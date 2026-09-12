@@ -24,6 +24,7 @@ import {
   appendMessage,
   getMessages,
   saveMemory,
+  executeValidatedEmmausAction,
   type EmmausMetadata,
   type SseDoneEvent,
   type HistoryItem,
@@ -572,10 +573,10 @@ export default function AskEmmausConversation() {
                       <button
                         type="button"
                         onClick={() => {
-                          const route = msg.metadata?.jarvis?.suggestedNextAction?.route;
-                          if (route?.startsWith('/') && !route.includes('\n') && !route.includes('\r')) {
-                            setLocation(route);
-                          }
+                          executeValidatedEmmausAction(
+                            msg.metadata?.jarvis?.suggestedNextAction,
+                            setLocation,
+                          );
                         }}
                         className="w-full rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-left text-[13px] font-semibold text-primary hover:bg-primary/10 transition-colors"
                       >
@@ -587,9 +588,7 @@ export default function AskEmmausConversation() {
                         key={`${action.capabilityId}:${action.kind}:${action.route}`}
                         type="button"
                         onClick={() => {
-                          if (action.route.startsWith('/') && !action.route.includes('\n') && !action.route.includes('\r')) {
-                            setLocation(action.route);
-                          }
+                          executeValidatedEmmausAction(action, setLocation);
                         }}
                         className="w-full rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-left text-[13px] font-semibold text-primary hover:bg-primary/10 transition-colors"
                       >
