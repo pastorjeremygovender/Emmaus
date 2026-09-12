@@ -1088,6 +1088,19 @@ export function canonicalFailureMetadata(routed: TypedAskEmmausIntent): EmmausRe
   metadata.answer = "I couldn't safely access that part of Emmaus right now. Please try again.";
   metadata.retrievalFailures = [source];
   metadata.followUpPrompts = ["Try again.", "What else can Emmaus help me with?"];
+
+  // A failed data lookup must not invent progress, but it may still offer a
+  // server-owned, non-destructive route so voice and accessibility clients do
+  // not strand the member in conversation.
+  const safeFallbackCapability = source === "active-progress" || source === "daily-rhythm"
+    ? "todays-steps"
+    : source === "sermons"
+      ? "sermons"
+      : undefined;
+  if (safeFallbackCapability) {
+    metadata.nextStep = capabilityNextStep(safeFallbackCapability);
+    metadata.capabilityActions = [capabilityAction(safeFallbackCapability)];
+  }
   return metadata;
 }
 
