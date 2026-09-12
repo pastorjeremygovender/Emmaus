@@ -2,7 +2,8 @@ package za.co.emmaus.app;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.os.Build;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 
 import com.getcapacitor.JSObject;
 
@@ -25,7 +26,19 @@ final class NativePermissionDiagnostics {
     private NativePermissionDiagnostics() {}
 
     static boolean isAvailable(Context context) {
-        return BuildConfig.DEBUG || BuildConfig.VERSION_NAME.toLowerCase(Locale.US).contains("-rc");
+        boolean debuggable =
+            (context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        if (debuggable) return true;
+
+        try {
+            String versionName = context.getPackageManager()
+                .getPackageInfo(context.getPackageName(), 0)
+                .versionName;
+            return versionName != null &&
+                versionName.toLowerCase(Locale.US).contains("-rc");
+        } catch (PackageManager.NameNotFoundException ignored) {
+            return false;
+        }
     }
 
     static void stage(Context context, String value) {
