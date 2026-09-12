@@ -166,7 +166,6 @@ export default function AskEmmausConversation() {
   const rootRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const streamingMsgRef = useRef<HTMLDivElement>(null);
-  const responseStartRef = useRef<HTMLDivElement>(null);
   const streamingIdRef = useRef<string | null>(null);
 
   // Keep the outer container height equal to the visual viewport (keyboard-aware)
@@ -191,24 +190,6 @@ export default function AskEmmausConversation() {
     }, 60);
     return () => clearTimeout(timer);
   }, [isStreaming]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // After the server finishes, keep the beginning of the completed response
-  // visible. This is important on small Android screens where the composer and
-  // bottom navigation can otherwise leave the member looking at the response's
-  // final card instead of its opening sentence.
-  useEffect(() => {
-    if (isStreaming || !responseStartRef.current || !mainRef.current) return;
-    const timer = setTimeout(() => {
-      if (!responseStartRef.current || !mainRef.current) return;
-      const main = mainRef.current;
-      const response = responseStartRef.current;
-      const responseTop = response.getBoundingClientRect().top;
-      const mainTop = main.getBoundingClientRect().top;
-      const target = main.scrollTop + (responseTop - mainTop) - HEADER_HEIGHT - 12;
-      main.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
-    }, 60);
-    return () => clearTimeout(timer);
-  }, [isStreaming, messages.length]);
 
   // ─── Stream a response ──────────────────────────────────────────────────────
 
@@ -556,13 +537,7 @@ export default function AskEmmausConversation() {
             ) : (
               /* ── Emmaus response ── */
               <div
-                ref={
-                  msg.isStreaming
-                    ? streamingMsgRef
-                    : msg.id === messages.filter((item) => item.role === 'assistant').at(-1)?.id
-                      ? responseStartRef
-                      : undefined
-                }
+                ref={msg.isStreaming ? streamingMsgRef : undefined}
                 className="space-y-5"
               >
                 {/* Prose or thinking bubble */}
@@ -646,9 +621,14 @@ export default function AskEmmausConversation() {
                     {msg.metadata.sermonRecommendations?.slice(0, 3).map((sermon) => (
                       <SermonRecommendationCard key={sermon.sermonId} sermon={sermon} />
                     ))}
-                    {msg.metadata.nextSteps && msg.metadata.nextSteps.length > 0 && (
-                      <NextStepsCard steps={msg.metadata.nextSteps} />
-                    )}
+                    {msg.metadata.nextSteps &&
+                      msg.metadata.nextSteps.length > 0 &&
+                      !(
+                        (msg.metadata.sermonRecommendations?.length ?? 0) > 0 &&
+                        msg.metadata.nextSteps.every((step) => step.type === 'listen')
+                      ) && (
+                        <NextStepsCard steps={msg.metadata.nextSteps} />
+                      )}
 
                     {/* AE-2: follow-up suggestion chips — only on the last assistant message */}
                     {msg.metadata.followUpPrompts && (msg.metadata.followUpPrompts as string[]).length > 0 &&
