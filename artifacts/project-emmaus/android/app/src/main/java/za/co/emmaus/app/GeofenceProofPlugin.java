@@ -7,15 +7,50 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import android.Manifest;
+import android.os.Build;
+import androidx.core.content.ContextCompat;
+import android.content.pm.PackageManager;
+import android.location.LocationManager;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-@CapacitorPlugin(name = "GeofenceProof")
+@CapacitorPlugin(name = "GeofenceProof", permissions = @Permission(alias = "location", strings = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}))
 public final class GeofenceProofPlugin extends Plugin {
     @PluginMethod
+    public void welcomeAssistStatus(PluginCall call) {
+        boolean location = ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                || ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        LocationManager manager = (LocationManager) getContext().getSystemService(android.content.Context.LOCATION_SERVICE);
+        JSObject result = new JSObject();
+        result.put("permission", location ? "granted" : "needed");
+        result.put("locationEnabled", manager != null && (Build.VERSION.SDK_INT < 28 || manager.isLocationEnabled()));
+        result.put("tracking", false);
+        result.put("privacy", "Location is used only for an optional one-time Welcome Assist test and is not sent.");
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void requestWelcomeAssistAccess(PluginCall call) {
+        if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                || ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            call.resolve();
+        } else {
+            requestPermissionForAlias("location", call, "welcomeLocationResult");
+        }
+    }
+
+    @com.getcapacitor.annotation.PermissionCallback
+    private void welcomeLocationResult(PluginCall call) { call.resolve(); }
+    @PluginMethod
     public void openDiagnostics(PluginCall call) {
+        if (!BuildConfig.DEBUG) {
+            call.reject("Diagnostics are available only in debug builds.");
+            return;
+        }
         Intent intent = new Intent(getContext(), GeofenceProofActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         getContext().startActivity(intent);

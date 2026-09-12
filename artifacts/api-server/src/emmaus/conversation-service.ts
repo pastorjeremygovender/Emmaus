@@ -1279,6 +1279,7 @@ export async function handleConversation(
         : "";
       finalMeta.nextSteps.push({
         type: "listen",
+        sermonId: sermonResult.sermonId,
         text: `"${titleShort}" — ${sermonResult.speaker}${timeLabel}`,
         path: sermonResult.timestampedUrl,
         watchUrl: sermonResult.timestampedUrl,

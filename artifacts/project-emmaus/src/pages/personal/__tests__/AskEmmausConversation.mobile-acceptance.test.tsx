@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 
 const mocks = vi.hoisted(() => ({
   setLocation: vi.fn(),
@@ -127,6 +127,7 @@ describe('Ask Emmaus authenticated mobile acceptance', () => {
     await waitFor(() => {
       expect(mocks.setLocation).toHaveBeenCalledWith('/journey/walk-b/day/2');
     });
+    expect(screen.getByLabelText('Follow-up message')).toBeInTheDocument();
 
     const root = container.firstElementChild as HTMLElement;
     const main = container.querySelector('main') as HTMLElement;

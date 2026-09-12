@@ -29,6 +29,7 @@ import {
   type EmmausMetadata,
   type SseDoneEvent,
   type HistoryItem,
+  filterDuplicateSermonNextSteps,
 } from '@/lib/emmaus-client';
 import { takePendingMessage, getReturnDestination, clearReturnDestination } from '@/lib/emmaus-pending';
 import { ScriptureCard } from '@/components/emmaus/ScriptureCard';
@@ -124,6 +125,17 @@ function useVisualViewportHeight(ref: RefObject<HTMLElement | null>) {
   }, [ref]);
 }
 
+function scrollConversationToBottom(main: HTMLElement, behavior: ScrollBehavior) {
+  if (typeof main.scrollTo === 'function') {
+    main.scrollTo({ top: main.scrollHeight, behavior });
+  } else {
+    // jsdom and a few embedded WebViews do not expose Element.scrollTo.
+    // Updating scrollTop preserves the same intent without breaking the
+    // conversation surface or its tests.
+    main.scrollTop = main.scrollHeight;
+  }
+}
+
 // ─── Helper: parse paragraphs ─────────────────────────────────────────────────
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -166,29 +178,65 @@ export default function AskEmmausConversation() {
   const mainRef = useRef<HTMLElement>(null);
   const streamingMsgRef = useRef<HTMLDivElement>(null);
   const streamingIdRef = useRef<string | null>(null);
+  const userScrolledAwayRef = useRef(false);
+  const autoScrollRef = useRef(false);
 
   // Keep the outer container height equal to the visual viewport (keyboard-aware)
   useVisualViewportHeight(rootRef);
 
-  // ─── Scroll to top of new streaming message (once, on stream start) ─────────
-  // Two-phase: wait 60 ms for the DOM to assign height to the new element,
-  // then measure and scroll. Never re-fires after that (guard: !isStreaming).
+  // Keep the answer readable without fighting the member. A user scroll up
+  // immediately opts out; streaming follows only while the viewport is near
+  // the bottom. This also works when the visual viewport shrinks for a keyboard.
 
-  const HEADER_HEIGHT = 56; // matches h-14 sticky header
+  useEffect(() => {
+    const main = mainRef.current;
+    if (!main) return;
+    const onScroll = () => {
+      if (autoScrollRef.current) return;
+      const distance = main.scrollHeight - main.scrollTop - main.clientHeight;
+      if (distance > 96) userScrolledAwayRef.current = true;
+      else if (distance <= 24) userScrolledAwayRef.current = false;
+    };
+    // Pointer intent must win over an in-flight smooth scroll. Do not wait for
+    // the next scroll event, otherwise one more streamed chunk can fight the
+    // member's upward gesture.
+    const onUserIntent = () => { userScrolledAwayRef.current = true; };
+    main.addEventListener('scroll', onScroll, { passive: true });
+    main.addEventListener('wheel', onUserIntent, { passive: true });
+    main.addEventListener('touchstart', onUserIntent, { passive: true });
+    return () => {
+      main.removeEventListener('scroll', onScroll);
+      main.removeEventListener('wheel', onUserIntent);
+      main.removeEventListener('touchstart', onUserIntent);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isStreaming) return;
+    userScrolledAwayRef.current = false;
     const timer = setTimeout(() => {
-      if (!streamingMsgRef.current || !mainRef.current) return;
       const main = mainRef.current;
-      const msgEl = streamingMsgRef.current;
-      const msgTop = msgEl.getBoundingClientRect().top;
-      const mainTop = main.getBoundingClientRect().top;
-      const target = main.scrollTop + (msgTop - mainTop) - HEADER_HEIGHT - 12;
-      main.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
-    }, 60);
+      if (!main || userScrolledAwayRef.current) return;
+      autoScrollRef.current = true;
+      scrollConversationToBottom(
+        main,
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      );
+      window.setTimeout(() => { autoScrollRef.current = false; }, 80);
+    }, 0);
     return () => clearTimeout(timer);
-  }, [isStreaming]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isStreaming]);
+
+  useEffect(() => {
+    const main = mainRef.current;
+    if (!main || !isStreaming || userScrolledAwayRef.current) return;
+    const distance = main.scrollHeight - main.scrollTop - main.clientHeight;
+    if (distance <= 120) {
+      autoScrollRef.current = true;
+      scrollConversationToBottom(main, 'auto');
+      window.setTimeout(() => { autoScrollRef.current = false; }, 40);
+    }
+  }, [messages, isStreaming]);
 
   // ─── Stream a response ──────────────────────────────────────────────────────
 
@@ -620,12 +668,30 @@ export default function AskEmmausConversation() {
                       <SermonRecommendationCard key={sermon.sermonId} sermon={sermon} />
                     ))}
                     {msg.metadata.nextSteps &&
-                      msg.metadata.nextSteps.length > 0 &&
-                      !(
-                        (msg.metadata.sermonRecommendations?.length ?? 0) > 0 &&
-                        msg.metadata.nextSteps.every((step) => step.type === 'listen')
-                      ) && (
-                        <NextStepsCard steps={msg.metadata.nextSteps} />
+                      filterDuplicateSermonNextSteps(msg.metadata.nextSteps, [
+                        ...(msg.metadata.sermonRecommendations ?? []).map((sermon) => ({
+                          sermonId: sermon.sermonId,
+                        })),
+                        ...(msg.metadata.recommendations ?? [])
+                          .filter((rec) => rec.type === 'sermon')
+                          .map((rec) => ({
+                            sermonId: rec.sermonId,
+                            resourceId: rec.resourceId,
+                          })),
+                      ]).length > 0 && (
+                         <NextStepsCard
+                           steps={filterDuplicateSermonNextSteps(msg.metadata.nextSteps, [
+                             ...(msg.metadata.sermonRecommendations ?? []).map((sermon) => ({
+                               sermonId: sermon.sermonId,
+                             })),
+                             ...(msg.metadata.recommendations ?? [])
+                               .filter((rec) => rec.type === 'sermon')
+                               .map((rec) => ({
+                                 sermonId: rec.sermonId,
+                                 resourceId: rec.resourceId,
+                               })),
+                           ])}
+                         />
                       )}
 
                     {/* AE-2: follow-up suggestion chips — only on the last assistant message */}

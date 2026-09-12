@@ -22,6 +22,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(GeofenceProofPlugin.class);
         registerPlugin(WelcomeAssistBluetoothPlugin.class);
         registerPlugin(DailyRhythmDeepLinkPlugin.class);
+        registerPlugin(DailyReminderPlugin.class);
         DailyRhythmDeepLinkPlugin.captureIntent(this, getIntent(), "activity_on_create");
         super.onCreate(savedInstanceState);
     }

@@ -55,4 +55,12 @@ describe('native Daily Rhythm widget deep-link handoff', () => {
     expect(window.location.pathname).toBe('/walk');
     expect(window.location.search).toBe('');
   });
+
+  it('hands a native reminder tap to the authenticated Personal destination', async () => {
+    native.pending = { path: '/personal?source=notification' };
+    await installNativeDailyRhythmDeepLink();
+
+    expect(window.location.pathname).toBe('/personal');
+    expect(window.location.search).toBe('?source=notification');
+  });
 });

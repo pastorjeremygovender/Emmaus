@@ -3,7 +3,7 @@ import { safeOpeningDestination } from './opening-destination';
 
 type NativeDeepLink = {
   path?: string;
-  source?: string;
+  source?: 'widget' | 'notification';
 };
 
 type DailyRhythmDeepLinkPlugin = {
@@ -18,7 +18,7 @@ type DailyRhythmDeepLinkPlugin = {
 const deepLink = registerPlugin<DailyRhythmDeepLinkPlugin>('DailyRhythmDeepLink');
 let activeNativeWidgetPath: string | null = null;
 
-function safeWidgetPath(path: string | undefined): string | null {
+function safeNativePath(path: string | undefined): string | null {
   if (!path) {
     return null;
   }
@@ -28,9 +28,13 @@ function safeWidgetPath(path: string | undefined): string | null {
   } catch {
     return null;
   }
+  const source = url.searchParams.get('source');
+  if (source === 'notification' && url.pathname === '/personal') {
+    return '/personal?source=notification';
+  }
   if (
     url.pathname.match(/^\/daily-rhythm\/day\/[1-9][0-9]*$/) === null ||
-    url.searchParams.get('source') !== 'widget' ||
+    source !== 'widget' ||
     (url.searchParams.get('version') !== null && url.searchParams.get('version') !== '1')
   ) {
     return null;
@@ -49,8 +53,8 @@ function safeWidgetPath(path: string | undefined): string | null {
   return safeOpeningDestination(`${canonical.pathname}${canonical.search}`);
 }
 
-function applyWidgetPath(path: string | undefined, replace: boolean): void {
-  const safePath = safeWidgetPath(path);
+function applyNativePath(path: string | undefined, replace: boolean): void {
+  const safePath = safeNativePath(path);
   if (!safePath) return;
   activeNativeWidgetPath = safePath;
 
@@ -58,9 +62,17 @@ function applyWidgetPath(path: string | undefined, replace: boolean): void {
   if (current === safePath) return;
 
   if (replace) {
-    window.history.replaceState({ ...window.history.state, source: 'widget' }, '', safePath);
+    window.history.replaceState(
+      { ...window.history.state, source: new URL(safePath, window.location.origin).searchParams.get('source') },
+      '',
+      safePath,
+    );
   } else {
-    window.history.pushState({ ...window.history.state, source: 'widget' }, '', safePath);
+    window.history.pushState(
+      { ...window.history.state, source: new URL(safePath, window.location.origin).searchParams.get('source') },
+      '',
+      safePath,
+    );
   }
   window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }));
 }
@@ -73,9 +85,9 @@ export async function installNativeDailyRhythmDeepLink(): Promise<void> {
   if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
 
   try {
-    await deepLink.addListener('deepLink', event => applyWidgetPath(event.path, false));
+    await deepLink.addListener('deepLink', event => applyNativePath(event.path, false));
     const pending = await deepLink.getPendingDeepLink();
-    applyWidgetPath(pending.path, true);
+    applyNativePath(pending.path, true);
   } catch {
     // Browser builds and older native shells simply have no widget handoff.
   }
@@ -87,7 +99,8 @@ export async function installNativeDailyRhythmDeepLink(): Promise<void> {
  */
 export function acknowledgeNativeDailyRhythmDeepLink(): void {
   if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
-  if (new URLSearchParams(window.location.search).get('source') !== 'widget') return;
+  const source = new URLSearchParams(window.location.search).get('source');
+  if (source !== 'widget' && source !== 'notification') return;
   const path = activeNativeWidgetPath ?? `${window.location.pathname}${window.location.search}`;
   void deepLink.acknowledgePendingDeepLink({ path }).then(() => {
     activeNativeWidgetPath = null;

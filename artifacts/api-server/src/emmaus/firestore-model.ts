@@ -77,6 +77,8 @@ export interface NextStepItem {
   relativeStartSeconds?: number;    // position within trimmed audio
   absoluteStartSeconds?: number;    // same as timestampSeconds (YouTube anchor)
   watchUrl?: string;                // explicit Watch URL (YouTube at absolute time)
+  /** Trusted canonical sermon identity; never infer identity from display text. */
+  sermonId?: string;
 }
 
 export interface Recommendation {

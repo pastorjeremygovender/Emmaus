@@ -76,6 +76,29 @@ export interface NextStepItem {
   relativeStartSeconds?: number;    // position within the trimmed audio (Listen)
   absoluteStartSeconds?: number;    // same as timestampSeconds (YouTube anchor)
   watchUrl?: string;                // explicit Watch URL (YouTube at absolute time)
+  /** Trusted canonical sermon identity, when this is a sermon listen step. */
+  sermonId?: string;
+  /** Trusted resource identity for non-canonical sermon resource shapes. */
+  resourceId?: string;
+}
+
+/**
+ * Remove only verified listen steps already represented by a trusted sermon
+ * card. Display titles are deliberately not considered identity.
+ */
+export function filterDuplicateSermonNextSteps(
+  steps: NextStepItem[],
+  trustedSermons: Array<{ sermonId?: string; resourceId?: string }>,
+): NextStepItem[] {
+  const identities = new Set(
+    trustedSermons.flatMap((sermon) => [sermon.sermonId, sermon.resourceId].filter(
+      (id): id is string => Boolean(id),
+    )),
+  );
+  return steps.filter((step) =>
+    step.type !== 'listen' ||
+    ![step.sermonId, step.resourceId].some((id) => id && identities.has(id)),
+  );
 }
 
 export interface Recommendation {
@@ -135,7 +158,7 @@ export interface EmmausMetadata {
     relevanceReasons?: string[];
   }>;
   prayer?: string | null;
-  requestedIntent?: 'ASK' | 'READ' | 'OPEN' | 'FIND';
+  requestedIntent?: 'ASK' | 'READ' | 'OPEN' | 'CONTINUE' | 'FIND';
   retrievalFailures?: string[];
   resourceActions?: Array<{
     kind: 'OPEN' | 'READ' | 'CONTINUE';
@@ -233,10 +256,13 @@ export function getImmediateEmmausAction(
   ) {
     return null;
   }
+  const nextStepAction = metadata.nextStep?.path
+    ? { route: metadata.nextStep.path }
+    : null;
   return metadata.jarvis?.suggestedNextAction
     ?? metadata.resourceActions?.[0]
     ?? metadata.capabilityActions?.[0]
-    ?? metadata.nextStep
+    ?? nextStepAction
     ?? null;
 }
 

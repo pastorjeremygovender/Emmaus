@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bell, BellOff, Send } from 'lucide-react';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +14,20 @@ type ReminderStatus = {
 };
 
 type ReminderState = 'loading' | 'off' | 'permission-needed' | 'on' | 'blocked' | 'unsupported';
+interface NativeReminder {
+  status(): Promise<{ enabled: boolean; time: string; permission: string; supported: boolean }>;
+  enable(): Promise<{ enabled: boolean; time: string; permission: string }>;
+  setTime(options: { time: string }): Promise<{ enabled: boolean; time: string; permission: string }>;
+  disable(): Promise<unknown>;
+  test(): Promise<unknown>;
+}
+type NativeReminderGlobal = typeof globalThis & {
+  __emmausDailyReminderPlugin?: NativeReminder;
+};
+const nativeReminder = (() => {
+  const scope = globalThis as NativeReminderGlobal;
+  return scope.__emmausDailyReminderPlugin ??= registerPlugin<NativeReminder>('DailyReminder');
+})();
 
 const timezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -63,8 +78,21 @@ export function DailyRemindersSettings() {
     'Notification' in window &&
     'serviceWorker' in navigator &&
     'PushManager' in window;
+  const nativeAndroid = typeof window !== 'undefined' &&
+    Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
   const refresh = useCallback(async () => {
+    if (nativeAndroid) {
+      try {
+        const native = await nativeReminder.status();
+        setTime(native.time || '09:00');
+        setState(native.permission === 'denied' && native.enabled ? 'blocked' : native.enabled ? 'on' : 'off');
+      } catch {
+        setState('off');
+        setMessage('Native reminders are unavailable in this build.');
+      }
+      return;
+    }
     if (!supported) {
       setState('unsupported');
       return;
@@ -93,7 +121,7 @@ export function DailyRemindersSettings() {
       setMessage('We could not check reminders just now. Please try again in a moment.');
       setState('off');
     }
-  }, [supported]);
+  }, [nativeAndroid, supported]);
 
   useEffect(() => {
     void refresh();
@@ -101,10 +129,15 @@ export function DailyRemindersSettings() {
 
   const saveTime = async (nextTime: string) => {
     setTime(nextTime);
-    if (!status || !/^\d{2}:\d{2}$/.test(nextTime)) return;
+    if (!/^\d{2}:\d{2}$/.test(nextTime)) return;
     setWorking(true);
     setMessage('');
     try {
+      if (nativeAndroid) {
+        await nativeReminder.setTime({ time: nextTime });
+        return;
+      }
+      if (!status) return;
       await request('/api/reminders/preferences', {
         method: 'PATCH',
         body: JSON.stringify({ reminderTime: nextTime, timezone: timezone() }),
@@ -118,6 +151,18 @@ export function DailyRemindersSettings() {
   };
 
   const enable = async () => {
+    if (nativeAndroid) {
+      setWorking(true);
+      setMessage('');
+      try {
+        const result = await nativeReminder.enable();
+        setTime(result.time || time);
+        setState(result.permission === 'granted' ? 'on' : 'blocked');
+        if (result.permission !== 'granted') setMessage('Notifications are blocked. Enable them in Android settings, then try again.');
+      } catch { setMessage('We could not enable reminders. Please try again.'); }
+      finally { setWorking(false); }
+      return;
+    }
     if (!supported || !status?.vapidPublicKey) return;
     setWorking(true);
     setMessage('');
@@ -163,6 +208,13 @@ export function DailyRemindersSettings() {
   };
 
   const disable = async () => {
+    if (nativeAndroid) {
+      setWorking(true);
+      try { await nativeReminder.disable(); setState('off'); }
+      catch { setMessage('We could not turn off reminders on this device.'); }
+      finally { setWorking(false); }
+      return;
+    }
     if (!subscription) return;
     setWorking(true);
     setMessage('');
@@ -183,6 +235,13 @@ export function DailyRemindersSettings() {
   };
 
   const sendTest = async () => {
+    if (nativeAndroid) {
+      setWorking(true);
+      try { await nativeReminder.test(); setMessage('Test notification sent.'); }
+      catch { setMessage('Enable reminders before sending a test.'); }
+      finally { setWorking(false); }
+      return;
+    }
     if (!subscription) return;
     setWorking(true);
     setMessage('');
@@ -201,12 +260,12 @@ export function DailyRemindersSettings() {
 
   const detail = useMemo(() => {
     if (state === 'loading') return 'Checking this device…';
-    if (state === 'unsupported') return 'Unsupported on this browser';
-    if (state === 'blocked') return 'Blocked in browser settings';
+     if (state === 'unsupported') return nativeAndroid ? 'Off' : 'Unsupported on this browser';
+    if (state === 'blocked') return nativeAndroid ? 'Blocked in Android settings' : 'Blocked in browser settings';
     if (state === 'permission-needed') return 'Permission needed';
     if (state === 'on') return `On daily at ${time}`;
     return 'Off';
-  }, [state, time]);
+  }, [nativeAndroid, state, time]);
 
   const guidance = isInstalledPwa()
     ? 'Notifications are managed in this app’s device settings.'
@@ -230,7 +289,7 @@ export function DailyRemindersSettings() {
           data-testid="toggle-notifications"
         />
       </div>
-      {state !== 'unsupported' && state !== 'loading' && (
+      {(!nativeAndroid && state !== 'unsupported' && state !== 'loading' || nativeAndroid && state !== 'loading') && (
         <div className="mt-3 border-t border-border/50 pt-3">
           <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-2 sm:flex">
             <Label htmlFor="reminder-time" className="shrink-0 text-[12px] font-medium">Daily time</Label>

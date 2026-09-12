@@ -5,12 +5,15 @@ import { Button } from '@/components/ui/button';
 
 interface GeofenceBridge {
   openDiagnostics(): Promise<void>;
+  welcomeAssistStatus(): Promise<{ permission: 'granted' | 'needed'; locationEnabled: boolean; tracking: boolean; privacy: string }>;
+  requestWelcomeAssistAccess(): Promise<void>;
 }
 
 interface BluetoothStatus {
   supported: boolean;
   enabled: boolean;
-  permission: 'granted' | 'prompt';
+  permission: 'granted' | 'prompt' | 'denied';
+  state?: 'unsupported' | 'off' | 'permission-needed' | 'ready';
   scanning: boolean;
   automaticScanning: boolean;
 }
@@ -50,9 +53,17 @@ export function WelcomeAssistSettings() {
   const openLocationTest = async () => {
     setMessage('');
     try {
-      await geofence.openDiagnostics();
+      const status = await geofence.welcomeAssistStatus();
+      if (status.permission !== 'granted') {
+        await geofence.requestWelcomeAssistAccess();
+        setMessage('Location permission requested. Tap again when it is granted.');
+      } else if (!status.locationEnabled) {
+        setMessage('Turn on Location in Android settings, then try again.');
+      } else {
+        setMessage('Welcome Assist is ready for a one-time location test. No route is tracked and no coordinates are shown or sent.');
+      }
     } catch {
-      setMessage('Welcome Assist location testing is unavailable in this build.');
+      setMessage('Location access was not granted. You can enable it later in phone settings.');
     }
   };
 
@@ -111,11 +122,15 @@ export function WelcomeAssistSettings() {
 
       {bluetoothStatus && (
         <p className="mt-2 text-[11px] text-muted-foreground" aria-live="polite">
-          Bluetooth: {!bluetoothStatus.supported
-            ? 'unsupported'
-            : bluetoothStatus.enabled
-              ? 'ready'
-              : 'not ready'}
+           Bluetooth: {bluetoothStatus.state === 'unsupported' || !bluetoothStatus.supported
+             ? 'unsupported'
+             : bluetoothStatus.state === 'permission-needed'
+               ? 'permission needed'
+               : bluetoothStatus.state === 'off'
+                 ? 'off'
+                 : bluetoothStatus.state === 'ready' || bluetoothStatus.enabled
+                   ? 'ready'
+                   : 'not ready'}
         </p>
       )}
       {message && <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground" aria-live="polite">{message}</p>}

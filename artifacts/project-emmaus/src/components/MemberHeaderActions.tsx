@@ -54,7 +54,7 @@ export function MemberHeaderActions({ compact = false }: { compact?: boolean }) 
               It’s All About JESUS.
             </p>
             <p className="border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
-              Android test build · 1.2.0-rc3 · version code 5
+               Android test build · 1.2.0-rc4 · version code 6
             </p>
           </div>
         </PopoverContent>

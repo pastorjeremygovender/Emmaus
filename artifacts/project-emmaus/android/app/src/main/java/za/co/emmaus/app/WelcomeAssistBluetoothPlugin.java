@@ -55,9 +55,22 @@ public final class WelcomeAssistBluetoothPlugin extends Plugin {
     public void status(PluginCall call) {
         BluetoothAdapter adapter = adapter();
         JSObject result = new JSObject();
-        result.put("supported", adapter != null);
-        result.put("enabled", adapter != null && hasConnectPermission() && adapter.isEnabled());
-        result.put("permission", hasScanPermission() ? "granted" : "prompt");
+        boolean supported = adapter != null;
+        boolean scanGranted = hasScanPermission();
+        boolean connectGranted = hasConnectPermission();
+        boolean permissionsGranted = scanGranted && connectGranted;
+        boolean enabled = supported && permissionsGranted && adapter.isEnabled();
+        result.put("supported", supported);
+        result.put("enabled", enabled);
+        String permission = permissionsGranted ? "granted" : "prompt";
+        result.put("permission", permission);
+        result.put(
+            "state",
+            !supported ? "unsupported"
+                : !permissionsGranted ? "permission-needed"
+                : !enabled ? "off"
+                : "ready"
+        );
         result.put("scanning", activeCallback != null);
         result.put("automaticScanning", false);
         call.resolve(result);

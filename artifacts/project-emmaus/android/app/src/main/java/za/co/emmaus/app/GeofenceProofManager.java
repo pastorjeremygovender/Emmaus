@@ -145,8 +145,9 @@ final class GeofenceProofManager {
             return null;
         }
 
-        String deviceId = GeofenceProofStore.anonymousDeviceId(context);
-        String eventKey = deviceId + ":" + start + ":" + end;
+        // Duplicate suppression is scoped to this local test window. The
+        // device identifier is deliberately not included in events or queues.
+        String eventKey = start + ":" + end;
         if (GeofenceProofStore.hasHandledKey(context, eventKey)) {
             GeofenceProofStore.incrementDuplicateCount(context);
             return null;
@@ -155,7 +156,6 @@ final class GeofenceProofManager {
         boolean offline = !hasValidatedNetwork(context);
         JSONObject event = new JSONObject();
         try {
-            event.put("anonymous_test_device_id", deviceId);
             event.put("event_type", "geofence_entry");
             event.put("detection_timestamp", now);
             event.put("received_timestamp", System.currentTimeMillis());

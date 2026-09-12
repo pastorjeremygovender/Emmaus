@@ -75,12 +75,20 @@ public final class DailyRhythmDeepLinkPlugin extends Plugin {
 
     static void captureIntent(Context context, Intent intent, String stage) {
         String route = routeFromIntent(intent);
+        String source = "widget";
+        if (route == null && intent != null) {
+            String notificationDestination = intent.getStringExtra("destination");
+            if ("/personal".equals(notificationDestination)) {
+                route = "/personal?source=notification";
+                source = "notification";
+            }
+        }
         if (route == null) {
             Log.i(TAG, "stage=" + stage + " route=none");
             return;
         }
         remember(context, route);
-        Log.i(TAG, "stage=" + stage + " route=" + route);
+        Log.i(TAG, "stage=" + stage + " source=" + source + " route=" + route);
     }
 
     private static String peek(Context context) {
@@ -103,13 +111,21 @@ public final class DailyRhythmDeepLinkPlugin extends Plugin {
     @Override
     protected void handleOnNewIntent(Intent intent) {
         String route = routeFromIntent(intent);
+        String source = "widget";
+        if (route == null && intent != null) {
+            String notificationDestination = intent.getStringExtra("destination");
+            if ("/personal".equals(notificationDestination)) {
+                route = "/personal?source=notification";
+                source = "notification";
+            }
+        }
         if (route == null) return;
 
         remember(getContext(), route);
-        Log.i(TAG, "stage=listener_delivery route=" + route);
+        Log.i(TAG, "stage=listener_delivery source=" + source + " route=" + route);
         JSObject payload = new JSObject();
         payload.put("path", route);
-        payload.put("source", "widget");
+        payload.put("source", source);
         notifyListeners("deepLink", payload);
     }
 
