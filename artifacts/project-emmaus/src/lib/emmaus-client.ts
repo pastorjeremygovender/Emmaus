@@ -28,6 +28,7 @@ export interface FlatContext {
   // Journey
   journeyId?: string;
   journeyTitle?: string;
+  journeyType?: string;
   currentDay?: number;
   // Sermon
   sermonId?: string;
@@ -204,6 +205,27 @@ export interface JarvisResponseContract {
   actions: JarvisAction[];
   handoffType: 'pastoral' | 'crisis' | null;
   retrievalFailures: string[];
+}
+
+/** Pick only the server-returned action that may execute an imperative request. */
+export function getImmediateEmmausAction(
+  metadata: Pick<
+    EmmausMetadata,
+    'requestedIntent' | 'jarvis' | 'resourceActions' | 'capabilityActions' | 'nextStep'
+  > | null | undefined,
+): { route?: string } | null {
+  if (
+    metadata?.requestedIntent !== 'OPEN'
+    && metadata?.requestedIntent !== 'READ'
+    && metadata?.requestedIntent !== 'CONTINUE'
+  ) {
+    return null;
+  }
+  return metadata.jarvis?.suggestedNextAction
+    ?? metadata.resourceActions?.[0]
+    ?? metadata.capabilityActions?.[0]
+    ?? metadata.nextStep
+    ?? null;
 }
 
 /** Execute only routes that were validated and returned by the Emmaus server. */

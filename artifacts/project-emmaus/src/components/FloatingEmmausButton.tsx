@@ -27,6 +27,7 @@ import {
 } from '@/lib/emmaus-pending';
 import type { FlatContext } from '@/lib/emmaus-client';
 import { getActiveSermonCompanionContext } from '@/lib/sermon-companion-context';
+import { buildEmmausScreenContext } from '@/lib/emmaus-screen-context';
 
 
 
@@ -65,6 +66,17 @@ function buildContext(
   getMyRooms: ReturnType<typeof useRooms>['getMyRooms'],
   userId: string | undefined,
 ): FlatContext {
+  const screenContext = buildEmmausScreenContext(path, {
+    journeys,
+    progress,
+    getStep,
+    lastRead,
+    translationId,
+  });
+  if (screenContext.journeyId || screenContext.sermonId || screenContext.bookId) {
+    return screenContext;
+  }
+
   // Bible chapter reader
   const bibleReadMatch = path.match(/^\/bible\/read\/([^/]+)\/(\d+)/);
   if (bibleReadMatch) {

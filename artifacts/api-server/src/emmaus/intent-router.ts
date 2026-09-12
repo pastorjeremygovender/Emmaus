@@ -97,9 +97,18 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
     };
   }
 
+  if (/^(?:open|go to|take me to)\s+(?:the|this|my)\s+walk(?:\s+please)?[.!?]*$/.test(value)) {
+    return {
+      intent: "DIRECT_ACTION",
+      requestedCapability: "walks",
+      requestedOperation: "OPEN",
+      confidence: 0.99,
+      clarificationRequired: false,
+    };
+  }
+
   if (
-    /^(?:open|go to|take me to)\s+(?:the\s+)?walk(?:\s+please)?[.!?]*$/.test(value)
-    || /^start\s+(?:my\s+)?walk[.!?]*$/.test(value)
+    /^start\s+(?:my\s+)?walk[.!?]*$/.test(value)
     || /^(?:open|go to|take me to)\s+(?:today's|todays)\s+steps[.!?]*$/.test(value)
   ) {
     return {
@@ -243,6 +252,17 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
       requestedCapability: "sermons",
       requestedOperation: "OPEN",
       resourceQuery: "this week's sermon",
+      confidence: 0.99,
+      clarificationRequired: false,
+    };
+  }
+
+  if (/^(?:open|play|show me|take me to)\s+(?:the|this|my|current)\s+sermon[.!?]*$/.test(routingValue)) {
+    return {
+      intent: "DIRECT_ACTION",
+      requestedCapability: "sermons",
+      requestedOperation: "OPEN",
+      resourceQuery: "the referenced sermon",
       confidence: 0.99,
       clarificationRequired: false,
     };

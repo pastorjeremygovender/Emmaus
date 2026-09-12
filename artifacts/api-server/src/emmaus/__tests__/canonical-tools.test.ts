@@ -24,13 +24,13 @@ describe("canonical Ask Emmaus tools", () => {
     const walk = await resolveCanonicalAskRequest("Open the walk please", "member-1");
     assert.equal(walk.handled, true);
     if (!walk.handled) return;
-    assert.equal(walk.metadata.capabilityActions?.[0]?.capabilityId, "todays-steps");
-    assert.equal(walk.metadata.capabilityActions?.[0]?.route, "/walk");
-    assert.equal(walk.metadata.nextStep?.path, "/walk");
+    assert.equal(walk.metadata.capabilityActions?.length ?? 0, 0);
+    assert.equal(walk.metadata.nextStep, null);
+    assert.match(walk.metadata.answer ?? "", /which walk/i);
     assert.equal(
       normalizeEmmausResponse({ answer: walk.metadata.answer ?? "", metadata: walk.metadata })
         .metadata.jarvis?.suggestedNextAction?.route,
-      "/walk",
+      undefined,
     );
 
     const start = await resolveCanonicalAskRequest("Start my Walk", "member-1");

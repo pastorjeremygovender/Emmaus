@@ -53,8 +53,23 @@ let memberBId = "";
 let publishedSermonId = "";
 let draftSermonId = "";
 
-async function metadataFor(message: string, userId: string) {
-  const result = await resolveCanonicalAskRequest(message, userId);
+async function metadataFor(
+  message: string,
+  userId: string,
+  context?: {
+    journeyContext?: {
+      journeyId: string;
+      journeyTitle?: string;
+      currentDay: number;
+    };
+    sermonContext?: {
+      sermonId: string;
+      sermonTitle: string;
+      scriptureReference?: string;
+    };
+  },
+) {
+  const result = await resolveCanonicalAskRequest(message, userId, undefined, undefined, context);
   assert.equal(result.handled, true, `${message} should use the canonical resolver`);
   if (!result.handled) throw new Error(`Canonical resolver did not handle: ${message}`);
   return result.metadata;
@@ -472,6 +487,47 @@ describe("Ask Emmaus multi-user acceptance matrix", () => {
     const invalidBible = await metadataFor("Read John 999", memberAId);
     assert.equal(invalidBible.nextStep, null);
     assert.equal(invalidBible.recommendations.length, 0);
+  });
+
+  it("uses the visible Walk and sermon as the only targets for contextual open commands", async () => {
+    const walk = await metadataFor("Open the walk please", memberAId, {
+      journeyContext: {
+        journeyId: WALK_ID,
+        journeyTitle: "Untrusted browser title",
+        currentDay: 2,
+      },
+    });
+    assert.equal(walk.recommendations[0]?.resourceId, WALK_ID);
+    assert.equal(walk.recommendations[0]?.title, "Acceptance Walk — Quartz Lantern");
+    assert.equal(walk.nextStep?.path, `/journey/${WALK_ID}/day/2`);
+    assert.equal(walk.resourceActions?.[0]?.resourceId, WALK_ID);
+    assert.equal(walk.resourceActions?.[0]?.route, `/journey/${WALK_ID}/day/2`);
+    assert.equal(walk.recommendations[0]?.path, walk.nextStep?.path);
+
+    const sermon = await metadataFor("Open the sermon", memberAId, {
+      sermonContext: {
+        sermonId: publishedSermonId,
+        sermonTitle: "Untrusted browser title",
+      },
+    });
+    assert.equal(sermon.recommendations[0]?.resourceId, publishedSermonId);
+    assert.equal(sermon.recommendations[0]?.title, "Acceptance Sermon — Steady Harbour");
+    assert.equal(sermon.nextStep?.path, `/sermon/${publishedSermonId}`);
+    assert.equal(sermon.resourceActions?.[0]?.resourceId, publishedSermonId);
+    assert.equal(sermon.resourceActions?.[0]?.route, `/sermon/${publishedSermonId}`);
+    assert.equal(sermon.recommendations[0]?.path, sermon.nextStep?.path);
+
+    const ambiguousWalk = await metadataFor("Open the walk please", memberBId);
+    assert.match(ambiguousWalk.answer ?? "", /which walk/i);
+    assert.equal(ambiguousWalk.nextStep, null);
+    assert.equal(ambiguousWalk.recommendations.length, 0);
+    assert.equal(ambiguousWalk.resourceActions?.length ?? 0, 0);
+
+    const ambiguousSermon = await metadataFor("Open the sermon", memberAId);
+    assert.match(ambiguousSermon.answer ?? "", /which sermon/i);
+    assert.equal(ambiguousSermon.nextStep, null);
+    assert.equal(ambiguousSermon.recommendations.length, 0);
+    assert.equal(ambiguousSermon.resourceActions?.length ?? 0, 0);
   });
 
   it("runs the release golden set through the final response and history boundary", async () => {

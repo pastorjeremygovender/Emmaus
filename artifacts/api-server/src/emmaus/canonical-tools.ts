@@ -40,6 +40,7 @@ import { logger } from "../lib/logger.js";
 import { buildEmmausResourceCatalogue, type EmmausResource } from "./resource-catalogue.js";
 import { actionsForResource } from "./action-registry.js";
 import { listPublishedSermons } from "../lib/canonical-sermon-store.js";
+import type { EmmausContextInput } from "./context-builder.js";
 
 export interface CanonicalActionExecutors {
   completeStep: typeof completeStep;
@@ -177,6 +178,120 @@ function actionForCapabilityResource(
     ...(parentId ? { parentId } : {}),
     route,
   } as NonNullable<EmmausResponseMetadata["resourceActions"]>[number];
+}
+
+type CanonicalRequestContext = Pick<EmmausContextInput, "journeyContext" | "sermonContext" | "jarvisContext">;
+
+function buildResolvedResourceMetadata(
+  type: "walk" | "journey" | "sermon",
+  id: string,
+  title: string,
+  route: string,
+  description: string,
+): EmmausResponseMetadata {
+  const metadata = emptyMetadata();
+  metadata.answer = `Opening “${title}”.`;
+  metadata.recommendations = [{
+    type,
+    title,
+    description,
+    resourceId: id,
+    path: route,
+    ...(type === "sermon" ? { sermonId: id } : {}),
+  }];
+  metadata.resourceRecommendations = [{
+    resourceType: type,
+    resourceId: id,
+    reason: "The published resource currently referenced in Emmaus.",
+  }];
+  metadata.resourceActions = [actionForCapabilityResource("OPEN", type, id, route)];
+  metadata.nextStep = {
+    action: `Open “${title}”.`,
+    primaryButtonText: `Open ${title}`,
+    path: route,
+  };
+  metadata.nextSteps = [{
+    type: type === "sermon" ? "listen" : "continue",
+    text: title,
+    path: route,
+  }];
+  return metadata;
+}
+
+async function resolveContextualWalkOpen(
+  userId: string,
+  context?: CanonicalRequestContext,
+): Promise<EmmausResponseMetadata> {
+  const metadata = emptyMetadata();
+  const journeys = await listPublishedJourneys();
+  const visible = context?.journeyContext;
+  if (visible) {
+    const journey = journeys.find((candidate) =>
+      candidate.id === visible.journeyId
+      && (candidate.journeyType === "walk" || candidate.journeyType === "core"),
+    );
+    if (journey) {
+      const day = Math.max(1, visible.currentDay);
+      return buildResolvedResourceMetadata(
+        "walk",
+        journey.id,
+        journey.title,
+        `/journey/${journey.id}/day/${day}`,
+        `Currently visible at Day ${day}.`,
+      );
+    }
+  }
+
+  const active: Array<{ journey: FrontendJourney; currentDay: number }> = [];
+  for (const journey of journeys) {
+    if (journey.journeyType !== "walk" && journey.journeyType !== "core") continue;
+    const progress = await getProgress(userId, journey.id);
+    if (!progress || progress.status === "paused" || progress.status === "hidden") continue;
+    if (progress.completedDays.length >= journey.durationDays) continue;
+    active.push({ journey, currentDay: Math.max(1, progress.currentDay) });
+  }
+
+  if (active.length === 1) {
+    const { journey, currentDay } = active[0];
+    return buildResolvedResourceMetadata(
+      "walk",
+      journey.id,
+      journey.title,
+      `/journey/${journey.id}/day/${currentDay}`,
+      `Your active Walk at Day ${currentDay}.`,
+    );
+  }
+
+  metadata.answer = active.length > 1
+    ? "Which Walk would you like to open?"
+    : "Which Walk would you like to open?";
+  return metadata;
+}
+
+async function resolveContextualSermonOpen(
+  context?: CanonicalRequestContext,
+): Promise<EmmausResponseMetadata> {
+  const sermonId = context?.sermonContext?.sermonId;
+  if (!sermonId) {
+    const metadata = emptyMetadata();
+    metadata.answer = "Which sermon would you like to open?";
+    return metadata;
+  }
+
+  const sermon = (await listPublishedSermons()).find((candidate) => candidate.id === sermonId);
+  if (!sermon) {
+    const metadata = emptyMetadata();
+    metadata.answer = "Which sermon would you like to open?";
+    return metadata;
+  }
+
+  return buildResolvedResourceMetadata(
+    "sermon",
+    sermon.id,
+    sermon.title,
+    `/sermon/${sermon.id}`,
+    sermon.scriptureReference ?? sermon.summary ?? "Published sermon",
+  );
 }
 
 function recommendationType(resource: EmmausResource): Recommendation["type"] {
@@ -1109,6 +1224,7 @@ export async function resolveCanonicalAskRequest(
   userId: string,
   previousMetadata?: EmmausResponseMetadata,
   executors: CanonicalActionExecutors = productionActionExecutors,
+  context?: CanonicalRequestContext,
 ): Promise<CanonicalToolResolution> {
   const contextual = await resolveContextualFollowUp(message, previousMetadata, userId, executors);
   if (contextual) return { handled: true, metadata: contextual };
@@ -1139,7 +1255,12 @@ export async function resolveCanonicalAskRequest(
         return { handled: true, metadata: await resolveSermonSearch(routed.resourceQuery ?? message) };
       case "DIRECT_ACTION":
         if (routed.requestedCapability === "sermons" && routed.requestedOperation === "OPEN") {
-          return { handled: true, metadata: await resolveCurrentSermon() };
+          return {
+            handled: true,
+            metadata: routed.resourceQuery === "this week's sermon"
+              ? await resolveCurrentSermon()
+              : await resolveContextualSermonOpen(context),
+          };
         }
         if (routed.requestedCapability === "todays-steps") {
           return {
@@ -1156,7 +1277,12 @@ export async function resolveCanonicalAskRequest(
           return { handled: true, metadata: await resolveDailyRhythm(userId) };
         }
         if (routed.requestedCapability === "walks") {
-          return { handled: true, metadata: await resolveContinueJourney(userId, "walk") };
+          return {
+            handled: true,
+            metadata: routed.requestedOperation === "OPEN"
+              ? await resolveContextualWalkOpen(userId, context)
+              : await resolveContinueJourney(userId, "walk"),
+          };
         }
         if (routed.requestedCapability === "journeys") {
           return { handled: true, metadata: await resolveContinueJourney(userId, "journey") };

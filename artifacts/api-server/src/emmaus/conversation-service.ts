@@ -164,8 +164,18 @@ async function reconstructTrustedContext(
         trusted.journeyContext = {
           journeyId: journey.id,
           journeyTitle: journey.title,
+          journeyType: journey.journeyType,
           currentDay: progress?.currentDay ?? 1,
         };
+        const requestedDay = input.journeyContext.currentDay;
+        if (Number.isInteger(requestedDay) && requestedDay! > 0) {
+          const visibleStep = (await listSteps(journey.id)).find((step) =>
+            step.day === requestedDay
+            && step.status === "Published"
+            && !step.isCompletionStep,
+          );
+          if (visibleStep) trusted.journeyContext.currentDay = requestedDay!;
+        }
       }
     }
 
@@ -689,6 +699,8 @@ export async function handleConversation(
       req.message,
       userId,
       previousCanonicalMetadata,
+      undefined,
+      contextInput,
     );
     if (canonical.handled) {
       logger.info(

@@ -25,7 +25,8 @@ export interface BibleContext {
 
 export interface JourneyContext {
   journeyId: string;
-  journeyTitle: string;
+  journeyTitle?: string;
+  journeyType?: string;
   currentDay: number;
   stepTitle?: string;
   stepTheme?: string;
@@ -76,6 +77,7 @@ export interface FlatEmmausContext {
   verseText?: string;
   journeyId?: string;
   journeyTitle?: string;
+  journeyType?: string;
   currentDay?: number;
   sermonId?: string;
   sermonTitle?: string;
@@ -127,6 +129,7 @@ export function toEmmausContextInput(
     ctx.journeyContext = {
       journeyId: flat.journeyId,
       journeyTitle: flat.journeyTitle ?? flat.journeyId,
+      journeyType: flat.journeyType,
       currentDay: Number.isInteger(flat.currentDay) && flat.currentDay! > 0 ? flat.currentDay! : 1,
     };
   }

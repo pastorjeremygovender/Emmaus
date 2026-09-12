@@ -25,6 +25,7 @@ import {
   getMessages,
   saveMemory,
   executeValidatedEmmausAction,
+  getImmediateEmmausAction,
   type EmmausMetadata,
   type SseDoneEvent,
   type HistoryItem,
@@ -164,6 +165,7 @@ export default function AskEmmausConversation() {
   const rootRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const streamingMsgRef = useRef<HTMLDivElement>(null);
+  const responseStartRef = useRef<HTMLDivElement>(null);
   const streamingIdRef = useRef<string | null>(null);
 
   // Keep the outer container height equal to the visual viewport (keyboard-aware)
@@ -189,8 +191,23 @@ export default function AskEmmausConversation() {
     return () => clearTimeout(timer);
   }, [isStreaming]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Scroll position is set to the top of the new message when streaming starts
-  // (effect above). No additional scroll on stream end — the user reads from the top.
+  // After the server finishes, keep the beginning of the completed response
+  // visible. This is important on small Android screens where the composer and
+  // bottom navigation can otherwise leave the member looking at the response's
+  // final card instead of its opening sentence.
+  useEffect(() => {
+    if (isStreaming || !responseStartRef.current || !mainRef.current) return;
+    const timer = setTimeout(() => {
+      if (!responseStartRef.current || !mainRef.current) return;
+      const main = mainRef.current;
+      const response = responseStartRef.current;
+      const responseTop = response.getBoundingClientRect().top;
+      const mainTop = main.getBoundingClientRect().top;
+      const target = main.scrollTop + (responseTop - mainTop) - HEADER_HEIGHT - 12;
+      main.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [isStreaming, messages.length]);
 
   // ─── Stream a response ──────────────────────────────────────────────────────
 
@@ -305,6 +322,15 @@ export default function AskEmmausConversation() {
           !memoryDecided
         ) {
           setMemoryPrompt(payload.metadata.nextStep.action);
+        }
+
+        // Canonical imperative requests are already authenticated and validated
+        // by the server. Execute their returned action immediately instead of
+        // making the member tap a duplicate button. Questions and ambiguous
+        // requests never have an automatic action.
+        const immediateAction = getImmediateEmmausAction(payload.metadata);
+        if (immediateAction) {
+          executeValidatedEmmausAction(immediateAction, setLocation);
         }
         // Do not programmatically focus the follow-up textarea — doing so
         // causes the browser to scroll it into view, overriding the scroll
@@ -486,7 +512,7 @@ export default function AskEmmausConversation() {
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div ref={rootRef} className="h-[100dvh] bg-background flex flex-col overflow-hidden pb-16">
+    <div ref={rootRef} className="h-[100dvh] bg-background flex flex-col overflow-hidden">
       {/* Header */}
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[560px] mx-auto">
@@ -523,7 +549,13 @@ export default function AskEmmausConversation() {
             ) : (
               /* ── Emmaus response ── */
               <div
-                ref={msg.isStreaming ? streamingMsgRef : undefined}
+                ref={
+                  msg.isStreaming
+                    ? streamingMsgRef
+                    : msg.id === messages.filter((item) => item.role === 'assistant').at(-1)?.id
+                      ? responseStartRef
+                      : undefined
+                }
                 className="space-y-5"
               >
                 {/* Prose or thinking bubble */}

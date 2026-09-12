@@ -20,7 +20,7 @@ import {
   sourceSectionFromPath,
 } from '@/lib/emmaus-pending';
 import type { FlatContext } from '@/lib/emmaus-client';
-import { getActiveSermonCompanionContext } from '@/lib/sermon-companion-context';
+import { buildEmmausScreenContext } from '@/lib/emmaus-screen-context';
 
 // ─── Context builder (mirrors FloatingEmmausButton logic) ─────────────────────
 
@@ -31,28 +31,7 @@ function buildBarContext(
   progress: ReturnType<typeof useJourney>['progress'],
   getStep: ReturnType<typeof useJourney>['getStep'],
 ): FlatContext {
-  if (path === '/walk') {
-    const coreJourney = journeys.find((j) => j.journeyType === 'core');
-    if (coreJourney) {
-      const prog = progress[coreJourney.id];
-      const currentDay = prog?.currentDay ?? 1;
-      const step = getStep(coreJourney.id, currentDay);
-      return { entryPoint: 'walk', journeyId: coreJourney.id, journeyTitle: coreJourney.title, currentDay, chapterHeading: step?.title };
-    }
-    return { entryPoint: 'walk' };
-  }
-  if (path.startsWith('/bible')) {
-    if (lastRead) {
-      return { entryPoint: 'bible', bookId: lastRead.bookId, bookName: lastRead.bookName, chapter: lastRead.chapter, chapterHeading: lastRead.chapterHeading };
-    }
-    return { entryPoint: 'bible' };
-  }
-  if (path.match(/^\/sermon-companion\//)) {
-    const ctx = getActiveSermonCompanionContext();
-    return { entryPoint: 'personal', sermonId: ctx?.sermonId, sermonTitle: ctx?.sermonTitle, scriptureReference: ctx?.scriptureReference };
-  }
-  if (path === '/journeys') return { entryPoint: 'journeys' };
-  return { entryPoint: 'personal' };
+  return buildEmmausScreenContext(path, { journeys, progress, getStep, lastRead });
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────

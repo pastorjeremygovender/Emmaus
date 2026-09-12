@@ -99,7 +99,7 @@ describe("typed Ask Emmaus request router", () => {
 
   it("classifies the six release-gate imperatives as canonical actions", () => {
     const cases = [
-      ["Open the walk please", "todays-steps", "OPEN"],
+      ["Open the walk please", "walks", "OPEN"],
       ["Start my Walk", "todays-steps", "OPEN"],
       ["Continue where I stopped", "active-progress", "CONTINUE"],
       ["Open Today's Steps", "todays-steps", "OPEN"],
