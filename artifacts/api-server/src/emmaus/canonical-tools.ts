@@ -1223,7 +1223,7 @@ export async function resolveContextualFollowUp(
     /^(?:open|show me|take me to)\s+(?:the\s+)?(?:(walk|journey|devotional|sermon)\s+)?(?:you\s+)?recommended(?:\s+(?:to me))?(?:\s+(?:yesterday|before|earlier|last time))?[.!?]*$/,
   );
   const followUp = value.match(
-    /^(?:(?:can|could|would)\s+you\s+)?(open|continue|resume|read|show me|take me there|go there)(?:\s+(?:it|that|this|there|the\s+(walk|journey|devotional|sermon)))?(?:\s+please)?[.!?]*$/,
+    /^(?:please\s+)?(?:(?:can|could|would)\s+you\s+)?(open|continue|resume|read|show me|take me there|go there)(?:\s+(?:it|that|this|there|the\s+(walk|journey|devotional|sermon)))?(?:\s+please)?[.!?]*$/,
   );
   if (!followUp && !recommendationRecall) return null;
   const requestedKind = recommendationRecall
