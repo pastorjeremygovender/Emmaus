@@ -235,14 +235,34 @@ public final class PermissionLifecycleInstrumentedTest {
     }
 
     private boolean waitForPermissionDialog() {
-        String[] grantLabels = {"Allow", "While using the app", "Only this time"};
-        for (String label : grantLabels) {
-            if (device.wait(Until.hasObject(By.text(label)), 2500)) return true;
+        String[] resourceIds = {
+            "permission_allow_button",
+            "permission_allow_foreground_only_button",
+            "permission_allow_one_time_button",
+            "permission_deny_button"
+        };
+        for (String id : resourceIds) {
+            if (device.wait(Until.hasObject(By.res("com.android.permissioncontroller", id)), 1500)) return true;
+        }
+        String[] labels = {"Allow", "While using the app", "Only this time", "Don't allow", "Deny"};
+        for (String label : labels) {
+            if (device.wait(Until.hasObject(By.text(label)), 1000)) return true;
         }
         return false;
     }
 
     private boolean clickPermissionButton(boolean grant) {
+        String[] resourceIds = grant
+            ? new String[]{"permission_allow_button", "permission_allow_foreground_only_button", "permission_allow_one_time_button"}
+            : new String[]{"permission_deny_button", "permission_deny_and_dont_ask_again_button"};
+        for (String id : resourceIds) {
+            androidx.test.uiautomator.UiObject2 button =
+                device.findObject(By.res("com.android.permissioncontroller", id));
+            if (button != null) {
+                button.click();
+                return true;
+            }
+        }
         String[] labels = grant
             ? new String[]{"Allow", "While using the app", "Only this time"}
             : new String[]{"Don't allow", "Deny"};
