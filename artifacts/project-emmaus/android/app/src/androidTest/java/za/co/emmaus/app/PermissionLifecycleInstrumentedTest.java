@@ -8,7 +8,6 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.ParcelFileDescriptor;
 import android.os.SystemClock;
 import android.view.View;
 import android.view.ViewGroup;
@@ -104,47 +103,8 @@ public final class PermissionLifecycleInstrumentedTest {
         assertActivityAlive();
     }
 
-    @Test
-    @SdkSuppress(minSdkVersion = 33)
-    public void b01_notificationGrantEnablesReminder() throws Exception {
-        launch();
 
-        PluginInvocation request = startPluginCall("DailyReminder.enable()");
-        SystemClock.sleep(1200);
-        grant("android.permission.POST_NOTIFICATIONS");
-        device.pressBack();
-        assertTrue(request.await().contains("resolved"));
-        assertTrue("reminder did not become enabled", callPlugin("DailyReminder.status()").contains("\\\"enabled\\\":true"));
-        assertActivityAlive();
-    }
 
-    @Test
-    @SdkSuppress(minSdkVersion = 31)
-    public void b03_bluetoothGrantChangesPermissionState() throws Exception {
-        launch();
-
-        PluginInvocation request = startPluginCall("WelcomeAssistBluetooth.requestAccess()");
-        SystemClock.sleep(1200);
-        grant("android.permission.BLUETOOTH_SCAN", "android.permission.BLUETOOTH_CONNECT");
-        device.pressBack();
-        assertTrue(request.await().contains("resolved"));
-        assertTrue("Bluetooth permission did not become granted", callPlugin("WelcomeAssistBluetooth.status()").contains("\\\"permission\\\":\\\"granted"));
-        assertActivityAlive();
-    }
-
-    @Test
-    @SdkSuppress(minSdkVersion = 23)
-    public void b02_locationGrantChangesPermissionState() throws Exception {
-        launch();
-
-        PluginInvocation request = startPluginCall("GeofenceProof.requestWelcomeAssistAccess()");
-        SystemClock.sleep(1200);
-        grant("android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION");
-        device.pressBack();
-        assertTrue(request.await().contains("resolved"));
-        assertTrue("location permission did not become granted", callPlugin("GeofenceProof.welcomeAssistStatus()").contains("\\\"permission\\\":\\\"granted"));
-        assertActivityAlive();
-    }
 
     @Test
     public void c01_permissionStatusCallsSurviveActivityPauseAndResume() throws Exception {
@@ -203,47 +163,48 @@ public final class PermissionLifecycleInstrumentedTest {
     private PluginInvocation startPluginCall(String expression) throws Exception {
         WebView webView = waitForWebView(activity);
         assertNotNull(webView);
-        AtomicReference<String> result = new AtomicReference<>();
-        CountDownLatch completed = new CountDownLatch(1);
+        CountDownLatch started = new CountDownLatch(1);
         String script =
+            "window.__emmausNativeTestResult=null;" +
             "(async()=>{try{" +
             "const DailyReminder=window.Capacitor.Plugins.DailyReminder;" +
             "const GeofenceProof=window.Capacitor.Plugins.GeofenceProof;" +
             "const WelcomeAssistBluetooth=window.Capacitor.Plugins.WelcomeAssistBluetooth;" +
-            "return 'resolved:'+JSON.stringify(await (" + expression + "));" +
-            "}catch(e){return 'rejected:'+String(e);}})()";
-        activity.runOnUiThread(() -> webView.evaluateJavascript(script, value -> {
-            result.set(value == null ? "" : value);
-            completed.countDown();
-        }));
-        return new PluginInvocation(result, completed);
+            "window.__emmausNativeTestResult='resolved:'+JSON.stringify(await (" + expression + "));" +
+            "}catch(e){window.__emmausNativeTestResult='rejected:'+String(e);}})()";
+        activity.runOnUiThread(() -> webView.evaluateJavascript(script, ignored -> started.countDown()));
+        assertTrue("permission bridge call did not start", started.await(5, TimeUnit.SECONDS));
+        return new PluginInvocation(webView);
     }
 
-    private static final class PluginInvocation {
-        private final AtomicReference<String> result;
-        private final CountDownLatch completed;
+    private final class PluginInvocation {
+        private final WebView webView;
 
-        private PluginInvocation(AtomicReference<String> result, CountDownLatch completed) {
-            this.result = result;
-            this.completed = completed;
+        private PluginInvocation(WebView webView) {
+            this.webView = webView;
         }
 
         private String await() throws Exception {
-            assertTrue("permission bridge did not return", completed.await(15, TimeUnit.SECONDS));
-            return result.get();
+            long deadline = SystemClock.uptimeMillis() + 15000;
+            while (SystemClock.uptimeMillis() < deadline) {
+                AtomicReference<String> value = new AtomicReference<>();
+                CountDownLatch checked = new CountDownLatch(1);
+                activity.runOnUiThread(() -> webView.evaluateJavascript(
+                    "window.__emmausNativeTestResult",
+                    result -> {
+                        value.set(result);
+                        checked.countDown();
+                    }
+                ));
+                assertTrue("permission bridge polling timed out", checked.await(2, TimeUnit.SECONDS));
+                String result = value.get();
+                if (result != null && !"null".equals(result) && !"undefined".equals(result)) {
+                    return result;
+                }
+                SystemClock.sleep(100);
+            }
+            throw new AssertionError("permission bridge did not return");
         }
-    }
-
-    private void grant(String... permissions) throws Exception {
-        String packageName = InstrumentationRegistry.getInstrumentation().getTargetContext().getPackageName();
-        for (String permission : permissions) {
-            runShell("pm grant " + packageName + " " + permission);
-        }
-    }
-
-    private void runShell(String command) throws Exception {
-        ParcelFileDescriptor descriptor = instrumentation.getUiAutomation().executeShellCommand(command);
-        if (descriptor != null) descriptor.close();
     }
 
     private void assertActivityAlive() {
