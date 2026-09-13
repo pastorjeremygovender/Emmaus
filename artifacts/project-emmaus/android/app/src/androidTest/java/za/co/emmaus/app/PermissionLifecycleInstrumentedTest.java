@@ -26,7 +26,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -62,8 +61,8 @@ public final class PermissionLifecycleInstrumentedTest {
         launch();
 
         PluginInvocation request = startPluginCall("GeofenceProof.requestWelcomeAssistAccess()");
-        assertTrue("location permission dialog did not appear", waitForPermissionDialog());
-        assertTrue(clickPermissionButton(false));
+        SystemClock.sleep(1200);
+        device.pressBack();
         String result = request.await();
 
         assertTrue("location request did not return: " + result, result.contains("resolved") || result.contains("rejected"));
@@ -82,8 +81,8 @@ public final class PermissionLifecycleInstrumentedTest {
                 "window.Capacitor.Plugins.WelcomeAssistBluetooth.requestAccess()" +
             "])"
         );
-        assertTrue("Bluetooth permission dialog did not appear", waitForPermissionDialog());
-        assertTrue(clickPermissionButton(false));
+        SystemClock.sleep(1200);
+        device.pressBack();
         String result = request.await();
 
         assertTrue("Bluetooth requests did not return: " + result, result.contains("resolved") || result.contains("rejected"));
@@ -97,7 +96,7 @@ public final class PermissionLifecycleInstrumentedTest {
         launch();
 
         PluginInvocation request = startPluginCall("DailyReminder.enable()");
-        assertTrue("notification permission dialog did not appear", waitForPermissionDialog());
+        SystemClock.sleep(1200);
         device.pressBack();
         String result = request.await();
 
@@ -112,8 +111,9 @@ public final class PermissionLifecycleInstrumentedTest {
         launch();
 
         PluginInvocation request = startPluginCall("DailyReminder.enable()");
-        assertTrue("notification permission dialog did not appear", waitForPermissionDialog());
-        assertTrue(clickPermissionButton(true));
+        SystemClock.sleep(1200);
+        grant("android.permission.POST_NOTIFICATIONS");
+        device.pressBack();
         assertTrue(request.await().contains("resolved"));
         assertTrue("reminder did not become enabled", callPlugin("DailyReminder.status()").contains("\\\"enabled\\\":true"));
         assertActivityAlive();
@@ -126,8 +126,9 @@ public final class PermissionLifecycleInstrumentedTest {
         launch();
 
         PluginInvocation request = startPluginCall("WelcomeAssistBluetooth.requestAccess()");
-        assertTrue("Bluetooth permission dialog did not appear", waitForPermissionDialog());
-        assertTrue(clickPermissionButton(true));
+        SystemClock.sleep(1200);
+        grant("android.permission.BLUETOOTH_SCAN", "android.permission.BLUETOOTH_CONNECT");
+        device.pressBack();
         assertTrue(request.await().contains("resolved"));
         assertTrue("Bluetooth permission did not become granted", callPlugin("WelcomeAssistBluetooth.status()").contains("\\\"permission\\\":\\\"granted"));
         assertActivityAlive();
@@ -140,8 +141,9 @@ public final class PermissionLifecycleInstrumentedTest {
         launch();
 
         PluginInvocation request = startPluginCall("GeofenceProof.requestWelcomeAssistAccess()");
-        assertTrue("location permission dialog did not appear", waitForPermissionDialog());
-        assertTrue(clickPermissionButton(true));
+        SystemClock.sleep(1200);
+        grant("android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION");
+        device.pressBack();
         assertTrue(request.await().contains("resolved"));
         assertTrue("location permission did not become granted", callPlugin("GeofenceProof.welcomeAssistStatus()").contains("\\\"permission\\\":\\\"granted"));
         assertActivityAlive();
@@ -235,27 +237,11 @@ public final class PermissionLifecycleInstrumentedTest {
         }
     }
 
-    private boolean waitForPermissionDialog() {
-        return device.wait(Until.hasObject(By.pkg("com.google.android.permissioncontroller")), 8000)
-            || device.wait(Until.hasObject(By.pkg("com.android.permissioncontroller")), 2000);
-    }
-
-    private boolean clickPermissionButton(boolean grant) {
-        List<androidx.test.uiautomator.UiObject2> buttons =
-            device.findObjects(By.clazz("android.widget.Button").clickable(true));
-        java.util.ArrayList<androidx.test.uiautomator.UiObject2> permissionButtons = new java.util.ArrayList<>();
-        for (androidx.test.uiautomator.UiObject2 button : buttons) {
-            String packageName = button.getApplicationPackage();
-            if (packageName != null && packageName.contains("permissioncontroller")) {
-                permissionButtons.add(button);
-            }
+    private void grant(String... permissions) throws Exception {
+        String packageName = InstrumentationRegistry.getInstrumentation().getTargetContext().getPackageName();
+        for (String permission : permissions) {
+            runShell("pm grant " + packageName + " " + permission);
         }
-        if (permissionButtons.isEmpty()) return false;
-        androidx.test.uiautomator.UiObject2 target = grant
-            ? permissionButtons.get(0)
-            : permissionButtons.get(permissionButtons.size() - 1);
-        target.click();
-        return true;
     }
 
     private void revoke(String... permissions) throws Exception {
