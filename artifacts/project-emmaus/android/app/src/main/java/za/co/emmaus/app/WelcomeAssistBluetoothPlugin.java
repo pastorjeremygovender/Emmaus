@@ -49,7 +49,6 @@ public final class WelcomeAssistBluetoothPlugin extends Plugin {
     private ScanCallback activeCallback;
     private Runnable activeTimeout;
     private PluginCall activeCall;
-    private final PermissionRequestGuard permissionRequest = new PermissionRequestGuard();
 
     @PluginMethod
     public void status(PluginCall call) {
@@ -84,41 +83,19 @@ public final class WelcomeAssistBluetoothPlugin extends Plugin {
 
     @PluginMethod
     public void requestAccess(PluginCall call) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || (hasScanPermission() && hasConnectPermission())) {
             call.resolve();
             return;
         }
-        try {
-            if (hasScanPermission() && hasConnectPermission()) {
-                call.resolve();
-                return;
-            }
-            if (!permissionRequest.begin(getContext(), call, "bluetooth.nearby")) return;
-            try {
-                requestPermissionForAlias("nearbyDevices", call, "permissionResult");
-            } catch (RuntimeException error) {
-                permissionRequest.fail(getContext(), call, "bluetooth.nearby.start", error);
-            }
-        } catch (RuntimeException error) {
-            NativePermissionDiagnostics.exception(getContext(), "bluetooth.nearby", error);
-            call.reject("Bluetooth access could not be requested.");
-        }
-    }
-
-    @PermissionCallback
-    public void permissionResult(PluginCall call) {
-        if (!permissionRequest.finish(getContext(), call, "bluetooth.nearby")) return;
-        try {
-            if (hasScanPermission() && hasConnectPermission()) {
-                if (call != null) call.resolve();
-            } else if (call != null) {
-                NativePermissionDiagnostics.stage(getContext(), "bluetooth.nearby.denied");
-                call.reject("Bluetooth access was not granted.");
-            }
-        } catch (RuntimeException error) {
-            NativePermissionDiagnostics.exception(getContext(), "bluetooth.nearby.callback", error);
-            if (call != null) call.reject("Bluetooth access could not be confirmed.");
-        }
+        MainActivity activity = getActivity() instanceof MainActivity ? (MainActivity) getActivity() : null;
+        if (activity == null) { call.reject("Bluetooth permission is unavailable while Emmaus is not active."); return; }
+        boolean started = activity.requestEmmausPermissions(
+            new String[]{Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT},
+            granted -> {
+                if (granted && hasScanPermission() && hasConnectPermission()) call.resolve();
+                else call.reject("Bluetooth access was not granted.");
+            });
+        if (!started) call.reject("Another permission request is already in progress.");
     }
 
     @PluginMethod
