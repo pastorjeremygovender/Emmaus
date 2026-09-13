@@ -24,6 +24,8 @@ import androidx.test.uiautomator.Until;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.FixMethodOrder;
+import org.junit.runners.MethodSorters;
 import org.junit.runner.RunWith;
 
 import java.util.concurrent.CountDownLatch;
@@ -35,6 +37,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * tests intentionally do not invoke plugin callback methods directly.
  */
 @RunWith(AndroidJUnit4.class)
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public final class PermissionLifecycleInstrumentedTest {
     private android.app.Instrumentation instrumentation;
     private UiDevice device;
@@ -56,8 +59,7 @@ public final class PermissionLifecycleInstrumentedTest {
 
     @Test
     @SdkSuppress(minSdkVersion = 23)
-    public void locationDenialKeepsMainActivityAlive() throws Exception {
-        revoke("android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION");
+    public void a01_locationDenialKeepsMainActivityAlive() throws Exception {
         launch();
 
         PluginInvocation request = startPluginCall("GeofenceProof.requestWelcomeAssistAccess()");
@@ -71,8 +73,7 @@ public final class PermissionLifecycleInstrumentedTest {
 
     @Test
     @SdkSuppress(minSdkVersion = 31)
-    public void bluetoothDenialAndRapidSecondTapKeepMainActivityAlive() throws Exception {
-        revoke("android.permission.BLUETOOTH_SCAN", "android.permission.BLUETOOTH_CONNECT");
+    public void a02_bluetoothDenialAndRapidSecondTapKeepMainActivityAlive() throws Exception {
         launch();
 
         PluginInvocation request = startPluginCall(
@@ -91,8 +92,7 @@ public final class PermissionLifecycleInstrumentedTest {
 
     @Test
     @SdkSuppress(minSdkVersion = 33)
-    public void notificationCancellationKeepsMainActivityAlive() throws Exception {
-        revoke("android.permission.POST_NOTIFICATIONS");
+    public void a03_notificationCancellationKeepsMainActivityAlive() throws Exception {
         launch();
 
         PluginInvocation request = startPluginCall("DailyReminder.enable()");
@@ -106,8 +106,7 @@ public final class PermissionLifecycleInstrumentedTest {
 
     @Test
     @SdkSuppress(minSdkVersion = 33)
-    public void notificationGrantEnablesReminder() throws Exception {
-        revoke("android.permission.POST_NOTIFICATIONS");
+    public void b01_notificationGrantEnablesReminder() throws Exception {
         launch();
 
         PluginInvocation request = startPluginCall("DailyReminder.enable()");
@@ -121,8 +120,7 @@ public final class PermissionLifecycleInstrumentedTest {
 
     @Test
     @SdkSuppress(minSdkVersion = 31)
-    public void bluetoothGrantChangesPermissionState() throws Exception {
-        revoke("android.permission.BLUETOOTH_SCAN", "android.permission.BLUETOOTH_CONNECT");
+    public void b03_bluetoothGrantChangesPermissionState() throws Exception {
         launch();
 
         PluginInvocation request = startPluginCall("WelcomeAssistBluetooth.requestAccess()");
@@ -136,8 +134,7 @@ public final class PermissionLifecycleInstrumentedTest {
 
     @Test
     @SdkSuppress(minSdkVersion = 23)
-    public void locationGrantChangesPermissionState() throws Exception {
-        revoke("android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION");
+    public void b02_locationGrantChangesPermissionState() throws Exception {
         launch();
 
         PluginInvocation request = startPluginCall("GeofenceProof.requestWelcomeAssistAccess()");
@@ -150,7 +147,7 @@ public final class PermissionLifecycleInstrumentedTest {
     }
 
     @Test
-    public void permissionStatusCallsSurviveActivityPauseAndResume() throws Exception {
+    public void c01_permissionStatusCallsSurviveActivityPauseAndResume() throws Exception {
         launch();
         assertTrue(callPlugin("Promise.all([" +
             "DailyReminder.status()," +
@@ -172,7 +169,7 @@ public final class PermissionLifecycleInstrumentedTest {
 
     @Test
     @SdkSuppress(maxSdkVersion = 32)
-    public void notificationEnableDoesNotRequestUnsupportedRuntimePermission() throws Exception {
+    public void z01_notificationEnableDoesNotRequestUnsupportedRuntimePermission() throws Exception {
         launch();
         assertTrue(callPlugin("DailyReminder.enable()").contains("resolved"));
         assertActivityAlive();
@@ -180,7 +177,7 @@ public final class PermissionLifecycleInstrumentedTest {
 
     @Test
     @SdkSuppress(maxSdkVersion = 30)
-    public void bluetoothAccessDoesNotRequestAndroid12PermissionOnOlderDevices() throws Exception {
+    public void z02_bluetoothAccessDoesNotRequestAndroid12PermissionOnOlderDevices() throws Exception {
         launch();
         assertTrue(callPlugin("WelcomeAssistBluetooth.requestAccess()").contains("resolved"));
         assertActivityAlive();
@@ -241,14 +238,6 @@ public final class PermissionLifecycleInstrumentedTest {
         String packageName = InstrumentationRegistry.getInstrumentation().getTargetContext().getPackageName();
         for (String permission : permissions) {
             runShell("pm grant " + packageName + " " + permission);
-        }
-    }
-
-    private void revoke(String... permissions) throws Exception {
-        String packageName = InstrumentationRegistry.getInstrumentation().getTargetContext().getPackageName();
-        for (String permission : permissions) {
-            runShell("pm revoke " + packageName + " " + permission);
-            runShell("pm clear-permission-flags " + packageName + " " + permission + " user-set user-fixed");
         }
     }
 
