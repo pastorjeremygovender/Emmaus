@@ -44,6 +44,12 @@ jobs:
         run: pnpm --filter @workspace/project-emmaus run android:verify
       - name: Build unified debug APK
         run: pnpm --filter @workspace/project-emmaus run android:assembleDebug
+      - name: Free space for Android emulator
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/lib/android/sdk/ndk
+          df -h /
       - name: Enable Linux Android acceleration
         run: |
           sudo chmod 666 /dev/kvm
