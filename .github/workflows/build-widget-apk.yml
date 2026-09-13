@@ -37,7 +37,9 @@ jobs:
       - name: Enable pnpm
         run: corepack enable
       - name: Install workspace dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        run: |
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm add --workspace-root --save-dev --ignore-scripts --lockfile=false @rollup/rollup-darwin-x64@4.62.2
       - name: Make Gradle wrapper executable
         run: chmod +x artifacts/project-emmaus/android/gradlew
       - name: Verify Android release configuration
