@@ -26,8 +26,6 @@ import org.json.JSONObject;
         }
 )
 public final class GeofenceProofPlugin extends Plugin {
-    private final PermissionRequestGuard foregroundPermissionRequest = new PermissionRequestGuard();
-    private final PermissionRequestGuard backgroundPermissionRequest = new PermissionRequestGuard();
     @PluginMethod
     public void welcomeAssistStatus(PluginCall call) {
         JSObject result = new JSObject();
@@ -48,82 +46,34 @@ public final class GeofenceProofPlugin extends Plugin {
 
     @PluginMethod
     public void requestWelcomeAssistAccess(PluginCall call) {
-        try {
-            if (hasForegroundPermission()) {
-                call.resolve();
-                return;
-            }
-            if (!foregroundPermissionRequest.begin(getContext(), call, "location.foreground")) return;
-            try {
-                requestPermissionForAlias("location", call, "welcomeLocationResult");
-            } catch (RuntimeException error) {
-                foregroundPermissionRequest.fail(getContext(), call, "location.foreground.start", error);
-            }
-        } catch (RuntimeException error) {
-            NativePermissionDiagnostics.exception(getContext(), "location.foreground", error);
-            call.reject("Location permission could not be requested.");
-        }
-    }
-
-    @com.getcapacitor.annotation.PermissionCallback
-    public void welcomeLocationResult(PluginCall call) {
-        if (!foregroundPermissionRequest.finish(getContext(), call, "location.foreground")) return;
-        try {
-            if (hasForegroundPermission()) {
-                if (call != null) call.resolve();
-            } else if (call != null) {
-                NativePermissionDiagnostics.stage(getContext(), "location.foreground.denied");
-                call.reject("Location access was not granted.");
-            }
-        } catch (RuntimeException error) {
-            NativePermissionDiagnostics.exception(getContext(), "location.foreground.callback", error);
-            if (call != null) call.reject("Location access could not be confirmed.");
-        }
+        if (hasForegroundPermission()) { call.resolve(); return; }
+        MainActivity activity = getActivity() instanceof MainActivity ? (MainActivity) getActivity() : null;
+        if (activity == null) { call.reject("Location permission is unavailable while Emmaus is not active."); return; }
+        boolean started = activity.requestEmmausPermissions(
+            new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
+            granted -> {
+                if (granted && hasForegroundPermission()) call.resolve();
+                else call.reject("Location access was not granted.");
+            });
+        if (!started) call.reject("Another permission request is already in progress.");
     }
 
     @PluginMethod
     public void requestBackgroundAccess(PluginCall call) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            call.resolve();
-            return;
-        }
-        try {
-            if (!hasForegroundPermission()) {
-                call.reject("Foreground location permission is required first.");
-                return;
-            }
-            if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-                    == PackageManager.PERMISSION_GRANTED) {
-                call.resolve();
-                return;
-            }
-            if (!backgroundPermissionRequest.begin(getContext(), call, "location.background")) return;
-            try {
-                requestPermissionForAlias("backgroundLocation", call, "backgroundLocationResult");
-            } catch (RuntimeException error) {
-                backgroundPermissionRequest.fail(getContext(), call, "location.background.start", error);
-            }
-        } catch (RuntimeException error) {
-            NativePermissionDiagnostics.exception(getContext(), "location.background", error);
-            call.reject("Background location permission could not be requested.");
-        }
-    }
-
-    @com.getcapacitor.annotation.PermissionCallback
-    public void backgroundLocationResult(PluginCall call) {
-        if (!backgroundPermissionRequest.finish(getContext(), call, "location.background")) return;
-        try {
-            if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-                    == PackageManager.PERMISSION_GRANTED) {
-                if (call != null) call.resolve();
-            } else if (call != null) {
-                NativePermissionDiagnostics.stage(getContext(), "location.background.denied");
-                call.reject("Background location access was not granted.");
-            }
-        } catch (RuntimeException error) {
-            NativePermissionDiagnostics.exception(getContext(), "location.background.callback", error);
-            if (call != null) call.reject("Background location access could not be confirmed.");
-        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) { call.resolve(); return; }
+        if (!hasForegroundPermission()) { call.reject("Foreground location permission is required first."); return; }
+        if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) { call.resolve(); return; }
+        MainActivity activity = getActivity() instanceof MainActivity ? (MainActivity) getActivity() : null;
+        if (activity == null) { call.reject("Background location permission is unavailable while Emmaus is not active."); return; }
+        boolean started = activity.requestEmmausPermissions(
+            new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION},
+            granted -> {
+                if (granted && ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                        == PackageManager.PERMISSION_GRANTED) call.resolve();
+                else call.reject("Background location access was not granted.");
+            });
+        if (!started) call.reject("Another permission request is already in progress.");
     }
 
     private boolean hasForegroundPermission() {
