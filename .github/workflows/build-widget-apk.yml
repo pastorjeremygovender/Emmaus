@@ -39,7 +39,7 @@ jobs:
       - name: Install workspace dependencies
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
-          pnpm add --workspace-root --save-dev --ignore-scripts --lockfile=false @rollup/rollup-darwin-x64@4.62.2 @esbuild/darwin-x64@0.27.3
+          pnpm add --workspace-root --save-dev --ignore-scripts --lockfile=false @rollup/rollup-darwin-x64@4.62.2 @esbuild/darwin-x64@0.27.3 lightningcss-darwin-x64@1.32.0
           git checkout -- package.json
       - name: Make Gradle wrapper executable
         run: chmod +x artifacts/project-emmaus/android/gradlew
