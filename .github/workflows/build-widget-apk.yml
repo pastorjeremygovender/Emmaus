@@ -67,8 +67,7 @@ jobs:
             adb wait-for-device
             adb shell getprop sys.boot_completed
             sleep 15
-            cd artifacts/project-emmaus/android
-            ./gradlew connectedDebugAndroidTest --stacktrace
+            cd artifacts/project-emmaus/android && ./gradlew connectedDebugAndroidTest --stacktrace
       - name: Upload Android test report
         if: always()
         uses: actions/upload-artifact@v4
