@@ -47,10 +47,12 @@ jobs:
         run: pnpm --filter @workspace/project-emmaus run android:verify
       - name: Build unified debug APK
         run: pnpm --filter @workspace/project-emmaus run android:assembleDebug
+      - name: Start Android debug bridge
+        run: adb start-server
       - name: Run real permission lifecycle tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 33
           target: google_apis
           arch: x86_64
           profile: Nexus 4
