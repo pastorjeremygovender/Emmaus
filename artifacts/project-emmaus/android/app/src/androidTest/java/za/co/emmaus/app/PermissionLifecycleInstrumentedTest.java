@@ -26,6 +26,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -235,45 +236,26 @@ public final class PermissionLifecycleInstrumentedTest {
     }
 
     private boolean waitForPermissionDialog() {
-        String[] resourceIds = {
-            "permission_allow_button",
-            "permission_allow_foreground_only_button",
-            "permission_allow_one_time_button",
-            "permission_deny_button"
-        };
-        for (String id : resourceIds) {
-            if (device.wait(Until.hasObject(By.res("com.android.permissioncontroller", id)), 1500)) return true;
-        }
-        String[] labels = {"Allow", "While using the app", "Only this time", "Don't allow", "Deny"};
-        for (String label : labels) {
-            if (device.wait(Until.hasObject(By.text(label)), 1000)) return true;
-        }
-        return false;
+        return device.wait(Until.hasObject(By.pkg("com.google.android.permissioncontroller")), 8000)
+            || device.wait(Until.hasObject(By.pkg("com.android.permissioncontroller")), 2000);
     }
 
     private boolean clickPermissionButton(boolean grant) {
-        String[] resourceIds = grant
-            ? new String[]{"permission_allow_button", "permission_allow_foreground_only_button", "permission_allow_one_time_button"}
-            : new String[]{"permission_deny_button", "permission_deny_and_dont_ask_again_button"};
-        for (String id : resourceIds) {
-            androidx.test.uiautomator.UiObject2 button =
-                device.findObject(By.res("com.android.permissioncontroller", id));
-            if (button != null) {
-                button.click();
-                return true;
+        List<androidx.test.uiautomator.UiObject2> buttons =
+            device.findObjects(By.clazz("android.widget.Button").clickable(true));
+        java.util.ArrayList<androidx.test.uiautomator.UiObject2> permissionButtons = new java.util.ArrayList<>();
+        for (androidx.test.uiautomator.UiObject2 button : buttons) {
+            String packageName = button.getApplicationPackage();
+            if (packageName != null && packageName.contains("permissioncontroller")) {
+                permissionButtons.add(button);
             }
         }
-        String[] labels = grant
-            ? new String[]{"Allow", "While using the app", "Only this time"}
-            : new String[]{"Don't allow", "Deny"};
-        for (String label : labels) {
-            androidx.test.uiautomator.UiObject2 button = device.findObject(By.text(label));
-            if (button != null) {
-                button.click();
-                return true;
-            }
-        }
-        return false;
+        if (permissionButtons.isEmpty()) return false;
+        androidx.test.uiautomator.UiObject2 target = grant
+            ? permissionButtons.get(0)
+            : permissionButtons.get(permissionButtons.size() - 1);
+        target.click();
+        return true;
     }
 
     private void revoke(String... permissions) throws Exception {
