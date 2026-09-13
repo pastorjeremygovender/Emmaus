@@ -190,7 +190,9 @@ public final class PermissionLifecycleInstrumentedTest {
         ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         activity = instrumentation.startActivitySync(launch);
         assertNotNull(activity);
-        assertNotNull(waitForWebView(activity));
+        WebView webView = waitForWebView(activity);
+        assertNotNull(webView);
+        assertTrue("Capacitor plugins did not become ready", waitForCapacitorPlugins(webView));
         return activity;
     }
 
@@ -271,6 +273,32 @@ public final class PermissionLifecycleInstrumentedTest {
         assertNotNull(activity);
         assertFalse(activity.isFinishing());
         assertFalse(activity.isDestroyed());
+    }
+
+    private boolean waitForCapacitorPlugins(WebView webView) {
+        long deadline = SystemClock.uptimeMillis() + 20000;
+        while (SystemClock.uptimeMillis() < deadline) {
+            AtomicReference<Boolean> ready = new AtomicReference<>(false);
+            CountDownLatch checked = new CountDownLatch(1);
+            activity.runOnUiThread(() -> webView.evaluateJavascript(
+                "Boolean(window.Capacitor&&window.Capacitor.Plugins&&" +
+                "window.Capacitor.Plugins.DailyReminder&&" +
+                "window.Capacitor.Plugins.GeofenceProof&&" +
+                "window.Capacitor.Plugins.WelcomeAssistBluetooth)",
+                value -> {
+                    ready.set("true".equals(value));
+                    checked.countDown();
+                }));
+            try {
+                checked.await(1, TimeUnit.SECONDS);
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+            if (Boolean.TRUE.equals(ready.get())) return true;
+            SystemClock.sleep(250);
+        }
+        return false;
     }
 
     private static WebView waitForWebView(Activity activity) {
