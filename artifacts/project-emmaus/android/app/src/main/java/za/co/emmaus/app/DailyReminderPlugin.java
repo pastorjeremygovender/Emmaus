@@ -28,7 +28,6 @@ public final class DailyReminderPlugin extends Plugin {
     private static final String ENABLED = "enabled";
     private static final String MINUTE = "minute";
     private static final int ALARM = 9100;
-    private final PermissionRequestGuard permissionRequest = new PermissionRequestGuard();
 
     @PluginMethod public void status(PluginCall call) {
         try {
@@ -47,34 +46,24 @@ public final class DailyReminderPlugin extends Plugin {
 
     @PluginMethod public void enable(PluginCall call) {
         try {
-            if (!hasNotificationPermission()) {
-                if (!permissionRequest.begin(getContext(), call, "daily-reminders.notification")) return;
-                try {
-                    requestPermissionForAlias("notifications", call, "notificationResult");
-                } catch (RuntimeException error) {
-                    permissionRequest.fail(getContext(), call, "daily-reminders.notification.start", error);
-                }
-                return;
-            }
-            enableNow(call);
+            if (hasNotificationPermission()) { enableNow(call); return; }
+            MainActivity activity = getActivity() instanceof MainActivity ? (MainActivity) getActivity() : null;
+            if (activity == null) { call.reject("Daily reminders are unavailable while Emmaus is not active."); return; }
+            boolean started = activity.requestEmmausPermissions(
+                new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                granted -> {
+                    try {
+                        if (granted && hasNotificationPermission()) enableNow(call);
+                        else call.resolve(statusObject());
+                    } catch (RuntimeException error) {
+                        NativePermissionDiagnostics.exception(getContext(), "daily-reminders.permission-result-result", error);
+                        call.reject("Daily reminders could not be enabled.");
+                    }
+                });
+            if (!started) call.reject("Another permission request is already in progress.");
         } catch (RuntimeException error) {
             NativePermissionDiagnostics.exception(getContext(), "daily-reminders.enable", error);
             call.reject("Daily reminders could not be enabled.");
-        }
-    }
-
-    @PermissionCallback public void notificationResult(PluginCall call) {
-        if (!permissionRequest.finish(getContext(), call, "daily-reminders.notification")) return;
-        try {
-            if (!hasNotificationPermission()) {
-                NativePermissionDiagnostics.stage(getContext(), "daily-reminders.notification.denied");
-                if (call != null) call.resolve(statusObject());
-                return;
-            }
-            enableNow(call);
-        } catch (RuntimeException error) {
-            NativePermissionDiagnostics.exception(getContext(), "daily-reminders.notification.callback", error);
-            if (call != null) call.reject("Daily reminders could not be enabled.");
         }
     }
 
