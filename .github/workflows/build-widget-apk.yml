@@ -15,11 +15,12 @@ permissions:
 
 env:
   EMMAUS_ANDROID_BUILD: unified-release-candidate
+  EMMAUS_ANDROID_TEST_BUILD_TYPE: debug
 
 jobs:
   build-debug-apk:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: macos-13
+    timeout-minutes: 60
     steps:
       - name: Check out unified source
         uses: actions/checkout@v4
@@ -43,6 +44,26 @@ jobs:
         run: pnpm --filter @workspace/project-emmaus run android:verify
       - name: Build unified debug APK
         run: pnpm --filter @workspace/project-emmaus run android:assembleDebug
+      - name: Run real permission lifecycle tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 4
+          disk-size: 2048M
+          disable-animations: true
+          script: cd artifacts/project-emmaus/android && ./gradlew connectedDebugAndroidTest --stacktrace
+      - name: Upload Android test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rc8-debug-permission-test-report
+          path: |
+            artifacts/project-emmaus/android/app/build/reports/androidTests/connected/**
+            artifacts/project-emmaus/android/app/build/outputs/androidTest-results/connected/**
+          if-no-files-found: warn
+          retention-days: 14
       - name: Upload unified installable APK
         uses: actions/upload-artifact@v4
         with:

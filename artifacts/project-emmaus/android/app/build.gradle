@@ -3,7 +3,7 @@ apply plugin: 'com.android.application'
 android {
     namespace = "za.co.emmaus.app"
     compileSdk = rootProject.ext.compileSdkVersion
-    testBuildType = "release"
+    testBuildType = System.getenv("EMMAUS_ANDROID_TEST_BUILD_TYPE") ?: "release"
     defaultConfig {
         applicationId = "za.co.emmaus.app"
         minSdk = rootProject.ext.minSdkVersion
