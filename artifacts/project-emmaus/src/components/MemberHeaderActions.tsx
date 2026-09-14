@@ -53,8 +53,6 @@ export function MemberHeaderActions({ compact = false }: { compact?: boolean }) 
               It’s All About JESUS.
             </p>
             <p className="border-t border-border/60 pt-2 text-[11px] text-muted-foreground">Emmaus 1.2.0</p>
-               </div>
-             )}
           </div>
         </PopoverContent>
       </Popover>
