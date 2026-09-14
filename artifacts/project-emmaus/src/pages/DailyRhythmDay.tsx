@@ -9,16 +9,9 @@
  *   My Emmaus.
  *
  * Modes:
- *   Live    — day === member's current day; shows Continue button; marks complete on tap,
- *             then waits on the completion decision card for an explicit choice.
- *   Replay  — day <  member's current day; read-only; shows ReadingCompletionFooter only.
- *             Never writes progress.
- *
- * Future-day guard (spec Task 7):
- *   If a normal (non-dev-mode) member lands on a day that is ahead of their current
- *   rhythm or whose step is not yet published, they are immediately redirected to
- *   My Emmaus via replace semantics. The "You're ahead of the rhythm" screen is
- *   preserved ONLY as a Development Mode diagnostic.
+ *   Open    — any published, incomplete day; shows Continue and records completion
+ *             only when the member deliberately presses it.
+ *   Replay  — a genuinely completed day; read-only.
  *
  * Previous Days remains accessible via the secondary link on the Walk card,
  * not from the bottom of this reading screen.
@@ -31,68 +24,24 @@ import { useLocation, useParams } from 'wouter';
 import { useJourney, type Progress } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Check } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { HearEmmausButton } from '@/components/emmaus/HearEmmausButton';
 import { DailyRhythmReading, resolveDisplayName } from '@/components/DailyRhythmReading';
 import { getStepLabel } from '@/lib/step-label';
 import { buildReturnScrollKey } from '@/components/EmbeddedScripture';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { BottomNav } from '@/components/BottomNav';
-import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
 import { goBackOrFallback } from '@/lib/return-context';
 import { getDailyRhythmState } from '@/lib/journeys-api';
 import { consumeOpeningDestination } from '@/lib/opening-destination';
-import { resolveDailyRhythmCalendar } from '@/lib/daily-rhythm-calendar';
 import { acknowledgeNativeDailyRhythmDeepLink } from '@/lib/native-daily-rhythm-deep-link';
-
-// ─── Ahead-of-rhythm screen (Dev Mode only) ───────────────────────────────────
-// Shown ONLY in Development Mode so admins/testers can diagnose future-day access.
-// Normal members are silently redirected to /walk instead (see guard below).
-
-function AheadOfRhythmDevOnly({
-  hasPreviousDays,
-  onBack,
-  onViewPrevious,
-}: {
-  hasPreviousDays: boolean;
-  onBack: () => void;
-  onViewPrevious: () => void;
-}) {
-  return (
-    <div className="min-h-[100dvh] flex items-center justify-center bg-background p-6">
-      <div className="text-center space-y-4 max-w-[320px]">
-        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
-          <Check size={28} className="text-primary" />
-        </div>
-        <h2 className="text-[22px] font-serif font-medium">You're ahead of the rhythm.</h2>
-        <p className="text-[15px] text-muted-foreground leading-relaxed">
-          Today's 10 Minutes with Jesus will be ready soon. Check back later.
-        </p>
-        {hasPreviousDays && (
-          <button
-            onClick={onViewPrevious}
-            className="text-[15px] text-primary font-medium hover:underline"
-          >
-            View Previous Days →
-          </button>
-        )}
-        <button
-          onClick={onBack}
-          className="block mx-auto text-[14px] text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Back to My Emmaus
-        </button>
-      </div>
-    </div>
-  );
-}
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function DailyRhythmDay() {
   const { dayNumber } = useParams<{ dayNumber: string }>();
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { journeys, progress, getStepsForJourney, completeStep, dailyRhythmState } = useJourney();
 
@@ -100,7 +49,6 @@ export default function DailyRhythmDay() {
   // Falls back to the known seed ID so existing deep-links don't break.
   const journeyId = journeys.find(j => j.journeyType === 'daily-rhythm')?.id ?? '15-minutes-with-jesus';
   const day = parseInt(dayNumber ?? '1', 10);
-  const devMode = isDevelopmentMode(user);
   const [dailyProgress, setDailyProgress] = useState<Progress | null>(null);
   const [dailyProgressLoading, setDailyProgressLoading] = useState(true);
 
@@ -120,14 +68,12 @@ export default function DailyRhythmDay() {
   const journey = journeys.find(j => j.id === journeyId);
   const isDailyRhythmJourney = journey?.journeyType === 'daily-rhythm';
   const prog = dailyProgress ?? dailyRhythmState?.progress ?? progress[journeyId];
-  const resolution = resolveDailyRhythmCalendar(undefined, dailyRhythmState);
-  const currentDay = resolution?.currentDay ?? prog?.currentDay ?? 1;
   const steps = getStepsForJourney(journeyId);
 
   // Startup can advance Daily Rhythm immediately before this page mounts,
   // while JourneyContext may still hold the progress snapshot fetched a
-  // moment earlier. Refresh the authoritative state before applying the
-  // future-day guard, or the newly unlocked lesson is sent back to /walk.
+  // moment earlier. Refresh the authoritative state before rendering the
+  // reader and completion state.
   useEffect(() => {
     if (!journey || journey.journeyType !== 'daily-rhythm' || !user?.id) {
       setDailyProgressLoading(false);
@@ -187,9 +133,7 @@ export default function DailyRhythmDay() {
   // link when the user arrived from My Emmaus (not from Previous Days).
   const openPreviousDays = () => setLocation('/daily-rhythm/previous?source=walk');
 
-  const hasPreviousDays =
-    currentDay > 1 &&
-    steps.some(s => s.status === 'Published' && s.day < currentDay);
+  const hasPreviousDays = steps.some(s => s.status === 'Published' && s.day !== day);
 
   // Resolve the step. A widget carries the exact step ID it displayed so a
   // stale day number can never silently open a different authored entry.
@@ -200,8 +144,6 @@ export default function DailyRhythmDay() {
   const widgetJourneyMismatch = Boolean(widgetJourneyId) && widgetJourneyId !== journeyId;
   const widgetStepUnavailable = Boolean(widgetStepId) && !widgetStep || widgetJourneyMismatch;
   const step = widgetStep ?? stepForDay;
-  const isAhead = day > currentDay && !devMode;
-
   useEffect(() => {
     if (
       source !== 'widget' ||
@@ -250,27 +192,23 @@ export default function DailyRhythmDay() {
     );
   }
 
-  // ── Future-day guard (spec Task 6 + 7) ───────────────────────────────────
-  // Dev mode: show the diagnostic screen so admins can see the state.
-  // Normal members: redirect silently to My Emmaus — never dead-end here.
-  if (isAhead || !step) {
-    if (devMode) {
-      return (
-        <AheadOfRhythmDevOnly
-          hasPreviousDays={hasPreviousDays}
-          onBack={goBack}
-          onViewPrevious={goToPreviousDays}
-        />
-      );
-    }
-    // Normal member — redirect immediately with replace so Back does not loop.
-    // Use a component-level effect to ensure this runs after render.
-    return <RedirectToWalk setLocation={setLocation} />;
+  // Published entries are independently readable. A missing entry is a content
+  // availability problem, not a Daily Rhythm progression lock.
+  if (!step) {
+    return (
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center p-6">
+        <div className="text-center space-y-4">
+          <p className="text-muted-foreground text-sm">This Daily Rhythm entry is not available.</p>
+          <Button variant="outline" className="rounded-xl" onClick={goBack}>Back to My Emmaus</Button>
+        </div>
+      </div>
+    );
   }
 
   // ── Reader ────────────────────────────────────────────────────────────────
-  // Replay: day already completed in a prior session (read-only).
-  const isReplay = day < currentDay || alreadyCompleted;
+  // Only a genuine completed-day record makes a day read-only. An uncompleted
+  // earlier or later published day remains open for deliberate completion.
+  const isReplay = alreadyCompleted;
 
   // Header back arrow:
   //   - Live (not yet completed) → My Emmaus

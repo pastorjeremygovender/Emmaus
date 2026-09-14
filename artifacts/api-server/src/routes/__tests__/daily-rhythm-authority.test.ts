@@ -242,22 +242,35 @@ describe("Daily Rhythm authority — 25 persisted-state cases", () => {
     const rs = await Promise.all([complete(key, 1), complete(key, 1)]);
     assert.ok(rs.every(r => r.status === 200)); assert.equal((await startup(key)).currentDay, 1);
   });
-  it("TEST 17 — future URL access returns no future step", async () => {
+  it("TEST 17 — member step access returns every published day", async () => {
     const key = `dr-17-${nonce}`; await reset(key); await startup(key);
     const r = json<{ steps: Array<{ day: number }> }>(await request(`/api/journeys/${journeyId}/steps`, await auth(key)));
-    assert.ok(r.steps.every(s => s.day <= 1));
+    assert.deepEqual(r.steps.map(s => s.day), [1, 2, 3]);
   });
-  it("TEST 18 — future API completion is rejected", async () => {
+  it("TEST 18 — an open published day can be deliberately completed without moving assignment", async () => {
     const key = `dr-18-${nonce}`; await reset(key); await startup(key);
-    assert.equal((await complete(key, 2)).status, 409);
+    const response = await complete(key, 2);
+    assert.equal(response.status, 200);
+    const body = json<{ progress: { currentDay: number; completedDays: number[] }; dailyRhythmState: { assignedDay: number; currentDayNumber: number } }>(response);
+    assert.deepEqual(body.progress.completedDays, [2]);
+    assert.equal(body.progress.currentDay, 1);
+    assert.equal(body.dailyRhythmState.assignedDay, 1);
+    assert.equal(body.dailyRhythmState.currentDayNumber, 1);
   });
   it("TEST 19 — manipulated client date cannot alter server decision", async () => {
     const key = `dr-19-${nonce}`; await reset(key); await startup(key); await complete(key, 1);
     assert.equal((await startup(key)).currentDay, 1);
   });
-  it("TEST 20 — Previous Days remains review-only", async () => {
-    const key = `dr-20-${nonce}`; await reset(key); await startup(key); await complete(key, 1); await ageProgress(key); await startup(key);
-    assert.equal((await complete(key, 1)).status, 409);
+  it("TEST 20 — completing the assigned day does not advance it on the same date", async () => {
+    const key = `dr-20-${nonce}`; await reset(key); await startup(key);
+    assert.equal((await complete(key, 1)).status, 200);
+    const sameDate = await startup(key);
+    assert.equal(sameDate.currentDay, 1);
+    assert.equal(sameDate.assignedDay, 1);
+    await ageProgress(key);
+    const laterDate = await startup(key);
+    assert.equal(laterDate.currentDay, 2);
+    assert.equal(laterDate.assignedDay, 2);
   });
   it("TEST 21 — separate users have isolated progression", async () => {
     const a = `dr-21a-${nonce}`, b = `dr-21b-${nonce}`; await reset(a); await reset(b); await startup(a); await startup(b); await complete(a, 1); await ageProgress(a);
@@ -271,10 +284,12 @@ describe("Daily Rhythm authority — 25 persisted-state cases", () => {
     const key = `dr-23-${nonce}`; await reset(key); await startup(key); await complete(key, 1); await ageProgress(key);
     assert.equal((await startup(key)).currentDay, 2); assert.equal((await startup(key)).currentDay, 2);
   });
-  it("TEST 24 — direct future requests remain locked after a later date", async () => {
+  it("TEST 24 — later-date assignment advances independently of readable future content", async () => {
     const key = `dr-24-${nonce}`; await reset(key); await startup(key); await ageProgress(key);
     const r = json<{ steps: Array<{ day: number }> }>(await request(`/api/journeys/${journeyId}/steps`, await auth(key)));
-     assert.ok(r.steps.every(s => s.day <= 2)); assert.equal((await complete(key, 3)).status, 409);
+     assert.deepEqual(r.steps.map(s => s.day), [1, 2, 3]);
+     assert.equal((await complete(key, 3)).status, 200);
+     assert.equal((await startup(key)).assignedDay, 2);
   });
   it("TEST 25 — opening decisions are user-specific and date-gated", async () => {
     const a = `dr-25a-${nonce}`, b = `dr-25b-${nonce}`; await reset(a); await reset(b);

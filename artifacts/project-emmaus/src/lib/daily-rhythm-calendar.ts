@@ -48,8 +48,7 @@ export function dailyRhythmHistoryStatus(
   resolution: DailyRhythmResolution,
 ): DailyRhythmHistoryStatus {
   if (resolution.progress?.completedDays.includes(day)) return 'Completed';
-  if (day === resolution.currentDay && !resolution.currentStepCompleted) return 'Open';
-  return day < resolution.currentDay ? 'Missed' : 'Open';
+  return 'Open';
 }
 
 /** Only published entries may be selected for a Daily Rhythm destination. */

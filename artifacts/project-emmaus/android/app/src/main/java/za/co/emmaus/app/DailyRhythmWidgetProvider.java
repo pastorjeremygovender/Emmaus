@@ -76,7 +76,12 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
 
     private static WidgetContent loadCurrentContent() throws Exception {
         JSONObject state = requestJson(STATE_PATH);
-        int day = Math.max(1, state.optInt("currentDayNumber", 1));
+        // The opening ledger's assigned day is the same server decision used
+        // by the app. currentDayNumber is only a compatibility fallback.
+        int day = Math.max(1, state.optInt(
+            "assignedDay",
+            state.optInt("currentDayNumber", 1)
+        ));
         String journeyId = state.optString("journeyId", "");
         String stepId = "";
         String title = clean(state.optString("currentStepTitle", "Today's Daily Rhythm"));

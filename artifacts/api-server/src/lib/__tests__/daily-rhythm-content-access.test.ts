@@ -21,18 +21,18 @@ describe("Daily Rhythm content access", () => {
     );
   });
 
-  it("keeps ordinary members limited to their server-authorized day", () => {
+  it("returns every published day to ordinary members", () => {
     assert.deepEqual(
       selectDailyRhythmSteps(steps, "user", 2),
-      steps.slice(0, 2),
+      [steps[0], steps[1], steps[3]],
     );
     assert.deepEqual(
       selectDailyRhythmSteps(steps, "user", 1),
-      steps.slice(0, 1),
+      [steps[0], steps[1], steps[3]],
     );
   });
 
-  it("does not let member access widen when progress is absent", () => {
-    assert.deepEqual(selectDailyRhythmSteps(steps, "user", 1), [steps[0]]);
+  it("does not expose draft authoring entries to members", () => {
+    assert.ok(selectDailyRhythmSteps(steps, "user", 1).every(step => step.status === "Published"));
   });
 });

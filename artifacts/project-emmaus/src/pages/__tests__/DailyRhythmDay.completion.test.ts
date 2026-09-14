@@ -12,7 +12,7 @@ describe('DailyRhythmDay completion contract', () => {
     expect(source).toContain('setJustCompleted(true)');
     expect(source).toContain("new CustomEvent('emmaus:opening-completed'");
     expect(source).toContain('detail: { decision: completion.dailyRhythmStartup }');
-    expect(source).toContain('returnLabel="Back to Today\'s Steps"');
+    expect(source).toContain('returnLabel="Back to My Emmaus"');
     expect(source).toContain('onReturn={() => goBackOrFallback(postCompletionDestination, setLocation)}');
     expect(source).not.toContain('setTimeout(() => setLocation(\'/walk\')');
     expect(source).not.toContain('Returning to Today\'s Steps…');
@@ -25,5 +25,11 @@ describe('DailyRhythmDay completion contract', () => {
     expect(source).toContain('getDailyRhythmState()');
     expect(source).toContain('dailyProgressLoading');
     expect(source).toContain('if (isDailyRhythmJourney && dailyProgressLoading)');
+  });
+
+  it('does not keep a future-day guard or infer replay from the assigned day', () => {
+    expect(source).not.toContain('isAhead');
+    expect(source).not.toContain('AheadOfRhythmDevOnly');
+    expect(source).toContain('const isReplay = alreadyCompleted;');
   });
 });

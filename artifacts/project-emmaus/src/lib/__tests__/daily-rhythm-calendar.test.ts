@@ -88,7 +88,7 @@ describe('Daily Rhythm calendar contract', () => {
     };
 
     expect(dailyRhythmHistoryStatus(1, resolution)).toBe('Completed');
-    expect(dailyRhythmHistoryStatus(2, resolution)).toBe('Missed');
+    expect(dailyRhythmHistoryStatus(2, resolution)).toBe('Open');
     expect(dailyRhythmHistoryStatus(4, resolution)).toBe('Open');
   });
 

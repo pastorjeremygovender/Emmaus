@@ -937,8 +937,9 @@ router.get("/journeys/:id/steps", async (req: Request, res: Response) => {
     }
     const progress = await store.getProgress(userId, journeyId);
     const currentDay = progress?.currentDay ?? 1;
-    // All elapsed published days remain available for review, whether or not
-    // the member opened or finished them. Future days stay server-gated.
+    // Members can read every published day. The opening ledger remains the
+    // authority for today's assigned progression; it is not a content-visibility
+    // filter.
     res.json({ steps: selectDailyRhythmSteps(steps, role, currentDay) });
     return;
   }
@@ -1177,8 +1178,8 @@ router.post("/journeys/:id/progress/complete-step", async (req: Request, res: Re
     res.json({ progress: prog, dailyRhythmStartup, dailyRhythmState });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not complete step";
-    if (message.includes("Daily Rhythm step is locked")) {
-      res.status(409).json({ error: message, code: "DAILY_RHYTHM_STEP_LOCKED" });
+    if (message.includes("Daily Rhythm step is unavailable")) {
+      res.status(409).json({ error: message, code: "DAILY_RHYTHM_STEP_UNAVAILABLE" });
       return;
     }
     res.status(500).json({ error: message });
