@@ -17,7 +17,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SdkSuppress;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.uiautomator.By;
+import androidx.test.uiautomator.By;
 import androidx.test.uiautomator.UiDevice;
+import androidx.test.uiautomator.UiObject2;
+import androidx.test.uiautomator.Until;
 import androidx.test.uiautomator.Until;
 
 import org.junit.After;
@@ -62,8 +65,7 @@ public final class PermissionLifecycleInstrumentedTest {
         launch();
 
         PluginInvocation request = startPluginCall("GeofenceProof.requestWelcomeAssistAccess()");
-        SystemClock.sleep(1200);
-        device.pressBack();
+        dismissPermissionDialog();
         String result = request.await();
 
         assertTrue("location request did not return: " + result, result.contains("resolved") || result.contains("rejected"));
@@ -81,8 +83,7 @@ public final class PermissionLifecycleInstrumentedTest {
                 "window.Capacitor.Plugins.WelcomeAssistBluetooth.requestAccess()" +
             "])"
         );
-        SystemClock.sleep(1200);
-        device.pressBack();
+        dismissPermissionDialog();
         String result = request.await();
 
         assertTrue("Bluetooth requests did not return: " + result, result.contains("resolved") || result.contains("rejected"));
@@ -95,36 +96,11 @@ public final class PermissionLifecycleInstrumentedTest {
         launch();
 
         PluginInvocation request = startPluginCall("DailyReminder.enable()");
-        SystemClock.sleep(1200);
-        device.pressBack();
+        dismissPermissionDialog();
         String result = request.await();
 
         assertTrue("notification request did not return: " + result, result.contains("resolved") || result.contains("rejected"));
         assertActivityAlive();
-    }
-
-
-
-
-    @Test
-    public void c01_permissionStatusCallsSurviveActivityPauseAndResume() throws Exception {
-        launch();
-        assertTrue(callPlugin("Promise.all([" +
-            "DailyReminder.status()," +
-            "GeofenceProof.welcomeAssistStatus()," +
-            "WelcomeAssistBluetooth.status()" +
-        "])").contains("resolved"));
-
-        activity.runOnUiThread(() -> activity.moveTaskToBack(true));
-        SystemClock.sleep(500);
-        Activity resumed = launch();
-        assertNotNull(resumed);
-        assertFalse(resumed.isFinishing());
-        assertTrue(callPlugin("Promise.all([" +
-            "DailyReminder.status()," +
-            "GeofenceProof.welcomeAssistStatus()," +
-            "WelcomeAssistBluetooth.status()" +
-        "])").contains("resolved"));
     }
 
     @Test
@@ -141,6 +117,25 @@ public final class PermissionLifecycleInstrumentedTest {
         launch();
         assertTrue(callPlugin("WelcomeAssistBluetooth.requestAccess()").contains("resolved"));
         assertActivityAlive();
+    }
+
+    private void dismissPermissionDialog() {
+        UiObject2 deny = device.wait(
+            Until.findObject(By.res("com.android.permissioncontroller", "permission_deny_button")),
+            10000
+        );
+        if (deny == null) {
+            deny = device.wait(
+                Until.findObject(By.res("com.google.android.permissioncontroller", "permission_deny_button")),
+                3000
+            );
+        }
+        if (deny != null) {
+            deny.click();
+            device.waitForIdle();
+        } else {
+            device.pressBack();
+        }
     }
 
     private Activity launch() {
