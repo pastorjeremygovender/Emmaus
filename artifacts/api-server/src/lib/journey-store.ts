@@ -1276,10 +1276,12 @@ export async function getDailyRhythmState(userId: string): Promise<DailyRhythmSt
     maxPublishedDay || Number(journeyRows.rows[0]?.duration_days || 1),
     Math.max(1, elapsedCalendarDays + 1),
   );
-  const currentDayNumber = Math.min(
-    maxPublishedDay || Number(journeyRows.rows[0]?.duration_days || 1),
-    Math.max(progress?.currentDay ?? 1, todayAvailableDay),
-  );
+  let firstIncompleteDay = 1;
+  while (completedDays.has(firstIncompleteDay) && firstIncompleteDay <= maxPublishedDay) {
+    firstIncompleteDay += 1;
+  }
+  const allPublishedDaysComplete = maxPublishedDay > 0 && firstIncompleteDay > maxPublishedDay;
+  const currentDayNumber = allPublishedDaysComplete ? maxPublishedDay : firstIncompleteDay;
   const ledgerRows = await db.execute(sql`
     SELECT assigned_day, completed_today, state
     FROM daily_rhythm_opening_ledger
@@ -1303,7 +1305,7 @@ export async function getDailyRhythmState(userId: string): Promise<DailyRhythmSt
     currentStepId: currentStep?.id ?? null,
     currentDayNumber,
     currentStepTitle: currentStep?.title ?? null,
-    currentStepCompleted: completedToday || completedDays.has(currentDayNumber),
+    currentStepCompleted: allPublishedDaysComplete || completedDays.has(currentDayNumber),
     completedStepIds,
     availableStepIds,
     reviewableStepIds,
@@ -1417,14 +1419,11 @@ export async function getDailyRhythmStartup(
     const legacyCompleted = Array.isArray(row.completed_days)
       ? row.completed_days.map((day: unknown) => Number(day)).filter((day: number) => Number.isFinite(day) && day >= 1)
       : [];
-    const maxCompletedDay = legacyCompleted.length > 0 ? Math.max(...legacyCompleted) : 0;
+    const completedSet = new Set(legacyCompleted);
+    let repairedCurrentDay = 1;
+    while (completedSet.has(repairedCurrentDay)) repairedCurrentDay += 1;
     const rawCurrentDay = Number(row.current_day || 1);
-    const hasOpeningHistory = Boolean(row.last_daily_open_date || row.daily_rhythm_startup_date);
-    const positionLooksLegacy = maxCompletedDay > 0 && rawCurrentDay > maxCompletedDay;
-    const positionNeedsRepair = positionLooksLegacy && !hasOpeningHistory;
-    const repairedCurrentDay = positionNeedsRepair
-      ? maxCompletedDay
-      : Math.max(1, rawCurrentDay);
+    const positionNeedsRepair = rawCurrentDay !== repairedCurrentDay;
     const missingUnlockMarker = !row.daily_rhythm_unlock_at;
     if (positionNeedsRepair || missingUnlockMarker) {
       await client.query(
@@ -1471,27 +1470,9 @@ export async function getDailyRhythmStartup(
       Number(journeyResult.rows[0]?.duration_days || 365),
       elapsedCalendarDays + 1,
     );
-    // Compatibility with legacy rows that only persisted the opening marker
-    // (and not a trustworthy start timestamp). It still advances one day at
-    // most; a real authored start date always wins and can account for
-    // multiple missed calendar days without blocking today's assignment.
-    if (previousLastDailyOpenDate && previousLastDailyOpenDate < today &&
-        todayAvailableDay <= currentDay) {
-      todayAvailableDay = Math.min(
-        Number(journeyResult.rows[0]?.duration_days || 365),
-        currentDay + 1,
-      );
-    }
-    // A missed day never blocks the current calendar day. Move the position
-    // directly to today's authored day, while retaining completion history.
-    if (todayAvailableDay > currentDay) {
-      await client.query(
-        `UPDATE user_journey_progress SET current_day = $1, daily_rhythm_unlock_at = $2,
-                updated_at = $3 WHERE id = $4`,
-        [todayAvailableDay, now, now, row.id],
-      );
-      row = (await client.query(`SELECT * FROM user_journey_progress WHERE id = $1`, [row.id])).rows[0];
-    }
+    // Calendar age controls what content has been published, but never skips
+    // unfinished days. The member's position is always the first incomplete day.
+    todayAvailableDay = Math.max(currentDay, Math.min(todayAvailableDay, currentDay));
 
     // Resolve today's ledger before changing the position. The unique
     // user/date ledger row is the durable acknowledgement that prevents
@@ -1506,31 +1487,8 @@ export async function getDailyRhythmStartup(
     let ledger = existingLedger.rows[0];
     const hasOpenedToday = Boolean(ledger);
 
-    // Opening acknowledgement, not Finished, advances the sequence. A
-    // missed local date still advances only one content day on the next
-    // actual opening; it never catches up multiple days at once.
-    if (!hasOpenedToday && previousLastDailyOpenDate && today > previousLastDailyOpenDate) {
-      const next = await client.query(
-        `SELECT day FROM journey_steps
-         WHERE journey_id = $1 AND status = 'Published'
-           AND COALESCE(is_completion_step, false) = false AND day > $2
-         ORDER BY day ASC LIMIT 1`,
-        [journeyId, currentDay],
-      );
-      if (next.rows[0]) {
-        await client.query(
-          `UPDATE user_journey_progress
-           SET current_day = $1, daily_rhythm_unlock_at = $2::timestamptz,
-               updated_at = $3::timestamp
-           WHERE id = $4`,
-          [Number(next.rows[0].day), now, now, row.id],
-        );
-        row = (await client.query(
-          `SELECT * FROM user_journey_progress WHERE id = $1`,
-          [row.id],
-        )).rows[0];
-      }
-    }
+    // Opening never advances progress. Only completing the current contiguous
+    // day moves the sequence.
     mark("unlock_resolution", progressStartedAt);
 
     const targetStepStartedAt = performance.now();
@@ -1775,12 +1733,19 @@ export async function completeStep(
       throw new Error("Progress record disappeared; please try again");
     }
 
-    if (isDailyRhythm && day !== lockedProgress.currentDay) {
+    const existingCompletedDays = lockedProgress.completedDays ?? [];
+    const existingCompletedSet = new Set(existingCompletedDays);
+    let expectedDay = 1;
+    while (existingCompletedSet.has(expectedDay)) expectedDay += 1;
+    if (isDailyRhythm && day !== expectedDay) {
       throw new Error("That Daily Rhythm step is locked");
     }
-    const completedDays = [...new Set([...(lockedProgress.completedDays ?? []), day])];
+    const completedDays = [...new Set([...existingCompletedDays, day])];
+    const contiguousCompleted = new Set(completedDays);
+    let nextIncompleteDay = 1;
+    while (contiguousCompleted.has(nextIncompleteDay)) nextIncompleteDay += 1;
     const newCurrentDay = isDailyRhythm
-      ? lockedProgress.currentDay
+      ? nextIncompleteDay
       : Math.max(lockedProgress.currentDay, day + 1);
     const rows = await tx
       .update(userJourneyProgressTable)

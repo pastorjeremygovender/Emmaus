@@ -551,7 +551,7 @@ export default function ChapterReader() {
           <div>
 
             {/* Scripture zone */}
-            <div className="px-5 pt-8">
+            <div className="px-5 py-8">
               {chapterData.verses.map(v => {
                 const hl = getHighlight(book.id, chapterNum, v.verse);
                 const deepLinked = startVerseParam !== null &&

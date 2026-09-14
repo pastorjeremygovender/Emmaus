@@ -112,7 +112,7 @@ function buildContext(
     };
   }
 
-  // Walk / Today's Steps
+  // Walk / My Emmaus
   if (path === '/walk') {
     const coreJourney = journeys.find((j) => j.journeyType === 'core');
     if (coreJourney) {

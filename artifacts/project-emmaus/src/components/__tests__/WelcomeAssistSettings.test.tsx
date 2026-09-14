@@ -3,77 +3,50 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const native = vi.hoisted(() => ({
-  geofence: {
-    welcomeAssistStatus: vi.fn(),
-    requestWelcomeAssistAccess: vi.fn(),
-  },
-  bluetooth: {
-    status: vi.fn(),
-    requestAccess: vi.fn(),
-  },
+  geofence: { welcomeAssistStatus: vi.fn(), requestWelcomeAssistAccess: vi.fn() },
+  bluetooth: { status: vi.fn(), requestAccess: vi.fn() },
 }));
 
 vi.mock('@capacitor/core', () => ({
-  Capacitor: {
-    isNativePlatform: () => true,
-    getPlatform: () => 'android',
-  },
+  Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android' },
   registerPlugin: (name: string) => name === 'GeofenceProof' ? native.geofence : native.bluetooth,
 }));
 
 import { WelcomeAssistSettings } from '@/components/WelcomeAssistSettings';
 
-describe('WelcomeAssistSettings native states', () => {
+describe('WelcomeAssistSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    native.bluetooth.status.mockResolvedValue({
-      supported: true,
-      enabled: false,
-      permission: 'prompt',
-      state: 'permission-needed',
-      scanning: false,
-      automaticScanning: false,
-    });
+    localStorage.clear();
     native.geofence.welcomeAssistStatus.mockResolvedValue({
-      permission: 'granted',
-      locationEnabled: true,
-      tracking: false,
-      privacy: 'local',
+      permission: 'granted', locationEnabled: true, tracking: false, privacy: 'local',
+    });
+    native.bluetooth.status.mockResolvedValue({
+      supported: true, enabled: true, permission: 'granted', state: 'ready',
     });
   });
 
-  it('shows permission-needed Bluetooth without scanning or exposing diagnostics', async () => {
+  it('defaults off and requests permissions once when enabled', async () => {
     const user = userEvent.setup();
     render(<WelcomeAssistSettings />);
-
-    await waitFor(() => expect(native.bluetooth.status).toHaveBeenCalledOnce());
-    expect(screen.getByText(/Bluetooth: permission needed/i)).toBeInTheDocument();
-    expect(screen.queryByText(/latitude|longitude|endpoint|device id|diagnostic/i)).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /check bluetooth readiness/i }));
-    await waitFor(() => expect(native.bluetooth.requestAccess).toHaveBeenCalledOnce());
-    expect(native.bluetooth.status.mock.calls.length).toBeGreaterThanOrEqual(3);
+    const toggle = screen.getByRole('switch', { name: /welcome assist/i });
+    expect(toggle).not.toBeChecked();
+    await user.click(toggle);
+    await waitFor(() => expect(toggle).toBeChecked());
+    expect(native.geofence.welcomeAssistStatus).toHaveBeenCalled();
+    expect(native.bluetooth.status).toHaveBeenCalled();
+    expect(localStorage.getItem('emmaus_welcome_assist_enabled')).toBe('true');
   });
 
-  it('gives a plain privacy-safe location readiness message', async () => {
+  it('can be switched off without revoking phone permissions', async () => {
+    localStorage.setItem('emmaus_welcome_assist_enabled', 'true');
     const user = userEvent.setup();
     render(<WelcomeAssistSettings />);
-
-    await user.click(screen.getByRole('button', { name: /test location detection/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/one-time location test/i)).toBeInTheDocument();
-    });
-    expect(screen.getByText(/no route is tracked and no coordinates are shown or sent/i)).toBeInTheDocument();
-  });
-
-  it('keeps both optional tests available when the Bluetooth status probe rejects', async () => {
-    native.bluetooth.status.mockRejectedValueOnce(new Error('Bluetooth status unavailable'));
-
-    render(<WelcomeAssistSettings />);
-
-    await waitFor(() => expect(native.bluetooth.status).toHaveBeenCalledOnce());
-    expect(screen.getByRole('button', { name: /test location detection/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /check bluetooth readiness/i })).toBeInTheDocument();
+    const toggle = screen.getByRole('switch', { name: /welcome assist/i });
+    await user.click(toggle);
+    expect(toggle).not.toBeChecked();
+    expect(localStorage.getItem('emmaus_welcome_assist_enabled')).toBe('false');
+    expect(native.geofence.requestWelcomeAssistAccess).not.toHaveBeenCalled();
+    expect(native.bluetooth.requestAccess).not.toHaveBeenCalled();
   });
 });

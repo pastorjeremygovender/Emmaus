@@ -1,23 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Bluetooth, MapPin } from 'lucide-react';
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 
 interface GeofenceBridge {
-  openDiagnostics(): Promise<void>;
   welcomeAssistStatus(): Promise<{ permission: 'granted' | 'needed'; locationEnabled: boolean; tracking: boolean; privacy: string }>;
   requestWelcomeAssistAccess(): Promise<void>;
 }
-
 interface BluetoothStatus {
   supported: boolean;
   enabled: boolean;
   permission: 'granted' | 'prompt' | 'denied';
   state?: 'unsupported' | 'off' | 'permission-needed' | 'ready';
-  scanning: boolean;
-  automaticScanning: boolean;
 }
-
 interface BluetoothBridge {
   status(): Promise<BluetoothStatus>;
   requestAccess(): Promise<void>;
@@ -25,70 +20,54 @@ interface BluetoothBridge {
 
 const geofence = registerPlugin<GeofenceBridge>('GeofenceProof');
 const bluetooth = registerPlugin<BluetoothBridge>('WelcomeAssistBluetooth');
+const STORAGE_KEY = 'emmaus_welcome_assist_enabled';
 
 export function WelcomeAssistSettings() {
-  const nativeAndroid = useMemo(
-    () => Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android',
-    [],
-  );
-  const [bluetoothStatus, setBluetoothStatus] = useState<BluetoothStatus | null>(null);
+  const nativeAndroid = useMemo(() => Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android', []);
+  const [enabled, setEnabled] = useState(() => localStorage.getItem(STORAGE_KEY) === 'true');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const refreshBluetooth = async () => {
-    if (!nativeAndroid) return;
-    try {
-      setBluetoothStatus(await bluetooth.status());
-    } catch {
-      setBluetoothStatus(null);
-    }
-  };
-
-  useEffect(() => {
-    void refreshBluetooth();
-  }, [nativeAndroid]);
-
   if (!nativeAndroid) return null;
 
-  const openLocationTest = async () => {
-    setMessage('');
-    try {
-      const status = await geofence.welcomeAssistStatus();
-      if (status.permission !== 'granted') {
-        await geofence.requestWelcomeAssistAccess();
-        const updated = await geofence.welcomeAssistStatus();
-        setMessage(updated.permission === 'granted'
-          ? 'Location permission is ready. No route is tracked and no coordinates are shown or sent.'
-          : 'Location access was not granted. You can enable it later in phone settings.');
-      } else if (!status.locationEnabled) {
-        setMessage('Turn on Location in Android settings, then try again.');
-      } else {
-        setMessage('Welcome Assist is ready for a one-time location test. No route is tracked and no coordinates are shown or sent.');
-      }
-    } catch {
-      setMessage('Location access was not granted. You can enable it later in phone settings.');
+  const changeEnabled = async (next: boolean) => {
+    if (!next) {
+      localStorage.setItem(STORAGE_KEY, 'false');
+      setEnabled(false);
+      setMessage('Welcome Assist is off. Emmaus will not check for arrival.');
+      return;
     }
-  };
 
-  const prepareBluetooth = async () => {
     setBusy(true);
     setMessage('');
     try {
-      const status = await bluetooth.status();
-      if (!status.supported) {
-        setMessage('This phone does not support Bluetooth beacon detection.');
+      let location = await geofence.welcomeAssistStatus();
+      if (location.permission !== 'granted') {
+        await geofence.requestWelcomeAssistAccess();
+        location = await geofence.welcomeAssistStatus();
+      }
+      let bt = await bluetooth.status();
+      if (bt.supported && bt.permission !== 'granted') {
+        await bluetooth.requestAccess();
+        bt = await bluetooth.status();
+      }
+      if (location.permission !== 'granted') {
+        setMessage('Location permission is needed to turn on Welcome Assist.');
         return;
       }
-      if (status.permission !== 'granted') {
-        await bluetooth.requestAccess();
+      if (bt.supported && bt.permission !== 'granted') {
+        setMessage('Bluetooth permission is needed to turn on Welcome Assist.');
+        return;
       }
-      const updated = await bluetooth.status();
-      setBluetoothStatus(updated);
-      setMessage(updated.enabled
-        ? 'Bluetooth is ready for Welcome Assist testing.'
-        : 'Permission is ready. Switch on Bluetooth to continue testing.');
+      localStorage.setItem(STORAGE_KEY, 'true');
+      setEnabled(true);
+      setMessage(!location.locationEnabled
+        ? 'Welcome Assist is on. Switch on Location in phone settings when you want arrival recognition.'
+        : bt.supported && !bt.enabled
+          ? 'Welcome Assist is on. Switch on Bluetooth when you want arrival recognition.'
+          : 'Welcome Assist is on. Emmaus does not record your route.');
     } catch {
-      setMessage('Bluetooth access was not granted. You can enable it later in phone settings.');
+      setMessage('Permission was not granted. Welcome Assist remains off.');
     } finally {
       setBusy(false);
     }
@@ -96,46 +75,29 @@ export function WelcomeAssistSettings() {
 
   return (
     <div className="rounded-xl border border-border/50 bg-card px-3.5 py-3" data-testid="welcome-assist-settings">
-      <div className="flex items-start gap-2.5">
-        <MapPin size={17} className="mt-0.5 shrink-0 text-primary" aria-hidden="true" />
-        <div>
-          <p className="text-[14px] font-semibold">Welcome Assist testing</p>
-          <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-            Optional testing for discreet arrival recognition. Emmaus does not continuously track your location or record your route.
-          </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2.5">
+          <MapPin size={17} className="mt-0.5 shrink-0 text-primary" aria-hidden="true" />
+          <div>
+            <label htmlFor="welcome-assist-toggle" className="text-[14px] font-semibold">Welcome Assist</label>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+              Optional arrival recognition. Emmaus does not continuously track your location or record your route.
+            </p>
+          </div>
         </div>
-      </div>
-
-      <div className="mt-3 grid gap-2">
-        <Button type="button" variant="outline" className="min-h-[44px] justify-start gap-2" onClick={openLocationTest}>
-          <MapPin size={16} aria-hidden="true" />
-          Test location detection
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="min-h-[44px] justify-start gap-2"
-          onClick={prepareBluetooth}
+        <Switch
+          id="welcome-assist-toggle"
+          checked={enabled}
           disabled={busy}
-        >
-          <Bluetooth size={16} aria-hidden="true" />
-          {busy ? 'Checking Bluetooth…' : 'Check Bluetooth readiness'}
-        </Button>
+          onCheckedChange={next => void changeEnabled(next)}
+          data-testid="toggle-welcome-assist"
+          aria-label="Welcome Assist"
+        />
       </div>
-
-      {bluetoothStatus && (
-        <p className="mt-2 text-[11px] text-muted-foreground" aria-live="polite">
-           Bluetooth: {bluetoothStatus.state === 'unsupported' || !bluetoothStatus.supported
-             ? 'unsupported'
-             : bluetoothStatus.state === 'permission-needed'
-               ? 'permission needed'
-               : bluetoothStatus.state === 'off'
-                 ? 'off'
-                 : bluetoothStatus.state === 'ready' || bluetoothStatus.enabled
-                   ? 'ready'
-                   : 'not ready'}
-        </p>
-      )}
+      <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+        <Bluetooth size={14} aria-hidden="true" />
+        <span>{busy ? 'Requesting permissions…' : enabled ? 'On' : 'Off'}</span>
+      </div>
       {message && <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground" aria-live="polite">{message}</p>}
     </div>
   );

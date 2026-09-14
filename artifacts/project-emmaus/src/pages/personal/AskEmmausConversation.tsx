@@ -314,8 +314,8 @@ export default function AskEmmausConversation() {
       const streamingMsgId = `streaming-${Date.now()}`;
       streamingIdRef.current = streamingMsgId;
        isStreamingRef.current = true;
-       followStreamingRef.current = true;
-       userScrolledAwayRef.current = false;
+       followStreamingRef.current = false;
+       userScrolledAwayRef.current = true;
        initialScrollPendingRef.current = true;
        lastFollowAtRef.current = 0;
       setIsStreaming(true);

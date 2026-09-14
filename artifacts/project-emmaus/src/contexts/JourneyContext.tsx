@@ -441,12 +441,15 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
           const existing = p[journeyId];
           if (!existing) return p;
           const completedDays = [...new Set([...existing.completedDays, day])];
+          let nextIncompleteDay = 1;
+          const completedSet = new Set(completedDays);
+          while (completedSet.has(nextIncompleteDay)) nextIncompleteDay += 1;
           return {
             ...p,
             [journeyId]: {
               ...existing,
               completedDays,
-              currentDay: Math.max(existing.currentDay, day + 1),
+              currentDay: nextIncompleteDay,
               lastCompletedAt: new Date().toISOString(),
             },
           };

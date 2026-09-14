@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Share2 } from 'lucide-react';
+import { Share2 } from 'lucide-react';
 import { shareContent } from '@/lib/share';
 
 /**
@@ -38,9 +38,7 @@ export function ShareEmmausButton({ compact = false }: { compact?: boolean }) {
       aria-label={status === 'copied' ? 'Emmaus link copied' : 'Share Emmaus'}
       title={status === 'copied' ? 'Link copied' : 'Share Emmaus'}
     >
-      {status === 'copied'
-        ? <Check size={19} aria-hidden="true" />
-        : <Share2 size={compact ? 17 : 19} aria-hidden="true" />}
+      <Share2 size={compact ? 17 : 19} aria-hidden="true" />
     </button>
   );
 }

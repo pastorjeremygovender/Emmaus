@@ -17,6 +17,10 @@ env:
   EMMAUS_ANDROID_BUILD: unified-release-candidate
   EMMAUS_ANDROID_TEST_BUILD_TYPE: debug
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: true
+
 jobs:
   build-debug-apk:
     runs-on: ubuntu-latest

@@ -8,7 +8,7 @@
  *   4. Your Journeys                   (started growth journeys)
  *
  * Ask Emmaus is available from its dedicated screen, not as a floating action
- * on Today's Steps.
+ * on My Emmaus.
  */
 
 import { useLocation, Link } from 'wouter';
@@ -88,8 +88,8 @@ function WalkDismissButton({ onDismiss }: { onDismiss: () => void }) {
         onDismiss();
       }}
       className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-      aria-label="Remove from Today's Steps"
-      title="Remove from Today's Steps"
+      aria-label="Remove from My Emmaus"
+      title="Remove from My Emmaus"
     >
       <X size={17} strokeWidth={1.8} />
     </button>
@@ -320,7 +320,7 @@ export default function Walk() {
       progress: progressList.find(p => p.seriesId === s.id) ?? null,
     }));
 
-    // Show ALL started, non-hidden series on Today's Steps.
+    // Show ALL started, non-hidden series on My Emmaus.
     const allStarted = withProg.filter(x => x.progress !== null && !x.progress.hidden_from_today);
     if (allStarted.length > 0) {
       // Load entries in parallel so every card can show its entry title.
@@ -362,7 +362,7 @@ export default function Walk() {
   // devotionals), so we track hidden IDs in a local Set for instant UI updates
   // rather than mutating the shared context.
   const [hiddenJourneyIds, setHiddenJourneyIds] = useState<Set<string>>(new Set());
-  // Groups do not have engagement-progress rows, so keep their Today's Steps
+  // Groups do not have engagement-progress rows, so keep their My Emmaus
   // dismissal local to this Walk screen rather than treating dismissal as
   // leaving the group.
   const [hiddenRoomIds, setHiddenRoomIds] = useState<Set<string>>(new Set());
@@ -398,7 +398,7 @@ export default function Walk() {
   // Visibility-change refresh — refreshes the Sermon Companions card whenever
   // the member returns to this tab.
   // Critical for Sunday mornings: admin marks a new companion as This Week's
-  // Sermon while the member has Today's Steps open; when they switch back to the
+  // Sermon while the member has My Emmaus open; when they switch back to the
   // app the card updates immediately without requiring a manual reload.
   //
   // Devotionals are also refreshed here so that after a member completes an entry
@@ -525,11 +525,11 @@ export default function Walk() {
   //    Status check: prefer server-backed progress[j.id]?.status; fall back to
   //    localStorage (enrollment.ts optimistic cache) for instant UI updates.
   //    IMPORTANT: overloadExempt only controls the active-enrollment limit. It
-  //    must never make started content disappear from Today's Steps.
+  //    must never make started content disappear from My Emmaus.
   const activeMemberJourneys = publishedJourneys
     .filter(j => {
       if (!progress[j.id]) return false;
-      // These content types have their own canonical Today's Steps sections.
+      // These content types have their own canonical My Emmaus sections.
       // Do not use isExemptJourney here: it also includes the independent
       // overloadExempt flag, which is not a visibility decision.
       if (j.journeyType === 'daily-rhythm' || j.journeyType === 'companion') {
@@ -649,13 +649,13 @@ export default function Walk() {
 
       <main className="relative px-4 pt-10 pb-4 max-w-[480px] mx-auto space-y-3.5">
 
-        {/* ── Today's Steps header ──────────────────────────────────────────── */}
+        {/* ── My Emmaus header ──────────────────────────────────────────── */}
         <header className="px-1 pb-1">
           <div className="mb-3 flex justify-end">
             <MemberHeaderActions compact />
           </div>
           <h1 className="text-[28px] font-semibold tracking-tight text-foreground">
-            Today's Steps
+            My Emmaus
           </h1>
           <p className="mt-1 text-[13px] text-muted-foreground">
             Continue what you've started or discover something new.

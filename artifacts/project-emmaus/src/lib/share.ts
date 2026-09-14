@@ -1,3 +1,5 @@
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
 /**
  * share.ts — shared content-sharing utility for Emmaus pilot.
  *
@@ -127,9 +129,19 @@ export function buildShareText(payload: SharePayload): string {
  *
  * Throws only if clipboard also fails.
  */
+interface EmmausShareBridge {
+  share(options: { title: string; text: string }): Promise<void>;
+}
+const emmausShare = registerPlugin<EmmausShareBridge>('EmmausShare');
+
 export async function shareContent(payload: SharePayload): Promise<'native' | 'clipboard'> {
   const text = buildShareText(payload);
   const shareTitle = payload.dayTitle ?? payload.title;
+
+  if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
+    await emmausShare.share({ title: shareTitle, text });
+    return 'native';
+  }
 
   if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
     try {

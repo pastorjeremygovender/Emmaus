@@ -6,7 +6,7 @@
  * Completion behaviour (spec §1):
  *   Tapping Continue saves progress and shows a completion decision card.
  *   The member explicitly chooses whether to review previous days or return to
- *   Today's Steps.
+ *   My Emmaus.
  *
  * Modes:
  *   Live    — day === member's current day; shows Continue button; marks complete on tap,
@@ -17,7 +17,7 @@
  * Future-day guard (spec Task 7):
  *   If a normal (non-dev-mode) member lands on a day that is ahead of their current
  *   rhythm or whose step is not yet published, they are immediately redirected to
- *   Today's Steps via replace semantics. The "You're ahead of the rhythm" screen is
+ *   My Emmaus via replace semantics. The "You're ahead of the rhythm" screen is
  *   preserved ONLY as a Development Mode diagnostic.
  *
  * Previous Days remains accessible via the secondary link on the Walk card,
@@ -81,7 +81,7 @@ function AheadOfRhythmDevOnly({
           onClick={onBack}
           className="block mx-auto text-[14px] text-muted-foreground hover:text-foreground transition-colors"
         >
-          Back to Today's Steps
+          Back to My Emmaus
         </button>
       </div>
     </div>
@@ -106,7 +106,7 @@ export default function DailyRhythmDay() {
 
   // Determine return context.
   // ?source=dailyRhythmPrevious → opened from Previous Days list → return to Previous Days.
-  // ?source=walk|today or legacy ?from=walk → opened from Today's Steps (Walk review button).
+  // ?source=walk|today or legacy ?from=walk → opened from My Emmaus (Walk review button).
   // NOTE: wouter's useLocation() returns pathname only — search params must come from window.location.search.
   const qs = new URLSearchParams(window.location.search);
   const source = qs.get('source');
@@ -184,7 +184,7 @@ export default function DailyRhythmDay() {
   // go back naturally. Falls back to forward navigation only when there is no history.
   const goToPreviousDays = () => goBackOrFallback('/daily-rhythm/previous?source=walk', setLocation);
   // Forward navigation to Previous Days — used for the "See Previous Days →" secondary
-  // link when the user arrived from Today's Steps (not from Previous Days).
+  // link when the user arrived from My Emmaus (not from Previous Days).
   const openPreviousDays = () => setLocation('/daily-rhythm/previous?source=walk');
 
   const hasPreviousDays =
@@ -252,7 +252,7 @@ export default function DailyRhythmDay() {
 
   // ── Future-day guard (spec Task 6 + 7) ───────────────────────────────────
   // Dev mode: show the diagnostic screen so admins can see the state.
-  // Normal members: redirect silently to Today's Steps — never dead-end here.
+  // Normal members: redirect silently to My Emmaus — never dead-end here.
   if (isAhead || !step) {
     if (devMode) {
       return (
@@ -273,8 +273,8 @@ export default function DailyRhythmDay() {
   const isReplay = day < currentDay || alreadyCompleted;
 
   // Header back arrow:
-  //   - Live (not yet completed) → Today's Steps
-  //   - Replay via Review button (?source=walk, or legacy ?from=walk) → Today's Steps
+  //   - Live (not yet completed) → My Emmaus
+  //   - Replay via Review button (?source=walk, or legacy ?from=walk) → My Emmaus
   //   - Replay via Previous Days (?source=dailyRhythmPrevious) → Previous Days
   const handleBack = isReplay
     ? (fromWalk ? goBack : goToPreviousDays)
@@ -306,16 +306,16 @@ export default function DailyRhythmDay() {
       <EmmausCompletionCard
         heading={`${getStepLabel(step, journey)} complete.`}
         subMessage="Continue when you’re ready."
-        returnLabel="Back to Today's Steps"
+        returnLabel="Back to My Emmaus"
         onReturn={() => goBackOrFallback(postCompletionDestination, setLocation)}
         onPreviousDays={hasPreviousDays ? openPreviousDays : undefined}
       />
     );
   } else if (isReplay) {
-    // Review from Today's Steps (?source=walk / legacy ?from=walk) → return to Today's Steps.
+    // Review from My Emmaus (?source=walk / legacy ?from=walk) → return to My Emmaus.
     // Review from Previous Days (?source=dailyRhythmPrevious) → return to Previous Steps.
     const replayReturnLabel = fromWalk
-      ? "Back to Today's Steps"
+      ? "Back to My Emmaus"
       : fromPreviousDays
         ? "Back to Previous Steps"
         : "Back to Previous Days";
@@ -366,7 +366,7 @@ export default function DailyRhythmDay() {
           <button
             onClick={handleBack}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label={isReplay ? 'Back to Previous Days' : "Back to Today's Steps"}
+            aria-label={isReplay ? 'Back to Previous Days' : "Back to My Emmaus"}
           >
             <ArrowLeft size={22} />
           </button>

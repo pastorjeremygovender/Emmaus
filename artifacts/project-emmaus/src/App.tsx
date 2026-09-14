@@ -124,7 +124,7 @@ function Router() {
       <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/checkin" component={CheckIn} />
       <Route path="/walk" component={Walk} />
-      {/* Keep the previous Library URL as a compatibility alias for Today's Steps. */}
+      {/* Keep the previous Library URL as a compatibility alias for My Emmaus. */}
       <Route path="/library" component={Walk} />
       {/* Canonical Daily Rhythm routes */}
       <Route path="/daily-rhythm/navigate">

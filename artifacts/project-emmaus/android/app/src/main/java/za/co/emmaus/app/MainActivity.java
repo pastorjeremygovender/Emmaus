@@ -63,6 +63,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DailyRhythmDeepLinkPlugin.class);
         registerPlugin(DailyReminderPlugin.class);
         registerPlugin(EmmausDiagnosticsPlugin.class);
+        registerPlugin(EmmausSharePlugin.class);
         DailyRhythmDeepLinkPlugin.captureIntent(this, getIntent(), "activity_on_create");
         super.onCreate(savedInstanceState);
     }

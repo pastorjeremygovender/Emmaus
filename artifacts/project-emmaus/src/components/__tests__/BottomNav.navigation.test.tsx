@@ -5,9 +5,7 @@ import { BottomNav } from '@/components/BottomNav';
 const { setLocation } = vi.hoisted(() => ({ setLocation: vi.fn() }));
 let currentLocation = '/daily-rhythm/day/1';
 
-vi.mock('wouter', () => ({
-  useLocation: () => [currentLocation, setLocation],
-}));
+vi.mock('wouter', () => ({ useLocation: () => [currentLocation, setLocation] }));
 
 describe('BottomNav navigation', () => {
   beforeEach(() => {
@@ -15,39 +13,18 @@ describe('BottomNav navigation', () => {
     setLocation.mockClear();
   });
 
-  it('shows only My Bible while inside Emmaus', () => {
+  it('always shows My Emmaus and My Bible', () => {
     render(<BottomNav />);
-
-    expect(screen.getByTestId('nav-bible')).toHaveAttribute('href', '/bible');
-    expect(screen.queryByTestId('nav-walk')).not.toBeInTheDocument();
+    expect(screen.getByTestId('nav-walk')).toHaveTextContent('My Emmaus');
+    expect(screen.getByTestId('nav-bible')).toHaveTextContent('My Bible');
+    expect(screen.getByTestId('nav-walk')).toHaveAttribute('aria-current', 'page');
   });
 
-  it('shows only Today\'s Steps while inside My Bible', () => {
-    currentLocation = '/bible';
+  it('marks My Bible active and navigates without a reload', () => {
+    currentLocation = '/bible/43/3';
     render(<BottomNav />);
-
-    expect(screen.getByTestId('nav-walk')).toHaveAttribute('href', '/walk');
-    expect(screen.getByTestId('nav-walk')).toHaveTextContent("Today's Steps");
-    expect(screen.queryByTestId('nav-bible')).not.toBeInTheDocument();
-  });
-
-  it('uses client-side navigation to open My Bible', () => {
-    currentLocation = '/walk';
-    render(<BottomNav />);
-
-    fireEvent.click(screen.getByTestId('nav-bible'));
-
-    expect(window.location.pathname).toBe('/');
-    expect(setLocation).toHaveBeenCalledWith('/bible');
-  });
-
-  it('uses client-side navigation to return to Today\'s Steps', () => {
-    currentLocation = '/bible';
-    render(<BottomNav />);
-
+    expect(screen.getByTestId('nav-bible')).toHaveAttribute('aria-current', 'page');
     fireEvent.click(screen.getByTestId('nav-walk'));
-
-    expect(window.location.pathname).toBe('/');
     expect(setLocation).toHaveBeenCalledWith('/walk');
   });
 });
