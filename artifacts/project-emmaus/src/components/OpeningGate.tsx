@@ -223,6 +223,16 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
     setLocation('/auth/callback?mode=recovery', { replace: true });
   }, [user, authLoading, loadingProfile, needsRecovery, setLocation]);
 
+  // Widget / notification deep links stored before auth finished: leave "/" as
+  // soon as the session is ready so Welcome's null render never stays on screen.
+  useEffect(() => {
+    if (authLoading || loadingProfile || !user || needsOnboarding || needsRecovery) return;
+    if (pathname !== '/') return;
+    const pending = peekOpeningDestination();
+    if (!isWidgetDestination(pending) && !(pending && pending.includes('source=notification'))) return;
+    setLocation(consumeOpeningDestination(pending ?? '/walk'), { replace: true });
+  }, [authLoading, loadingProfile, user, needsOnboarding, needsRecovery, pathname, setLocation]);
+
   useEffect(() => {
     if (!decision || !user || needsOnboarding || needsRecovery) return;
     window.dispatchEvent(new CustomEvent('emmaus:daily-rhythm-resolved', {
@@ -286,6 +296,20 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
   // Public pages do not need to wait for account restoration.
   if ((pathname === '/' || !isPublicPath(pathname)) && (authLoading || loadingProfile)) {
     return <BrandedSplash />;
+  }
+
+  // Welcome (route "/") returns null by design. Painting it is the white screen
+  // after splash — especially on widget relaunch when the WebView resumes at /
+  // before the deep link is applied. Stay on a visible state until navigation
+  // leaves the entry path.
+  if (pathname === '/') {
+    if (!user) {
+      return <BrandedSplash />;
+    }
+    if (error && needsOpening) {
+      return <OpeningError reference={error.diagnosticReference} onRetry={retry} />;
+    }
+    return <LoadingOpening />;
   }
 
   if (!user || (isAdminPath(pathname) && !needsRecovery) || authenticatedExempt || !needsOpening) {
