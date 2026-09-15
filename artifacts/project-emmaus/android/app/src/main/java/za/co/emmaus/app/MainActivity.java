@@ -83,6 +83,8 @@ public class MainActivity extends BridgeActivity {
         // Widget VIEW intents do not automatically navigate a Capacitor WebView that
         // uses a remote server URL. Apply the route after the bridge is up.
         webViewRecoveryHandler.post(() -> deliverDeepLinkToWebView(getIntent()));
+        webViewRecoveryHandler.postDelayed(() -> deliverDeepLinkToWebView(getIntent()), 400L);
+        webViewRecoveryHandler.postDelayed(() -> deliverDeepLinkToWebView(getIntent()), 1200L);
     }
 
     @Override
@@ -94,13 +96,22 @@ public class MainActivity extends BridgeActivity {
     }
 
     /**
-     * Push a widget/notification deep link into the live WebView so the SPA does
-     * not remain on "/" (Welcome renders null → white screen after splash).
+     * Widget VIEW intents are not applied by Capacitor when server.url is set.
+     * Always navigate the WebView to the deep-link URL. evaluateJavascript alone
+     * is not enough: the SPA often paints Welcome (null) on "/" first → white screen.
      */
     private void deliverDeepLinkToWebView(Intent intent) {
         if (intent == null || getBridge() == null) return;
         WebView webView = getBridge().getWebView();
         if (webView == null) return;
+
+        // Never leave a pure-white empty document visible while routing.
+        webView.setBackgroundColor(0xFFFFFFFF);
+        try {
+            webView.setBackgroundColor(android.graphics.Color.parseColor("#FFFFFF"));
+        } catch (Exception ignored) {
+            // keep default
+        }
 
         String route = DailyRhythmDeepLinkPlugin.routeFromIntent(intent);
         if (route == null) {
@@ -111,26 +122,31 @@ public class MainActivity extends BridgeActivity {
         }
         if (route == null || route.isEmpty()) return;
 
-        String targetUrl = "https://emmaus.co.za" + route;
-        String escapedRoute = route
-            .replace("\\", "\\\\")
-            .replace("'", "\\'")
-            .replace("\n", "");
-        String escapedUrl = targetUrl
-            .replace("\\", "\\\\")
-            .replace("'", "\\'");
+        final String targetUrl = "https://emmaus.co.za" + route;
+        final String finalRoute = route;
+        Log.i(TAG, "stage=webview_deeplink_loadurl route=" + finalRoute);
 
-        Log.i(TAG, "stage=webview_deeplink_delivery route=" + route);
-        // Prefer in-SPA navigation so we do not tear down a healthy session.
-        String js =
-            "(function(){try{"
-            + "var p='" + escapedRoute + "';"
-            + "var cur=(location.pathname||'')+(location.search||'');"
-            + "if(cur===p)return;"
-            + "history.replaceState(Object.assign({}, history.state||{}, {emmausDeepLink:true}),'',p);"
-            + "window.dispatchEvent(new PopStateEvent('popstate',{state:history.state}));"
-            + "}catch(e){location.replace('" + escapedUrl + "');}})();";
-        webView.evaluateJavascript(js, null);
+        // Full navigation — reliable on cold start and singleTask resume.
+        webView.stopLoading();
+        webView.loadUrl(targetUrl);
+
+        // Retry SPA history handoff after the document has had time to boot,
+        // in case loadUrl raced the first document commit.
+        webViewRecoveryHandler.postDelayed(() -> {
+            if (isFinishing() || isDestroyed() || getBridge() == null) return;
+            WebView wv = getBridge().getWebView();
+            if (wv == null) return;
+            String escapedRoute = finalRoute.replace("\\", "\\\\").replace("'", "\\'");
+            String js =
+                "(function(){try{"
+                + "var p='" + escapedRoute + "';"
+                + "var cur=(location.pathname||'')+(location.search||'');"
+                + "if(cur===p)return;"
+                + "history.replaceState(Object.assign({},history.state||{},{emmausDeepLink:true}),'',p);"
+                + "window.dispatchEvent(new PopStateEvent('popstate',{state:history.state}));"
+                + "}catch(e){}})();";
+            wv.evaluateJavascript(js, null);
+        }, 900L);
     }
 
     @Override
