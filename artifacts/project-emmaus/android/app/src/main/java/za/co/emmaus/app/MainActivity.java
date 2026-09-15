@@ -80,6 +80,9 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         configureWebViewCookies();
         installWebViewRecovery();
+        // Widget VIEW intents do not automatically navigate a Capacitor WebView that
+        // uses a remote server URL. Apply the route after the bridge is up.
+        webViewRecoveryHandler.post(() -> deliverDeepLinkToWebView(getIntent()));
     }
 
     @Override
@@ -87,6 +90,47 @@ public class MainActivity extends BridgeActivity {
         DailyRhythmDeepLinkPlugin.captureIntent(this, intent, "activity_on_new_intent");
         setIntent(intent);
         super.onNewIntent(intent);
+        deliverDeepLinkToWebView(intent);
+    }
+
+    /**
+     * Push a widget/notification deep link into the live WebView so the SPA does
+     * not remain on "/" (Welcome renders null → white screen after splash).
+     */
+    private void deliverDeepLinkToWebView(Intent intent) {
+        if (intent == null || getBridge() == null) return;
+        WebView webView = getBridge().getWebView();
+        if (webView == null) return;
+
+        String route = DailyRhythmDeepLinkPlugin.routeFromIntent(intent);
+        if (route == null) {
+            String notificationDestination = intent.getStringExtra("destination");
+            if ("/personal".equals(notificationDestination)) {
+                route = "/personal?source=notification";
+            }
+        }
+        if (route == null || route.isEmpty()) return;
+
+        String targetUrl = "https://emmaus.co.za" + route;
+        String escapedRoute = route
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+            .replace("\n", "");
+        String escapedUrl = targetUrl
+            .replace("\\", "\\\\")
+            .replace("'", "\\'");
+
+        Log.i(TAG, "stage=webview_deeplink_delivery route=" + route);
+        // Prefer in-SPA navigation so we do not tear down a healthy session.
+        String js =
+            "(function(){try{"
+            + "var p='" + escapedRoute + "';"
+            + "var cur=(location.pathname||'')+(location.search||'');"
+            + "if(cur===p)return;"
+            + "history.replaceState(Object.assign({}, history.state||{}, {emmausDeepLink:true}),'',p);"
+            + "window.dispatchEvent(new PopStateEvent('popstate',{state:history.state}));"
+            + "}catch(e){location.replace('" + escapedUrl + "');}})();";
+        webView.evaluateJavascript(js, null);
     }
 
     @Override
