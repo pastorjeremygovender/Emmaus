@@ -1,0 +1,112 @@
+Emmaus Privacy Policy
+
+Effective date: 14 September 2026
+
+Emmaus is a Christian discipleship application provided by Isipingo Community Church (“ICC”, “we”, “us” or “our”). This Privacy Policy explains what information Emmaus collects, why it is used, how it is protected, and the choices available to users.
+
+Information we collect
+
+Depending on which Emmaus features you use, we may collect:
+
+Account information, including your name, surname, email address, telephone number, date of birth, physical address and church-membership information.
+Authentication information required to create and secure your account.
+Discipleship activity, including Daily Rhythm activity, Walks and Journeys opened or completed, Bible activity, devotional progress and other engagement within Emmaus.
+Content you submit, including profile information, notes, messages, voice notes, images, documents and other material shared through Groups or related features.
+Group and meeting information, including membership, participation and messages.
+Notification preferences and device notification tokens.
+Technical information required for security, troubleshooting and operation, such as device type, operating system, app version, IP address, error information and diagnostic logs.
+Camera and microphone access when you choose to use video, audio, voice-note, image-upload or related features.
+Location information only when you expressly enable a location-based feature such as Welcome Assist or attendance check-in.
+Bluetooth access only when you expressly enable a feature that requires nearby-device detection.
+
+Emmaus does not continuously track users’ movements or sell precise location information.
+
+How we use information
+
+We use information to:
+
+Create, secure and maintain user accounts.
+Provide Daily Rhythm content, devotionals, the Bible, Walks, Journeys, Groups and other Emmaus features.
+Save progress and show relevant content.
+Support group communication, audio and video meetings.
+Send notifications selected by the user.
+Provide optional attendance, Welcome Assist or pastoral-care functionality.
+Respond to support requests.
+Maintain security, prevent misuse, diagnose errors and improve reliability.
+Comply with applicable legal obligations.
+
+Pastoral information is intended to support appropriate care and discipleship. It should not be used to shame, rank or publicly expose individuals.
+
+Permissions
+
+Emmaus may request device permissions for notifications, camera, microphone, location or Bluetooth. Permissions are requested only where required by a feature and can be refused or withdrawn through the device’s settings.
+
+Some features may not work if the corresponding permission is disabled.
+
+Sharing of information
+
+We do not sell or rent personal information.
+
+Information may be shared:
+
+With authorised ICC pastors, leaders or administrators where necessary for administration, pastoral care or Group management.
+With other members of a Group when you deliberately post or share content in that Group.
+With trusted technology providers that host, secure or operate Emmaus, solely as necessary to provide their services.
+Where required by law, legal process or to protect users, ICC or the public.
+Data storage and security
+
+We use reasonable administrative and technical safeguards designed to protect personal information against unauthorised access, loss, alteration or disclosure.
+
+No internet service can guarantee absolute security. Users should protect their login details and avoid sharing highly sensitive information through Group messages or other shared areas.
+
+Data retention
+
+We retain personal information only for as long as reasonably necessary to provide Emmaus, meet pastoral and administrative requirements, resolve disputes, maintain security and comply with legal obligations.
+
+Group content or records may remain where required to preserve legitimate church or administrative records, subject to applicable law.
+
+Account and data deletion
+
+Users may request deletion of their Emmaus account and associated personal information by emailing:
+
+pastorjeremygovender@gmail.com
+
+Please use the subject: Emmaus Account Deletion Request.
+
+We may need to verify the requester’s identity. Information may be retained where required by law, security obligations or legitimate record-keeping requirements.
+
+A public account-deletion request page may also be provided within Emmaus or on the Emmaus website.
+
+Children
+
+Emmaus is not directed at children under 13. A parent or legal guardian should supervise the use of Emmaus by a minor where required by law.
+
+Third-party services and links
+
+Emmaus may use or link to third-party services for hosting, authentication, notifications, media, communications or other functionality. Those services may process limited information under their own terms and privacy policies.
+
+Links to external websites are not controlled by ICC.
+
+User rights
+
+Subject to applicable law, including South Africa’s Protection of Personal Information Act (POPIA), users may request:
+
+Access to their personal information.
+Correction of inaccurate information.
+Deletion of eligible information.
+Withdrawal of consent for optional processing.
+Information about how their data is being used.
+
+Requests can be sent to the contact address below.
+
+Changes to this policy
+
+We may update this Privacy Policy when Emmaus features, legal requirements or data practices change. The effective date displayed above will be updated when material changes are made.
+
+Contact
+
+For privacy questions, account-deletion requests or concerns about personal information, contact:
+
+Isipingo Community Church
+Email: pastorjeremygovender@gmail.com
+Website: https://www.emmaus.co.za

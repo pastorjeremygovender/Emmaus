@@ -120,6 +120,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     activeRequestRef.current?.abort();
     const controller = new AbortController();
     activeRequestRef.current = controller;
+    const requestTimeout = window.setTimeout(() => {
+      controller.abort();
+    }, 15_000);
     if (!preserveUi) {
       setSessionEpoch(current => current + 1);
       setUser(null);
@@ -183,6 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!preserveUi) setUser(null);
       throw error;
     } finally {
+      window.clearTimeout(requestTimeout);
       if (requestGenerationRef.current === generation) {
         activeRequestRef.current = null;
         if (!preserveUi) {

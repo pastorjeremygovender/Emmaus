@@ -93,4 +93,5 @@
 - [Member Personal Details](member-personal-details.md) — self-service profile fields stay on the auth-subject profile row and sync directly to Church Register.
 - [API artifact health path](api-artifact-health-path.md) — Replit promotion probes the API artifact preview path as well as the explicit health endpoint.
 - [Native Android build environment](android-phase1-build.md) — Capacitor 8 Android builds need standard OpenJDK 21 plus Android SDK 36; GraalVM is incompatible with the JDK image transform.
+- [Native WebView bootstrap](native-webview-bootstrap.md) — never block React mounting on an Android plugin bridge call; deep-link handoff may finish after the app renders.
 - [Release branch commit path](release-branch-commit.md) — source commits for the release branch use the connected GitHub API, not local Git remotes or resets.

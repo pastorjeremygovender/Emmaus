@@ -25,16 +25,20 @@ try {
 
 installAuthRequestGuard();
 
-async function bootstrap() {
+function bootstrap() {
   // Native plugin startup must never prevent the WebView from mounting. Some
   // Android shells can leave a bridge call pending while the app is opening;
   // the deep-link listener can still apply its route after the app renders.
-  await Promise.race([
-    installNativeDailyRhythmDeepLink(),
-    new Promise<void>(resolve => window.setTimeout(resolve, 1200)),
-  ]);
   createRoot(document.getElementById('root')!).render(<App />);
   registerServiceWorker();
+
+  void Promise.race([
+    installNativeDailyRhythmDeepLink(),
+    new Promise<void>(resolve => window.setTimeout(resolve, 1200)),
+  ]).catch(() => {
+    // Deep-link delivery is optional. The app is already mounted and remains
+    // usable when an older/native bridge cannot answer.
+  });
 }
 
-void bootstrap();
+bootstrap();

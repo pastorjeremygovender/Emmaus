@@ -62,6 +62,8 @@ export default function ChapterReader() {
   const book = getBibleBook(resolvedBookId);
 
   const { chapter: chapterData, loading, error, retry } = useChapter(resolvedBookId, chapterNum, translationId);
+  const selectedTranslation = translations.find(item => item.id === translationId);
+  const publicDomainFallback = translations.find(item => item.id === 'bsb');
 
   const [verseSheet, setVerseSheet] = useState<{ verse: number; text: string } | null>(null);
   const [noteText, setNoteText] = useState('');
@@ -543,9 +545,29 @@ export default function ChapterReader() {
         ) : !chapterData ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4 text-center px-5">
             <p className="text-[16px] text-muted-foreground">
-              {book.name} {chapterNum} is not available in this translation.
+              {book.name} {chapterNum} is not available in {selectedTranslation?.abbreviation ?? translationId.toUpperCase()}.
             </p>
-            <Button variant="outline" onClick={() => goBackOrFallback('/bible', setLocation)}>Back to My Bible</Button>
+            <p className="max-w-sm text-[13px] leading-relaxed text-muted-foreground">
+              The selected translation stays unchanged. You can read this chapter in a public-domain translation instead.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {publicDomainFallback && (
+                <Button
+                  onClick={() => {
+                    scrollBeforeTranslation.current = window.scrollY;
+                    setTranslation(publicDomainFallback.id);
+                  }}
+                >
+                  Read in {publicDomainFallback.abbreviation}
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => setTranslationDropdownOpen(true)}>
+                Choose translation
+              </Button>
+            </div>
+            <Button variant="ghost" onClick={() => goBackOrFallback('/bible', setLocation)}>
+              Back to My Bible
+            </Button>
           </div>
         ) : (
           <div>

@@ -48,4 +48,15 @@ describe('useChapter request identity', () => {
     await waitFor(() => expect(result.current.chapter?.bookId).toBe('daniel'));
     expect(result.current.chapter?.chapter).toBe(4);
   });
+
+  it('keeps an unavailable licensed chapter empty so the reader can offer an explicit fallback', async () => {
+    getChapter.mockResolvedValue(null);
+
+    const { result } = renderHook(() => useChapter('nahum', 1, 'niv'));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.chapter).toBeNull();
+    expect(result.current.error).toBeNull();
+  });
 });

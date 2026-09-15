@@ -14,3 +14,17 @@ mtime_ms = 1787928383166
 storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:56d2210c-938e-4468-a6aa-b25d01eaaa3b/cadba9e0-4ac3-4ae0-9c90-398525ae3afa/ea3930e2-598d-4f21-8384-68426d6bc86f"
 storage_version_token = "1787928875811805"
 content_type = "image/jpeg"
+
+[[outputs]]
+id = "tRNpSlONW2Z8y7u_Jp7wY"
+uri = "file://artifacts/project-emmaus/android/app/build/outputs/apk/debug/app-debug.apk"
+type = "unspecified"
+title = "Emmaus Android APK — 1.2.0-rc13 widget and startup fix"
+description = "Debug APK with calendar-governed Daily Rhythm widget day selection, immediate React mount, transient WebView recovery retries, and a visible reconnect screen. Version code 15. SHA-256: 9ec3d210416e3f0ed103d062c2009c463b2c8590ffddb9199e7eeaadc134b76f"
+logical_id = "8a88eb59-bbe0-4c6e-b1b6-613d87c2f6b8"
+content_hash = "sha256:9ec3d210416e3f0ed103d062c2009c463b2c8590ffddb9199e7eeaadc134b76f"
+size = 7733202
+mtime_ms = 1789469150070
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:56d2210c-938e-4468-a6aa-b25d01eaaa3b/8a88eb59-bbe0-4c6e-b1b6-613d87c2f6b8/522d01c0-236b-4e04-b575-d0540850e2aa"
+storage_version_token = "1789469164352623"
+content_type = "application/octet-stream"

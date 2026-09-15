@@ -29,6 +29,7 @@ function isRoomPath(pathname: string): boolean {
 
 function isPublicPath(pathname: string): boolean {
   return pathname === '/' ||
+    pathname === '/privacy-policy' ||
     pathname === '/auth' ||
     pathname === '/auth/callback' ||
     pathname === '/onboarding' ||
@@ -278,6 +279,14 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
   }
   if (splashPhase !== 'done') {
     return <BrandedSplash fading={splashPhase === 'fading'} />;
+  }
+
+  // On a retained WebView, the branded splash has already been acknowledged
+  // in sessionStorage. Keep showing a visible loading state while the auth
+  // request restores the session instead of letting Welcome render nothing.
+  // Public pages do not need to wait for account restoration.
+  if (!isPublicPath(pathname) && (authLoading || loadingProfile)) {
+    return <BrandedSplash />;
   }
 
   if (!user || (isAdminPath(pathname) && !needsRecovery) || authenticatedExempt || !needsOpening) {

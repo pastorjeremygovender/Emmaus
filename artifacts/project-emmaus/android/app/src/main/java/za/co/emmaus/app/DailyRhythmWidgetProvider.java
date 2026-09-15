@@ -76,12 +76,12 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
 
     private static WidgetContent loadCurrentContent() throws Exception {
         JSONObject state = requestJson(STATE_PATH);
-        // The opening ledger's assigned day is the same server decision used
-        // by the app. currentDayNumber is only a compatibility fallback.
-        int day = Math.max(1, state.optInt(
-            "assignedDay",
-            state.optInt("currentDayNumber", 1)
-        ));
+        // The widget is a calendar surface, not a progress surface. A member
+        // may complete or review an earlier day without changing which day is
+        // available today. todayAvailableDay advances one day per calendar
+        // date; assignedDay/currentDayNumber describe the opening/progress
+        // ledger and must not drive the widget.
+        int day = selectWidgetDay(state);
         String journeyId = state.optString("journeyId", "");
         String stepId = "";
         String title = clean(state.optString("currentStepTitle", "Today's Daily Rhythm"));
@@ -124,6 +124,13 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
             }
         }
         return new WidgetContent(journeyId, stepId, day, title, verse, reference, completed);
+    }
+
+    static int selectWidgetDay(JSONObject state) {
+        return Math.max(1, state.optInt(
+            "todayAvailableDay",
+            state.optInt("assignedDay", state.optInt("currentDayNumber", 1))
+        ));
     }
 
     private static String loadVerseExcerpt(String reference) throws Exception {

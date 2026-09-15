@@ -13,9 +13,20 @@ import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.json.JSONObject;
 
 @RunWith(AndroidJUnit4.class)
 public final class DailyRhythmWidgetProviderInstrumentedTest {
+    @Test
+    public void widgetUsesCalendarDayInsteadOfProgressAssignedDay() throws Exception {
+        JSONObject state = new JSONObject()
+            .put("todayAvailableDay", 25)
+            .put("assignedDay", 6)
+            .put("currentDayNumber", 6);
+
+        assertEquals(25, DailyRhythmWidgetProvider.selectWidgetDay(state));
+    }
+
     @Test
     public void productionWidgetPendingIntentLaunchesMainActivityWithExactEntry() throws Exception {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
