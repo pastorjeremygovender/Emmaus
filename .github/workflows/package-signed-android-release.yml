@@ -28,9 +28,9 @@ jobs:
           java-version: "21"
           cache: gradle
 
-
       - name: Install Android platform
-        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0
+        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
@@ -57,7 +57,7 @@ jobs:
       - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: emmaus-unified-1.2.0-rc10-signed-apk
+          name: emmaus-unified-1.2.0-rc14-signed-apk
           path: artifacts/project-emmaus/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
@@ -65,7 +65,7 @@ jobs:
       - name: Upload Google Play bundle
         uses: actions/upload-artifact@v4
         with:
-          name: emmaus-unified-1.2.0-rc10-play-aab
+          name: emmaus-unified-1.2.0-rc14-play-aab
           path: artifacts/project-emmaus/android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
