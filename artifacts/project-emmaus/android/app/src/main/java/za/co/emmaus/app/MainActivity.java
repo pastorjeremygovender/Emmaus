@@ -83,7 +83,13 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         configureWebViewCookies();
         installWebViewRecovery();
-        scheduleDeepLinkDelivery(getIntent(), "activity_on_create");
+        // Cold-start only: Capacitor opens server root. If this launch is a widget
+        // VIEW intent, move to that path once the WebView exists. Warm resumes
+        // must NOT loadUrl — that was blanking the document on the 2nd widget open.
+        final String coldRoute = routeFromAnyDeepLink(getIntent());
+        if (coldRoute != null) {
+            deepLinkHandler.postDelayed(() -> coldStartWidgetNavigate(coldRoute), 450L);
+        }
     }
 
     @Override
@@ -91,9 +97,11 @@ public class MainActivity extends BridgeActivity {
         DailyRhythmDeepLinkPlugin.captureIntent(this, intent, "activity_on_new_intent");
         setIntent(intent);
         super.onNewIntent(intent);
-        // Switching icon ↔ widget must cancel in-flight loads or the WebView
-        // is left on a blank document (white screen after splash).
-        scheduleDeepLinkDelivery(intent, "activity_on_new_intent");
+        // Do not touch the WebView here. The DailyRhythmDeepLink plugin emits
+        // deepLink to JS (history navigation). Native loadUrl/stopLoading on
+        // icon↔widget switches caused the white screen on the second widget open.
+        Log.i(TAG, "stage=on_new_intent_webview_untouched hasWidgetRoute="
+            + (routeFromAnyDeepLink(intent) != null));
     }
 
     private static boolean isLauncherIntent(Intent intent) {
@@ -111,70 +119,23 @@ public class MainActivity extends BridgeActivity {
         return null;
     }
 
-    private void scheduleDeepLinkDelivery(Intent intent, String stage) {
-        deepLinkHandler.removeCallbacksAndMessages(null);
-        deepLinkGeneration++;
-        final int generation = deepLinkGeneration;
-        final Intent intentRef = intent;
-        // Run soon, then once more after the bridge/WebView is guaranteed up.
-        deepLinkHandler.post(() -> deliverDeepLinkToWebView(intentRef, generation, stage + "_t0"));
-        deepLinkHandler.postDelayed(() -> deliverDeepLinkToWebView(intentRef, generation, stage + "_t400"), 400L);
-    }
-
-    /**
-     * Handle icon ↔ widget transitions without blanking the WebView.
-     * Widget: load the Daily Rhythm URL when needed.
-     * Launcher: if a previous widget load left a blank document, restore the app shell.
-     */
-    private void deliverDeepLinkToWebView(Intent intent, int generation, String stage) {
-        if (generation != deepLinkGeneration) return;
-        if (intent == null || getBridge() == null) return;
+    private void coldStartWidgetNavigate(String route) {
+        if (isFinishing() || isDestroyed() || getBridge() == null) return;
         WebView webView = getBridge().getWebView();
-        if (webView == null) return;
-
-        String route = routeFromAnyDeepLink(intent);
+        if (webView == null || route == null || route.isEmpty()) return;
         String currentUrl = webView.getUrl() == null ? "" : webView.getUrl();
-        boolean blank = currentUrl.isEmpty()
+        boolean atRoot = currentUrl.isEmpty()
             || "about:blank".equals(currentUrl)
-            || currentUrl.startsWith("data:");
-        boolean onEmmaus = currentUrl.startsWith("https://emmaus.co.za");
-
-        if (route != null && !route.isEmpty()) {
-            String targetUrl = "https://emmaus.co.za" + route;
-            // If the SPA is already alive on emmaus.co.za, do NOT stopLoading/loadUrl.
-            // Full reloads on icon↔widget switches were leaving a white blank document
-            // on the second widget open. Soft-navigate via history instead.
-            if (onEmmaus && !blank) {
-                String escapedRoute = route.replace("\\", "\\\\").replace("'", "\\'");
-                String js =
-                    "(function(){try{"
-                    + "var p='" + escapedRoute + "';"
-                    + "var cur=(location.pathname||'')+(location.search||'');"
-                    + "if(cur===p){return;}"
-                    + "history.replaceState(Object.assign({},history.state||{},{emmausDeepLink:true}),'',p);"
-                    + "window.dispatchEvent(new PopStateEvent('popstate',{state:history.state}));"
-                    + "}catch(e){location.assign('" + targetUrl.replace("'", "\\'") + "');}})();";
-                Log.i(TAG, "stage=webview_deeplink_soft route=" + route + " stage=" + stage);
-                lastLoadedDeepLinkUrl = targetUrl;
-                webView.evaluateJavascript(js, null);
-                return;
-            }
-
-            Log.i(TAG, "stage=webview_deeplink_loadurl route=" + route + " stage=" + stage);
-            lastLoadedDeepLinkUrl = targetUrl;
-            webView.loadUrl(targetUrl);
+            || currentUrl.equals("https://emmaus.co.za")
+            || currentUrl.equals("https://emmaus.co.za/")
+            || currentUrl.startsWith("https://emmaus.co.za/?");
+        if (!atRoot) {
+            Log.i(TAG, "stage=cold_start_skip not_at_root url=" + currentUrl);
             return;
         }
-
-        // Launcher: only recover a truly blank document — never reload a healthy session.
-        if (isLauncherIntent(intent) && blank) {
-            String appUrl = getBridge().getAppUrl();
-            if (appUrl == null || appUrl.trim().isEmpty()) {
-                appUrl = "https://emmaus.co.za/";
-            }
-            Log.w(TAG, "stage=webview_launcher_recover_blank stage=" + stage);
-            webView.loadUrl(appUrl);
-        }
+        String targetUrl = "https://emmaus.co.za" + route;
+        Log.i(TAG, "stage=cold_start_widget_loadurl route=" + route);
+        webView.loadUrl(targetUrl);
     }
 
     @Override
