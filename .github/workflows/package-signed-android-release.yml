@@ -59,10 +59,7 @@ jobs:
       - name: Verify signing and sync web assets
         run: |
           pnpm --filter @workspace/project-emmaus run android:verify -- --require-signing
-          # Bundle the fixed web build into the APK (do not point at live emmaus.co.za).
-          # Live-server sync left phones on old JS when Replit had not republished.
-          pnpm --filter @workspace/project-emmaus run build:member
-          pnpm --filter @workspace/project-emmaus exec cap sync android
+          pnpm --filter @workspace/project-emmaus run android:sync
 
       - name: Build signed APK and Play bundle
         working-directory: artifacts/project-emmaus/android
