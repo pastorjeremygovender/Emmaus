@@ -134,37 +134,46 @@ public class MainActivity extends BridgeActivity {
 
         String route = routeFromAnyDeepLink(intent);
         String currentUrl = webView.getUrl() == null ? "" : webView.getUrl();
+        boolean blank = currentUrl.isEmpty()
+            || "about:blank".equals(currentUrl)
+            || currentUrl.startsWith("data:");
+        boolean onEmmaus = currentUrl.startsWith("https://emmaus.co.za");
 
         if (route != null && !route.isEmpty()) {
             String targetUrl = "https://emmaus.co.za" + route;
-            if (currentUrl.startsWith(targetUrl) || currentUrl.contains(route.split("\\?")[0])) {
-                Log.i(TAG, "stage=webview_deeplink_skip already_on_route stage=" + stage);
+            // If the SPA is already alive on emmaus.co.za, do NOT stopLoading/loadUrl.
+            // Full reloads on icon↔widget switches were leaving a white blank document
+            // on the second widget open. Soft-navigate via history instead.
+            if (onEmmaus && !blank) {
+                String escapedRoute = route.replace("\\", "\\\\").replace("'", "\\'");
+                String js =
+                    "(function(){try{"
+                    + "var p='" + escapedRoute + "';"
+                    + "var cur=(location.pathname||'')+(location.search||'');"
+                    + "if(cur===p){return;}"
+                    + "history.replaceState(Object.assign({},history.state||{},{emmausDeepLink:true}),'',p);"
+                    + "window.dispatchEvent(new PopStateEvent('popstate',{state:history.state}));"
+                    + "}catch(e){location.assign('" + targetUrl.replace("'", "\\'") + "');}})();";
+                Log.i(TAG, "stage=webview_deeplink_soft route=" + route + " stage=" + stage);
                 lastLoadedDeepLinkUrl = targetUrl;
+                webView.evaluateJavascript(js, null);
                 return;
             }
+
             Log.i(TAG, "stage=webview_deeplink_loadurl route=" + route + " stage=" + stage);
             lastLoadedDeepLinkUrl = targetUrl;
-            webView.stopLoading();
             webView.loadUrl(targetUrl);
             return;
         }
 
-        // Launcher / plain resume: recover a blank WebView left by a cancelled widget load.
-        if (isLauncherIntent(intent)) {
-            boolean blank = currentUrl.isEmpty()
-                || "about:blank".equals(currentUrl)
-                || currentUrl.startsWith("data:");
-            if (blank) {
-                String appUrl = getBridge().getAppUrl();
-                if (appUrl == null || appUrl.trim().isEmpty()) {
-                    appUrl = "https://emmaus.co.za/";
-                }
-                Log.w(TAG, "stage=webview_launcher_recover_blank url=" + currentUrl + " stage=" + stage);
-                webView.stopLoading();
-                webView.loadUrl(appUrl);
-            } else {
-                Log.i(TAG, "stage=webview_launcher_keep url=" + currentUrl + " stage=" + stage);
+        // Launcher: only recover a truly blank document — never reload a healthy session.
+        if (isLauncherIntent(intent) && blank) {
+            String appUrl = getBridge().getAppUrl();
+            if (appUrl == null || appUrl.trim().isEmpty()) {
+                appUrl = "https://emmaus.co.za/";
             }
+            Log.w(TAG, "stage=webview_launcher_recover_blank stage=" + stage);
+            webView.loadUrl(appUrl);
         }
     }
 
