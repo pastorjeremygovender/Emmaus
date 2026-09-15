@@ -1,5 +1,5 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
-import { safeOpeningDestination } from './opening-destination';
+import { rememberOpeningDestination, safeOpeningDestination } from './opening-destination';
 
 type NativeDeepLink = {
   path?: string;
@@ -57,6 +57,9 @@ function applyNativePath(path: string | undefined, replace: boolean): void {
   const safePath = safeNativePath(path);
   if (!safePath) return;
   activeNativeWidgetPath = safePath;
+  // So OpeningGate can prefer the widget destination instead of rendering
+  // empty Welcome while auth/opening resolves at "/".
+  rememberOpeningDestination(safePath);
 
   const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   if (current === safePath) return;
