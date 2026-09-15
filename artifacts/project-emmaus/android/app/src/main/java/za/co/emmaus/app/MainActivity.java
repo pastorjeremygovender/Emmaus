@@ -4,16 +4,20 @@ import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Bundle;
 import android.util.Log;
 import android.webkit.CookieManager;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
-import com.getcapacitor.WebViewListener;
+import com.getcapacitor.BridgeWebViewClient;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
@@ -29,10 +33,8 @@ public class MainActivity extends BridgeActivity {
     private EmmausPermissionCallback pendingPermissionCallback;
     private String[] pendingPermissions;
     private final Handler webViewRecoveryHandler = new Handler(Looper.getMainLooper());
-    private boolean webViewPageCommitted;
-    private boolean webViewRecoveryScheduled;
-    private boolean webViewRecoveryFallbackShown;
-    private int webViewRecoveryAttempts;
+    private final WebViewRecoveryState webViewRecoveryState =
+        new WebViewRecoveryState(MAX_WEBVIEW_RECOVERY_ATTEMPTS);
     private final ActivityResultLauncher<String[]> emmausPermissionLauncher =
         registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), ignored -> {
             EmmausPermissionCallback callback = pendingPermissionCallback;
@@ -127,72 +129,81 @@ public class MainActivity extends BridgeActivity {
 
     private void installWebViewRecovery() {
         if (getBridge() == null) return;
-        getBridge().addWebViewListener(new WebViewListener() {
+        getBridge().getWebView().setWebViewClient(new BridgeWebViewClient(getBridge()) {
             @Override
-            public void onPageStarted(WebView webView) {
-                webViewPageCommitted = false;
-                webViewRecoveryAttempts = 0;
-                webViewRecoveryFallbackShown = false;
-            }
-
-            @Override
-            public void onPageLoaded(WebView webView) {
-                webViewPageCommitted = true;
-                webViewRecoveryAttempts = 0;
-                webViewRecoveryScheduled = false;
-                webViewRecoveryFallbackShown = false;
+            public void onPageStarted(WebView webView, String url, Bitmap favicon) {
+                super.onPageStarted(webView, url, favicon);
+                webViewRecoveryState.onPageStarted();
             }
 
             @Override
             public void onPageCommitVisible(WebView webView, String url) {
-                webViewPageCommitted = true;
-                webViewRecoveryAttempts = 0;
-                webViewRecoveryScheduled = false;
-                webViewRecoveryFallbackShown = false;
+                super.onPageCommitVisible(webView, url);
+                webViewRecoveryHandler.removeCallbacksAndMessages(null);
+                webViewRecoveryState.onVisibleCommit();
             }
 
             @Override
-            public void onReceivedError(WebView webView) {
-                recoverWebViewIfBlank(webView, "resource_error");
+            public void onReceivedError(
+                WebView webView,
+                WebResourceRequest request,
+                WebResourceError error
+            ) {
+                super.onReceivedError(webView, request, error);
+                if (request.isForMainFrame()) {
+                    recoverWebViewIfBlank(webView, "main_document_error");
+                }
             }
 
             @Override
-            public void onReceivedHttpError(WebView webView) {
-                recoverWebViewIfBlank(webView, "http_error");
+            public void onReceivedHttpError(
+                WebView webView,
+                WebResourceRequest request,
+                WebResourceResponse errorResponse
+            ) {
+                super.onReceivedHttpError(webView, request, errorResponse);
+                if (request.isForMainFrame()) {
+                    recoverWebViewIfBlank(webView, "main_document_http_error");
+                }
             }
         });
     }
 
     private void recoverWebViewIfBlank(WebView webView, String reason) {
-        if (webViewPageCommitted
-                || webViewRecoveryScheduled
-                || webViewRecoveryFallbackShown) {
+        if (!webViewRecoveryState.shouldHandleFailure(true)) {
             return;
         }
 
-        if (webViewRecoveryAttempts >= MAX_WEBVIEW_RECOVERY_ATTEMPTS) {
+        if (!webViewRecoveryState.scheduleRecovery(true)) {
             showWebViewRecoveryPage(webView);
             return;
         }
 
-        webViewRecoveryScheduled = true;
         webViewRecoveryHandler.postDelayed(() -> {
-            webViewRecoveryScheduled = false;
-            if (webViewPageCommitted || isFinishing() || isDestroyed()) return;
+            if (isFinishing() || isDestroyed()) return;
 
-            webViewRecoveryAttempts++;
-            Log.w(TAG, "stage=webview_recovery attempt=" + webViewRecoveryAttempts
-                + " reason=" + reason);
+            int attempt = webViewRecoveryState.beginRecoveryLoad();
+            if (attempt < 0) {
+                if (webViewRecoveryState.shouldShowFallback()) {
+                    showWebViewRecoveryPage(webView);
+                }
+                return;
+            }
+
+            Log.w(TAG, "stage=webview_recovery attempt=" + attempt + " reason=" + reason);
             String appUrl = getBridge() == null ? null : getBridge().getAppUrl();
-            if (appUrl == null || appUrl.trim().isEmpty()) return;
+            if (appUrl == null || appUrl.trim().isEmpty()) {
+                showWebViewRecoveryPage(webView);
+                return;
+            }
             webView.stopLoading();
             webView.loadUrl(appUrl);
         }, WEBVIEW_RECOVERY_DELAY_MS);
     }
 
     private void showWebViewRecoveryPage(WebView webView) {
-        if (webViewRecoveryFallbackShown) return;
-        webViewRecoveryFallbackShown = true;
+        if (webViewRecoveryState.isPageCommitted() || webViewRecoveryState.isFallbackShown()) return;
+        webViewRecoveryState.markFallbackShown();
         String appUrl = getBridge() == null ? "https://emmaus.co.za/" : getBridge().getAppUrl();
         String retryUrl = appUrl == null || appUrl.trim().isEmpty()
             ? "https://emmaus.co.za/"

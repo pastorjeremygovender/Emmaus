@@ -251,6 +251,61 @@ describe('OpeningGate', () => {
     expect(screen.queryByText('member content')).not.toBeInTheDocument();
   });
 
+  it('shows the branded splash on a second launch while authentication is pending', () => {
+    authState = {
+      user: null,
+      loading: true,
+      loadingProfile: true,
+    };
+
+    render(<OpeningGate><div>Welcome</div></OpeningGate>);
+
+    expect(screen.getByRole('status', { name: 'Emmaus is loading' })).toBeInTheDocument();
+    expect(screen.queryByText('Welcome')).not.toBeInTheDocument();
+  });
+
+  it('renders the normal opening after authentication resolves successfully', async () => {
+    authState = {
+      user: null,
+      loading: true,
+      loadingProfile: true,
+    };
+    const view = render(<OpeningGate><div>Welcome</div></OpeningGate>);
+
+    authState = {
+      user: { id: 'member-1', role: 'member', preferredName: 'Grace' },
+      loading: false,
+      loadingProfile: false,
+    };
+    view.rerender(<OpeningGate><div>Welcome</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(getDailyRhythmStartup).toHaveBeenCalledTimes(1);
+    expect(setLocation).toHaveBeenCalledWith('/daily-rhythm/day/1', { replace: true });
+    expect(screen.getByText('Welcome')).toBeInTheDocument();
+  });
+
+  it('routes the root to sign-in when authentication times out without a session', async () => {
+    authState = {
+      user: null,
+      loading: true,
+      loadingProfile: true,
+    };
+    const view = render(<OpeningGate><div>Welcome</div></OpeningGate>);
+    expect(screen.getByRole('status', { name: 'Emmaus is loading' })).toBeInTheDocument();
+
+    authState = {
+      user: null,
+      loading: false,
+      loadingProfile: false,
+    };
+    view.rerender(<OpeningGate><div>Welcome</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(setLocation).toHaveBeenCalledWith('/auth', { replace: true });
+    expect(screen.queryByRole('status', { name: 'Emmaus is loading' })).not.toBeInTheDocument();
+  });
+
   it('keeps a completed decision in place when the reader reports completion', async () => {
     render(<OpeningGate><div>member content</div></OpeningGate>);
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
