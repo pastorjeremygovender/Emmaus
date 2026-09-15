@@ -30,8 +30,7 @@ jobs:
 
 
       - name: Install Android platform
-        run: "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-36" "build-tools;36.0.0"      - run: corepack enable
-
+        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
