@@ -100,7 +100,11 @@ public final class DailyRhythmDeepLinkPlugin extends Plugin {
             }
         }
         if (route == null) {
-            Log.i(TAG, "stage=" + stage + " route=none");
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .remove(KEY_PENDING_ROUTE)
+                .apply();
+            Log.i(TAG, "stage=" + stage + " route=none pending_cleared=true");
             return;
         }
         remember(context, route);

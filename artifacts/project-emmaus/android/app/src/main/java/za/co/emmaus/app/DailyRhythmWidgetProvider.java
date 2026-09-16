@@ -261,31 +261,12 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
         String journeyId,
         String stepId
     ) {
-        Uri.Builder uri = Uri.parse(BASE_URL).buildUpon()
-            .appendPath("daily-rhythm")
-            .appendPath("day")
-            .appendPath(String.valueOf(day))
-            .appendQueryParameter("source", "widget")
-            .appendQueryParameter("version", "1");
-        if (journeyId != null && !journeyId.isEmpty()) {
-            uri.appendQueryParameter("journeyId", journeyId);
-        }
-        if (stepId != null && !stepId.isEmpty()) {
-            uri.appendQueryParameter("stepId", stepId);
-        }
-        if (journeyId == null || journeyId.isEmpty() || stepId == null || stepId.isEmpty()) {
-            uri.appendQueryParameter("widgetFallback", "unavailable");
-        }
-        // Do not use ACTION_VIEW + https://emmaus.co.za. Capacitor treats that
-        // App Link as a full WebView document load and blanks the first tap.
-        String route = uri.build().getEncodedPath();
-        if (uri.build().getEncodedQuery() != null) {
-            route = route + "?" + uri.build().getEncodedQuery();
-        }
+        // Rebuild: the widget is a display surface. Tap must be identical to
+        // the launcher icon. Deep-linking into /daily-rhythm/day/N remounted
+        // the reader, showed "Loading…", then left a blank document.
         return new Intent(context, MainActivity.class)
             .setAction(Intent.ACTION_MAIN)
             .addCategory(Intent.CATEGORY_LAUNCHER)
-            .putExtra(DailyRhythmDeepLinkPlugin.EXTRA_WIDGET_ROUTE, route)
             .setFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK
                     | Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -309,7 +290,7 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
 
     private static int pendingIntentRequestCode(int appWidgetId, Uri destination) {
         int hash = 31 * appWidgetId + (destination == null ? 0 : destination.toString().hashCode());
-        return (hash + 0x51) & 0x7fffffff;
+        return (hash + 0x62) & 0x7fffffff;
     }
 
     private static String displayVerse(String verse) {
