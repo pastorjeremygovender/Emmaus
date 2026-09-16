@@ -16,7 +16,7 @@ import {
   type FlatContext,
   type SermonRecommendation,
 } from '@/lib/emmaus-client';
-import { getDailyRhythmState } from '@/lib/journeys-api';
+import { getDailyRhythmState, getJourney } from '@/lib/journeys-api';
 
 type Presence = 'resting' | 'hearing' | 'with-you' | 'interrupted';
 
@@ -152,16 +152,24 @@ function writePresence(next: SavedPresence) {
 export default function EmmausCompanion() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
-  const saved = readPresence();
   const [presence, setPresence] = useState<Presence>('resting');
-  const [spoken, setSpoken] = useState(saved?.spoken ?? '');
+  const [spoken, setSpoken] = useState('');
   const [draft, setDraft] = useState('');
-  const [moves, setMoves] = useState<CompanionMove[]>(saved?.moves ?? []);
+  const [moves, setMoves] = useState<CompanionMove[]>([]);
   const [dayLine, setDayLine] = useState<string | null>(null);
   const [todayDay, setTodayDay] = useState<number | null>(null);
-  const conversationIdRef = useRef<string | null>(saved?.conversationId ?? null);
+  const conversationIdRef = useRef<string | null>(null);
   const abortRef = useRef<{ abort: () => void } | null>(null);
-  const spokenRef = useRef(saved?.spoken ?? '');
+  const spokenRef = useRef('');
+
+  useEffect(() => {
+    const snap = (window.history.state && window.history.state.companionSnapshot) as SavedPresence | undefined;
+    if (!snap) return;
+    conversationIdRef.current = snap.conversationId;
+    spokenRef.current = snap.spoken;
+    setSpoken(snap.spoken);
+    setMoves(snap.moves ?? []);
+  }, []);
 
   function remember(nextSpoken: string, nextMoves: CompanionMove[], conversationId = conversationIdRef.current) {
     writePresence({
@@ -169,9 +177,34 @@ export default function EmmausCompanion() {
       spoken: nextSpoken,
       moves: nextMoves,
     });
-    if (conversationId && !window.location.pathname.includes(conversationId)) {
-      window.history.replaceState(null, '', `/personal/companion/${conversationId}`);
-    }
+    const url = conversationId ? `/personal/companion/${conversationId}` : '/personal/companion';
+    window.history.replaceState({ companionSnapshot: { conversationId, spoken: nextSpoken, moves: nextMoves } }, '', url);
+  }
+
+  async function nameJourneyMoves(nextMoves: CompanionMove[]): Promise<CompanionMove[]> {
+    return Promise.all(nextMoves.map(async (move) => {
+      const id = move.route.split('?')[0].match(/\/journeys?\/([^/]+)/)?.[1];
+      if (!id) return move;
+      try {
+        const journey = await getJourney(id);
+        if (journey?.title) return { ...move, label: journey.title };
+      } catch {
+        return move;
+      }
+      return move;
+    }));
+  }
+
+  function startOver() {
+    abortRef.current?.abort();
+    conversationIdRef.current = null;
+    spokenRef.current = '';
+    setSpoken('');
+    setMoves([]);
+    setDraft('');
+    setPresence('resting');
+    sessionStorage.removeItem(PRESENCE_KEY);
+    window.history.replaceState(null, '', '/personal/companion');
   }
 
   function openMove(route: string) {
@@ -232,14 +265,15 @@ export default function EmmausCompanion() {
         setSpoken(spokenRef.current);
         setPresence('with-you');
       },
-      onDone: (payload: { conversationId: string; metadata: EmmausMetadata }) => {
+      onDone: async (payload: { conversationId: string; metadata: EmmausMetadata }) => {
         conversationIdRef.current = payload.conversationId;
         const canonical = payload.metadata.jarvis?.pastoralText
           ?? payload.metadata.displayAnswer
           ?? payload.metadata.answer
           ?? spokenRef.current;
         spokenRef.current = canonical;
-        const nextMoves = movesFromMetadata(payload.metadata);
+        let nextMoves = movesFromMetadata(payload.metadata);
+        nextMoves = await nameJourneyMoves(nextMoves);
         setSpoken(canonical);
         setMoves(nextMoves);
         remember(canonical, nextMoves, payload.conversationId);
@@ -302,7 +336,13 @@ export default function EmmausCompanion() {
           <ArrowLeft size={22} />
         </button>
         <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Emmaus</p>
-        <span className="w-11" />
+        <button
+          type="button"
+          onClick={startOver}
+          className="text-[11px] text-muted-foreground min-h-[44px] px-1"
+        >
+          Start over
+        </button>
       </header>
 
       <main className="flex-1 flex flex-col items-center px-6 pb-6 text-center gap-6 overflow-y-auto">
