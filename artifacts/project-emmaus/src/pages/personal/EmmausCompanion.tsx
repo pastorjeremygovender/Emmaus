@@ -54,7 +54,41 @@ function titleFromRoute(route: string): string {
   return named ? named : 'Continue in Emmaus';
 }
 
-function movesFromMetadata(metadata: EmmausMetadata): CompanionMove[] {
+function kindFromRoute(route: string, resourceType?: string): string {
+  const path = route.split('?')[0];
+  if (resourceType === 'daily-rhythm' || path.includes('/daily-rhythm')) return '10 Minutes';
+  if (resourceType === 'bible' || path.includes('/bible')) return 'Bible';
+  if (resourceType === 'sermon-companion' || path.includes('/sermon-companion')) return 'Sermon Companion';
+  if (resourceType === 'sermon' || path.includes('/sermon')) return 'Sermon';
+  if (resourceType === 'room' || path.includes('/room') || path.includes('/group')) return 'Room';
+  if (resourceType === 'walk' || path.includes('/walk')) return 'Walk';
+  if (resourceType === 'devotional' || path.includes('/devotional')) return 'Devotional';
+  if (resourceType === 'bible-study' || path.includes('/study')) return 'Bible study';
+  if (resourceType === 'journey' || path.includes('/journey')) return 'Journey';
+  return 'Emmaus';
+}
+
+function withKind(label: string, kind: string): string {
+  const clean = label.replace(/^(Walk|Journey|Bible|Sermon Companion|Sermon|Room|Devotional|Bible study|10 Minutes) · /i, '').trim();
+  return `${kind} · ${clean}`;
+}
+
+function scoreMove(label: string, route: string, spoken: string): number {
+  const hay = `${label} ${route}`.toLowerCase();
+  const said = spoken.toLowerCase();
+  let score = 0;
+  if (said && label && said.includes(label.toLowerCase().replace(/^(walk|journey|bible|sermon|room|devotional|10 minutes) · /i, '').trim())) score += 12;
+  if (/hope in the storm/.test(said) && /hope in the storm|daily-rhythm/.test(hay)) score += 14;
+  if (/john\s*6/.test(said) && /john|bible/.test(hay)) score += 10;
+  if (route.includes('/daily-rhythm')) score += 7;
+  if (route.includes('/bible')) score += 6;
+  if (route.includes('/sermon')) score += 9;
+  if (route.includes('/room') || route.includes('/group')) score += 2;
+  if (/afraid|fear|storm|anxious/.test(said) && /what went wrong|sin entering|created in god/.test(hay)) score -= 14;
+  return score;
+}
+
+function movesFromMetadata(metadata: EmmausMetadata, spoken = '', todayDay: number | null = null): CompanionMove[] {
   const moves: CompanionMove[] = [];
   const seen = new Set<string>();
   const recs = metadata.recommendations ?? [];
@@ -106,17 +140,23 @@ function movesFromMetadata(metadata: EmmausMetadata): CompanionMove[] {
   const suggested = metadata.jarvis?.suggestedNextAction;
   if (suggested?.route) add(suggested.label, suggested.route);
 
+  if (/hope in the storm/i.test(spoken) && todayDay) {
+    add('Hope in the Storm', `/daily-rhythm/day/${todayDay}`);
+  }
+
   const used = new Set<string>();
-  return moves.filter((move) => {
+  const unique = moves.filter((move) => {
     const key = move.label.toLowerCase();
-    if (used.has(key)) {
-      const unique = `${move.label} — ${lastPathName(move.route)}`;
-      if (used.has(unique.toLowerCase())) return false;
-      move.label = unique;
-    }
-    used.add(move.label.toLowerCase());
+    if (used.has(key)) return false;
+    used.add(key);
     return true;
-  }).slice(0, 3);
+  }).map((move) => ({
+    ...move,
+    label: withKind(move.label, kindFromRoute(move.route)),
+  }));
+
+  unique.sort((a, b) => scoreMove(b.label, b.route, spoken) - scoreMove(a.label, a.route, spoken));
+  return unique.slice(0, 3);
 }
 
 function isOpenBibleAsk(text: string): boolean {
@@ -272,8 +312,12 @@ export default function EmmausCompanion() {
           ?? payload.metadata.answer
           ?? spokenRef.current;
         spokenRef.current = canonical;
-        let nextMoves = movesFromMetadata(payload.metadata);
+        let nextMoves = movesFromMetadata(payload.metadata, canonical, todayDay);
         nextMoves = await nameJourneyMoves(nextMoves);
+        nextMoves = nextMoves.map((move) => ({
+          ...move,
+          label: withKind(move.label, kindFromRoute(move.route)),
+        }));
         setSpoken(canonical);
         setMoves(nextMoves);
         remember(canonical, nextMoves, payload.conversationId);
