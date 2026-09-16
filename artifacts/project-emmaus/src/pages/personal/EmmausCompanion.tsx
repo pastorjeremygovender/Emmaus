@@ -180,35 +180,35 @@ function isOffTopicForFear(label: string, route: string): boolean {
 
 async function sermonsNamedInSpeech(spoken: string): Promise<CompanionMove[]> {
   const month = spoken.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})\b/i);
-  if (!month) return [];
-  const wanted = new Date(`${month[1]} ${month[2]}, ${month[3]}`);
-  if (Number.isNaN(wanted.getTime())) return [];
   try {
     const sermons = await listPublishedSermons();
-    return sermons.flatMap((sermon) => {
-      const raw = String(sermon.sermonDate || '').slice(0, 10);
-      const when = raw ? new Date(raw) : null;
-      if (!when || Number.isNaN(when.getTime())) return [];
-      if (when.toISOString().slice(0, 10) !== wanted.toISOString().slice(0, 10)) return [];
-      const moves: CompanionMove[] = [{
-        label: `Sermon · ${sermon.title}`,
-        route: `/sermon/${sermon.id}`,
-        kind: 'Sermon',
-      }];
-      if (sermon.youtubeUrl) {
-        moves.push({
-          label: `Watch · ${sermon.title}`,
-          route: sermon.youtubeUrl,
-          kind: 'Sermon',
-        });
+    if (month) {
+      const wanted = new Date(`${month[1]} ${month[2]}, ${month[3]}`);
+      if (!Number.isNaN(wanted.getTime())) {
+        const key = wanted.toISOString().slice(0, 10);
+        const dated = sermons.filter((sermon) => String(sermon.sermonDate || '').slice(0, 10) === key);
+        if (dated.length) {
+          return dated.flatMap((sermon) => {
+            const moves: CompanionMove[] = [{ label: sermon.title, route: `/sermon/${sermon.id}`, kind: 'Sermon' }];
+            if (sermon.youtubeUrl) moves.push({ label: `Watch ${sermon.title}`, route: sermon.youtubeUrl, kind: 'Sermon' });
+            return moves;
+          });
+        }
       }
-      return moves;
-    });
+    }
+    if (/\byour sermon\b|\bin the sermon\b|\bthis sermon\b/i.test(spoken)) {
+      const current = sermons.find((sermon) => sermon.isCurrentWeek) ?? sermons[0];
+      if (current) {
+        const moves: CompanionMove[] = [{ label: current.title, route: `/sermon/${current.id}`, kind: 'Sermon' }];
+        if (current.youtubeUrl) moves.push({ label: `Watch ${current.title}`, route: current.youtubeUrl, kind: 'Sermon' });
+        return moves;
+      }
+    }
+    return [];
   } catch {
     return [];
   }
 }
-
 
 const PRESENCE_KEY = 'emmaus_companion_presence';
 
@@ -422,12 +422,12 @@ export default function EmmausCompanion() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[#0A5738] text-[#F4EFE4] flex flex-col">
+    <div className="min-h-[100dvh] bg-[#F6F1E8] text-[#1F2A24] flex flex-col">
       <header className="h-12 flex items-center justify-between px-4">
         <button
           type="button"
           onClick={() => setLocation('/walk')}
-          className="p-2 -ml-2 min-h-[44px] min-w-[44px] text-[#F4EFE4]/70"
+          className="p-2 -ml-2 min-h-[44px] min-w-[44px] text-[#1F2A24]/60"
           aria-label="Back"
         >
           <ArrowLeft size={22} />
@@ -446,14 +446,14 @@ export default function EmmausCompanion() {
         <div
           className={`mt-10 h-28 w-28 rounded-full border transition-all ${
             presence === 'hearing' || presence === 'with-you'
-              ? 'border-[#F4EFE4] bg-[#F4EFE4]/15 scale-105'
+              ? 'border-[#0A5738] bg-[#0A5738]/10 scale-105'
               : presence === 'interrupted'
-                ? 'border-red-200/60 bg-red-200/10'
-                : 'border-[#F4EFE4]/35 bg-[#F4EFE4]/10'
+                ? 'border-red-300 bg-red-50'
+                : 'border-[#0A5738]/20 bg-white'
           }`}
           aria-hidden="true"
         />
-        <p className="text-[13px] text-[#F4EFE4]/70" aria-live="polite">
+        <p className="text-[13px] text-[#1F2A24]/55" aria-live="polite">
           {presence === 'hearing'
             ? 'Emmaus heard you. Stay with me…'
             : presence === 'with-you'
@@ -462,7 +462,7 @@ export default function EmmausCompanion() {
                 ? 'Emmaus could not finish'
                 : 'Emmaus is here'}
         </p>
-        <p className="font-serif text-[1.35rem] leading-relaxed max-w-md whitespace-pre-wrap text-[#F4EFE4]">
+        <p className="font-serif text-[1.2rem] leading-relaxed max-w-md whitespace-pre-wrap text-[#1F2A24]">
           {spoken || dayLine || 'Speak when you are ready. I already know today in Emmaus.'}
         </p>
         {moves.length > 0 && (
@@ -471,7 +471,7 @@ export default function EmmausCompanion() {
               <button
                 key={move.route}
                 type="button"
-                className="text-left text-[15px] text-[#F4EFE4] underline-offset-4 hover:underline py-2"
+                className="w-full rounded-2xl bg-white border border-[#0A5738]/15 px-4 py-3 text-left text-[15px] text-[#0A5738]"
                 onClick={() => openMove(move.route)}
               >
                 {move.label}
@@ -494,12 +494,12 @@ export default function EmmausCompanion() {
           onChange={(event) => setDraft(event.target.value)}
           placeholder="I’m here…"
           disabled={presence === 'hearing' || presence === 'with-you'}
-          className="flex-1 rounded-full border border-[#F4EFE4]/25 bg-[#063d27] px-5 py-3 text-[15px] text-[#F4EFE4] placeholder:text-[#F4EFE4]/40 outline-none disabled:opacity-60"
+          className="flex-1 rounded-full border border-[#0A5738]/20 bg-white px-5 py-3 text-[15px] text-[#1F2A24] placeholder:text-[#1F2A24]/40 outline-none disabled:opacity-60"
         />
         <button
           type="submit"
           disabled={!draft.trim() || presence === 'hearing' || presence === 'with-you'}
-          className="h-12 w-12 rounded-full bg-[#F4EFE4] text-[#0A5738] flex items-center justify-center disabled:opacity-40"
+          className="h-12 w-12 rounded-full bg-[#0A5738] text-white flex items-center justify-center disabled:opacity-40"
           aria-label="Send to Emmaus"
         >
           <ArrowUp size={20} />
