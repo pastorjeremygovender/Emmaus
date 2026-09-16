@@ -27,9 +27,25 @@ public final class DailyRhythmDeepLinkPlugin extends Plugin {
     private static final String PREFS = "emmaus_daily_rhythm_deep_link";
     private static final String KEY_PENDING_ROUTE = "pending_route";
 
+    static final String ACTION_OPEN_DAILY_RHYTHM = "za.co.emmaus.app.OPEN_DAILY_RHYTHM";
+    static final String EXTRA_WIDGET_ROUTE = "emmaus_widget_route";
+
     static String routeFromIntent(Intent intent) {
         if (intent == null) return null;
-        Uri data = intent.getData();
+        String extraRoute = intent.getStringExtra(EXTRA_WIDGET_ROUTE);
+        if (extraRoute != null && !extraRoute.isBlank()) {
+            try {
+                Uri extra = Uri.parse("https://emmaus.co.za" + extraRoute);
+                String fromExtra = routeFromUri(extra);
+                if (fromExtra != null) return fromExtra;
+            } catch (RuntimeException ignored) {
+                // Fall through to the https VIEW data used by older widgets.
+            }
+        }
+        return routeFromUri(intent.getData());
+    }
+
+    private static String routeFromUri(Uri data) {
         if (data == null
             || !"https".equalsIgnoreCase(data.getScheme())
             || !"emmaus.co.za".equalsIgnoreCase(data.getHost())

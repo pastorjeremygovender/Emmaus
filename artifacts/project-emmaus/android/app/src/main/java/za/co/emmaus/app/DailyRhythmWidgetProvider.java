@@ -276,7 +276,15 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
         if (journeyId == null || journeyId.isEmpty() || stepId == null || stepId.isEmpty()) {
             uri.appendQueryParameter("widgetFallback", "unavailable");
         }
-        return new Intent(Intent.ACTION_VIEW, uri.build(), context, MainActivity.class)
+        // Do not use ACTION_VIEW + https://emmaus.co.za. Capacitor treats that
+        // App Link as a full WebView document load and blanks the first tap.
+        String route = uri.build().getEncodedPath();
+        if (uri.build().getEncodedQuery() != null) {
+            route = route + "?" + uri.build().getEncodedQuery();
+        }
+        return new Intent(context, MainActivity.class)
+            .setAction(DailyRhythmDeepLinkPlugin.ACTION_OPEN_DAILY_RHYTHM)
+            .putExtra(DailyRhythmDeepLinkPlugin.EXTRA_WIDGET_ROUTE, route)
             .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
     }
 
