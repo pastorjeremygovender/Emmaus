@@ -26,28 +26,72 @@ type CompanionMove = {
   route: string;
 };
 
+function titleFromRoute(route: string): string {
+  const path = route.split('?')[0];
+  const rhythm = path.match(/\/daily-rhythm\/day\/(\d+)/);
+  if (rhythm) return `Open 10 Minutes with Jesus — day ${rhythm[1]}`;
+  if (path.includes('/bible')) return 'Open in Bible';
+  if (path.includes('/sermon-companion')) return 'Open Sermon Companion';
+  if (path.includes('/sermon')) return 'Open sermon';
+  if (path.includes('/walk')) return 'Open this Walk';
+  if (path.includes('/journey')) return 'Open this Journey';
+  if (path.includes('/group') || path.includes('/room')) return 'Open this room';
+  if (path.includes('/devotional')) return 'Open this devotional';
+  return 'Continue in Emmaus';
+}
+
+function typeLabel(resourceType?: string): string | null {
+  switch (resourceType) {
+    case 'daily-rhythm':
+      return 'Open 10 Minutes with Jesus';
+    case 'bible':
+      return 'Open in Bible';
+    case 'walk':
+      return 'Open this Walk';
+    case 'journey':
+      return 'Open this Journey';
+    case 'sermon':
+      return 'Open this sermon';
+    case 'sermon-companion':
+      return 'Open Sermon Companion';
+    case 'devotional':
+      return 'Open this devotional';
+    case 'room':
+      return 'Open this room';
+    default:
+      return null;
+  }
+}
+
 function movesFromMetadata(metadata: EmmausMetadata): CompanionMove[] {
   const moves: CompanionMove[] = [];
   const seen = new Set<string>();
+  const recs = metadata.recommendations ?? [];
   const add = (label: string, route?: string) => {
     if (!route || (!route.startsWith('/') && !route.startsWith('http')) || route.startsWith('//') || seen.has(route)) return;
+    const clean = label.replace(/\s+/g, ' ').trim();
+    if (!clean || clean.toLowerCase() === 'open this') return;
     seen.add(route);
-    moves.push({ label, route });
+    moves.push({ label: clean, route });
   };
 
+  const namedRoute = (route?: string, resourceId?: string) =>
+    recs.find((item) => (route && item.path === route) || (resourceId && item.resourceId === resourceId));
+
   for (const item of metadata.capabilityActions ?? []) {
-    add(item.label || 'Continue in Emmaus', item.route);
+    add(item.label || titleFromRoute(item.route), item.route);
   }
   for (const item of metadata.resourceActions ?? []) {
-    add(
-      item.kind === 'READ' ? 'Read this' : item.kind === 'CONTINUE' ? 'Continue' : 'Open this',
-      item.route,
-    );
+    const named = namedRoute(item.route, item.resourceId);
+    add(named?.title || typeLabel(item.resourceType) || titleFromRoute(item.route), item.route);
   }
   if (metadata.scripture?.book) {
     const chapter = metadata.scripture.chapter;
     const bookId = metadata.scripture.book.toLowerCase().replace(/\s+/g, '-');
     add(`Open ${metadata.scripture.reference}`, `/bible/read/${bookId}/${chapter}`);
+  }
+  for (const rec of recs) {
+    add(rec.title, rec.path);
   }
   for (const step of metadata.nextSteps ?? []) {
     add(step.text, step.path);
@@ -61,7 +105,7 @@ function movesFromMetadata(metadata: EmmausMetadata): CompanionMove[] {
   }
   const suggested = metadata.jarvis?.suggestedNextAction;
   if (suggested?.route) add(suggested.label, suggested.route);
-  return moves.slice(0, 4);
+  return moves.slice(0, 3);
 }
 
 function isOpenBibleAsk(text: string): boolean {
