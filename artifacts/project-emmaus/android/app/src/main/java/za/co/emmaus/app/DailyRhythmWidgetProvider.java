@@ -277,7 +277,7 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
             uri.appendQueryParameter("widgetFallback", "unavailable");
         }
         return new Intent(Intent.ACTION_VIEW, uri.build(), context, MainActivity.class)
-            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
     }
 
     static PendingIntent buildPendingIntent(

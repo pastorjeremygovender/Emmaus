@@ -33,9 +33,6 @@ public class MainActivity extends BridgeActivity {
     private EmmausPermissionCallback pendingPermissionCallback;
     private String[] pendingPermissions;
     private final Handler webViewRecoveryHandler = new Handler(Looper.getMainLooper());
-    private final Handler deepLinkHandler = new Handler(Looper.getMainLooper());
-    private int deepLinkGeneration = 0;
-    private String lastLoadedDeepLinkUrl = null;
     private final WebViewRecoveryState webViewRecoveryState =
         new WebViewRecoveryState(MAX_WEBVIEW_RECOVERY_ATTEMPTS);
     private final ActivityResultLauncher<String[]> emmausPermissionLauncher =
@@ -83,13 +80,11 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         configureWebViewCookies();
         installWebViewRecovery();
-        // Cold-start only: Capacitor opens server root. If this launch is a widget
-        // VIEW intent, move to that path once the WebView exists. Warm resumes
-        // must NOT loadUrl — that was blanking the document on the 2nd widget open.
-        final String coldRoute = routeFromAnyDeepLink(getIntent());
-        if (coldRoute != null) {
-            deepLinkHandler.postDelayed(() -> coldStartWidgetNavigate(coldRoute), 450L);
-        }
+        // Widget route is stored by DailyRhythmDeepLinkPlugin for JS
+        // getPendingDeepLink. Do not loadUrl here — that raced Capacitor
+        // and blanked the first widget open.
+        Log.i(TAG, "stage=on_create_webview_untouched hasWidgetRoute="
+            + (routeFromAnyDeepLink(getIntent()) != null));
     }
 
     @Override
@@ -117,25 +112,6 @@ public class MainActivity extends BridgeActivity {
             return "/personal?source=notification";
         }
         return null;
-    }
-
-    private void coldStartWidgetNavigate(String route) {
-        if (isFinishing() || isDestroyed() || getBridge() == null) return;
-        WebView webView = getBridge().getWebView();
-        if (webView == null || route == null || route.isEmpty()) return;
-        String currentUrl = webView.getUrl() == null ? "" : webView.getUrl();
-        boolean atRoot = currentUrl.isEmpty()
-            || "about:blank".equals(currentUrl)
-            || currentUrl.equals("https://emmaus.co.za")
-            || currentUrl.equals("https://emmaus.co.za/")
-            || currentUrl.startsWith("https://emmaus.co.za/?");
-        if (!atRoot) {
-            Log.i(TAG, "stage=cold_start_skip not_at_root url=" + currentUrl);
-            return;
-        }
-        String targetUrl = "https://emmaus.co.za" + route;
-        Log.i(TAG, "stage=cold_start_widget_loadurl route=" + route);
-        webView.loadUrl(targetUrl);
     }
 
     @Override
