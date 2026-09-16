@@ -267,6 +267,7 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
         return new Intent(context, MainActivity.class)
             .setAction(Intent.ACTION_MAIN)
             .addCategory(Intent.CATEGORY_LAUNCHER)
+            .putExtra(DailyRhythmDeepLinkPlugin.EXTRA_WIDGET_DAY, Math.max(1, day))
             .setFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK
                     | Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -282,15 +283,15 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
     ) {
         return PendingIntent.getActivity(
             context,
-            pendingIntentRequestCode(appWidgetId, intent.getData()),
+            pendingIntentRequestCode(appWidgetId, intent.getIntExtra(DailyRhythmDeepLinkPlugin.EXTRA_WIDGET_DAY, 0)),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
     }
 
-    private static int pendingIntentRequestCode(int appWidgetId, Uri destination) {
-        int hash = 31 * appWidgetId + (destination == null ? 0 : destination.toString().hashCode());
-        return (hash + 0x62) & 0x7fffffff;
+    private static int pendingIntentRequestCode(int appWidgetId, int day) {
+        int hash = 31 * appWidgetId + day + 0x74;
+        return hash & 0x7fffffff;
     }
 
     private static String displayVerse(String verse) {

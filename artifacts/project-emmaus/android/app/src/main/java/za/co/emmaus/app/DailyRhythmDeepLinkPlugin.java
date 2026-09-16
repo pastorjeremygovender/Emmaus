@@ -29,9 +29,14 @@ public final class DailyRhythmDeepLinkPlugin extends Plugin {
 
     static final String ACTION_OPEN_DAILY_RHYTHM = "za.co.emmaus.app.OPEN_DAILY_RHYTHM";
     static final String EXTRA_WIDGET_ROUTE = "emmaus_widget_route";
+    static final String EXTRA_WIDGET_DAY = "emmaus_widget_day";
 
     static String routeFromIntent(Intent intent) {
         if (intent == null) return null;
+        int widgetDay = intent.getIntExtra(EXTRA_WIDGET_DAY, -1);
+        if (widgetDay >= 1) {
+            return "/daily-rhythm/day/" + widgetDay + "?source=widget&version=1";
+        }
         String extraRoute = intent.getStringExtra(EXTRA_WIDGET_ROUTE);
         if (extraRoute != null && !extraRoute.isBlank()) {
             try {
