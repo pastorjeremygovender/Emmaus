@@ -1,13 +1,12 @@
 /**
  * Emmaus Companion — presence surface (not Ask Emmaus).
  *
- * Ask Emmaus stays at /personal/ask-emmaus. This route is the Jarvis-shaped
- * companion: one living reply, resource actions from the existing server
- * contract, no chat transcript as the product.
+ * Same conversation API as Ask Emmaus. Different embodiment: one reply,
+ * visible working state, send control, and server-owned actions.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ArrowUp } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   appendMessage,
@@ -16,10 +15,63 @@ import {
   startConversation,
   type EmmausMetadata,
   type FlatContext,
+  type SermonRecommendation,
 } from '@/lib/emmaus-client';
 import { getDailyRhythmState } from '@/lib/journeys-api';
 
 type Presence = 'resting' | 'hearing' | 'with-you' | 'interrupted';
+
+type CompanionMove = {
+  label: string;
+  route: string;
+};
+
+function movesFromMetadata(metadata: EmmausMetadata): CompanionMove[] {
+  const moves: CompanionMove[] = [];
+  const seen = new Set<string>();
+  const add = (label: string, route?: string) => {
+    if (!route || (!route.startsWith('/') && !route.startsWith('http')) || route.startsWith('//') || seen.has(route)) return;
+    seen.add(route);
+    moves.push({ label, route });
+  };
+
+  for (const item of metadata.capabilityActions ?? []) {
+    add(item.label || 'Continue in Emmaus', item.route);
+  }
+  for (const item of metadata.resourceActions ?? []) {
+    add(
+      item.kind === 'READ' ? 'Read this' : item.kind === 'CONTINUE' ? 'Continue' : 'Open this',
+      item.route,
+    );
+  }
+  if (metadata.scripture?.book) {
+    const chapter = metadata.scripture.chapter;
+    const bookId = metadata.scripture.book.toLowerCase().replace(/\s+/g, '-');
+    add(`Open ${metadata.scripture.reference}`, `/bible/read/${bookId}/${chapter}`);
+  }
+  for (const step of metadata.nextSteps ?? []) {
+    add(step.text, step.path);
+  }
+  if (metadata.nextStep?.path) {
+    add(metadata.nextStep.primaryButtonText || metadata.nextStep.action, metadata.nextStep.path);
+  }
+  for (const sermon of (metadata.sermonRecommendations ?? []) as SermonRecommendation[]) {
+    if (sermon.openPath) add(sermon.title, sermon.openPath);
+    if (sermon.watchUrl) add(`Watch ${sermon.title}`, sermon.watchUrl);
+  }
+  const suggested = metadata.jarvis?.suggestedNextAction;
+  if (suggested?.route) add(suggested.label, suggested.route);
+  return moves.slice(0, 4);
+}
+
+function isOpenBibleAsk(text: string): boolean {
+  return /^(please\s+)?(open|go to|show|take me to)\s+(my\s+)?(the\s+)?bible\b/i.test(text.trim())
+    || /^(my\s+)?bible$/i.test(text.trim());
+}
+
+function isOpenTodayRhythmAsk(text: string): boolean {
+  return /(10\s*minutes?\s+with\s+jesus|daily rhythm|today'?s\s+(reading|rhythm|opening))/i.test(text);
+}
 
 export default function EmmausCompanion() {
   const { user } = useAuth();
@@ -27,7 +79,7 @@ export default function EmmausCompanion() {
   const [presence, setPresence] = useState<Presence>('resting');
   const [spoken, setSpoken] = useState('');
   const [draft, setDraft] = useState('');
-  const [action, setAction] = useState<{ label: string; route: string } | null>(null);
+  const [moves, setMoves] = useState<CompanionMove[]>([]);
   const [dayLine, setDayLine] = useState<string | null>(null);
   const [todayDay, setTodayDay] = useState<number | null>(null);
   const conversationIdRef = useRef<string | null>(null);
@@ -53,41 +105,48 @@ export default function EmmausCompanion() {
     };
   }, []);
 
-  const contextForTurn = useCallback((): FlatContext => {
-    return {
-      entryPoint: 'personal',
-      userName: user?.preferredName,
-      conversationId: conversationIdRef.current ?? undefined,
-      currentDay: todayDay ?? undefined,
-      journeyTitle: '10 Minutes with Jesus',
-      journeyType: 'daily-rhythm',
-      voiceAppContext: dayLine ?? undefined,
-    };
-  }, [dayLine, todayDay, user?.preferredName]);
+  const contextForTurn = useCallback((): FlatContext => ({
+    entryPoint: 'personal',
+    userName: user?.preferredName,
+    conversationId: conversationIdRef.current ?? undefined,
+    currentDay: todayDay ?? undefined,
+    journeyTitle: '10 Minutes with Jesus',
+    journeyType: 'daily-rhythm',
+    voiceAppContext: [
+      dayLine,
+      'Companion surface. Keep the spoken reply under 80 words.',
+      'Prefer one Scripture and one Emmaus action over a long essay.',
+      'If the member asks to open the Bible, Daily Rhythm, a Walk, or a sermon, return an OPEN action.',
+    ].filter(Boolean).join(' '),
+  }), [dayLine, todayDay, user?.preferredName]);
 
   const speakFromEmmaus = useCallback((message: string) => {
     if (!user?.id || !message.trim()) return;
     abortRef.current?.abort();
     spokenRef.current = '';
     setSpoken('');
-    setAction(null);
-    setPresence('with-you');
+    setMoves([]);
+    setPresence('hearing');
 
     const callbacks = {
       onText: (chunk: string) => {
+        if (!chunk) return;
         spokenRef.current += chunk;
         setSpoken(spokenRef.current);
+        setPresence('with-you');
       },
       onDone: (payload: { conversationId: string; metadata: EmmausMetadata }) => {
         conversationIdRef.current = payload.conversationId;
-        const next = getImmediateEmmausAction(payload.metadata);
-        const labeled = payload.metadata.jarvis?.suggestedNextAction
-          ?? payload.metadata.resourceActions?.[0]
-          ?? payload.metadata.capabilityActions?.[0];
-        if (next?.route && labeled?.label) {
-          setAction({ label: labeled.label, route: next.route });
-        } else if (next?.route) {
-          setAction({ label: 'Continue in Emmaus', route: next.route });
+        const canonical = payload.metadata.jarvis?.pastoralText
+          ?? payload.metadata.displayAnswer
+          ?? payload.metadata.answer
+          ?? spokenRef.current;
+        spokenRef.current = canonical;
+        setSpoken(canonical);
+        setMoves(movesFromMetadata(payload.metadata));
+        const immediate = getImmediateEmmausAction(payload.metadata);
+        if (immediate?.route?.startsWith('/')) {
+          executeValidatedEmmausAction(immediate, (route) => setLocation(route));
         }
         setPresence('resting');
       },
@@ -111,14 +170,28 @@ export default function EmmausCompanion() {
           context: contextForTurn(),
           callbacks,
         });
-  }, [contextForTurn, user?.id]);
+  }, [contextForTurn, setLocation, user?.id]);
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const text = draft.trim();
-    if (!text) return;
+    if (!text || presence === 'hearing' || presence === 'with-you') return;
     setDraft('');
-    setPresence('hearing');
+
+    if (isOpenBibleAsk(text)) {
+      setSpoken('Opening the Bible.');
+      setMoves([{ label: 'My Bible', route: '/bible' }]);
+      setLocation('/bible');
+      return;
+    }
+    if (isOpenTodayRhythmAsk(text) && todayDay) {
+      const route = `/daily-rhythm/day/${todayDay}`;
+      setSpoken(dayLine ?? 'Opening today’s 10 Minutes with Jesus.');
+      setMoves([{ label: 'Open today’s reading', route }]);
+      setLocation(route);
+      return;
+    }
+
     speakFromEmmaus(text);
   }
 
@@ -137,43 +210,55 @@ export default function EmmausCompanion() {
         <span className="w-11" />
       </header>
 
-      <main className="flex-1 flex flex-col items-center justify-center px-8 pb-8 text-center gap-8">
+      <main className="flex-1 flex flex-col items-center px-6 pb-6 text-center gap-6 overflow-y-auto">
         <div
-          className={`h-28 w-28 rounded-full border ${
-            presence === 'with-you'
+          className={`mt-6 h-24 w-24 rounded-full border transition-colors ${
+            presence === 'hearing' || presence === 'with-you'
               ? 'border-primary/50 bg-primary/10'
-              : presence === 'hearing'
-                ? 'border-primary/30 bg-primary/5'
+              : presence === 'interrupted'
+                ? 'border-destructive/40 bg-destructive/5'
                 : 'border-border bg-card'
           }`}
           aria-hidden="true"
         />
-        <div className="space-y-3 max-w-sm">
-          <p className="text-[13px] text-muted-foreground">
-            {presence === 'with-you'
-              ? 'Emmaus is with you'
-              : presence === 'hearing'
-                ? 'Emmaus is listening'
-                : presence === 'interrupted'
-                  ? 'Emmaus could not finish'
-                  : 'Emmaus is here'}
-          </p>
-          <p className="font-serif text-xl leading-relaxed">
-            {spoken || dayLine || 'Speak when you are ready. I already know today in Emmaus.'}
-          </p>
-        </div>
-        {action && (
-          <button
-            type="button"
-            className="rounded-full bg-primary text-primary-foreground px-5 py-3 text-sm"
-            onClick={() => executeValidatedEmmausAction(action, (route) => setLocation(route))}
-          >
-            {action.label}
-          </button>
+        <p className="text-[13px] text-muted-foreground" aria-live="polite">
+          {presence === 'hearing'
+            ? 'Emmaus heard you. Stay with me…'
+            : presence === 'with-you'
+              ? 'Emmaus is answering'
+              : presence === 'interrupted'
+                ? 'Emmaus could not finish'
+                : 'Emmaus is here'}
+        </p>
+        <p className="font-serif text-xl leading-relaxed max-w-md whitespace-pre-wrap">
+          {spoken || dayLine || 'Speak when you are ready. I already know today in Emmaus.'}
+        </p>
+        {moves.length > 0 && (
+          <div className="flex flex-col gap-2 w-full max-w-sm">
+            {moves.map((move) => (
+              <button
+                key={move.route}
+                type="button"
+                className="rounded-full border border-border bg-card px-4 py-3 text-sm"
+                onClick={() => {
+                  if (move.route.startsWith('http')) {
+                    window.open(move.route, '_blank', 'noopener,noreferrer');
+                    return;
+                  }
+                  executeValidatedEmmausAction(move, (route) => setLocation(route));
+                }}
+              >
+                {move.label}
+              </button>
+            ))}
+          </div>
         )}
       </main>
 
-      <form onSubmit={handleSubmit} className="px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+      <form
+        onSubmit={handleSubmit}
+        className="px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex items-center gap-2"
+      >
         <label className="sr-only" htmlFor="emmaus-companion-say">
           Speak to Emmaus
         </label>
@@ -182,8 +267,17 @@ export default function EmmausCompanion() {
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           placeholder="I’m here…"
-          className="w-full rounded-full border border-border bg-card px-5 py-3 text-[15px] outline-none focus:border-primary/40"
+          disabled={presence === 'hearing' || presence === 'with-you'}
+          className="flex-1 rounded-full border border-border bg-card px-5 py-3 text-[15px] outline-none focus:border-primary/40 disabled:opacity-60"
         />
+        <button
+          type="submit"
+          disabled={!draft.trim() || presence === 'hearing' || presence === 'with-you'}
+          className="h-12 w-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40"
+          aria-label="Send to Emmaus"
+        >
+          <ArrowUp size={20} />
+        </button>
       </form>
     </div>
   );
