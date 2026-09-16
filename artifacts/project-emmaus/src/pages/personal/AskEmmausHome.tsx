@@ -147,6 +147,13 @@ export default function AskEmmausHome() {
         <p className="text-[12px] text-muted-foreground leading-relaxed text-center">
           Emmaus offers pastoral reflection, not counseling or professional advice.
         </p>
+        <button
+          type="button"
+          onClick={() => setLocation('/personal/companion')}
+          className="text-[12px] text-primary underline-offset-4 hover:underline"
+        >
+          Compare Emmaus companion
+        </button>
       </div>
 
       {/* ── Composer ─────────────────────────────────────────────────────── */}

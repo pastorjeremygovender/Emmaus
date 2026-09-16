@@ -52,6 +52,7 @@ import NotFound from '@/pages/not-found';
 import AskEmmausHome from '@/pages/personal/AskEmmausHome';
 import AskEmmausConversation from '@/pages/personal/AskEmmausConversation';
 import AskEmmausHistory from '@/pages/personal/AskEmmausHistory';
+import EmmausCompanion from '@/pages/personal/EmmausCompanion';
 import VoiceMode from '@/components/emmaus/VoiceMode';
 
 // Bible
@@ -172,6 +173,7 @@ function Router() {
       <Route path="/journeys/:id" component={JourneyDetail} />
       <Route path="/personal" component={Personal} />
       <Route path="/profile/personal-details" component={PersonalDetails} />
+      <Route path="/personal/companion" component={EmmausCompanion} />
       <Route path="/personal/ask-emmaus" component={AskEmmausHome} />
       <Route path="/personal/ask-emmaus/voice" component={VoiceMode} />
       <Route path="/personal/ask-emmaus/conversation" component={AskEmmausConversation} />
