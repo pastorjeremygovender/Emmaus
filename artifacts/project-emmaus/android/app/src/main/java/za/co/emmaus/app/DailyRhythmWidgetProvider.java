@@ -283,9 +283,15 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
             route = route + "?" + uri.build().getEncodedQuery();
         }
         return new Intent(context, MainActivity.class)
-            .setAction(DailyRhythmDeepLinkPlugin.ACTION_OPEN_DAILY_RHYTHM)
+            .setAction(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_LAUNCHER)
             .putExtra(DailyRhythmDeepLinkPlugin.EXTRA_WIDGET_ROUTE, route)
-            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            .setFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK
+                    | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                    | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+            );
     }
 
     static PendingIntent buildPendingIntent(
@@ -303,7 +309,7 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
 
     private static int pendingIntentRequestCode(int appWidgetId, Uri destination) {
         int hash = 31 * appWidgetId + (destination == null ? 0 : destination.toString().hashCode());
-        return hash & 0x7fffffff;
+        return (hash + 0x51) & 0x7fffffff;
     }
 
     private static String displayVerse(String verse) {

@@ -63,6 +63,13 @@ function applyNativePath(path: string | undefined, replace: boolean): void {
 
   const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   if (current === safePath) return;
+  try {
+    const currentUrl = new URL(current, window.location.origin);
+    const nextUrl = new URL(safePath, window.location.origin);
+    if (currentUrl.pathname === nextUrl.pathname) return;
+  } catch {
+    // Fall through to a single history update.
+  }
 
   if (replace) {
     window.history.replaceState(
