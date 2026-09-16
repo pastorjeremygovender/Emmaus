@@ -173,6 +173,7 @@ function Router() {
       <Route path="/journeys/:id" component={JourneyDetail} />
       <Route path="/personal" component={Personal} />
       <Route path="/profile/personal-details" component={PersonalDetails} />
+      <Route path="/personal/companion/:conversationId" component={EmmausCompanion} />
       <Route path="/personal/companion" component={EmmausCompanion} />
       <Route path="/personal/ask-emmaus" component={AskEmmausHome} />
       <Route path="/personal/ask-emmaus/voice" component={VoiceMode} />

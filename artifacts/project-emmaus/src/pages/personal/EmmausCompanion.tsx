@@ -11,7 +11,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   appendMessage,
   executeValidatedEmmausAction,
-  getImmediateEmmausAction,
   startConversation,
   type EmmausMetadata,
   type FlatContext,
@@ -117,18 +116,60 @@ function isOpenTodayRhythmAsk(text: string): boolean {
   return /(10\s*minutes?\s+with\s+jesus|daily rhythm|today'?s\s+(reading|rhythm|opening))/i.test(text);
 }
 
+const PRESENCE_KEY = 'emmaus_companion_presence';
+
+type SavedPresence = {
+  conversationId: string | null;
+  spoken: string;
+  moves: CompanionMove[];
+};
+
+function readPresence(): SavedPresence | null {
+  try {
+    const raw = sessionStorage.getItem(PRESENCE_KEY);
+    return raw ? JSON.parse(raw) as SavedPresence : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePresence(next: SavedPresence) {
+  sessionStorage.setItem(PRESENCE_KEY, JSON.stringify(next));
+}
+
 export default function EmmausCompanion() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const saved = readPresence();
   const [presence, setPresence] = useState<Presence>('resting');
-  const [spoken, setSpoken] = useState('');
+  const [spoken, setSpoken] = useState(saved?.spoken ?? '');
   const [draft, setDraft] = useState('');
-  const [moves, setMoves] = useState<CompanionMove[]>([]);
+  const [moves, setMoves] = useState<CompanionMove[]>(saved?.moves ?? []);
   const [dayLine, setDayLine] = useState<string | null>(null);
   const [todayDay, setTodayDay] = useState<number | null>(null);
-  const conversationIdRef = useRef<string | null>(null);
+  const conversationIdRef = useRef<string | null>(saved?.conversationId ?? null);
   const abortRef = useRef<{ abort: () => void } | null>(null);
-  const spokenRef = useRef('');
+  const spokenRef = useRef(saved?.spoken ?? '');
+
+  function remember(nextSpoken: string, nextMoves: CompanionMove[], conversationId = conversationIdRef.current) {
+    writePresence({
+      conversationId,
+      spoken: nextSpoken,
+      moves: nextMoves,
+    });
+    if (conversationId && !window.location.pathname.includes(conversationId)) {
+      window.history.replaceState(null, '', `/personal/companion/${conversationId}`);
+    }
+  }
+
+  function openMove(route: string) {
+    remember(spokenRef.current || spoken, moves, conversationIdRef.current);
+    if (route.startsWith('http')) {
+      window.open(route, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    executeValidatedEmmausAction({ label: route, route }, (next) => setLocation(next));
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -186,12 +227,10 @@ export default function EmmausCompanion() {
           ?? payload.metadata.answer
           ?? spokenRef.current;
         spokenRef.current = canonical;
+        const nextMoves = movesFromMetadata(payload.metadata);
         setSpoken(canonical);
-        setMoves(movesFromMetadata(payload.metadata));
-        const immediate = getImmediateEmmausAction(payload.metadata);
-        if (immediate?.route?.startsWith('/')) {
-          executeValidatedEmmausAction(immediate, (route) => setLocation(route));
-        }
+        setMoves(nextMoves);
+        remember(canonical, nextMoves, payload.conversationId);
         setPresence('resting');
       },
       onError: (err: string) => {
@@ -284,13 +323,7 @@ export default function EmmausCompanion() {
                 key={move.route}
                 type="button"
                 className="rounded-full border border-border bg-card px-4 py-3 text-sm"
-                onClick={() => {
-                  if (move.route.startsWith('http')) {
-                    window.open(move.route, '_blank', 'noopener,noreferrer');
-                    return;
-                  }
-                  executeValidatedEmmausAction(move, (route) => setLocation(route));
-                }}
+                onClick={() => openMove(move.route)}
               >
                 {move.label}
               </button>
