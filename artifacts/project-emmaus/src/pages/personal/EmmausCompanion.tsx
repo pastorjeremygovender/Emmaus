@@ -25,64 +25,65 @@ type CompanionMove = {
   route: string;
 };
 
+function lastPathName(route: string): string {
+  const parts = route.split('?')[0].split('/').filter(Boolean);
+  const tail = parts[parts.length - 1] || '';
+  return decodeURIComponent(tail).replace(/[-_]+/g, ' ').trim();
+}
+
+function pathsMatch(left?: string, right?: string): boolean {
+  if (!left || !right) return false;
+  const a = left.split('?')[0].replace(/\/+$/, '');
+  const b = right.split('?')[0].replace(/\/+$/, '');
+  return a === b || a.endsWith(b) || b.endsWith(a);
+}
+
 function titleFromRoute(route: string): string {
   const path = route.split('?')[0];
   const rhythm = path.match(/\/daily-rhythm\/day\/(\d+)/);
-  if (rhythm) return `Open 10 Minutes with Jesus — day ${rhythm[1]}`;
+  if (rhythm) return `10 Minutes with Jesus — day ${rhythm[1]}`;
   if (path.includes('/bible')) return 'Open in Bible';
-  if (path.includes('/sermon-companion')) return 'Open Sermon Companion';
-  if (path.includes('/sermon')) return 'Open sermon';
-  if (path.includes('/walk')) return 'Open this Walk';
-  if (path.includes('/journey')) return 'Open this Journey';
-  if (path.includes('/group') || path.includes('/room')) return 'Open this room';
-  if (path.includes('/devotional')) return 'Open this devotional';
-  return 'Continue in Emmaus';
-}
-
-function typeLabel(resourceType?: string): string | null {
-  switch (resourceType) {
-    case 'daily-rhythm':
-      return 'Open 10 Minutes with Jesus';
-    case 'bible':
-      return 'Open in Bible';
-    case 'walk':
-      return 'Open this Walk';
-    case 'journey':
-      return 'Open this Journey';
-    case 'sermon':
-      return 'Open this sermon';
-    case 'sermon-companion':
-      return 'Open Sermon Companion';
-    case 'devotional':
-      return 'Open this devotional';
-    case 'room':
-      return 'Open this room';
-    default:
-      return null;
-  }
+  const named = lastPathName(route);
+  if (path.includes('/sermon-companion')) return named ? `Sermon Companion — ${named}` : 'Open Sermon Companion';
+  if (path.includes('/sermon')) return named ? `Sermon — ${named}` : 'Open sermon';
+  if (path.includes('/walk')) return named ? `Walk — ${named}` : 'Open this Walk';
+  if (path.includes('/journey')) return named ? `Journey — ${named}` : 'Open this Journey';
+  if (path.includes('/group') || path.includes('/room')) return named ? `Room — ${named}` : 'Open this room';
+  if (path.includes('/devotional')) return named ? `Devotional — ${named}` : 'Open this devotional';
+  if (path.includes('/bible-study') || path.includes('/study')) return named ? `Bible Study — ${named}` : 'Open this Bible study';
+  return named ? named : 'Continue in Emmaus';
 }
 
 function movesFromMetadata(metadata: EmmausMetadata): CompanionMove[] {
   const moves: CompanionMove[] = [];
   const seen = new Set<string>();
   const recs = metadata.recommendations ?? [];
+  const extras = metadata.resourceRecommendations ?? [];
   const add = (label: string, route?: string) => {
     if (!route || (!route.startsWith('/') && !route.startsWith('http')) || route.startsWith('//') || seen.has(route)) return;
     const clean = label.replace(/\s+/g, ' ').trim();
-    if (!clean || clean.toLowerCase() === 'open this') return;
+    if (!clean) return;
     seen.add(route);
     moves.push({ label: clean, route });
   };
 
-  const namedRoute = (route?: string, resourceId?: string) =>
-    recs.find((item) => (route && item.path === route) || (resourceId && item.resourceId === resourceId));
+  const nameFor = (route?: string, resourceId?: string, resourceType?: string) => {
+    const rec = recs.find((item) =>
+      (resourceId && (item.resourceId === resourceId || item.sermonId === resourceId))
+      || pathsMatch(item.path, route),
+    );
+    if (rec?.title) return rec.title;
+    const extra = extras.find((item) => item.resourceId === resourceId);
+    if (extra?.reason) return extra.reason;
+    if (route) return titleFromRoute(route);
+    return resourceType ? resourceType.replace(/-/g, ' ') : 'Continue in Emmaus';
+  };
 
   for (const item of metadata.capabilityActions ?? []) {
-    add(item.label || titleFromRoute(item.route), item.route);
+    add(item.label || nameFor(item.route, undefined, item.capabilityId), item.route);
   }
   for (const item of metadata.resourceActions ?? []) {
-    const named = namedRoute(item.route, item.resourceId);
-    add(named?.title || typeLabel(item.resourceType) || titleFromRoute(item.route), item.route);
+    add(nameFor(item.route, item.resourceId, item.resourceType), item.route);
   }
   if (metadata.scripture?.book) {
     const chapter = metadata.scripture.chapter;
@@ -104,7 +105,18 @@ function movesFromMetadata(metadata: EmmausMetadata): CompanionMove[] {
   }
   const suggested = metadata.jarvis?.suggestedNextAction;
   if (suggested?.route) add(suggested.label, suggested.route);
-  return moves.slice(0, 3);
+
+  const used = new Set<string>();
+  return moves.filter((move) => {
+    const key = move.label.toLowerCase();
+    if (used.has(key)) {
+      const unique = `${move.label} — ${lastPathName(move.route)}`;
+      if (used.has(unique.toLowerCase())) return false;
+      move.label = unique;
+    }
+    used.add(move.label.toLowerCase());
+    return true;
+  }).slice(0, 3);
 }
 
 function isOpenBibleAsk(text: string): boolean {
