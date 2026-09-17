@@ -14,7 +14,7 @@ const TAB_ROOT_PATHS = ['/bible', '/journeys', '/personal'];
 TAB_ROOT_PATHS.includes(location)   // only matched the three root strings
 ```
 
-Any deep path under those tabs — `/bible/read/john/3`, `/bible/books`, `/journeys/explore`, etc. — was NOT matched. The browser restores the last URL on reopen, so a user who was reading a Bible chapter always reopened there, Welcome never ran, and Today's Steps was never restored.
+Any deep path under those tabs — `/bible/read/john/3`, `/bible/books`, `/journeys/explore`, etc. — was NOT matched. The browser restores the last URL on reopen, so a user who was reading a Bible chapter always reopened there, Welcome never ran, and My Emmaus was never restored.
 
 The same exact-match hole existed in the `visibilitychange` listener (warm PWA resume path).
 

@@ -46,7 +46,7 @@ export interface BibleRef extends CanonicalBibleReference {
 
 export type VoiceIntent =
   | { type: 'converse' }                                        // default → Emmaus with context
-  | { type: 'get-steps' }                                       // "what's on today's steps?"
+  | { type: 'get-steps' }                                       // "what's in My Emmaus?"
   | { type: 'navigate'; target: NavigateTarget }                // "open my bible"
   | { type: 'reading-command'; command: ReadingCommand }        // "pause", "explain that"
   | { type: 'read-content'; content: ReadContentType; bibleRef?: BibleRef; titleHint?: string }
@@ -344,7 +344,7 @@ export function resolveIntent(transcript: string, isReading: boolean): VoiceInte
       return { type: 'reading-command', command: 'pray' };
   }
 
-  // ─── Today's Steps ──────────────────────────────────────────────────────
+  // ─── My Emmaus ──────────────────────────────────────────────────────────
   if (
     /what('?s| is| are)?\s+(on\s+)?(my\s+)?(today'?s?\s+steps?|steps? today|daily steps?)/.test(t) ||
     /what do i (have|need to do) today/.test(t) ||
@@ -371,7 +371,7 @@ export function resolveIntent(transcript: string, isReading: boolean): VoiceInte
   if (/open (my\s+)?(walks?|journeys?)\s*(page)?$|go to (my\s+)?(walks?|journeys?)\s*$|show me (my\s+)?(walks?|journeys?)/.test(t))
     return { type: 'navigate', target: 'journeys' };
 
-  // "Go to Today's Steps" / "Open Today's Steps" → walk home (/walk = Today's Steps)
+  // Legacy "Today's Steps" commands still resolve to My Emmaus (/walk).
   if (
     /go to (today'?s?\s+)?steps?/.test(t) ||
     /open (today'?s?\s+)?steps?/.test(t) ||

@@ -15,8 +15,8 @@ afterEach(() => {
 
 describe('resolveReturn', () => {
   it.each([
-    ['today', '/walk', "Today's Steps"],
-    ['walk', '/walk', "Today's Steps"],
+    ['today', '/walk', 'My Emmaus'],
+    ['walk', '/walk', 'My Emmaus'],
     ['nextStepsDevotionals', '/journeys?tab=devotionals', 'Discover'],
     ['nextStepsJourneys', '/journeys?tab=journeys', 'Discover'],
     ['nextStepsWalks', '/journeys?tab=walks', 'Discover'],

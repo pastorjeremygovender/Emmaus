@@ -261,19 +261,23 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
         String journeyId,
         String stepId
     ) {
-        // Rebuild: the widget is a display surface. Tap must be identical to
-        // the launcher icon. Deep-linking into /daily-rhythm/day/N remounted
-        // the reader, showed "Loading…", then left a blank document.
-        return new Intent(context, MainActivity.class)
-            .setAction(Intent.ACTION_MAIN)
-            .addCategory(Intent.CATEGORY_LAUNCHER)
-            .putExtra(DailyRhythmDeepLinkPlugin.EXTRA_WIDGET_DAY, Math.max(1, day))
-            .setFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK
-                    | Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-                    | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
-            );
+        Uri.Builder uri = Uri.parse(BASE_URL).buildUpon()
+            .appendPath("daily-rhythm")
+            .appendPath("day")
+            .appendPath(String.valueOf(day))
+            .appendQueryParameter("source", "widget")
+            .appendQueryParameter("version", "1");
+        if (journeyId != null && !journeyId.isEmpty()) {
+            uri.appendQueryParameter("journeyId", journeyId);
+        }
+        if (stepId != null && !stepId.isEmpty()) {
+            uri.appendQueryParameter("stepId", stepId);
+        }
+        if (journeyId == null || journeyId.isEmpty() || stepId == null || stepId.isEmpty()) {
+            uri.appendQueryParameter("widgetFallback", "unavailable");
+        }
+        return new Intent(Intent.ACTION_VIEW, uri.build(), context, MainActivity.class)
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
     }
 
     static PendingIntent buildPendingIntent(
@@ -283,14 +287,14 @@ public final class DailyRhythmWidgetProvider extends AppWidgetProvider {
     ) {
         return PendingIntent.getActivity(
             context,
-            pendingIntentRequestCode(appWidgetId, intent.getIntExtra(DailyRhythmDeepLinkPlugin.EXTRA_WIDGET_DAY, 0)),
+            pendingIntentRequestCode(appWidgetId, intent.getData()),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
     }
 
-    private static int pendingIntentRequestCode(int appWidgetId, int day) {
-        int hash = 31 * appWidgetId + day + 0x74;
+    private static int pendingIntentRequestCode(int appWidgetId, Uri destination) {
+        int hash = 31 * appWidgetId + (destination == null ? 0 : destination.toString().hashCode());
         return hash & 0x7fffffff;
     }
 

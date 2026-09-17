@@ -1,6 +1,6 @@
 /**
  * DevotionalNavigatorPage — shown when a member taps a Daily Devotional card
- * from Today's Steps or Discover. Shows the full list of entries so the member
+ * from My Emmaus or Discover. Shows the full list of entries so the member
  * can choose where to read, using the same layout as the Walk steps list.
  *
  * Route: /devotional/:seriesId/navigate

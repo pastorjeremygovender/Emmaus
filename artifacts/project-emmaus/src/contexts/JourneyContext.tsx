@@ -121,7 +121,7 @@ export type Progress = {
   status?: string;
   /** Set when member opens the content — clears UPDATED badge */
   lastOpenedAt?: string | null;
-  /** Non-destructive hide: card removed from Today's Steps, all progress preserved. */
+  /** Non-destructive hide: card removed from My Emmaus, all progress preserved. */
   hiddenFromToday?: boolean;
   /** The member-facing surface that originally started this progress. */
   displayOrigin?: api.JourneyDisplayOrigin | null;
@@ -251,7 +251,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         }
 
         // A brand-new account gets a server-backed starting set across all
-        // Today's Steps content systems. Refresh this map after seeding so the
+        // My Emmaus content systems. Refresh this map after seeding so the
         // Daily Rhythm and Journey cards are available without a page reload.
         if (user?.role === 'user') {
           try {
@@ -373,7 +373,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
       const existing = progress[journeyId];
       // Starting an already-active journey is a no-op. Starting a paused or
       // completed journey is explicit re-engagement and must reach the server
-      // so it becomes eligible for Today's Steps again.
+      // so it becomes eligible for My Emmaus again.
       // An active row with an origin is already classified. Do not rewrite it
       // just because the member later opened the same Walk elsewhere.
       if (existing && existing.status === 'active' && existing.displayOrigin) return;

@@ -1,6 +1,6 @@
 /**
  * StepNavigatorPage — shown when a member taps a Walk or Daily Rhythm card on
- * Today's Steps. Lists EVERY step in the walk, all accessible at any time.
+ * My Emmaus. Lists EVERY step in the walk, all accessible at any time.
  * Nothing is locked or hidden — members can jump to any step freely.
  *
  * Used at two routes:
@@ -49,7 +49,7 @@ export function StepNavigatorPage({ mode }: Props) {
     : undefined;
   const completedSet = new Set(prog?.completedDays ?? []);
   // The current day remains visible after completion so the Days screen agrees
-  // with Today's Steps. It is still the server's current day; showing it does
+  // with My Emmaus. It is still the server's current day; showing it does
   // not unlock the next day.
   // Daily Rhythm availability comes from the canonical state response. The
   // progress row is retained only as a compatibility fallback during bootstrap.
@@ -116,7 +116,7 @@ export function StepNavigatorPage({ mode }: Props) {
           aria-label="Back"
         >
           <ChevronLeft size={17} />
-          {selectedGroupId ? journey.title : "Today's Steps"}
+          {selectedGroupId ? journey.title : "My Emmaus"}
         </button>
 
         <div className="space-y-0.5">

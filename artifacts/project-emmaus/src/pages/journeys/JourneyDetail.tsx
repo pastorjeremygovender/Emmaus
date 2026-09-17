@@ -107,7 +107,7 @@ export default function JourneyDetail() {
   }, [journey?.collectionId]);
 
   // Re-engage + auto-unhide — opening a Walk from Discover/Next Steps restores
-  // a paused or hidden item to Today's Steps. Both are fire-and-forget; the
+  // a paused or hidden item to My Emmaus. Both are fire-and-forget; the
   // member does not need to wait for these lifecycle updates before reading.
   useEffect(() => {
     if (!journey || !prog || !user) return;

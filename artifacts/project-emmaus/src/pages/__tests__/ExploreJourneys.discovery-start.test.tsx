@@ -68,7 +68,7 @@ vi.mock('@/components/JourneyStartSheet', () => ({
 
 vi.mock('@/components/BottomNav', () => ({ BottomNav: () => null }));
 
-describe('Discovery → Today’s Steps contract', () => {
+describe('Discovery → My Emmaus contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

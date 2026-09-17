@@ -236,7 +236,7 @@ function buildDevotionalItem(
   // formula used by Walk.tsx > calcAvailableDaySelfPaced (devotional-calendar.ts).
   // markDayComplete intentionally never increments currentDay (it stays at the DB
   // seed value of 1), so using p.currentDay here would always show "Day 1" to
-  // in-progress members and produce a different card text than Today's Steps.
+  // in-progress members and produce a different card text than My Emmaus.
   //
   // The cap is the HIGHEST published day number — NOT publishedEntries.length.
   // For non-contiguous series (e.g. published days 1 and 5, count=2, maxDay=5),
@@ -352,7 +352,7 @@ router.get("/next-steps", async (req: Request, res: Response) => {
 
     // Fetch published entries per sermon-table companion.
     // Used by buildCompanionItem to compute a progress-aware description
-    // ("Day N of M · Entry Title") that mirrors Today's Steps exactly.
+    // ("Day N of M · Entry Title") that mirrors My Emmaus exactly.
     const companionEntriesMap = new Map<string, sermonCompanionStore.CompanionEntry[]>();
 
     await Promise.all(
@@ -378,7 +378,7 @@ router.get("/next-steps", async (req: Request, res: Response) => {
     // published entry. Results are already sorted newest-published first.
 
     // Current means explicitly marked is_current_week = true. A published
-    // companion must never become Today's Steps content merely because it is
+    // companion must never become My Emmaus content merely because it is
     // the newest record; admins choose the highlighted sermon intentionally.
     const currentCompanion = scTableCompanions.find(c => c.isCurrentWeek) ?? null;
     const previousCompanions = scTableCompanions.filter(c => c.id !== currentCompanion?.id);
@@ -389,7 +389,7 @@ router.get("/next-steps", async (req: Request, res: Response) => {
 
       // Use the actual published entry count as the final-day threshold.
       // publishedEntryCount is returned by listPublishedSermonCompanions() and
-      // reflects only published (not draft) entries — the same value Today's Steps
+      // reflects only published (not draft) entries — the same value My Emmaus
       // uses via numberOfDays on the scCompanion object.
       const publishedEntryCount = c.publishedEntryCount;
 
@@ -407,7 +407,7 @@ router.get("/next-steps", async (req: Request, res: Response) => {
 
       // "All days complete" when the user's arithmetic next-day pointer has
       // advanced past the last available published entry — matches the same
-      // check used by the Today's Steps card (currentDay > numberOfDays).
+      // check used by the My Emmaus card (currentDay > numberOfDays).
       const isAllComplete = publishedEntryCount > 0 && currentDay > publishedEntryCount;
 
       // Strip subtitle appended to companion title by AI generation
@@ -416,7 +416,7 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       const title    = hasSeparator ? c.title.split(": ")[0].trim() : c.title;
       const subtitle = hasSeparator ? c.title.split(": ").slice(1).join(": ").trim() : undefined;
 
-      // Progress-aware description for Today's Steps card
+      // Progress-aware description for My Emmaus card
       const publishedEntries = companionEntriesMap.get(c.id) ?? [];
       const completedCount = prog?.completedDays.length ?? 0;
       const allComplete = publishedEntryCount > 0 && completedCount >= publishedEntryCount;

@@ -4,9 +4,9 @@
  * Route: /devotional/:seriesId/day/:day
  *
  * Source-aware return (spec §4):
- *   Pass ?source=today      → "Back to Today's Steps" → /walk
+ *   Pass ?source=today      → "Back to My Emmaus" → /walk
  *   Pass ?source=nextSteps  → "Back to Next Steps"    → /journeys
- *   Default (no param)      → Today's Steps (daily devotionals default to Walk)
+ *   Default (no param)      → My Emmaus (daily devotionals default to Walk)
  *
  * Completion behaviour:
  *   - Tapping "Finished" marks the current day complete and shows JourneyCompletionPanel
@@ -116,7 +116,7 @@ export default function DevotionalDay() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Restore to Today's Steps — clears hidden_from_today when the member opens
+  // Restore to My Emmaus — clears hidden_from_today when the member opens
   // the content from Next Steps (or any other surface). Fire-and-forget; non-fatal.
   useEffect(() => {
     if (!seriesId || !user?.id) return;

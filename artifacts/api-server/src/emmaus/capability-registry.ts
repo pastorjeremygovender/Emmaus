@@ -44,7 +44,7 @@ export interface EmmausCapability {
 export const EMMAUS_CAPABILITIES: readonly EmmausCapability[] = [
   {
     id: "todays-steps",
-    displayName: "Today's Steps",
+    displayName: "My Emmaus",
     aliases: ["today's steps", "todays steps", "today", "home", "walk home"],
     description: "Your Walk home, where Emmaus shows the steps available to you today.",
     location: "The Walk tab",
@@ -82,8 +82,8 @@ export const EMMAUS_CAPABILITIES: readonly EmmausCapability[] = [
     id: "daily-rhythm",
     displayName: "Daily Rhythm",
     aliases: ["daily rhythm", "rhythm", "daily reading", "today's rhythm", "today's daily rhythm"],
-    description: "Your once-a-day discipleship step, shown through Today's Steps when it is eligible.",
-    location: "Today's Steps on Walk",
+    description: "Your Walk home, where Emmaus shows the steps available to you today.",
+    location: "My Emmaus on Walk",
     route: "/daily-rhythm/navigate",
     supportedOperations: ["DESCRIBE", "OPEN", "READ", "CONTINUE"],
     requiredAuthentication: "authenticated",

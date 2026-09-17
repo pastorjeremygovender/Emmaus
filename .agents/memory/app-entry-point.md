@@ -4,27 +4,28 @@ description: Where signed-in members always land on normal app launch, and why t
 ---
 
 ## Rule (spec-locked — permanent)
-On the first normal member app opening of each calendar day, launch the Daily
-Rhythm "10 Minutes With Jesus" journey at the member's current step. Later
-same-day openings land on `/walk` (Today's Steps).
+Every normal member app opening from the web or Android app icon lands on
+`/walk` (My Emmaus). It must not automatically launch the Daily Rhythm
+"10 Minutes With Jesus" journey.
 
-Every normal launch — cold start, warm start, PWA open, background resume, force-close — lands on Today's Walk.
+The Daily Rhythm widget remains a deliberate exception: its exact native
+`source=widget` destination opens the displayed Daily Rhythm entry.
 
 ## Root cause of the bug
-The launch path must preserve the once-per-day `emmaus_last_opened_v2` rule,
-but Auth must return members through `/` so Welcome can apply that rule instead
-of bypassing it with a direct `/walk` redirect.
+The launch gate was applying the Daily Rhythm opening ledger to normal root and
+cold member launches. That made the first opening of a day bypass My Emmaus.
 
-**Why:**  Daily Rhythm should be the first spiritual touchpoint each day,
-while Today's Steps remains the normal destination for subsequent openings.
+**Why:** My Emmaus is the normal home. Daily Rhythm should open automatically
+only when the member deliberately chooses it or taps its widget.
 
 ## Deep-link exceptions
 Push notifications, shared Room invitations, shared Journey links, Bible deep links — these navigate directly to a specific URL and never pass through `Welcome.tsx` at root. They are NOT handled by `resolveEntryRoute`; they bypass it entirely. After the deep-link interaction ends, the next normal launch returns to `/walk`.
 
 ## Call sites
-Both `Welcome.tsx` useEffect paths (fast path + splash path) call
-`resolveDailyOpenRoute`. `Auth.tsx` sends members back through `/` so the same
-authenticated launch path runs after sign-in.
+`Welcome.tsx` routes authenticated normal root launches to `/walk`.
+`OpeningGate` handles splash/auth/onboarding only. Native widget handoff is
+resolved separately before the normal root redirect.
 
 ## How to apply
-Never add routing logic that sends a member to a daily-rhythm URL at launch. Any content-page URL from launch must be a genuine deep link passed in through the URL, not derived from progress state.
+Never add routing logic that sends a normal member launch to a daily-rhythm URL.
+Any Daily Rhythm URL at launch must be a deliberate widget or content deep link.

@@ -179,7 +179,7 @@ describe("Daily Rhythm authority — 25 persisted-state cases", () => {
     const key = `dr-04-${nonce}`; await reset(key); await startup(key); assert.equal((await complete(key, 1)).status, 200);
     assert.equal((await startup(key)).currentDay, 1);
   });
-  it("TEST 5 — Back to Today's Steps is progression-neutral", async () => {
+  it("TEST 5 — Back to My Emmaus is progression-neutral", async () => {
     const key = `dr-05-${nonce}`; await reset(key); await startup(key); await complete(key, 1);
     assert.equal((await startup(key)).progress.currentDay, 1);
   });
@@ -406,7 +406,7 @@ describe("Daily Rhythm production-like startup lifecycle", () => {
     assert.ok(rs.every(r => r.firstOpen === true));
     assert.ok(rs.every(r => r.destination === "/daily-rhythm/day/1"));
   });
-  it("TEST B — a React remount in the same launch does not switch to Today's Steps", async () => {
+  it("TEST B — a React remount in the same launch does not switch to My Emmaus", async () => {
     const key = `dr-b-${nonce}`; await reset(key);
     const launch = `launch-b-${key}`;
     const first = await startup(key, launch); const remount = await startup(key, launch);

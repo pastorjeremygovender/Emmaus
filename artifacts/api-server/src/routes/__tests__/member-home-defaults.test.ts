@@ -1,5 +1,5 @@
 /**
- * Regression coverage for the first Today's Steps bootstrap.
+ * Regression coverage for the first My Emmaus bootstrap.
  *
  * Requires the API server to be running against the development database:
  *   NODE_ENV=test ALLOW_TEST_AUTH_HARNESS=1 \

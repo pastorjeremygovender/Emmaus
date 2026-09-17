@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { JourneyProvider } from '@/contexts/JourneyContext';
 import OpeningGate from '@/components/OpeningGate';
@@ -23,7 +23,7 @@ const navigation = vi.hoisted(() => {
   };
 });
 const setLocation = navigation.setLocation;
-const AUTHORIZED_TARGET = '/daily-rhythm/day/7';
+const AUTHORIZED_TARGET = '/walk';
 
 vi.mock('wouter', () => ({
   useLocation: () => ['/', setLocation],
@@ -71,22 +71,11 @@ function assertWithinBudget(
 }
 
 function AuthorizedTarget() {
-  const [shown, setShown] = useState(
-    navigation.state.authorizedPath === AUTHORIZED_TARGET,
-  );
-
   useEffect(() => {
-    const update = () => setShown(navigation.state.authorizedPath === AUTHORIZED_TARGET);
-    window.addEventListener('test:authorized-target', update);
-    update();
-    return () => window.removeEventListener('test:authorized-target', update);
+    navigation.state.targetShownAt = performance.now();
   }, []);
 
-  useEffect(() => {
-    if (shown) navigation.state.targetShownAt = performance.now();
-  }, [shown]);
-
-  return shown ? <div data-testid="authorized-target">Daily Rhythm target</div> : null;
+  return <div data-testid="authorized-target">My Emmaus</div>;
 }
 
 describe('authenticated cold-launch performance', () => {
@@ -160,7 +149,7 @@ describe('authenticated cold-launch performance', () => {
     vi.restoreAllMocks();
   });
 
-  it('shows the server-authorized Daily Rhythm target within the documented phase budgets', async () => {
+  it('shows My Emmaus without requesting the Daily Rhythm startup decision', async () => {
     const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
     const coldLaunchStartedAt = performance.now();
 
@@ -174,12 +163,6 @@ describe('authenticated cold-launch performance', () => {
       </AuthProvider>,
     );
 
-    await waitFor(() => {
-      expect(setLocation).toHaveBeenCalledWith(
-        AUTHORIZED_TARGET,
-        { replace: true },
-      );
-    });
     await waitFor(() => expect(screen.getByTestId('authorized-target')).toBeInTheDocument());
     const authorizedTargetDuration = Math.round(
       (navigation.state.targetShownAt ?? performance.now()) - coldLaunchStartedAt,
@@ -194,14 +177,15 @@ describe('authenticated cold-launch performance', () => {
 
     expect(screen.getByTestId('authorized-target')).toBeInTheDocument();
     assertWithinBudget('authorizedTarget', authorizedTargetDuration);
+    expect((vi.mocked(fetch).mock.calls as unknown[][]).some(([input]) => (
+      String(input).endsWith('/api/journeys/daily-rhythm/startup')
+    ))).toBe(false);
 
     const identityProfile = phaseFrom(debug, '[AuthBootstrap]', 'identity-profile-ready');
-    const serverDecision = phaseFrom(debug, '[DailyOpen]', 'startup-response');
     const primaryContent = phaseFrom(debug, '[JourneyBootstrap]', 'primary-content-ready');
     const secondaryContent = phaseFrom(debug, '[JourneyBootstrap]', 'secondary-content-ready');
 
     assertWithinBudget('identityProfile', identityProfile.durationMs ?? -1);
-    assertWithinBudget('serverDecision', serverDecision.durationMs ?? -1);
     assertWithinBudget('primaryContent', primaryContent.durationMs ?? -1);
     assertWithinBudget('secondaryContent', secondaryContent.durationMs ?? -1);
   });

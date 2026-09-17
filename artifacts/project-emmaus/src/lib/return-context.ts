@@ -16,7 +16,7 @@
  *   4. Use <EmmausBackButton> (components/EmmausBackButton.tsx) which wraps this automatically.
  *
  * Source key → destination mapping:
- *   walk / today               → /walk                       (Today's Steps)
+ *   walk / today               → /walk                       (My Emmaus)
  *   nextSteps                  → /journeys                   (legacy; devotionals default)
  *   nextStepsDevotionals       → /journeys?tab=devotionals
  *   nextStepsJourneys          → /journeys?tab=journeys
@@ -51,8 +51,8 @@ export type SourceKey =
   | 'dailyRhythmPrevious';
 
 const SOURCE_MAP: Record<string, { path: string; label: string }> = {
-  walk:                 { path: '/walk',                     label: "Today's Steps"  },
-  today:                { path: '/walk',                     label: "Today's Steps"  },
+  walk:                 { path: '/walk',                     label: 'My Emmaus'      },
+  today:                { path: '/walk',                     label: 'My Emmaus'      },
   nextSteps:            { path: '/journeys',                 label: 'Discover'       },  // legacy
   nextStepsDevotionals: { path: '/journeys?tab=devotionals', label: 'Discover'       },
   nextStepsJourneys:    { path: '/journeys?tab=journeys',    label: 'Discover'       },
@@ -188,7 +188,7 @@ export function goBackOrFallback(
 
 /** Infer a short label from a route path for the fallback case. */
 function pathLabel(path: string): string {
-  if (path === '/walk')              return "Today's Steps";
+  if (path === '/walk')              return 'My Emmaus';
   if (path.startsWith('/journeys'))  return 'Discover';
   if (path === '/my-journey')        return 'My Journey';
   if (path === '/bible')             return 'My Bible';
@@ -217,7 +217,7 @@ export function resolveReturn(
 ): { path: string; label: string } {
   const normalizeLabel = (result: { path: string; label: string }) => {
     if (content && (source === 'walk' || source === 'today') && result.path === '/walk') {
-      return { ...result, label: "Back to Today's Steps" };
+      return { ...result, label: 'Back to My Emmaus' };
     }
     if (content === 'sermon' && result.path.startsWith('/journeys?tab=')) {
       return { ...result, label: 'Back to Discover' };

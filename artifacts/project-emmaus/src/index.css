@@ -52,7 +52,7 @@
 }
 
 /* ── Actionable Daily Rhythm card ───────────────────────────────────────────
-   The Start Here card is the only Today’s Steps card that uses this treatment.
+   The Start Here card is the only My Emmaus card that uses this treatment.
    The completed state does not receive the class, so it remains unchanged. */
 @keyframes daily-rhythm-actionable-pulse {
   0%, 100% {

@@ -18,6 +18,7 @@ import { installAppHistoryTracking } from '@/lib/return-context';
 // Pages
 import Welcome from '@/pages/Welcome';
 import PrivacyPolicy from '@/pages/PrivacyPolicy';
+import AccountDeletion from '@/pages/AccountDeletion';
 import Onboarding from '@/pages/Onboarding';
 import Auth from '@/pages/Auth';
 import AuthCallback from '@/pages/AuthCallback';
@@ -121,6 +122,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Welcome} />
       <Route path="/privacy-policy" component={PrivacyPolicy} />
+      <Route path="/delete-account" component={AccountDeletion} />
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/auth" component={Auth} />
       <Route path="/auth/callback" component={AuthCallback} />
@@ -172,7 +174,7 @@ function Router() {
       <Route path="/journeys/:id" component={JourneyDetail} />
       <Route path="/personal" component={Personal} />
       <Route path="/profile/personal-details" component={PersonalDetails} />
-      
+
       <Route path="/personal/ask-emmaus" component={AskEmmausHome} />
       <Route path="/personal/ask-emmaus/voice" component={VoiceMode} />
       <Route path="/personal/ask-emmaus/conversation" component={AskEmmausConversation} />

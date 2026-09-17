@@ -7,14 +7,12 @@
  *
  * Rules:
  *
- *   FIRST OPEN OF THE DAY:
- *     The server opening endpoint resolves this from the authenticated account
- *     and its timezone-aware opening ledger. Client-only date markers are not
- *     authoritative and must never decide whether an opening is due.
+ *   NORMAL WEB / APP-ICON LAUNCH:
+ *     Always → My Emmaus (/walk). Daily Rhythm progress and calendar state do
+ *     not change this normal home destination.
  *
- *   SUBSEQUENT OPENS SAME DAY (visiting "/" while splash already shown):
- *     Always → Today's Walk (/walk).
- *     Call `resolveEntryRoute()`.
+ *   WIDGET / DEEP-LINK LAUNCH:
+ *     Preserve the explicit destination supplied by the widget or shared link.
  *
  *   RESUME EVENTS (screen lock/unlock, brief app switch, incoming call,
  *     notification shade, visibilitychange, pageshow, focus):
@@ -23,7 +21,7 @@
  *
  *   DEEP-LINK NAVIGATIONS (push notification, shared Room/Journey/Bible link):
  *     Target a specific URL directly and bypass Welcome entirely.
- *     After the user returns to a normal launch this resolver applies.
+ *     After the user returns to a normal launch, `/walk` is the destination.
  *
  * Persistence contract (Emmaus must remember where every member is):
  *   – Daily Rhythm / Journeys : server-persisted via user_journey_progress.
@@ -71,10 +69,9 @@ export function resolveDailyOpenRoute(
 // ─── resolveEntryRoute ────────────────────────────────────────────────────────
 
 /**
- * Standard member entry route — Today's Walk.
+ * Standard member entry route — My Emmaus.
  *
- * Used for subsequent same-day opens (splash already shown this session),
- * and as the fallback when `resolveDailyOpenRoute` returns null.
+ * Used for normal web, app-icon, and authenticated post-login launches.
  *
  * Parameters are accepted for API compatibility but are not used.
  */

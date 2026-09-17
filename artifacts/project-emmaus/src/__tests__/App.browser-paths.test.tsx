@@ -95,7 +95,7 @@ vi.mock('@/lib/journeys-api', () => ({
 }));
 
 vi.mock('@/pages/Walk', () => ({
-  default: () => <div data-testid="page-walk">Today's Steps</div>,
+  default: () => <div data-testid="page-walk">My Emmaus</div>,
 }));
 
 vi.mock('@/pages/DailyRhythmDay', () => ({
@@ -143,14 +143,6 @@ function openingRequired(destination = '/daily-rhythm/day/1') {
   };
 }
 
-function openingCompleted() {
-  return {
-    state: 'COMPLETED',
-    destination: '/walk',
-    assignedDay: 1,
-  };
-}
-
 function openAt(path: string) {
   window.history.replaceState({}, '', path);
 }
@@ -180,69 +172,46 @@ describe('authenticated browser path matrix', () => {
     openAt('/');
   });
 
-  it('asks the server before an authenticated member can reach Walk from root', async () => {
+  it('opens an authenticated root launch on My Emmaus without a Daily Rhythm redirect', async () => {
     render(<App />);
 
-    await waitFor(() => expect(mocks.startup).toHaveBeenCalledTimes(1));
-    expect(screen.queryByTestId('page-walk')).not.toBeInTheDocument();
-    await waitFor(() => expect(window.location.pathname).toBe('/daily-rhythm/day/1'));
-    expect(screen.getByTestId('page-daily-rhythm')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('page-walk')).toBeInTheDocument());
+    expect(window.location.pathname).toBe('/walk');
+    expect(mocks.startup).not.toHaveBeenCalled();
   });
 
-  it('keeps the rendered completion card mounted after the reader reports completion', async () => {
-    render(<App />);
-    await waitFor(() => expect(screen.getByTestId('page-daily-rhythm')).toBeInTheDocument());
-
-    await userEvent.click(screen.getByRole('button', { name: 'Complete today' }));
-
-    expect(screen.getByTestId('daily-completion-card')).toBeInTheDocument();
-    expect(screen.queryByTestId('page-walk')).not.toBeInTheDocument();
-    expect(mocks.startup).toHaveBeenCalledTimes(1);
-  });
-
-  it('holds a deep link until the server confirms the opening is complete', async () => {
-    let resolveStartup!: (value: ReturnType<typeof openingCompleted>) => void;
-    const pendingStartup = new Promise<ReturnType<typeof openingCompleted>>(resolve => {
-      resolveStartup = resolve;
-    });
-    mocks.startup.mockReturnValueOnce(pendingStartup);
+  it('opens an authenticated deep link directly without a Daily Rhythm redirect', async () => {
     openAt('/personal?source=shared');
 
     render(<App />);
 
-    await waitFor(() => expect(mocks.startup).toHaveBeenCalledTimes(1));
-    expect(screen.queryByTestId('page-personal')).not.toBeInTheDocument();
-    expect(screen.getByText('Preparing today’s opening…')).toBeInTheDocument();
-
-    resolveStartup(openingCompleted());
     await waitFor(() => expect(screen.getByTestId('page-personal')).toBeInTheDocument());
     expect(window.location.pathname).toBe('/personal');
     expect(window.location.search).toBe('?source=shared');
+    expect(mocks.startup).not.toHaveBeenCalled();
   });
 
-  it('does not let an authenticated invite skip the required Daily Rhythm opening', async () => {
+  it('opens an authenticated invite directly', async () => {
     sessionStorage.setItem('emmaus_splash_shown', 'true');
     sessionStorage.setItem('pendingInviteToken', 'invite-token-1');
     openAt('/');
 
     render(<App />);
 
-    await waitFor(() => expect(window.location.pathname).toBe('/daily-rhythm/day/1'));
-    expect(screen.queryByText("You've been invited")).not.toBeInTheDocument();
-    expect(sessionStorage.getItem('emmaus_pending_opening_destination_v1'))
-      .toBe('/join-room/invite-token-1');
+    await waitFor(() => expect(window.location.pathname).toBe('/join-room/invite-token-1'));
+    expect(screen.getByText("You've been invited")).toBeInTheDocument();
+    expect(mocks.startup).not.toHaveBeenCalled();
   });
 
-  it('resumes an authenticated invite only after the server reports completion', async () => {
+  it('does not invoke the Daily Rhythm opening for an authenticated invite', async () => {
     sessionStorage.setItem('emmaus_splash_shown', 'true');
     sessionStorage.setItem('pendingInviteToken', 'invite-token-1');
-    mocks.startup.mockResolvedValueOnce(openingCompleted());
 
     render(<App />);
 
     await waitFor(() => expect(window.location.pathname).toBe('/join-room/invite-token-1'));
     expect(screen.getByText("You've been invited")).toBeInTheDocument();
-    expect(mocks.startup).toHaveBeenCalledTimes(1);
+    expect(mocks.startup).not.toHaveBeenCalled();
   });
 
   it('keeps a restored recovery session on the recovery screen', async () => {
@@ -291,23 +260,13 @@ describe('authenticated browser path matrix', () => {
     expect(mocks.startup).not.toHaveBeenCalled();
   });
 
-  it('fails closed with retry UI and never routes an opening error to Walk', async () => {
-    mocks.startup.mockRejectedValueOnce(Object.assign(new Error('opening unavailable'), {
-      diagnosticReference: 'browser-opening-test',
-    }));
+  it('keeps a restored member route available when the opening service is unavailable', async () => {
     openAt('/personal');
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByText('Today’s opening is unavailable')).toBeInTheDocument());
-    expect(screen.getByText(/browser-opening-test/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
-    expect(screen.queryByTestId('page-walk')).not.toBeInTheDocument();
-    expect(window.location.pathname).toBe('/personal');
-
-    mocks.startup.mockResolvedValueOnce(openingCompleted());
-    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
     await waitFor(() => expect(screen.getByTestId('page-personal')).toBeInTheDocument());
     expect(window.location.pathname).toBe('/personal');
+    expect(mocks.startup).not.toHaveBeenCalled();
   });
 });

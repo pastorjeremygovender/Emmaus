@@ -28,7 +28,7 @@ description: Walk with Jesus home screen, next-step engine, enrollment state, da
 
 ## Navigation
 
-BottomNav labels changed: "Today's Steps"→"Walk", "Next Steps"→"Journeys", "My Bible"→"Bible", "My Walk"→"Personal". Icons updated: Footprints / Library / BookOpen / User.
+BottomNav labels: "My Emmaus"→"/walk", "Discover"→"/journeys", "My Bible"→"/bible", "My Journey"→"/personal". Icons updated: Footprints / Library / BookOpen / User.
 
 ## Two-Journey limit
 
@@ -54,7 +54,7 @@ Removed from Walk: "Ready for you" card, Ask Emmaus inline card, Browse Journeys
 
 **Why:** Spec requires splash on every fresh launch without skipping for authenticated users, but no repeat during tab navigation.
 
-## First-time Today's Steps defaults
+## First-time My Emmaus defaults
 
 Brand-new member accounts are initialized once on the server, across each independent
 progress system. The “First Steps - Come and See” default is a collection card, so its

@@ -5,8 +5,8 @@
  * recognised ?source= value, and for the case where the parameter is absent.
  *
  * resolveReturn contract (SermonCompanionReader):
- *   source=today                    → "Back to Today's Steps"  → /walk
- *   source=walk                     → "Back to Today's Steps"  → /walk
+ *   source=today                    → "Back to My Emmaus"  → /walk
+ *   source=walk                     → "Back to My Emmaus"  → /walk
  *   source=nextStepsDevotionals     → "Back to Discover"       → /journeys?tab=devotionals
  *   source=nextStepsJourneys        → "Back to Discover"       → /journeys?tab=journeys
  *   source=nextStepsSermons         → "Back to Discover"       → /journeys?tab=sermons
@@ -133,19 +133,19 @@ describe('SermonCompanionReader — completion card return label per ?source= va
     setupFetch();
   });
 
-  it('source=today → "Back to Today\'s Steps"', async () => {
+   it('source=today → "Back to My Emmaus"', async () => {
     setSource('today');
     render(<SermonCompanionReader />);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /back to today's steps/i })).toBeInTheDocument();
+       expect(screen.getByRole('button', { name: /back to my emmaus/i })).toBeInTheDocument();
     });
   });
 
-  it('source=walk → "Back to Today\'s Steps"', async () => {
+   it('source=walk → "Back to My Emmaus"', async () => {
     setSource('walk');
     render(<SermonCompanionReader />);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /back to today's steps/i })).toBeInTheDocument();
+       expect(screen.getByRole('button', { name: /back to my emmaus/i })).toBeInTheDocument();
     });
   });
 
@@ -209,17 +209,17 @@ describe('SermonCompanionReader — completion card return destination per ?sour
   it('source=today → navigates to /walk on return', async () => {
     setSource('today');
     render(<SermonCompanionReader />);
-    const btn = await screen.findByRole('button', { name: /back to today's steps/i });
+    const btn = await screen.findByRole('button', { name: /back to my emmaus/i });
     btn.click();
-    expect(mockSetLocation).toHaveBeenCalledWith('/walk');
+    expect(mockSetLocation).toHaveBeenCalledWith('/walk', { replace: true });
   });
 
   it('source=walk → navigates to /walk on return', async () => {
     setSource('walk');
     render(<SermonCompanionReader />);
-    const btn = await screen.findByRole('button', { name: /back to today's steps/i });
+    const btn = await screen.findByRole('button', { name: /back to my emmaus/i });
     btn.click();
-    expect(mockSetLocation).toHaveBeenCalledWith('/walk');
+    expect(mockSetLocation).toHaveBeenCalledWith('/walk', { replace: true });
   });
 
   it('source=nextStepsDevotionals → navigates to /journeys?tab=devotionals on return', async () => {
@@ -227,7 +227,7 @@ describe('SermonCompanionReader — completion card return destination per ?sour
     render(<SermonCompanionReader />);
     const btn = await screen.findByRole('button', { name: /^back to discover$/i });
     btn.click();
-    expect(mockSetLocation).toHaveBeenCalledWith('/journeys?tab=devotionals');
+    expect(mockSetLocation).toHaveBeenCalledWith('/journeys?tab=devotionals', { replace: true });
   });
 
   it('source=nextStepsJourneys → navigates to /journeys?tab=journeys on return', async () => {
@@ -235,7 +235,7 @@ describe('SermonCompanionReader — completion card return destination per ?sour
     render(<SermonCompanionReader />);
     const btn = await screen.findByRole('button', { name: /^back to discover$/i });
     btn.click();
-    expect(mockSetLocation).toHaveBeenCalledWith('/journeys?tab=journeys');
+    expect(mockSetLocation).toHaveBeenCalledWith('/journeys?tab=journeys', { replace: true });
   });
 
   it('source=nextStepsSermons → navigates to /journeys?tab=sermons on return', async () => {
@@ -243,7 +243,7 @@ describe('SermonCompanionReader — completion card return destination per ?sour
     render(<SermonCompanionReader />);
     const btn = await screen.findByRole('button', { name: /^back to discover$/i });
     btn.click();
-    expect(mockSetLocation).toHaveBeenCalledWith('/journeys?tab=sermons');
+    expect(mockSetLocation).toHaveBeenCalledWith('/journeys?tab=sermons', { replace: true });
   });
 
   it('source=nextSteps (legacy) → navigates to /journeys?tab=sermons on return', async () => {
@@ -251,7 +251,7 @@ describe('SermonCompanionReader — completion card return destination per ?sour
     render(<SermonCompanionReader />);
     const btn = await screen.findByRole('button', { name: /^back to discover$/i });
     btn.click();
-    expect(mockSetLocation).toHaveBeenCalledWith('/journeys?tab=sermons');
+    expect(mockSetLocation).toHaveBeenCalledWith('/journeys?tab=sermons', { replace: true });
   });
 
   it('no source param → navigates to /journeys?tab=sermons on return', async () => {
@@ -259,7 +259,7 @@ describe('SermonCompanionReader — completion card return destination per ?sour
     render(<SermonCompanionReader />);
     const btn = await screen.findByRole('button', { name: /^back to discover$/i });
     btn.click();
-    expect(mockSetLocation).toHaveBeenCalledWith('/journeys?tab=sermons');
+    expect(mockSetLocation).toHaveBeenCalledWith('/journeys?tab=sermons', { replace: true });
   });
 
   it('source=sermonCompanionPrevious → navigates to /sermon-companion/:sourceId/previous on return', async () => {
@@ -270,6 +270,6 @@ describe('SermonCompanionReader — completion card return destination per ?sour
     const btns = await screen.findAllByRole('button', { name: /previous steps/i });
     expect(btns.length).toBeGreaterThan(0);
     btns[0].click();
-    expect(mockSetLocation).toHaveBeenCalledWith('/sermon-companion/companion-1/previous');
+    expect(mockSetLocation).toHaveBeenCalledWith('/sermon-companion/companion-1/previous', { replace: true });
   });
 });

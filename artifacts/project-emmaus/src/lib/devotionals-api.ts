@@ -87,7 +87,7 @@ export interface DevotionalProgress {
   /** Set when the member opens the content — used for UPDATED badge computation. */
   lastOpenedAt?: string | null;
   /**
-   * When true the card is hidden from Today's Steps without losing progress.
+ * When true the card is hidden from My Emmaus without losing progress.
    * Set via POST /api/engagements/devotional/:id/hide; cleared automatically
    * when the member opens the content from Next Steps.
    */

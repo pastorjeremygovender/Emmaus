@@ -2,7 +2,7 @@
  * devotional-calendar.test.ts
  *
  * Unit tests for calcAvailableDaySelfPaced — the shared position helper that
- * drives Today's Steps (Walk.tsx).  The DevotionalNavigatorPage uses its own
+ * drives My Emmaus (Walk.tsx).  The DevotionalNavigatorPage uses its own
  * resolveCurrentIdx which must produce consistent results; that alignment is
  * verified in the "surface alignment" suite at the bottom.
  *

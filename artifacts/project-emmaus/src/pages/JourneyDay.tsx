@@ -123,7 +123,7 @@ export default function JourneyDay() {
       startJourney(journeyId, displayOrigin);
       // Clear UPDATED badge — member has opened the content (fire-and-forget).
       void dismissBadge('journey', journeyId);
-      // Restore a hidden Walk to Today's Steps — idempotent if not hidden.
+       // Restore a hidden Walk to My Emmaus — idempotent if not hidden.
       // Covers the primary Next Steps → Continue path (direct to /journey/:id/day/:n)
       // which bypasses JourneyDetail. Both routes now issue the unhide on open.
       const base = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -222,7 +222,7 @@ export default function JourneyDay() {
             </p>
             <div className="pt-4">
               <Button variant="outline" className="rounded-xl px-8" onClick={() => goBackOrFallback('/walk', setLocation)}>
-                Back to Today's Steps
+                Back to My Emmaus
               </Button>
             </div>
           </div>
@@ -489,7 +489,7 @@ export default function JourneyDay() {
                 className="w-full h-14 text-[17px] rounded-2xl"
                 onClick={() => goBackOrFallback('/walk', setLocation)}
               >
-                Back to Today's Steps
+                Back to My Emmaus
               </Button>
             ) : (
               <Button

@@ -28,3 +28,73 @@ mtime_ms = 1789469150070
 storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:56d2210c-938e-4468-a6aa-b25d01eaaa3b/8a88eb59-bbe0-4c6e-b1b6-613d87c2f6b8/522d01c0-236b-4e04-b575-d0540850e2aa"
 storage_version_token = "1789469164352623"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "ZW9g0WyayIg1UyPdb8NeZ"
+uri = "file://artifacts/project-emmaus/public/icons/icon-512.png"
+type = "image"
+title = "Download Emmaus app icon (PNG)"
+description = "512×512 high-resolution Emmaus app icon PNG. Use the download button on the attachment."
+logical_id = "91714cf8-dae8-44e0-b1ac-fe8af3f0091d"
+content_hash = "sha256:ab718aa62a68c5f1bd24d64ff891f1df28289a13c702fac01d79398ca9a98325"
+size = 217871
+mtime_ms = 1789371014118
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:56d2210c-938e-4468-a6aa-b25d01eaaa3b/91714cf8-dae8-44e0-b1ac-fe8af3f0091d/950966b0-a419-4382-9ad2-59076f8d6f0a"
+storage_version_token = "1789621876630828"
+content_type = "image/png"
+
+[[outputs]]
+id = "0M2Kko6wvX9_w3PhENqrC"
+uri = "file://attached_assets/Emmaus-feature-graphic.png"
+type = "image"
+title = "Download Emmaus Google Play feature graphic"
+description = "Google Play-ready 1024×500 PNG feature graphic for Emmaus by Isipingo Community Church."
+logical_id = "bfaa4b92-db90-49ea-ad0d-a680aaff31e6"
+content_hash = "sha256:c5643d764eb0764bb627cb44f6b07e2ad5a602bf5375662e632cdd0e8d29245e"
+size = 166474
+mtime_ms = 1789622849234
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:56d2210c-938e-4468-a6aa-b25d01eaaa3b/bfaa4b92-db90-49ea-ad0d-a680aaff31e6/cff23a43-a2a2-46ac-91e8-0c6b9323cd83"
+storage_version_token = "1789622873413526"
+content_type = "image/png"
+
+[[outputs]]
+id = "k_McZB5Qj6kAYw1xAYCCj"
+uri = "file://attached_assets/Emmaus-mobile-daily-rhythm.png"
+type = "image"
+title = "Download Emmaus mobile screenshot — Daily Rhythm"
+description = "1080×1920 PNG store screenshot featuring Emmaus Daily Rhythm."
+logical_id = "5df2b40a-381d-41be-9357-a425f3309caf"
+content_hash = "sha256:9546b12ddfb5cd7175c7a0f777dc51b7e6ce31e5cb74df80d90cb2d4128efb19"
+size = 197673
+mtime_ms = 1789623069278
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:56d2210c-938e-4468-a6aa-b25d01eaaa3b/5df2b40a-381d-41be-9357-a425f3309caf/c0e38dff-e978-4af0-b4ac-b9bfb825e153"
+storage_version_token = "1789623123388774"
+content_type = "image/png"
+
+[[outputs]]
+id = "x1umhWzm7eLwkY0y0keN9"
+uri = "file://attached_assets/Emmaus-mobile-bible.png"
+type = "image"
+title = "Download Emmaus mobile screenshot — Bible"
+description = "1080×1920 PNG store screenshot featuring the Emmaus Bible experience."
+logical_id = "4951e29c-0139-4901-8b81-38a982d3fa62"
+content_hash = "sha256:6da2c59da51ed73e801834dbfc88a429a7ac710cc8395b1f3999f1c9de635761"
+size = 202700
+mtime_ms = 1789623069850
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:56d2210c-938e-4468-a6aa-b25d01eaaa3b/4951e29c-0139-4901-8b81-38a982d3fa62/46aa3d88-e3e0-4929-835d-59b615d95345"
+storage_version_token = "1789623124644698"
+content_type = "image/png"
+
+[[outputs]]
+id = "udzQwEYCIzx1TbDW1UbCL"
+uri = "file://attached_assets/Emmaus-mobile-rooms.png"
+type = "image"
+title = "Download Emmaus mobile screenshot — Rooms"
+description = "1080×1920 PNG store screenshot featuring Emmaus Rooms and community."
+logical_id = "ed536936-057e-4745-9747-b10e68ea7350"
+content_hash = "sha256:9633040568c17ce2a0b22f68434bbbe89a947df1ddd789ae2e8cc98c4193a3fb"
+size = 194431
+mtime_ms = 1789623070314
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:56d2210c-938e-4468-a6aa-b25d01eaaa3b/ed536936-057e-4745-9747-b10e68ea7350/0b788c19-f977-4601-a574-871b7ba75b79"
+storage_version_token = "1789623126169285"
+content_type = "image/png"

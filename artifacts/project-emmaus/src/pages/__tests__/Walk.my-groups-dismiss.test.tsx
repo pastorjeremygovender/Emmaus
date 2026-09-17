@@ -118,7 +118,7 @@ describe("Walk — My Groups dismissal", () => {
 
     expect(screen.getByText('Tuesday Bible Group')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: "Remove from Today's Steps" }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from My Emmaus' }));
 
     expect(screen.queryByText('Tuesday Bible Group')).not.toBeInTheDocument();
     expect(mocks.setLocation).not.toHaveBeenCalled();

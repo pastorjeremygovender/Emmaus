@@ -80,12 +80,6 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         configureWebViewCookies();
         installWebViewRecovery();
-        // Widget route is stored by DailyRhythmDeepLinkPlugin for JS
-        // getPendingDeepLink. Do not loadUrl here — that raced Capacitor
-        // and blanked the first widget open.
-        Log.i(TAG, "stage=on_create_webview_untouched hasWidgetRoute="
-            + (routeFromAnyDeepLink(getIntent()) != null));
-        scheduleWidgetDayNavigation(getIntent());
     }
 
     @Override
@@ -93,52 +87,6 @@ public class MainActivity extends BridgeActivity {
         DailyRhythmDeepLinkPlugin.captureIntent(this, intent, "activity_on_new_intent");
         setIntent(intent);
         super.onNewIntent(intent);
-        // Do not touch the WebView here. The DailyRhythmDeepLink plugin emits
-        // deepLink to JS (history navigation). Native loadUrl/stopLoading on
-        // icon↔widget switches caused the white screen on the second widget open.
-        Log.i(TAG, "stage=on_new_intent_webview_untouched hasWidgetRoute="
-            + (routeFromAnyDeepLink(intent) != null));
-        scheduleWidgetDayNavigation(intent);
-    }
-
-    private static boolean isLauncherIntent(Intent intent) {
-        return intent != null && Intent.ACTION_MAIN.equals(intent.getAction());
-    }
-
-    private void scheduleWidgetDayNavigation(Intent intent) {
-        if (intent == null) return;
-        int day = intent.getIntExtra(DailyRhythmDeepLinkPlugin.EXTRA_WIDGET_DAY, -1);
-        if (day < 1) return;
-        intent.removeExtra(DailyRhythmDeepLinkPlugin.EXTRA_WIDGET_DAY);
-        new Handler(Looper.getMainLooper()).postDelayed(() -> openWidgetDayInPlace(day), 1600L);
-    }
-
-    private void openWidgetDayInPlace(int day) {
-        if (isFinishing() || isDestroyed() || getBridge() == null) return;
-        WebView webView = getBridge().getWebView();
-        if (webView == null) return;
-        String url = webView.getUrl() == null ? "" : webView.getUrl();
-        if (url.isEmpty() || "about:blank".equals(url)) return;
-        String js =
-            "(function(){var d=" + day + ";"
-            + "var path='/daily-rhythm/day/'+d+'?from=widget';"
-            + "if(window.location.pathname==='/daily-rhythm/day/'+d)return;"
-            + "window.history.pushState({source:'widget'},'',path);"
-            + "window.dispatchEvent(new PopStateEvent('popstate'));"
-            + "})()";
-        webView.evaluateJavascript(js, null);
-        Log.i(TAG, "stage=widget_in_place_nav day=" + day);
-    }
-
-    private String routeFromAnyDeepLink(Intent intent) {
-        if (intent == null) return null;
-        String route = DailyRhythmDeepLinkPlugin.routeFromIntent(intent);
-        if (route != null) return route;
-        String notificationDestination = intent.getStringExtra("destination");
-        if ("/personal".equals(notificationDestination)) {
-            return "/personal?source=notification";
-        }
-        return null;
     }
 
     @Override

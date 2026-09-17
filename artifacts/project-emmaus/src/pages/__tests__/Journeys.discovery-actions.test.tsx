@@ -164,10 +164,10 @@ describe('Discovery content activation contract', () => {
     expect(startJourney).not.toHaveBeenCalled();
   });
 
-  it('provides a back navigation to Today\'s Steps', () => {
+  it('provides a back navigation to My Emmaus', () => {
     render(<Journeys />);
 
-    fireEvent.click(screen.getByRole('button', { name: "Back to Today's Steps" }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to My Emmaus' }));
 
     expect(setLocation).toHaveBeenCalledWith('/walk');
   });
@@ -177,7 +177,7 @@ describe('Discovery content activation contract', () => {
     await screen.findByText(walk.title);
 
     expect(screen.queryByText('Locked')).not.toBeInTheDocument();
-    expect(screen.queryByText("Complete Today's Steps first")).not.toBeInTheDocument();
+    expect(screen.queryByText('Complete My Emmaus first')).not.toBeInTheDocument();
   });
 
   it('opens a published content group from the Walks tab', async () => {

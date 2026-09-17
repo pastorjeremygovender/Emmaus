@@ -342,7 +342,7 @@ router.put("/voice/settings", async (req, res) => {
  * daily rhythm step, active devotionals, active walks, and sermon companion.
  *
  * Called ONCE at Voice Mode session start so the reading engine and Emmaus
- * context enrichment can answer "what's on today's steps?" without requiring
+ * context enrichment can answer "what's in My Emmaus?" without requiring
  * the user to be on any particular page.
  *
  * Cache-Control: no-store — user content changes frequently.

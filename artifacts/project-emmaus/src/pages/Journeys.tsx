@@ -150,7 +150,7 @@ function TabBar({ active, onChange }: { active: TabId; onChange: (id: TabId) => 
   );
 }
 
-// ─── Compact card (matches Today's Steps style) ───────────────────────────────
+// ─── Compact card (matches My Emmaus style) ───────────────────────────────────
 
 function DiscoverCompactCard({
   title, subtitle, ctaLabel, onAction,
@@ -841,10 +841,10 @@ export default function Journeys() {
               type="button"
               onClick={() => setLocation('/walk')}
               className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-1 text-[14px] font-semibold text-primary"
-              aria-label="Back to Today's Steps"
+              aria-label="Back to My Emmaus"
             >
               <ArrowLeft size={17} aria-hidden="true" />
-              Today's Steps
+              My Emmaus
             </button>
             <MemberHeaderActions compact />
           </div>

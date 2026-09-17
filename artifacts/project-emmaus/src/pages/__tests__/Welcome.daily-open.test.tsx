@@ -44,11 +44,11 @@ describe('Welcome — opening authority boundary', () => {
 
   afterEach(() => vi.useRealTimers());
 
-  it('does not ask Welcome to resolve or consume the Daily Rhythm opening', async () => {
+  it('sends a normal authenticated launch to My Emmaus', async () => {
     render(<Welcome />);
     await act(async () => { await Promise.resolve(); });
 
-    expect(setLocation).not.toHaveBeenCalled();
+    expect(setLocation).toHaveBeenCalledWith('/walk', { replace: true });
     expect(localStorage.length).toBe(0);
   });
 

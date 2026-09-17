@@ -99,7 +99,7 @@ sermonCompanionsRouter.post("/:companionId/set-current-week", async (req: Reques
 // Must be registered before GET /:companionId to prevent path-param capture.
 // Any authenticated member. Returns ALL Published companions with the caller's
 // progress attached. Walk.tsx uses this to surface every in-progress companion
-// on Today's Steps, not just the current-week one.
+// on My Emmaus, not just the current-week one.
 
 sermonCompanionsRouter.get("/member/engagements", async (req: Request, res: Response) => {
   const userId = requireAuth(req, res);
@@ -112,7 +112,7 @@ sermonCompanionsRouter.get("/member/engagements", async (req: Request, res: Resp
     ]);
 
     // Only fetch entries for companions the user has ACTIVE progress on — paused
-    // companions are excluded so they don't reappear on Today's Steps after reload.
+    // companions are excluded so they don't reappear on My Emmaus after reload.
     const startedIds = companions
       .filter(c => progressMap[c.id] && progressMap[c.id].status !== "paused")
       .map(c => c.id);

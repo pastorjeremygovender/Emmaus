@@ -4,9 +4,9 @@ description: Full UX redesign — new bottom nav, Discover page, My Journey page
 ---
 
 ## Bottom Nav (canonical order)
-Today's Steps | My Bible | Discover | My Journey
+My Emmaus | My Bible | Discover | My Journey
 
-- Tab 1: Today's Steps → /walk
+- Tab 1: My Emmaus → /walk
 - Tab 2: My Bible → /bible
 - Tab 3: Discover → /journeys  (was "Next Steps")
 - Tab 4: My Journey → /personal

@@ -518,7 +518,7 @@ describe("F — Non-contiguous published entries: cap uses maxPublishedDay not c
   });
 });
 
-// ─── G. Sermon companion description parity with Today's Steps ───────────────
+// ─── G. Sermon companion description parity with My Emmaus ──────────────────
 //
 // buildCompanionItem (sermon-table source) must compute the same
 // "Day N of M · Entry Title" string that Walk.tsx shows so the two screens
@@ -528,7 +528,7 @@ describe("F — Non-contiguous published entries: cap uses maxPublishedDay not c
 // If no published companion exists the test is skipped with a diagnostic note —
 // the devotional and sparse-series tests above still protect buildDevotionalItem.
 
-describe("G — Sermon companion description matches Today's Steps formula", () => {
+describe("G — Sermon companion description matches My Emmaus formula", () => {
   it("companion in-progress description is 'Day N of M' or 'Day N of M · Title' (not generic)", async () => {
     // Step 1: discover the current published companion (if any).
     const companionRes = await request({

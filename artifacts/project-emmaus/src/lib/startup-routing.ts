@@ -1,10 +1,8 @@
 /**
  * Client-only lifecycle guard.
  *
- * The server launch claim makes duplicate bootstrap requests idempotent.
- * This separate flag answers a different question: may the client still
- * perform an automatic startup redirect? Once the initial destination has
- * been selected, ordinary SPA navigation must never consult that destination.
+ * Retained for compatibility with older startup callers. Normal launches now
+ * go directly to My Emmaus, and widget/deep-link destinations are explicit.
  */
 let startupRoutingComplete = false;
 
@@ -18,8 +16,8 @@ export function markStartupRoutingComplete(): void {
 
 /**
  * A user can sign out from an admin or member route and sign in again without
- * creating a new JavaScript context. The new member session must get its own
- * first-open decision rather than inheriting the previous account's guard.
+ * creating a new JavaScript context. Keep the reset API available for older
+ * callers even though normal entry no longer has a first-open redirect.
  */
 export function resetStartupRouting(): void {
   startupRoutingComplete = false;

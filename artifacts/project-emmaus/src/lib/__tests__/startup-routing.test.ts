@@ -2,7 +2,7 @@
  * startup-routing.test.ts
  *
  * Confirms the startup redirect logic that ensures a member always lands on
- * Today's Steps (/walk) after closing and reopening the app from any Bible or
+ * My Emmaus (/walk) after closing and reopening the app from any Bible or
  * Journeys sub-page.
  *
  * Spec:
@@ -12,7 +12,7 @@
  *     that should NOT trigger the startup redirect.
  *   - resolveEntryRoute() must always return '/walk' regardless of arguments,
  *     ensuring the Welcome screen never sends an authenticated member anywhere
- *     other than Today's Steps on a normal launch.
+ *     other than My Emmaus on a normal launch.
  */
 
 import { describe, it, expect } from 'vitest';

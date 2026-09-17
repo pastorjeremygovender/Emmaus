@@ -336,7 +336,7 @@ export default function Testing() {
           <SectionCard>
             <SectionTitle
               label="Prepare Next Member Launch"
-              sub="Clears automatic Daily Rhythm opening markers and the splash-session flag in this browser. Use this before switching to a member account to replay today's first-open route. Progress and completion history are not changed."
+              sub="Clears the splash-session flag in this browser so the normal next launch can be checked from a clean state. Progress and completion history are not changed."
             />
             <div className="flex items-center gap-4 pt-1">
               <ResetBtn
@@ -345,7 +345,7 @@ export default function Testing() {
               >
                 <span className="flex items-center gap-1.5">
                   <RotateCcw size={13} />
-                  Prepare First Open Test
+                  Prepare Normal Launch Test
                 </span>
               </ResetBtn>
               <StatusPill state={dailyOpenState} errorMsg={dailyOpenError} />

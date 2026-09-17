@@ -1,43 +1,4 @@
-import { getBibleData } from "../bible/store.js";
-import {
-  getProgress,
-  getDailyRhythmState,
-  completeStep,
-  listPublishedJourneys,
-  listSteps,
-  type DailyRhythmState,
-  type FrontendJourney,
-  type FrontendStep,
-} from "../lib/journey-store.js";
-import {
-  getAllProgressForUser,
-  getSeriesById,
-  listPublishedSeries,
-  type DevotionalProgress,
-} from "../lib/devotional-store.js";
-import { retrieveSermons } from "./sermon-retrieval.js";
-import {
-  describeCapability,
-  EMMAUS_CAPABILITIES,
-  getEmmausCapability,
-  type EmmausCapabilityId,
-} from "./capability-registry.js";
-import { routeAskEmmausRequest, type TypedAskEmmausIntent } from "./intent-router.js";
-import type {
-  EmmausResponseMetadata,
-  NextStep,
-  Recommendation,
-  SermonRecommendation,
-  ScriptureRef,
-} from "./firestore-model.js";
-import {
-  buildScriptureRoute,
-  canonicalBibleBookName,
-  extractValidatedScriptureReferences,
-} from "./citation-validation.js";
-import { readBiblePassage } from "../lib/bible-verse-search.js";
-import { logger } from "../lib/logger.js";
-import { buildEmmausResourceCatalogue, type EmmausResource } from "./resource-catalogue.js";
+ogue.js";
 import { actionsForResource } from "./action-registry.js";
 import { listPublishedSermons } from "../lib/canonical-sermon-store.js";
 import type { EmmausContextInput } from "./context-builder.js";
@@ -157,7 +118,7 @@ function appHelp(capabilityId?: EmmausCapabilityId): EmmausResponseMetadata {
     .filter((capability) => !["saved-bible-position", "active-progress", "ask-emmaus"].includes(capability.id))
     .map((capability) => capability.displayName)
     .join(", ");
-  metadata.answer = `Emmaus can help you read Scripture, keep your place in My Bible, take Today's Steps, continue Walks and Journeys, read Daily Devotionals and Bible Studies, find published sermons, and discover new content. You can find these in: ${names}.`;
+  metadata.answer = `Emmaus can help you read Scripture, keep your place in My Bible, open My Emmaus, continue Walks and Journeys, read Daily Devotionals and Bible Studies, find published sermons, and discover new content. You can find these in: ${names}.`;
   metadata.nextStep = capabilityNextStep("todays-steps");
   metadata.capabilityActions = [capabilityAction("todays-steps")];
   metadata.followUpPrompts = ["Where can I find devotionals?", "How do I continue my Journey?"];

@@ -1,6 +1,6 @@
 /**
  * SermonCompanionNavigatorPage — shown when a member taps an in-progress
- * Sermon Companion card on Today's Steps. Shows all steps as a scrollable
+ * Sermon Companion card on My Emmaus. Shows all steps as a scrollable
  * list using the same layout as Walk/Journey/Devotional navigators.
  *
  * Route: /sermon-companion/:id/navigate

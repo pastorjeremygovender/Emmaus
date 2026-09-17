@@ -1,12 +1,12 @@
 Publishing a companion and notifying members must never assign it as the current-week sermon; current-week visibility requires the separate explicit admin selection.
 
-**Why:** The publish form's default notification option previously promoted every newly published companion into Today's Steps, overriding intentional sermon selection.
+**Why:** The publish form's default notification option previously promoted every newly published companion into My Emmaus, overriding intentional sermon selection.
 
 **How to apply:** Keep publication, member notification/badges, and current-week assignment as separate operations. Editor reloads must hydrate companions from the server even when the in-memory sermon list is empty.
 
 ---
 name: Sermon Companion Single Source of Truth
-description: Root cause and fix for stale sermon companions appearing in member UI; permanent Today's Steps card; 5-day generation; speaker attribution.
+description: Root cause and fix for stale sermon companions appearing in member UI; permanent My Emmaus card; 5-day generation; speaker attribution.
 ---
 
 # Sermon Companion — Single Source of Truth Fix
@@ -36,7 +36,7 @@ Prompt update: `SPEAKER RULE` in `COMPANION_SYSTEM` — never "the pastor"/"the 
 ## 5-Day Generation Fix
 `DAYS RULE` in `COMPANION_SYSTEM` updated: **target exactly 5 days** by grouping/expanding ideas. Only generate fewer when sermon genuinely cannot support 5 (e.g. short 2-idea sermon). The old rule said "between 1 and 5 based on distinct ideas" — too conservative.
 
-## Permanent "This Week's Sermon" Card (Today's Steps / Walk.tsx)
+## Permanent "This Week's Sermon" Card (My Emmaus / Walk.tsx)
 - Section 2 (after Daily Rhythm) — **always rendered**, even when no companion is published.
 - Fetches from `/api/sermon-companions/current-week/member` (404 = 'none' empty state).
 - Empty state: "This week's Sermon Companion will appear here when it is published."

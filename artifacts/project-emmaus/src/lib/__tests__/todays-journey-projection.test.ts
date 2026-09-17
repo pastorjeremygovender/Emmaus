@@ -29,7 +29,7 @@ const collections = [
   { id: 'collection-b', title: 'Beta', description: '', status: 'Published' as const },
 ];
 
-describe('Today’s Steps journey projection', () => {
+describe('My Emmaus journey projection', () => {
   it('does not create cards when the member has only browsed', () => {
     expect(projectTodaysJourneys([], collections)).toEqual({
       standaloneWalks: [],

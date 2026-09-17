@@ -771,7 +771,7 @@ export async function initializeMemberHomeDefaults(): Promise<MemberHomeDefaults
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
   });
-  if (!res.ok) throw new Error(`Could not initialize Today's Steps (${res.status})`);
+  if (!res.ok) throw new Error(`Could not initialize My Emmaus (${res.status})`);
   return res.json() as Promise<MemberHomeDefaults>;
 }
 

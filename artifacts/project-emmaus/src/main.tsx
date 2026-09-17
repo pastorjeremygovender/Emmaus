@@ -34,7 +34,7 @@ function bootstrap() {
 
   void Promise.race([
     installNativeDailyRhythmDeepLink(),
-    new Promise<void>(resolve => window.setTimeout(resolve, 1200)),
+    new Promise<null>(resolve => window.setTimeout(() => resolve(null), 1200)),
   ]).catch(() => {
     // Deep-link delivery is optional. The app is already mounted and remains
     // usable when an older/native bridge cannot answer.

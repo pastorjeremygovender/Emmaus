@@ -1,11 +1,15 @@
 ---
 name: Daily Open Architecture
-description: How the first-daily-open auto-route to Daily Rhythm works, and the bug class that breaks it.
+description: Normal web/icon launches open My Emmaus; native widget taps retain their exact Daily Rhythm destination.
 ---
 
 ## The Rule
-On the first app open of each calendar day, members land on their current Daily
-Rhythm step. Subsequent same-day opens go to `/walk` (Today's Steps).
+Normal web launches and Android app-icon launches open `/walk` (My Emmaus) every
+time. They do not consume the Daily Rhythm opening ledger or auto-route to
+"10 Minutes with Jesus".
+
+Native Daily Rhythm widget taps remain explicit deep links to the exact
+`/daily-rhythm/day/:day?source=widget` route displayed by the widget.
 
 `resolveDailyOpenRoute(journeys, progress, getStepsForJourney)` in `lib/entry-route.ts` encapsulates this. Key guards:
 - Reads/writes account-scoped `emmaus_last_opened_v2` in localStorage (versioned to avoid poisoning from old buggy builds)
@@ -13,55 +17,29 @@ Rhythm step. Subsequent same-day opens go to `/walk` (Today's Steps).
 - Returns null if: no DR journey found, no DR progress, steps not loaded, or already completed
 - Writes the key ONLY on successful navigation (not on failure)
 
-## Architecture (final)
+## Architecture (current)
 
-Two call sites for `resolveDailyOpenRoute`:
-
-### 1. Welcome.tsx root-entry paths (both splash and fast path)
-- Fires on fresh browser sessions (new tab, full reload, first install) and when a retained browser/PWA session re-enters `/`
-- Both paths wait for `!authLoading + !loadingProfile + !journeyLoading`; the splash path also waits for its display timer
-- The session splash marker controls animation only; `emmaus_last_opened_v2`
-  controls whether the Daily Rhythm redirect has already happened today
-- Handles: user already logged in, opens app fresh → lands on DR step directly
-
-### 2. Walk.tsx `dailyOpenCheckedRef` effect
-- Fires once per Walk mount after journeys and progress are ready
-- Covers the login path only when Auth or a retained route arrives at `/walk`
-- `resolveDailyOpenRoute` prevents a second Daily Rhythm redirect on the same day
-
-## Why Welcome needs journey loading and Walk remains a fallback
-
-Putting the check in Welcome.tsx fast path **without** waiting for journey loading creates a race condition:
-- When Auth.tsx redirects to `/`, JourneyContext hasn't set `journeyLoading = true` yet for the newly-authenticated user
-- Fast path fires with stale `progress = {}` from the unauthenticated load
-- `resolveDailyOpenRoute` returns null (no DR progress) → navigates to /walk
-- A direct fallback to `/walk` makes the behavior dependent on a second component mounting correctly
-
-Welcome's fast path waits for the full JourneyContext load before invoking the
-daily-open resolver. Walk applies the same resolver for routes that deliberately
-arrive directly at `/walk`.
+- `Welcome.tsx` sends an authenticated normal root launch to `/walk`.
+- `OpeningGate` still owns splash/auth/onboarding boundaries, but no longer
+  requests the Daily Rhythm startup decision or redirects normal launches.
+- `native-daily-rhythm-deep-link.ts` waits briefly for a cold widget intent
+  before Welcome performs its normal `/walk` redirect. A valid widget route
+  therefore wins without blocking React mounting.
+- `DailyRhythmDay` acknowledges a widget route only after the referenced entry
+  has been validated and rendered.
 
 ## Required regression coverage
 
-Use fake system time to test the only-once-per-day contract; manual testing cannot reliably catch it:
-- first daily open routes to the current Daily Rhythm step and records the local date;
-- a second open on that date routes to `/walk`;
-- advancing the local date routes to Daily Rhythm again;
-- a retained `emmaus_splash_shown` session marker from yesterday must still route to Daily Rhythm after JourneyContext finishes loading.
-
-**Why:** browser/PWA session storage can survive overnight even when the user experiences the next interaction as opening the app.
+- authenticated normal root launch routes to `/walk` without calling the Daily
+  Rhythm startup endpoint;
+- authenticated deep links remain direct;
+- cold and warm widget taps preserve their exact widget-owned route;
+- the native handoff remains independent from the normal `/walk` redirect.
 
 ## Auth.tsx
-- Members are sent to `/` after login so Welcome can apply the once-per-day
-  Daily Rhythm launch rule.
+Members can still return through `/` after login; Welcome now resolves that
+normal entry directly to `/walk`.
 
-The application gate should cache a successful server opening per authenticated
-subject and local calendar day. Same-day root reloads can go directly to Walk,
-while `/` and direct `/walk` entries after a day boundary must still consult the
-server.
-
-**Why:** Repeating the authoritative startup request on every reload made Emmaus
-feel slow even though the server decision itself was healthy.
-
-**How to apply:** Keep the cache account-scoped and write it only after a valid
-server decision. Do not use it to bypass a first opening on a new local day.
+**Why:** The requested product behavior is a consistent My Emmaus home for web
+and app-icon launches. Daily Rhythm remains available through the widget and
+deliberate navigation instead of hijacking normal entry.

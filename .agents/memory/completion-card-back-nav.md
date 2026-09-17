@@ -36,4 +36,4 @@ onReturn={() => setLocation(returnPath)}
 ## DailyRhythmDay special case
 `goToPreviousDays` (used for header back arrow when replaying from Previous Days) must use `goBackOrFallback()` — it must NOT use a direct `setLocation` even though the destination is Previous Days.
 
-`openPreviousDays` is the separate function that uses `setLocation` — only used for the "See Previous Days →" secondary link (when user arrived from Today's Steps and wants to navigate forward to Previous Days).
+`openPreviousDays` is the separate function that uses `setLocation` — only used for the "See Previous Days →" secondary link (when user arrived from My Emmaus and wants to navigate forward to Previous Days).

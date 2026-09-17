@@ -7,8 +7,8 @@
  *  RC-1  hide endpoint returns 400 for Daily Rhythm journeys (no hide for DR)
  *  RC-2  Devotional progress survives hide → reopen (day/completedDays intact)
  *  RC-3  Companion progress survives hide → reopen (day/completedDays intact)
- *  RC-4  Hidden devotional absent from Today's Steps (/api/devotionals/progress/all)
- *  RC-5  Hidden companion absent from Today's Steps (/api/sermon-companions/member/engagements)
+ *  RC-4  Hidden devotional absent from My Emmaus (/api/devotionals/progress/all)
+ *  RC-5  Hidden companion absent from My Emmaus (/api/sermon-companions/member/engagements)
  *  RC-6  Completion history retained after hide/reopen for both content types
  *  RC-7  Active Engagement rule preserved — hidden items NOT in GET /api/engagements
  *  RC-8  unhide is idempotent — safe to call when content is not hidden
@@ -246,7 +246,7 @@ describe("RC-2 & RC-6 — Devotional progress survives hide → reopen", () => {
       `Expected ≥3 completedDays before hide, got ${before.completedDays.length}`,
     );
 
-    // 4. Hide (remove from Today's Steps — non-destructive).
+    // 4. Hide (remove from My Emmaus — non-destructive).
     const hideRes = await request({
       method: "POST",
       path:   `/api/engagements/devotional/${encodeURIComponent(devotionalSeriesId)}/hide`,
@@ -303,9 +303,9 @@ describe("RC-2 & RC-6 — Devotional progress survives hide → reopen", () => {
   });
 });
 
-// ─── RC-4: Hidden devotional absent from Today's Steps ───────────────────────
+// ─── RC-4: Hidden devotional absent from My Emmaus ───────────────────────────
 
-describe("RC-4 — Hidden devotional is absent from Today's Steps list", () => {
+describe("RC-4 — Hidden devotional is absent from My Emmaus list", () => {
   it("GET /api/devotionals/progress/all omits series when hidden_from_today=true", async () => {
     assert.ok(devotionalSeriesId, "devotionalSeriesId must be seeded in before()");
 
@@ -445,7 +445,7 @@ describe("RC-3, RC-5 & RC-6 — Companion progress survives hide → reopen", ()
 
 // ─── RC-7: Active Engagement rule — hidden items remain active in /api/engagements
 //
-// Hide is a view-layer filter for Today's Steps only.
+// Hide is a view-layer filter for My Emmaus only.
 // The engagement record must stay status=active so the member can re-open
 // the content from Next Steps. The Active Engagement rule counts hidden
 // items as still-active, not paused or removed.
@@ -480,7 +480,7 @@ describe("RC-7 — Active Engagement rule: hiding does not pause or remove the e
     });
 
     // The engagement record must still appear in /api/engagements as status=active.
-    // Hiding removes the card from Today's Steps (Walk.tsx filters on hidden_from_today)
+    // Hiding removes the card from My Emmaus (Walk.tsx filters on hidden_from_today)
     // but the member is still engaged — they can re-open from Next Steps at any time.
     const afterRes = await request({
       path:   "/api/engagements",
@@ -565,7 +565,7 @@ describe("RC-8 — unhide is idempotent (safe when content is not hidden)", () =
   });
 });
 
-// ─── RC-4b: Brand-new member sees no optional content on Today's Steps ────────
+// ─── RC-4b: Brand-new member sees no optional content on My Emmaus ────────────
 // (New member = no progress rows → Walk.tsx shows only unstarted discovery cards,
 //  never automatically-added active devotional or companion cards.)
 

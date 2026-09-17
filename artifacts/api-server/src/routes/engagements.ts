@@ -260,7 +260,7 @@ engagementsRouter.post("/:contentType/:contentId/resume", async (req: Request, r
 });
 
 // ─── POST /api/engagements/:type/:id/hide ────────────────────────────────────
-// Non-destructive hide: removes the card from Today's Steps WITHOUT deleting
+// Non-destructive hide: removes the card from My Emmaus WITHOUT deleting
 // progress, completed history, or position. The member can restore it by
 // opening the content from Next Steps (which calls /unhide automatically).
 
@@ -299,7 +299,7 @@ engagementsRouter.post("/:contentType/:contentId/hide", async (req: Request, res
 });
 
 // ─── POST /api/engagements/:type/:id/unhide ──────────────────────────────────
-// Restores hidden content to Today's Steps. Called automatically when the
+// Restores hidden content to My Emmaus. Called automatically when the
 // member opens the content from Next Steps. Idempotent — safe to call even
 // when the content is not currently hidden.
 

@@ -11,7 +11,7 @@ type SeededDefaults = {
 };
 
 /**
- * Seed the first Today's Steps only once, and only for an account with no
+ * Seed the first My Emmaus content only once, and only for an account with no
  * existing engagement history. The marker is account-backed so a member who
  * removes every card is never repopulated on a later visit or another device.
  */
@@ -164,7 +164,7 @@ router.post("/member-home/initialize-defaults", async (req: Request, res: Respon
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);
     console.error("POST /member-home/initialize-defaults failed", err);
-    res.status(500).json({ error: "Could not initialize Today's Steps" });
+    res.status(500).json({ error: "Could not initialize My Emmaus" });
   } finally {
     client.release();
   }

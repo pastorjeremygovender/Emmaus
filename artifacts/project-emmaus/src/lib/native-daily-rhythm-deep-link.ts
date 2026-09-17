@@ -1,5 +1,5 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
-import { rememberOpeningDestination, safeOpeningDestination } from './opening-destination';
+import { safeOpeningDestination } from './opening-destination';
 
 type NativeDeepLink = {
   path?: string;
@@ -53,23 +53,13 @@ function safeNativePath(path: string | undefined): string | null {
   return safeOpeningDestination(`${canonical.pathname}${canonical.search}`);
 }
 
-function applyNativePath(path: string | undefined, replace: boolean): void {
+function applyNativePath(path: string | undefined, replace: boolean): string | null {
   const safePath = safeNativePath(path);
-  if (!safePath) return;
+  if (!safePath) return null;
   activeNativeWidgetPath = safePath;
-  // So OpeningGate can prefer the widget destination instead of rendering
-  // empty Welcome while auth/opening resolves at "/".
-  rememberOpeningDestination(safePath);
 
   const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-  if (current === safePath) return;
-  try {
-    const currentUrl = new URL(current, window.location.origin);
-    const nextUrl = new URL(safePath, window.location.origin);
-    if (currentUrl.pathname === nextUrl.pathname) return;
-  } catch {
-    // Fall through to a single history update.
-  }
+  if (current === safePath) return safePath;
 
   if (replace) {
     window.history.replaceState(
@@ -85,22 +75,38 @@ function applyNativePath(path: string | undefined, replace: boolean): void {
     );
   }
   window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }));
+  return safePath;
 }
 
 /**
  * Consume cold-start widget intents before the router renders, and handle
  * subsequent taps while the singleTask Android activity is already running.
  */
-export async function installNativeDailyRhythmDeepLink(): Promise<void> {
-  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
+export function installNativeDailyRhythmDeepLink(): Promise<string | null> {
+  return (async () => {
+    if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return null;
 
-  try {
-    await deepLink.addListener('deepLink', event => applyNativePath(event.path, false));
-    const pending = await deepLink.getPendingDeepLink();
-    applyNativePath(pending.path, true);
-  } catch {
-    // Browser builds and older native shells simply have no widget handoff.
-  }
+    try {
+      await deepLink.addListener('deepLink', event => applyNativePath(event.path, false));
+      const pending = await deepLink.getPendingDeepLink();
+      return applyNativePath(pending.path, true);
+    } catch {
+      // Browser builds and older native shells simply have no widget handoff.
+      return null;
+    }
+  })();
+}
+
+/**
+ * Normal root launches wait briefly for the native bridge to deliver a cold
+ * widget intent. This does not block React mounting; it only prevents Welcome
+ * from racing a valid widget route with its normal /walk redirect.
+ */
+export async function waitForNativeDailyRhythmDeepLink(): Promise<string | null> {
+  return Promise.race([
+    installNativeDailyRhythmDeepLink(),
+    new Promise<null>(resolve => window.setTimeout(() => resolve(null), 1200)),
+  ]);
 }
 
 /**

@@ -33,7 +33,7 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
  * NOTE: 'core' is intentionally NOT in this set.  The startup migration
  * promotes the actual 10-Minutes-with-Jesus journey from 'core' → 'daily-rhythm',
  * so any remaining 'core' journey is an admin-created growth journey that must
- * count toward the limit and appear on Today's Steps.
+ * count toward the limit and appear on My Emmaus.
  */
 const EXEMPT_TYPES = new Set(['companion', 'devotional', 'daily-rhythm']);
 

@@ -35,8 +35,8 @@ export async function dismissBadge(
 }
 
 /**
- * Client-side badge computation for Today's Steps journey cards.
- * Today's Steps only shows UPDATED — never NEW.
+ * Client-side badge computation for My Emmaus journey cards.
+ * My Emmaus only shows UPDATED — never NEW.
  *
  * @param notifyPublishedAt — ISO string from FrontendJourney.notifyPublishedAt
  * @param lastOpenedAt      — ISO string from FrontendProgress.lastOpenedAt

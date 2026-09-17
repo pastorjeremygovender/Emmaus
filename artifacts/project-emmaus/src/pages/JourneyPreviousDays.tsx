@@ -8,7 +8,7 @@
  * Devotionals, and Sermon Companions.
  *
  * Back navigation:
- *   ?from=walk  → /walk     (Today's Steps)
+ *   ?from=walk  → /walk     (My Emmaus)
  *   default     → /journeys (Next Steps)
  */
 

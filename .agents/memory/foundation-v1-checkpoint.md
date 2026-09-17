@@ -15,7 +15,7 @@ description: Official restore point recorded 2026-08-08 after LiveKit connectivi
 | Admin Content Studio | ✅ Operational | Journey builder, Devotionals, Daily Rhythm, Sermon Companion, Media Studio |
 | Daily Rhythm | ✅ Operational | Calendar-gated, 30 days seeded (John 1–19) |
 | Daily Devotionals | ✅ Operational | Self-paced, atomic progress, 9 series |
-| Walk (Today's Steps) | ✅ Operational | Next-step engine, daily lock, daily-rhythm layout |
+| Walk (My Emmaus) | ✅ Operational | Next-step engine, daily lock, daily-rhythm layout |
 | Journey architecture | ✅ Operational | Collections + Standalone, builder wizard, completion flow |
 | Sermon Companion | ✅ Operational | Full 8-phase generation pipeline, current-week, overview page |
 | Ask Emmaus | ✅ Operational | Parallel Bible + sermon search, SSE streaming, safety layer |

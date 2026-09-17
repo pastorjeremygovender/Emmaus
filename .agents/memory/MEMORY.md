@@ -67,7 +67,7 @@
 - [Supabase server-mediated authentication](supabase-server-auth.md) — Opaque sessions; per-tab subject assertions reject stale cross-tab requests; recovery authorization is one-use.
 - [TypeScript source test runtime](typescript-source-test-runtime.md) — API source-graph tests need tsx/esm because Node type stripping does not remap emitted .js specifiers to .ts.
 - [Bulk Bible Study imports](bulk-bible-study-imports.md) — server-reparsed previews; chapter-atomic Skip/Replace/Merge; authored Study data and member metadata stay protected.
-- [Daily Rhythm day groups](daily-rhythm-day-groups.md) — day-level memberships power manual grouped browsing; first-open direct-to-day routing stays unchanged.
+- [Daily Rhythm day groups](daily-rhythm-day-groups.md) — day-level memberships power manual browsing; widget/deep-link day routing stays explicit.
 - [Daily launch cold-start race](daily-launch-cold-start-race.md) — cold /walk loads can consume the one-shot check before authenticated journeys arrive; route through Welcome and retry only with real data.
 - [Daily Rhythm server authority](daily-rhythm-server-authority.md) — completion stays on the current day; a locked server decision unlocks one next step on a later local calendar date.
 - [Daily Rhythm correction safety](daily-rhythm-correction-safety.md) — retired verified snapshots must never crash production startup; skip guarded one-time corrections without mutating content.
@@ -95,3 +95,4 @@
 - [Native Android build environment](android-phase1-build.md) — Capacitor 8 Android builds need standard OpenJDK 21 plus Android SDK 36; GraalVM is incompatible with the JDK image transform.
 - [Native WebView bootstrap](native-webview-bootstrap.md) — never block React mounting on an Android plugin bridge call; deep-link handoff may finish after the app renders.
 - [Release branch commit path](release-branch-commit.md) — source commits for the release branch use the connected GitHub API, not local Git remotes or resets.
+- [GitHub commit resolution](github-commit-resolution.md) — when a requested commit is absent locally, use the connected repository’s commit endpoint as the source of truth.

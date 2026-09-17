@@ -4,7 +4,7 @@
  * Route: /sermon-companion/:id/day/:day
  *
  * Source-aware return (spec §4):
- *   Pass ?source=today      → "Back to Today's Steps" → /walk
+ *   Pass ?source=today      → "Back to My Emmaus" → /walk
  *   Pass ?source=nextSteps  → "Back to Next Steps"    → /journeys  (default)
  *
  * Sermon companions are AI-generated 5-day devotionals linked to a specific sermon.
@@ -258,7 +258,7 @@ export default function SermonCompanionReader() {
     return () => setActiveSermonCompanionContext(null);
   }, []);
 
-  // Restore to Today's Steps — clears hidden_from_today when the member opens
+  // Restore to My Emmaus — clears hidden_from_today when the member opens
   // the content from Next Steps (or any other surface). Fire-and-forget; non-fatal.
   useEffect(() => {
     if (!companionId || !user?.id) return;
@@ -406,7 +406,7 @@ export default function SermonCompanionReader() {
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors -ml-1 shrink-0"
           >
             <ChevronLeft size={16} />
-            {source === 'sermonCompanionPrevious' ? 'Previous Steps' : source === 'today' || source === 'walk' ? "Today's Steps" : source === 'sermonHome' ? "This Week's Sermon" : 'Discover'}
+            {source === 'sermonCompanionPrevious' ? 'Previous Steps' : source === 'today' || source === 'walk' ? 'My Emmaus' : source === 'sermonHome' ? "This Week's Sermon" : 'Discover'}
           </button>
           <span className="text-muted-foreground/30 mx-1 shrink-0">·</span>
           <span className="text-sm text-muted-foreground truncate flex-1">{companion.title}</span>
