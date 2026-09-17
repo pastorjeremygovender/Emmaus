@@ -1,4 +1,1341 @@
-     let chapterData: Awaited<ReturnType<typeof remoteBibleProvider.getChapter>> = null;
+/**
+ * VoiceSessionContext — Phase 4: App-level persistent Voice session.
+ *
+ * Previously the Voice engine lived entirely inside VoiceMode.tsx and was
+ * destroyed every time the user navigated away.  Phase 4 lifts the engine
+ * to the application level so the session survives route changes.
+ *
+ * ARCHITECTURE:
+ *   VoiceSessionProvider   — mounts once at app startup (inside the router)
+ *   useVoiceSession()      — hook consumed by VoiceMode (view) and
+ *                            GlobalVoiceIndicator (compact overlay)
+ *
+ * CLOSE VIEW vs END SESSION:
+ *   Navigating away from /personal/ask-emmaus/voice → session continues.
+ *   Tapping "End" explicitly → endSession() → cleanup + state reset.
+ *
+ * ENGINE NOTES:
+ *   All phases 1-3 logic is preserved verbatim.
+ *   Dynamic state (convId, history, user, initContext) is mirrored into
+ *   refs so processAudioBlob can be a stable useCallback with no deps —
+ *   eliminating the stale-closure problem that existed in the old component.
+ *
+ *   cancelledRef is now a "session ended" flag, NOT an "unmounted" flag.
+ *   It is reset to false on startSession() and set to true on endSession().
+ */
+
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+} from 'react';
+import { useLocation } from 'wouter';
+import { useAuth } from '@/contexts/AuthContext';
+import { useBible } from '@/contexts/BibleContext';
+import { goBackOrFallback } from '@/lib/return-context';
+import {
+  type FlatContext,
+  type HistoryItem,
+  type SermonRecommendation,
+} from '@/lib/emmaus-client';
+import {
+  transcribeAudio,
+  streamSpeechToAudio,
+  fetchSpeechArrayBuffer,
+  getSupportedMimeType,
+  getVoiceSettings,
+  speakWithDevice,
+  selectDeviceVoice,
+  type DeviceSpeechHandle,
+} from '@/lib/voice-client';
+import { getUnlockedAudioContext } from '@/lib/voice-audio-unlock';
+import {
+  takePendingContext,
+  getReturnDestination,
+  clearReturnDestination,
+} from '@/lib/emmaus-pending';
+import { fetchVoiceContext, type VoiceAppContext } from '@/lib/voice-context';
+import { resolveIntent, type VoiceIntent } from '@/lib/voice-intent';
+import { sendVoiceConversation, type AnyVoiceToolCall, type VoiceDoneInfo } from '@/lib/voice-conversation-client';
+import {
+  resolveVoiceTranslation,
+  buildUnavailableTranslationNotice,
+} from '@/lib/voice-bible';
+import { remoteBibleProvider } from '@/lib/bible-provider';
+import { validateVoiceReadAction, isSafeVoiceRoute } from '@/lib/voice-action-validation';
+import { loadVoiceReadingProgress, saveVoiceReadingProgress, clearVoiceReadingProgress } from '@/lib/voice-reading-progress';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type VoiceState = 'READY' | 'LISTENING' | 'THINKING' | 'SPEAKING' | 'ERROR';
+
+interface InterruptCapture {
+  recorder: MediaRecorder | null;
+  chunks:   Blob[];
+  stream:   MediaStream | null;
+  mimeType: string;
+}
+
+export interface VoiceSessionContextType {
+  // ── Session lifecycle ──────────────────────────────────────────────────────
+  isActive:      boolean;
+  sessionPaused: boolean;
+
+  // ── Engine state (reactive) ────────────────────────────────────────────────
+  voiceState:       VoiceState;
+  transcript:       string;
+  response:         string;
+  streamingResponse: string;
+  errorMsg:         string | null;
+  ttsError:         boolean;
+  convId:           string | null;
+  history:          HistoryItem[];
+  initContext:      FlatContext | null;
+  autoplayBlocked:  boolean;
+  showHistory:      boolean;
+  activeContent:    { label: string } | null;
+  sermonResults:    SermonRecommendation[];
+
+  // ── For the view to access audioElRef (tap-to-play guard) ─────────────────
+  hasAudioElement: boolean;
+
+  // ── Actions (stable references) ────────────────────────────────────────────
+  startSession:       (context?: FlatContext) => void;
+  endSession:         () => void;
+  pauseSession:       () => void;
+  resumeSession:      () => void;
+  stopPlayback:       () => void;
+  handleOrbTap:       () => void;
+  handleTapToHear:    () => void;
+  handleRetryAudio:   () => Promise<void>;
+  setShowHistory:     React.Dispatch<React.SetStateAction<boolean>>;
+  updateVisualContext: (ctx: FlatContext) => void;
+  /** Called by VoiceMode on mount so processAudioBlob can issue navigation commands. */
+  registerNavigate:   (fn: (to: string) => void) => void;
+}
+
+// ─── Opening greeting builder ─────────────────────────────────────────────────
+/**
+ * Build a short personalised greeting from the user's active content.
+ * Called once when a voice session starts. Purely data-driven — no LLM call.
+ * Returns null when there is nothing meaningful to announce (skip to listening).
+ */
+function buildOpeningGreeting(
+  ctx: import('@/lib/voice-context').VoiceAppContext,
+  preferredName?: string | null,
+): string | null {
+  const name = preferredName && preferredName.trim() && preferredName !== 'friend'
+    ? preferredName.trim()
+    : null;
+  const hi = name ? `Hi ${name}.` : 'Hi.';
+
+  const items: string[] = [];
+  if (ctx.dailyRhythm) {
+    const dr = ctx.dailyRhythm;
+    items.push(`your ${dr.journeyTitle} on Day ${dr.currentDay}`);
+  }
+  for (const d of ctx.activeDevotionals) {
+    items.push(`your ${d.seriesTitle} on Day ${d.currentDay}`);
+  }
+  if (ctx.sermonCompanion) {
+    items.push('your Sermon Companion');
+  }
+  for (const w of ctx.activeWalks) {
+    const stepNote = w.stepTitle ? ` — "${w.stepTitle}"` : '';
+    items.push(`your walk "${w.title}" on Day ${w.currentDay}${stepNote}`);
+  }
+
+  if (items.length === 0) return null;
+
+  if (items.length === 1) {
+    return `${hi} You have ${items[0]} ready. What would you like to do?`;
+  }
+  const last = items[items.length - 1];
+  const rest = items.slice(0, -1).join(', ');
+  return `${hi} You have ${rest} and ${last} ready. What would you like to do?`;
+}
+
+// ─── Context ──────────────────────────────────────────────────────────────────
+
+const VoiceSessionContext = createContext<VoiceSessionContextType | null>(null);
+
+export function useVoiceSession(): VoiceSessionContextType {
+  const ctx = useContext(VoiceSessionContext);
+  if (!ctx) throw new Error('useVoiceSession must be used within VoiceSessionProvider');
+  return ctx;
+}
+
+// ─── Provider ─────────────────────────────────────────────────────────────────
+
+export function VoiceSessionProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  // BibleProvider is above this provider in App.tsx. Using its reconciled
+  // value avoids a race where Voice reads stale localStorage before the cloud
+  // preference has finished loading.
+  const { translationId: accountTranslationId } = useBible();
+  const [location, providerNavigate] = useLocation();
+  // providerNavigate is always available (provider-level), used as fallback when
+  // VoiceMode is not mounted (user speaking via GlobalVoiceIndicator).
+  const providerNavigateRef = useRef<((to: string) => void) | null>(null);
+  useEffect(() => { providerNavigateRef.current = providerNavigate; }, [providerNavigate]);
+
+  // ── Session lifecycle state ────────────────────────────────────────────────
+  const [isActive,      setIsActive]      = useState(false);
+  const [sessionPaused, setSessionPaused] = useState(false);
+
+  // ── Voice engine state (same as old VoiceMode) ────────────────────────────
+  const [voiceState,        setVoiceState]        = useState<VoiceState>('READY');
+  const [transcript,        setTranscript]        = useState('');
+  const [response,          setResponse]          = useState('');
+  const [streamingResponse, setStreamingResponse] = useState('');
+  const [errorMsg,          setErrorMsg]          = useState<string | null>(null);
+  const [ttsError,          setTtsError]          = useState(false);
+  const [convId,            setConvId]            = useState<string | null>(null);
+  const [history,           setHistory]           = useState<HistoryItem[]>([]);
+  const [initContext,       setInitContext]       = useState<FlatContext | null>(null);
+  const [autoplayBlocked,   setAutoplayBlocked]   = useState(false);
+  const [showHistory,       setShowHistory]       = useState(false);
+  const [activeContent,     setActiveContent]     = useState<{ label: string } | null>(null);
+  const [sermonResults,     setSermonResults]     = useState<SermonRecommendation[]>([]);
+  const [hasAudioElement,   setHasAudioElement]   = useState(false);
+
+  // ── Ref-copies of dynamic state (for use inside stable processAudioBlob) ──
+  // React guarantees state setters are stable; the VALUES need refs.
+  const userRef        = useRef(user);
+  const accountTranslationRef = useRef(accountTranslationId);
+  const convIdRef      = useRef<string | null>(null);
+  const historyRef     = useRef<HistoryItem[]>([]);
+  const initContextRef = useRef<FlatContext | null>(null);
+
+  useEffect(() => { userRef.current        = user; },        [user]);
+  useEffect(() => { accountTranslationRef.current = accountTranslationId; }, [accountTranslationId]);
+  useEffect(() => { convIdRef.current      = convId; },      [convId]);
+  useEffect(() => { historyRef.current     = history; },     [history]);
+  useEffect(() => { initContextRef.current = initContext; }, [initContext]);
+
+  // ── Audio / recording refs ─────────────────────────────────────────────────
+  const recorderRef         = useRef<MediaRecorder | null>(null);
+  const chunksRef           = useRef<Blob[]>([]);
+  const streamRef           = useRef<MediaStream | null>(null);
+  const abortRef            = useRef<(() => void) | null>(null);
+  const audioElRef          = useRef<HTMLAudioElement | null>(null);
+  const disposeAudioRef     = useRef<(() => void) | null>(null);
+  const deviceSpeechRef    = useRef<DeviceSpeechHandle | null>(null);
+  const playbackAcRef       = useRef<AudioContext | null>(null);
+  const cancelledRef        = useRef(true); // true until startSession() is called
+  // Normal users get explicit tap-to-speak turns. Hands-free auto-restart is
+  // deliberately disabled; keep the ref so experimental mode can be gated
+  // separately later without changing the playback state machine.
+  const tapToSpeakOnlyRef   = useRef(true);
+  const autoRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recordingTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const voiceTurnRef        = useRef(0);
+  const deviceVoiceRef      = useRef<SpeechSynthesisVoice | null>(null);
+  const voiceSpeedRef       = useRef(1);
+
+  // ── VAD refs ──────────────────────────────────────────────────────────────
+  const vadAcRef            = useRef<AudioContext | null>(null);
+  const analyserRef         = useRef<AnalyserNode | null>(null);
+  const vadIntervalRef      = useRef<ReturnType<typeof setInterval> | null>(null);
+  const vadSilenceStartRef  = useRef<number | null>(null);
+  const vadSpokenRef        = useRef(false);
+  // Admin-tunable VAD parameters loaded from the server at session start.
+  // Defaults match the hardcoded values that shipped before this feature.
+  const vadSettingsRef      = useRef<{ threshold: number; ticks: number }>({ threshold: 30, ticks: 3 });
+  // hadVoiceActivityRef is set to true by the VAD interval when speech is
+  // detected (same trigger as vadSpokenRef) but is NOT cleared by clearVAD().
+  // It is only reset at the start of startListening() so that processAudioBlob
+  // can reliably tell whether the user actually spoke — even though clearVAD()
+  // always runs before recorder.onstop fires.
+  const hadVoiceActivityRef = useRef(false);
+  const recordingStartRef   = useRef<number>(0);
+
+  // ── Phase 3: content context refs ─────────────────────────────────────────
+  const appContextRef      = useRef<VoiceAppContext | null>(null);
+  const sermonResultsRef   = useRef<SermonRecommendation[]>([]);
+  const bibleContextRef    = useRef<{ bookId: string; chapter: number; translationId: string } | null>(null);
+  const readingSectionsRef = useRef<{ label: string; text: string }[]>([]);
+  const readingIndexRef    = useRef(0);
+  const readingResourceRef = useRef<{
+    type: 'bible' | 'daily-rhythm' | 'devotional' | 'walk' | 'sermon-companion';
+    id: string;
+    bookId?: string;
+    chapter?: number;
+    translationId?: string;
+  }>({ type: 'bible', id: 'unknown' });
+  const isReadingRef       = useRef(false);
+  const readingPausedRef   = useRef(false);
+  // Sections from the most recently completed reading session.
+  // Populated when advanceReading() determines there are no more sections.
+  // Cleared when a new reading session starts or the voice session ends.
+  // Used by buildEmmausContext to give the LLM post-reading recall context.
+  const lastReadSectionsRef = useRef<{ label: string; text: string }[]>([]);
+
+  useEffect(() => {
+    sermonResultsRef.current = sermonResults;
+  }, [sermonResults]);
+
+  // ── Interrupt monitor refs ─────────────────────────────────────────────────
+  const intStreamRef        = useRef<MediaStream | null>(null);
+  const intAcRef            = useRef<AudioContext | null>(null);
+  const intAnalyserRef      = useRef<AnalyserNode | null>(null);
+  const intIntervalRef      = useRef<ReturnType<typeof setInterval> | null>(null);
+  const intSpeechStartRef   = useRef<number | null>(null);
+  const intRecorderRef      = useRef<MediaRecorder | null>(null);
+  const intChunksRef        = useRef<Blob[]>([]);
+  const intMimeTypeRef      = useRef<string>('');
+
+  // ── Stable ref for processAudioBlob (avoids stale closures in recorder.onstop) ──
+  const processAudioBlobRef = useRef<((blob: Blob, mimeType: string, turnId?: number) => Promise<void>) | null>(null);
+
+  // ── pausedRef — mirrors sessionPaused for use inside the stable processAudioBlob
+  // callback. Without this, the auto-restart timer inside playTTS would see the
+  // initial (false) value of sessionPaused because processAudioBlob has no deps.
+  const pausedRef = useRef(false);
+
+  // ── Post-TTS mic guard — records when TTS audio last finished so that
+  // processAudioBlob can compute how long the mic has been open since TTS
+  // ended. Used in [VOICE INPUT TRACE] for diagnostics.
+  const ttsEndedAtRef = useRef<number | null>(null);
+
+  // ─── Cleanup helpers ──────────────────────────────────────────────────────
+
+  function cancelAutoRestart() {
+    if (autoRestartTimerRef.current) {
+      clearTimeout(autoRestartTimerRef.current);
+      autoRestartTimerRef.current = null;
+    }
+  }
+
+  function clearRecordingTimer() {
+    if (recordingTimerRef.current) {
+      clearTimeout(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  }
+
+  function stopInterruptMonitor() {
+    if (intIntervalRef.current) { clearInterval(intIntervalRef.current); intIntervalRef.current = null; }
+    intAnalyserRef.current    = null;
+    intSpeechStartRef.current = null;
+    intAcRef.current?.close().catch(() => {}); intAcRef.current = null;
+    const rec = intRecorderRef.current;
+    if (rec) {
+      rec.ondataavailable = null;
+      rec.onstop          = null;
+      if (rec.state !== 'inactive') rec.stop();
+      intRecorderRef.current = null;
+    }
+    intChunksRef.current = [];
+    intStreamRef.current?.getTracks().forEach((t) => t.stop());
+    intStreamRef.current = null;
+  }
+
+  function clearVAD() {
+    if (vadIntervalRef.current) { clearInterval(vadIntervalRef.current); vadIntervalRef.current = null; }
+    analyserRef.current        = null;
+    vadSilenceStartRef.current = null;
+    vadSpokenRef.current       = false;
+    vadAcRef.current?.close().catch(() => {});
+    vadAcRef.current = null;
+  }
+
+  function stopMicStream() {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  }
+
+  function stopAudioElement() {
+    // Clears only the audio element — leaves the interrupt monitor running.
+    // Use this between reading sections so the monitor stays alive across the
+    // whole reading session without restarting getUserMedia per section.
+    audioElRef.current?.pause();
+    audioElRef.current = null;
+    deviceSpeechRef.current?.cancel();
+    deviceSpeechRef.current = null;
+    setHasAudioElement(false);
+    disposeAudioRef.current?.();
+    disposeAudioRef.current = null;
+    setAutoplayBlocked(false);
+    setTtsError(false);
+    if ('mediaSession' in navigator) {
+      try { navigator.mediaSession.playbackState = 'none'; } catch { /* ignore */ }
+    }
+  }
+
+  function stopAudio() {
+    stopInterruptMonitor();
+    stopAudioElement();
+  }
+
+  function cancelRecorder() {
+    clearRecordingTimer();
+    clearVAD();
+    const rec = recorderRef.current;
+    if (rec) {
+      rec.ondataavailable = null;
+      rec.onstop = null;
+      if (rec.state !== 'inactive') rec.stop();
+    }
+    recorderRef.current = null;
+    stopMicStream();
+  }
+
+  function stopRecorder() {
+    clearRecordingTimer();
+    clearVAD();
+    const rec = recorderRef.current;
+    if (rec && rec.state !== 'inactive') rec.stop();
+    recorderRef.current = null;
+  }
+
+  function cleanupAll() {
+    cancelAutoRestart();
+    clearVAD();
+    stopAudio();
+    cancelRecorder();
+    abortRef.current?.();
+    abortRef.current = null;
+    playbackAcRef.current?.close().catch(() => {});
+    playbackAcRef.current = null;
+    // Clear Media Session
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.setActionHandler('play', null);
+        navigator.mediaSession.setActionHandler('pause', null);
+        navigator.mediaSession.setActionHandler('stop', null);
+        navigator.mediaSession.setActionHandler('nexttrack', null);
+        navigator.mediaSession.setActionHandler('previoustrack', null);
+      } catch { /* ignore */ }
+    }
+  }
+
+  // ─── Media Session API ───────────────────────────────────────────────────────
+
+  function updateMediaSession(title: string, state: MediaSessionPlaybackState) {
+    if (!('mediaSession' in navigator)) return;
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title,
+        artist: 'Emmaus Voice',
+        album: 'Emmaus',
+      });
+      navigator.mediaSession.playbackState = state;
+    } catch { /* not supported — silently skip */ }
+  }
+
+  function setupMediaSessionHandlers() {
+    if (!('mediaSession' in navigator)) return;
+    try {
+      navigator.mediaSession.setActionHandler('pause', () => {
+        readingPausedRef.current = true;
+        cancelAutoRestart();
+        stopAudio();
+        setVoiceState('READY');
+        try { navigator.mediaSession.playbackState = 'paused'; } catch { /* ignore */ }
+      });
+      navigator.mediaSession.setActionHandler('play', () => {
+        if (readingPausedRef.current) {
+          readingPausedRef.current = false;
+          const sections = readingSectionsRef.current;
+          const section  = sections[readingIndexRef.current];
+          if (section) {
+            processAudioBlobRef.current; // ensure stable ref is set
+            // Restart via the reading engine
+            setActiveContent({ label: section.label });
+            try { navigator.mediaSession.playbackState = 'playing'; } catch { /* ignore */ }
+          }
+        }
+      });
+      navigator.mediaSession.setActionHandler('stop', () => {
+        endSession();
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        const sections = readingSectionsRef.current;
+        const next = readingIndexRef.current + 1;
+        if (next < sections.length) {
+          readingIndexRef.current = next;
+          updateMediaSession(sections[next].label, 'playing');
+        }
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        const prev = Math.max(0, readingIndexRef.current - 1);
+        readingIndexRef.current = prev;
+        const sections = readingSectionsRef.current;
+        if (sections[prev]) updateMediaSession(sections[prev].label, 'playing');
+      });
+    } catch { /* not all handlers supported — skip */ }
+  }
+
+  // ─── Interrupt monitor ────────────────────────────────────────────────────
+
+  async function startInterruptMonitor(onInterrupt: (capture: InterruptCapture) => void) {
+    if (intStreamRef.current) return;
+    try {
+      // echoCancellation + noiseSuppression prevent TTS speaker bleed from
+      // self-triggering the interrupt.  On iOS only one concurrent mic stream
+      // is allowed — this call may fail silently if the primary stream is still
+      // open, which is why we also keep the orb-tap path as a barge-in option.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl:  true,
+        },
+      });
+      if (cancelledRef.current) { stream.getTracks().forEach((t) => t.stop()); return; }
+
+      intStreamRef.current = stream;
+
+      const Ctx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctx) { stopInterruptMonitor(); return; }
+
+      const ac       = new Ctx();
+      const source   = ac.createMediaStreamSource(stream);
+      const analyser = ac.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      intAcRef.current       = ac;
+      intAnalyserRef.current = analyser;
+      intSpeechStartRef.current = null;
+
+      const mimeType = getSupportedMimeType();
+      intMimeTypeRef.current = mimeType;
+
+      const data = new Uint8Array(analyser.frequencyBinCount);
+
+      // ── Startup delay ──────────────────────────────────────────────────────
+      // Wait before polling. AEC typically locks within 200–400 ms; 600 ms is
+      // a comfortable margin that still allows barge-in on short TTS responses.
+      // Previously 1000 ms — reduced to cut barge-in latency floor.
+      const monitorStartTime = Date.now();
+      const MONITOR_STARTUP_DELAY_MS = 600;
+
+      intIntervalRef.current = setInterval(() => {
+        // Don't evaluate anything until the startup window has passed
+        if (Date.now() - monitorStartTime < MONITOR_STARTUP_DELAY_MS) return;
+
+        const a = intAnalyserRef.current;
+        if (!a) return;
+        a.getByteFrequencyData(data);
+        const avg = data.reduce((s, v) => s + v, 0) / data.length;
+
+        // Threshold 36: sensitive enough for normal device-mic speech at arm's
+        // length, robust against AEC-attenuated speaker bleed after the startup
+        // delay.  Gate 350 ms: enough to reject transient knocks while still
+        // feeling instant — previously 600 ms which felt sluggish.
+        if (avg > 36) {
+          if (intSpeechStartRef.current === null) {
+            intSpeechStartRef.current = Date.now();
+            const opts: MediaRecorderOptions = mimeType ? { mimeType } : {};
+            try {
+              const rec = new MediaRecorder(intStreamRef.current!, opts);
+              intChunksRef.current = [];
+              rec.ondataavailable = (e) => { if (e.data.size > 0) intChunksRef.current.push(e.data); };
+              rec.start(200);
+              intRecorderRef.current = rec;
+            } catch { /* recorder unavailable */ }
+          } else if (Date.now() - intSpeechStartRef.current > 350) {
+            if (intIntervalRef.current) { clearInterval(intIntervalRef.current); intIntervalRef.current = null; }
+            intAnalyserRef.current    = null;
+            intSpeechStartRef.current = null;
+            intAcRef.current?.close().catch(() => {}); intAcRef.current = null;
+
+            const capture: InterruptCapture = {
+              recorder: intRecorderRef.current,
+              chunks:   intChunksRef.current,
+              stream:   intStreamRef.current,
+              mimeType: intMimeTypeRef.current,
+            };
+            intRecorderRef.current = null;
+            intChunksRef.current   = [];
+            intStreamRef.current   = null;
+            console.log('[VOICE] bargeInDetected: true — interrupt monitor fired');
+            onInterrupt(capture);
+          }
+        } else {
+          if (intSpeechStartRef.current !== null) {
+            intSpeechStartRef.current = null;
+            const rec = intRecorderRef.current;
+            if (rec) {
+              rec.ondataavailable = null;
+              rec.onstop = null;
+              if (rec.state !== 'inactive') rec.stop();
+              intRecorderRef.current = null;
+            }
+            intChunksRef.current = [];
+          }
+        }
+      }, 50);
+    } catch (err) {
+      // Mic denied or device doesn't allow a second concurrent stream (iOS).
+      // Barge-in via orb tap (SPEAKING state → startListening) is still available.
+      console.log('[VOICE] bargeInDetected: false — interrupt monitor unavailable:', String(err));
+    }
+  }
+
+  // ─── Recording ────────────────────────────────────────────────────────────
+
+  async function startListening() {
+    setErrorMsg(null);
+    setTranscript('');
+    setTtsError(false);
+    hadVoiceActivityRef.current = false; // reset here, NOT in clearVAD()
+    const turnId = ++voiceTurnRef.current;
+
+    try {
+      // Request AEC + noise suppression explicitly — critical for device speakers
+      // without earphones, where TTS audio bleeds back into the mic.
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl:  true,
+        },
+      });
+      if (cancelledRef.current) { mediaStream.getTracks().forEach((t) => t.stop()); return; }
+
+      streamRef.current = mediaStream;
+
+      const mimeType = getSupportedMimeType();
+      const opts: MediaRecorderOptions = mimeType ? { mimeType } : {};
+      const recorder = new MediaRecorder(mediaStream, opts);
+      recorderRef.current = recorder;
+      chunksRef.current   = [];
+
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        stopMicStream();
+        const actualMimeType = recorder.mimeType || mimeType || 'audio/webm';
+        const blob = new Blob(chunksRef.current, { type: actualMimeType });
+        chunksRef.current = [];
+        await processAudioBlobRef.current?.(blob, actualMimeType, turnId);
+      };
+
+      recorder.start(200);
+      recordingStartRef.current = Date.now();
+      recordingTimerRef.current = setTimeout(() => {
+        recordingTimerRef.current = null;
+        if (voiceTurnRef.current === turnId && recorderRef.current === recorder && recorder.state !== 'inactive') {
+          hadVoiceActivityRef.current = true;
+          stopRecorder();
+          setVoiceState('THINKING');
+        }
+      }, 30_000);
+
+      // ── Voice Activity Detection ──────────────────────────────────────────
+      try {
+        const Ctx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (Ctx) {
+          const ac       = new Ctx();
+          const source   = ac.createMediaStreamSource(mediaStream);
+          const analyser = ac.createAnalyser();
+          analyser.fftSize = 256;
+          source.connect(analyser);
+          vadAcRef.current    = ac;
+          analyserRef.current = analyser;
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+          // ── VAD tuning notes ────────────────────────────────────────────────
+          // threshold 18 was too low — room HVAC / ambient hum triggers it in
+          // a quiet space, causing the recorder to stop on near-silence and
+          // send garbage audio to Whisper which returns hallucinated text.
+          // 35 requires actual voice-level energy.  Keep it here; do NOT lower
+          // it without testing in a real room environment.
+          // Raised from 35 → 50 to reject TV / room audio at normal listening volume.
+          // A person speaking at the device needs ~50+ avg amplitude; ambient TV sits
+          // below that at typical room distances.  Consecutive-tick requirement raised
+          // from 3 → 6 (~600 ms sustained) so a brief noise burst cannot lock VAD.
+          //
+          // Both values are now admin-tunable via Settings → Voice → Microphone sensitivity.
+          // The vadSettingsRef is populated from the server at session start;
+          // defaults (50 / 6) are used until the fetch resolves.
+          const VAD_THRESHOLD     = vadSettingsRef.current.threshold; // admin-tunable
+          const VAD_MIN_ELAPSED   = 1000; // ms before silence-gate can fire (was 1500)
+          const VAD_CONSECUTIVE   = vadSettingsRef.current.ticks;     // admin-tunable
+          // Sprint 1: reduced 2000 → 1200 ms. Sprint 2: reduced to 800 ms for faster
+          // conversational turn-taking. Mid-sentence pauses are ~200–500 ms so 800 ms
+          // still avoids cutting off naturally paced speech.
+          const VAD_SILENCE_GATE  = 800; // ms of silence after speech to stop
+
+          // Track how long we've been genuinely above threshold
+          let vadAboveCount = 0;
+
+          vadIntervalRef.current = setInterval(() => {
+            const a = analyserRef.current;
+            if (!a) return;
+            a.getByteFrequencyData(dataArray);
+            const avg     = dataArray.reduce((s, v) => s + v, 0) / dataArray.length;
+            const elapsed = Date.now() - recordingStartRef.current;
+
+            if (avg > VAD_THRESHOLD) {
+              vadAboveCount++;
+              // VAD_CONSECUTIVE ticks ≈ ticks×100 ms of sustained speech — filters TV /
+              // ambient noise while still detecting shorter utterances from a close-by speaker.
+              // Admin-tunable via Settings → Voice → Microphone sensitivity.
+              if (vadAboveCount >= VAD_CONSECUTIVE) {
+                vadSpokenRef.current        = true;
+                hadVoiceActivityRef.current = true; // survives clearVAD()
+                vadSilenceStartRef.current  = null;
+              }
+            } else {
+              vadAboveCount = 0;
+              if (vadSpokenRef.current && elapsed > VAD_MIN_ELAPSED) {
+                if (vadSilenceStartRef.current === null) {
+                  vadSilenceStartRef.current = Date.now();
+                } else if (Date.now() - vadSilenceStartRef.current > VAD_SILENCE_GATE) {
+                  stopRecorder();
+                  setVoiceState('THINKING');
+                }
+              }
+            }
+          }, 100);
+        }
+      } catch { /* VAD not supported */ }
+
+      setVoiceState('LISTENING');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      const isDenied =
+        msg.includes('NotAllowed') || msg.includes('Permission') || msg.includes('denied');
+      setErrorMsg(
+        isDenied
+          ? 'Emmaus needs microphone access for Voice Mode. Please allow microphone access in your browser settings.'
+          : 'Could not start the microphone. Please check your device and try again.',
+      );
+      setVoiceState('ERROR');
+    }
+  }
+
+  function stopListening() {
+    stopRecorder();
+    setVoiceState('THINKING');
+  }
+
+  function startListeningFromCapture(capture: InterruptCapture) {
+    const { recorder, chunks, stream, mimeType } = capture;
+
+    setErrorMsg(null);
+    setTranscript('');
+    setTtsError(false);
+    cancelAutoRestart();
+    // The user was definitely speaking (they triggered the barge-in by talking for 1500 ms).
+    // Mark voice activity so processAudioBlob doesn't reject this blob at the VAD gate.
+    hadVoiceActivityRef.current = true;
+    const turnId = ++voiceTurnRef.current;
+
+    if (!stream) { startListening(); return; }
+
+    streamRef.current         = stream;
+    chunksRef.current         = chunks;
+    recordingStartRef.current = Date.now();
+
+    let rec = recorder;
+    if (!rec || rec.state === 'inactive') {
+      const opts: MediaRecorderOptions = mimeType ? { mimeType } : {};
+      rec = new MediaRecorder(stream, opts);
+      rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      rec.start(200);
+    } else {
+      rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+    }
+
+    rec.onstop = async () => {
+      stopMicStream();
+      const actualMimeType = rec?.mimeType || mimeType || 'audio/webm';
+      const blob = new Blob(chunksRef.current, { type: actualMimeType });
+      chunksRef.current = [];
+      await processAudioBlobRef.current?.(blob, actualMimeType, turnId);
+    };
+
+    recorderRef.current = rec;
+    recordingStartRef.current = Date.now();
+    recordingTimerRef.current = setTimeout(() => {
+      recordingTimerRef.current = null;
+      if (voiceTurnRef.current === turnId && recorderRef.current === rec && rec.state !== 'inactive') {
+        stopRecorder();
+        setVoiceState('THINKING');
+      }
+    }, 30_000);
+    setVoiceState('LISTENING');
+
+    try {
+      const Ctx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (Ctx) {
+        const ac       = new Ctx();
+        const source   = ac.createMediaStreamSource(stream);
+        const analyser = ac.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        vadAcRef.current          = ac;
+        analyserRef.current       = analyser;
+        vadSilenceStartRef.current = null;
+        vadSpokenRef.current      = true;
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        // startListeningFromCapture — capture continues from barge-in.
+        // vadSpokenRef is already true (user was speaking), so only the
+        // silence gate matters here.  Same thresholds as startListening.
+        const captureThreshold = vadSettingsRef.current.threshold;
+        vadIntervalRef.current = setInterval(() => {
+          const a = analyserRef.current;
+          if (!a) return;
+          a.getByteFrequencyData(dataArray);
+          const avg     = dataArray.reduce((s, v) => s + v, 0) / dataArray.length;
+          const elapsed = Date.now() - recordingStartRef.current;
+          if (avg > captureThreshold) {  // matches startListening VAD_THRESHOLD
+            vadSilenceStartRef.current = null;
+          } else if (elapsed > 1000) {
+            if (vadSilenceStartRef.current === null) {
+              vadSilenceStartRef.current = Date.now();
+            } else if (Date.now() - vadSilenceStartRef.current > 800) {
+              // Matches startListening silence gate: 800 ms
+              clearVAD();
+              stopRecorder();
+              setVoiceState('THINKING');
+            }
+          }
+        }, 100);
+      }
+    } catch { /* VAD unavailable */ }
+  }
+
+  // ─── Audio processing pipeline (stable — reads everything from refs) ───────
+
+  const processAudioBlob = useCallback(async (blob: Blob, mimeType: string, turnId?: number) => {
+    // Pull current values from refs — no stale closures
+    const user        = userRef.current;
+    const history     = historyRef.current;
+    const initContext = initContextRef.current;
+
+    if (!user || cancelledRef.current || (turnId !== undefined && turnId !== voiceTurnRef.current)) return;
+
+    // ── Inner helpers (same as Phases 1–3) ────────────────────────────────
+
+    async function playTTS(ttsText: string, isReadingSection: boolean): Promise<void> {
+      if (cancelledRef.current) return;
+      setVoiceState('SPEAKING');
+
+      const sectionIdx   = isReadingSection ? readingIndexRef.current : null;
+      const sectionLabel = isReadingSection ? (readingSectionsRef.current[readingIndexRef.current]?.label ?? null) : null;
+      const ttsStartMs   = Date.now();
+
+      console.info('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+        event:         'ttsRequestStarted',
+        isReadingSection,
+        sectionIndex:  sectionIdx,
+        sectionLabel,
+        sectionsTotal: isReadingSection ? readingSectionsRef.current.length : null,
+        textLength:    ttsText.length,
+        ttsProvider:   'device',
+      }));
+
+      // Normal users hear the browser/device voice. This is free, keeps
+      // personalized answers off any reusable audio cache, and avoids sending
+      // normal response text to a paid TTS provider.
+      const deviceSpeech = speakWithDevice(ttsText, {
+        rate: Math.max(0.5, Math.min(2, voiceSpeedRef.current)),
+        voice: deviceVoiceRef.current,
+      });
+      deviceSpeechRef.current = deviceSpeech;
+      try {
+        await deviceSpeech.promise;
+        if (deviceSpeechRef.current !== deviceSpeech) return;
+        deviceSpeechRef.current = null;
+        if (cancelledRef.current) return;
+        setVoiceState('READY');
+        if (isReadingSection && isReadingRef.current && !readingPausedRef.current) {
+          autoRestartTimerRef.current = setTimeout(() => {
+            autoRestartTimerRef.current = null;
+            if (!cancelledRef.current && !pausedRef.current && isReadingRef.current && !readingPausedRef.current) {
+              advanceReading();
+            }
+          }, 250);
+        }
+      } catch (deviceErr) {
+        if (deviceSpeechRef.current !== deviceSpeech) return;
+        deviceSpeechRef.current = null;
+        console.warn('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+          event: 'deviceTtsFailed',
+          isReadingSection,
+          sectionIndex: sectionIdx,
+          error: String(deviceErr),
+        }));
+        if (!cancelledRef.current) {
+          setTtsError(true);
+          setVoiceState('READY');
+        }
+        if (isReadingSection && isReadingRef.current && !readingPausedRef.current && !cancelledRef.current) {
+          setTimeout(() => { if (!cancelledRef.current) advanceReading(); }, 500);
+        }
+      }
+      return;
+
+      /*
+       * Server-backed comparison playback remains below for the admin/test
+       * surface only. Keeping the old path isolated here prevents normal Voice
+       * turns from accidentally selecting a configured paid provider.
+       */
+      if (false) {
+      let ttsAudio: HTMLAudioElement;
+      try {
+        const result = await streamSpeechToAudio(ttsText, user!.id);
+        if (cancelledRef.current) { result.dispose(); return; }
+        ttsAudio                = result.audio;
+        audioElRef.current      = result.audio;
+        disposeAudioRef.current = result.dispose;
+        setHasAudioElement(true);
+        console.info('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+          event:          'audioElementCreated',
+          isReadingSection,
+          sectionIndex:   sectionIdx,
+          firstChunkMs:   Date.now() - ttsStartMs,
+        }));
+      } catch (fetchErr) {
+        console.error('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+          event:         'ttsRequestFailed',
+          isReadingSection,
+          sectionIndex:  sectionIdx,
+          failureReason: 'streamSpeechToAudio_threw',
+          error:         String(fetchErr),
+        }));
+        if (!cancelledRef.current) { setTtsError(true); setVoiceState('READY'); }
+        // During structured reading: skip the failed section and advance instead of stalling
+        if (isReadingSection && isReadingRef.current && !readingPausedRef.current && !cancelledRef.current) {
+          setTimeout(() => { if (!cancelledRef.current) advanceReading(); }, 500);
+        }
+        return;
+      }
+
+      // Interrupt monitor is started once per reading session in playReadingSection,
+      // NOT here per TTS call. Starting getUserMedia mid-playback causes iOS to
+      // briefly interrupt audio routing (audible stutter). By starting it once
+      // before the first section, the mic is already open when audio plays.
+
+      await new Promise<void>((resolve) => {
+        ttsAudio.onended = () => {
+          if (audioElRef.current !== ttsAudio) { resolve(); return; }
+          console.info('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+            event:             'audioEnded',
+            isReadingSection,
+            sectionIndex:      sectionIdx,
+            totalPlayMs:       Date.now() - ttsStartMs,
+            nextSectionExists: isReadingSection && ((sectionIdx ?? 0) + 1 < readingSectionsRef.current.length),
+            nextSectionIndex:  isReadingSection && ((sectionIdx ?? 0) + 1 < readingSectionsRef.current.length)
+              ? (sectionIdx ?? 0) + 1 : null,
+          }));
+          // Between reading sections: clear audio element only, keep interrupt monitor alive.
+          // For normal conversation TTS: full stopAudio (closes monitor, opens mic).
+          if (isReadingSection) { stopAudioElement(); } else { stopAudio(); }
+          ttsEndedAtRef.current = Date.now();
+          if (!cancelledRef.current) {
+            setVoiceState('READY');
+            autoRestartTimerRef.current = setTimeout(() => {
+              autoRestartTimerRef.current = null;
+              if (cancelledRef.current || pausedRef.current) return;
+
+              // ── Structured reading: advance section directly ─────────────────
+              // Do NOT route through startListening() between sections.
+              // The old path (mic → VAD silence → empty transcript → advanceReading)
+              // fails in a quiet room because VAD requires 5 consecutive ticks
+              // above threshold before silence-gate can fire — it never triggers
+              // when there is no speech, so the reader stalls after section 0.
+              if (isReadingSection && isReadingRef.current && !readingPausedRef.current) {
+                advanceReading();
+                return;
+              }
+
+              // Normal conversation or end-of-reading: open the mic.
+              if (!tapToSpeakOnlyRef.current) startListening();
+            // Sprint 2: conversational mic delay 1000 → 350 ms (much faster turn-taking).
+            // Reading section advance 800 → 250 ms (bypasses mic — just pacing between sections).
+            }, isReadingSection ? 250 : 350);
+          }
+          resolve();
+        };
+        ttsAudio.onerror = (e) => {
+          if (audioElRef.current !== ttsAudio) { resolve(); return; }
+          console.error('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+            event:         'audioError',
+            isReadingSection,
+            sectionIndex:  sectionIdx,
+            failureReason: 'audio_element_onerror',
+            error:         e instanceof ErrorEvent ? e.message : String(e),
+          }));
+          // Keep interrupt monitor alive between reading sections.
+          if (isReadingSection) { stopAudioElement(); } else { stopAudio(); }
+          setVoiceState('READY');
+          // During structured reading: skip the failed section and advance instead of stalling
+          if (isReadingSection && isReadingRef.current && !readingPausedRef.current && !cancelledRef.current) {
+            setTimeout(() => { if (!cancelledRef.current) advanceReading(); }, 500);
+          }
+          resolve();
+        };
+        const playPromise = ttsAudio.play();
+        console.info('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+          event:        'audioPlayCalled',
+          isReadingSection,
+          sectionIndex: sectionIdx,
+          hasPromise:   playPromise !== undefined,
+        }));
+        playPromise?.catch((err: unknown) => {
+          // AbortError = audio was deliberately stopped (barge-in / interrupt / stopAudio).
+          // Do NOT advance reading — the interrupt handler owns what happens next.
+          // Also guard against the audio element having been replaced (ref no longer matches).
+          const isAbort = err instanceof DOMException && err.name === 'AbortError';
+          if (isAbort || audioElRef.current !== ttsAudio) {
+            console.info('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+              event:         'audioPlayAborted',
+              isReadingSection,
+              sectionIndex:  sectionIdx,
+              failureReason: isAbort ? 'AbortError_intentional_stop' : 'audio_ref_replaced',
+            }));
+            resolve();
+            return;
+          }
+          const isNotAllowed = err instanceof DOMException && err.name === 'NotAllowedError';
+          console.error('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+            event:         'audioPlayRejected',
+            isReadingSection,
+            sectionIndex:  sectionIdx,
+            failureReason: isNotAllowed ? 'autoplay_NotAllowedError' : 'play_rejected',
+            errorName:     err instanceof DOMException ? err.name : String(err),
+          }));
+          if (isNotAllowed) { setAutoplayBlocked(true); setVoiceState('READY'); }
+          else if (isReadingSection) { stopAudioElement(); setVoiceState('READY'); }
+          else               { stopAudio();              setVoiceState('READY'); }
+          // Only advance during reading on genuine play() failures (not intentional stops)
+          if (isReadingSection && isReadingRef.current && !readingPausedRef.current && !cancelledRef.current) {
+            setTimeout(() => { if (!cancelledRef.current) advanceReading(); }, 500);
+          }
+          resolve();
+        });
+      });
+      }
+    }
+
+    async function playReadingSection(section: { label: string; text: string } | undefined): Promise<void> {
+      if (!section || cancelledRef.current) return;
+      const sections = readingSectionsRef.current;
+      const idx      = readingIndexRef.current;
+      // ── VOICE CONTENT PLAYBACK: section boundary ─────────────────────────────
+      console.info('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+        event:             'sectionStarted',
+        readingIndex:      idx,
+        sectionsTotal:     sections.length,
+        sectionLabel:      section.label,
+        sectionTextLength: section.text.length,
+        nextSectionExists: idx + 1 < sections.length,
+        ttsRequestStarted: true,
+      }));
+      // Legacy READER TRACE kept for backwards compatibility
+      console.log('[VOICE READER TRACE]', JSON.stringify({
+        contentTitle:             activeContent?.label ?? null,
+        sectionsTotal:            sections.length,
+        currentSectionIndex:      idx,
+        currentSectionLabel:      section.label,
+        currentSectionTextLength: section.text.length,
+        nextSectionExists:        idx + 1 < sections.length,
+        nextSectionIndex:         idx + 1 < sections.length ? idx + 1 : null,
+        readerState:              'SPEAKING',
+      }));
+      setActiveContent({ label: section.label });
+      const uid = userRef.current?.id;
+      if (uid) {
+        saveVoiceReadingProgress({
+          userId: uid,
+          resourceType: readingResourceRef.current.type,
+          resourceId: readingResourceRef.current.id,
+          bookId: readingResourceRef.current.bookId,
+          chapter: readingResourceRef.current.chapter,
+          translationId: readingResourceRef.current.translationId,
+          segmentId: `section-${idx}`,
+          sectionIndex: idx,
+          sectionsTotal: sections.length,
+           provider: 'device',
+          updatedAt: new Date().toISOString(),
+          completed: false,
+        });
+      }
+      updateMediaSession(section.label, 'playing');
+      // Start (or keep) interrupt monitor for this reading session.
+      // Called once per section but is a no-op if monitor is already running
+      // (intStreamRef guard at top of startInterruptMonitor). This approach means
+      // getUserMedia is called BEFORE audio starts playing — eliminating the iOS
+      // hardware-routing stutter that occurred when it was called mid-playback.
+      // The 3-second startup delay now counts from session start, not per section.
+      startInterruptMonitor((capture) => {
+        stopAudio();
+        setStreamingResponse('');
+        startListeningFromCapture(capture);
+      });
+      await playTTS(section.text, true);
+    }
+
+    async function advanceReading(): Promise<void> {
+      const sections = readingSectionsRef.current;
+      const next     = readingIndexRef.current + 1;
+      console.info('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+        event:         'advanceReading',
+        fromIndex:     readingIndexRef.current,
+        toIndex:       next,
+        sectionsTotal: sections.length,
+        hasNext:       !(!sections.length || next >= sections.length),
+      }));
+      if (!sections.length || next >= sections.length) {
+        isReadingRef.current = false;
+        // Preserve the just-finished sections so follow-up questions work.
+        // e.g. "What was that verse?" after reading completes.
+        lastReadSectionsRef.current = sections.slice();
+        const uid = userRef.current?.id;
+        if (uid) clearVoiceReadingProgress(uid);
+        // Reading is done — stop the interrupt monitor that was kept alive across sections.
+        stopInterruptMonitor();
+        setActiveContent(null);
+        setVoiceState('READY');
+        console.info('[VOICE CONTENT PLAYBACK]', JSON.stringify({ event: 'readingComplete', totalSections: sections.length }));
+        autoRestartTimerRef.current = setTimeout(() => {
+          autoRestartTimerRef.current = null;
+          if (!cancelledRef.current && !pausedRef.current && !tapToSpeakOnlyRef.current) startListening();
+        // Sprint 2: 1500 → 600 ms — open mic promptly after reading ends so
+        // follow-up questions feel like natural conversation.
+        }, 600);
+        return;
+      }
+      readingIndexRef.current = next;
+      await playReadingSection(sections[next]);
+    }
+
+    async function loadAndStartReading(
+      content: 'daily-rhythm' | 'devotional' | 'walk' | 'sermon-companion' | 'bible',
+      bibleRef?: { bookId: string; bookName: string; chapter: number; verse?: number; translationId?: string },
+      titleHint?: string,
+    ): Promise<boolean> {
+      // ── Race-condition guard ──────────────────────────────────────────────
+      // fetchVoiceContext is fire-and-forget at session start; if the user
+      // speaks before the API responds, appContextRef is still null.
+      // Await a fresh fetch here so content always resolves correctly.
+      if (!appContextRef.current && content !== 'bible') {
+        const uid = userRef.current?.id;
+        console.log('[VOICE CONTENT DEBUG] appContextRef was null — awaiting fresh context fetch', { uid, content });
+        if (uid) {
+          const fresh = await fetchVoiceContext(uid);
+          if (fresh) appContextRef.current = fresh;
+        }
+      }
+
+      const appCtx = appContextRef.current;
+      const sections: { label: string; text: string }[] = [];
+
+      // Clear last-read memory so follow-up questions target the new session.
+      lastReadSectionsRef.current = [];
+
+      // ── Diagnostic log (always emitted, seen in browser console on device) ──
+      if (content !== 'bible') {
+        console.log('[VOICE CONTENT DEBUG]', JSON.stringify({
+          content,
+          titleHint: titleHint ?? null,
+          voiceContextLoaded: !!appCtx,
+          availableDailyRhythm: appCtx?.dailyRhythm
+            ? { journeyTitle: appCtx.dailyRhythm.journeyTitle, currentDay: appCtx.dailyRhythm.currentDay, stepTitle: appCtx.dailyRhythm.stepTitle }
+            : null,
+          availableDevotionals: appCtx?.activeDevotionals?.map(d => ({
+            seriesId: d.seriesId, seriesTitle: d.seriesTitle, currentDay: d.currentDay, entryTitle: d.entryTitle,
+          })) ?? [],
+          availableSermonCompanion: appCtx?.sermonCompanion
+            ? { title: appCtx.sermonCompanion.title, currentDay: appCtx.sermonCompanion.currentDay }
+            : null,
+        }));
+      }
+
+      if (content === 'daily-rhythm') {
+        const dr = appCtx?.dailyRhythm;
+        if (!dr) {
+          console.log('[VOICE CONTENT DEBUG] daily-rhythm: failureReason=no_daily_rhythm_in_context');
+          return false;
+        }
+        const label = `${dr.journeyTitle} — Day ${dr.currentDay}`;
+        readingResourceRef.current = { type: 'daily-rhythm', id: dr.journeyId };
+        if (dr.stepTitle)      sections.push({ label: 'Introduction', text: dr.stepTitle });
+        if (dr.stepScripture)  sections.push({ label: 'Scripture',    text: `Today's scripture is ${dr.stepScripture}.` });
+        if (dr.stepTeaching)   sections.push({ label: 'Teaching',     text: dr.stepTeaching });
+        if (dr.stepReflection) sections.push({ label: 'Reflection',   text: dr.stepReflection });
+        if (dr.stepPrayer)     sections.push({ label: 'Prayer',       text: dr.stepPrayer });
+        console.log('[VOICE CONTENT DEBUG] daily-rhythm', JSON.stringify({
+          journeyTitle: dr.journeyTitle, currentDay: dr.currentDay,
+          sectionsCount: sections.length,
+          contentResolved: sections.length > 0,
+          failureReason: sections.length === 0 ? 'all_fields_empty' : null,
+        }));
+        if (!sections.length) return false;
+        readingSectionsRef.current = sections;
+        readingIndexRef.current    = 0;
+        isReadingRef.current       = true;
+        readingPausedRef.current   = false;
+        setActiveContent({ label });
+      }
+
+      else if (content === 'devotional') {
+        const allDevs = appCtx?.activeDevotionals ?? [];
+
+        // Fuzzy match titleHint (e.g. "psalms") against series titles so
+        // "Read my Psalms devotional" finds "Psalms Daily Devotional" without hardcoding.
+        let devs = allDevs;
+        if (titleHint && allDevs.length > 0) {
+          const hint = titleHint.toLowerCase();
+          const matched = allDevs.filter(d => d.seriesTitle.toLowerCase().includes(hint));
+          if (matched.length > 0) devs = matched;
+        }
+
+        console.log('[VOICE CONTENT DEBUG] devotional', JSON.stringify({
+          titleHint: titleHint ?? null,
+          totalActive: allDevs.length,
+          matchedCount: devs.length,
+          matchedTitles: devs.map(d => d.seriesTitle),
+        }));
+
+        if (devs.length === 0) {
+          console.log('[VOICE CONTENT DEBUG] devotional: failureReason=no_active_devotionals');
+          return false;
+        }
+        if (devs.length > 1) {
+          // Speak the real titles so the user can clarify
+          const titles = devs.map(d => d.seriesTitle).join(' and ');
+          await playTTS(`You have ${titles}. Which devotional would you like me to read?`, false);
+          console.log('[VOICE CONTENT DEBUG] devotional: failureReason=multiple_active_asked_clarification titles=' + titles);
+          return false;
+        }
+        const dev   = devs[0];
+        const label = `${dev.seriesTitle} — Day ${dev.currentDay}`;
+        readingResourceRef.current = { type: 'devotional', id: dev.seriesId };
+        if (dev.entryTitle)     sections.push({ label: 'Today',      text: dev.entryTitle });
+        if (dev.entryScripture) sections.push({ label: 'Scripture',  text: `Today's scripture is ${dev.entryScripture}.` });
+        if (dev.entryContent)   sections.push({ label: 'Reflection', text: dev.entryContent });
+        if (dev.entryPrayer)    sections.push({ label: 'Prayer',     text: dev.entryPrayer });
+        console.log('[VOICE CONTENT DEBUG] devotional', JSON.stringify({
+          seriesTitle: dev.seriesTitle, currentDay: dev.currentDay,
+          entryTitle: dev.entryTitle, sectionsCount: sections.length,
+          contentResolved: sections.length > 0,
+          failureReason: sections.length === 0 ? 'all_fields_empty' : null,
+        }));
+        if (!sections.length) return false;
+        readingSectionsRef.current = sections;
+        readingIndexRef.current    = 0;
+        isReadingRef.current       = true;
+        readingPausedRef.current   = false;
+        setActiveContent({ label });
+      }
+
+      else if (content === 'walk') {
+        const allWalks = appCtx?.activeWalks ?? [];
+
+        // Fuzzy match titleHint (e.g. "god", "serve") against walk titles.
+        let walks = allWalks;
+        if (titleHint && allWalks.length > 0) {
+          const hint = titleHint.toLowerCase();
+          const matched = allWalks.filter(w => w.title.toLowerCase().includes(hint));
+          if (matched.length > 0) walks = matched;
+        }
+
+        console.log('[VOICE CONTENT DEBUG] walk', JSON.stringify({
+          titleHint: titleHint ?? null, totalActive: allWalks.length,
+          matchedCount: walks.length, matchedTitles: walks.map(w => w.title),
+        }));
+
+        if (walks.length === 0) {
+          console.log('[VOICE CONTENT DEBUG] walk: failureReason=no_active_walks');
+          return false;
+        }
+        if (walks.length > 1 && !titleHint) {
+          const titles = walks.map(w => w.title).join(' and ');
+          await playTTS(`You have ${titles} active. Which walk would you like me to read?`, false);
+          return false;
+        }
+
+        const walk = walks[0];
+        const label = `${walk.title} — Day ${walk.currentDay}`;
+        readingResourceRef.current = { type: 'walk', id: walk.journeyId };
+        if (walk.stepTitle)      sections.push({ label: 'Introduction',  text: walk.stepTitle });
+        if (walk.stepScripture)  sections.push({ label: 'Scripture',     text: `Today's scripture is ${walk.stepScripture}.` });
+        if (walk.stepTeaching)   sections.push({ label: 'Teaching',      text: walk.stepTeaching });
+        if (walk.stepReflection) sections.push({ label: 'Consider This', text: walk.stepReflection });
+        if (walk.stepPrayer)     sections.push({ label: 'Prayer',        text: walk.stepPrayer });
+
+        console.log('[VOICE CONTENT DEBUG] walk resolved', JSON.stringify({
+          journeyId: walk.journeyId, walkTitle: walk.title, currentDay: walk.currentDay,
+          sectionsCount: sections.length,
+          failureReason: sections.length === 0 ? 'all_step_fields_empty_or_missing' : null,
+        }));
+        if (!sections.length) {
+          await playTTS(`I can see your "${walk.title}" walk on Day ${walk.currentDay}, but the step content hasn't loaded yet. Try opening it from Today's Steps.`, false);
+          return false;
+        }
+        readingSectionsRef.current = sections;
+        readingIndexRef.current    = 0;
+        isReadingRef.current       = true;
+        readingPausedRef.current   = false;
+        setActiveContent({ label });
+      }
+
+      else if (content === 'sermon-companion') {
+        const sc = appCtx?.sermonCompanion;
+        if (!sc) return false;
+        const label = `Sermon Companion — Day ${sc.currentDay}`;
+        readingResourceRef.current = { type: 'sermon-companion', id: sc.id };
+        if (sc.entryGreeting)   sections.push({ label: 'Opening',    text: sc.entryGreeting });
+        if (sc.entryScripture)  sections.push({ label: 'Scripture',  text: `This week's scripture is ${sc.entryScripture}.` });
+        if (sc.entryReflection) sections.push({ label: 'Reflection', text: sc.entryReflection });
+        if (sc.entryPrayer)     sections.push({ label: 'Prayer',     text: sc.entryPrayer });
+        if (sc.entryClosing)    sections.push({ label: 'Closing',    text: sc.entryClosing });
+        if (!sections.length) return false;
+        readingSectionsRef.current = sections;
+        readingIndexRef.current    = 0;
+        isReadingRef.current       = true;
+        readingPausedRef.current   = false;
+        setActiveContent({ label });
+      }
+
+      else if (content === 'bible') {
+        let resolvedRef: {
+          bookId: string; bookName: string; chapter: number;
+          verse?: number; translationId?: string;
+        } | null = null;
+
+        if (bibleRef?.bookId) {
+          resolvedRef = bibleRef;
+        } else if (bibleContextRef.current) {
+          const ctx = bibleContextRef.current;
+          resolvedRef = { bookId: ctx.bookId, bookName: ctx.bookId, chapter: ctx.chapter, translationId: ctx.translationId };
+        } else if (initContext?.bookId && initContext?.chapter) {
+          resolvedRef = { bookId: initContext.bookId, bookName: initContext.bookName ?? initContext.bookId, chapter: initContext.chapter };
+        }
+
+        if (!resolvedRef) return false;
+
+        const translation = resolveVoiceTranslation(
+          resolvedRef.translationId ?? null,
+          user?.id ?? null,
+          accountTranslationRef.current,
+        );
+        if (!translation.availableForTts) {
+          const notice = buildUnavailableTranslationNotice(
+            translation.resolvedId,
+            translation.resolvedName,
+          );
+          setErrorMsg(notice);
+          await playTTS(notice, false);
+          return false;
+        }
+        let chapterData: Awaited<ReturnType<typeof remoteBibleProvider.getChapter>> = null;
         try {
           chapterData = await remoteBibleProvider.getChapter(resolvedRef.bookId, resolvedRef.chapter, translation.resolvedId);
           console.log('[VOICE] Bible fetch result:', resolvedRef.bookId, resolvedRef.chapter, translation.resolvedId, '→ verses:', chapterData?.verses?.length ?? 0);
@@ -749,7 +2086,7 @@
               dailyRhythmInContext: !!appContextRef.current?.dailyRhythm,
               activeDevotionalsCount: appContextRef.current?.activeDevotionals?.length ?? 0,
             }));
-            const errMsg = `I wasn't able to load that content. Check My Emmaus to see what's available.`;
+            const errMsg = `I wasn't able to load that content. Check Today's Steps to see what's available.`;
             setResponse(errMsg);
             setStreamingResponse('');
             await playTTS(errMsg, false);
