@@ -37,7 +37,6 @@ import { buildEmmausScreenContext } from '@/lib/emmaus-screen-context';
 
 const HIDDEN_PREFIXES = [
   '/personal/ask-emmaus',  // Ask Emmaus screens themselves
-  '/personal/companion',
   '/admin',
   '/join-room',
   '/bible/read',           // Bible chapter reader — focused reading, no FAB
