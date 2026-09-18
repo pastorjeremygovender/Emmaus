@@ -36,6 +36,7 @@ import { goBackOrFallback } from '@/lib/return-context';
 import { getDailyRhythmState } from '@/lib/journeys-api';
 import { consumeOpeningDestination } from '@/lib/opening-destination';
 import { acknowledgeNativeDailyRhythmDeepLink } from '@/lib/native-daily-rhythm-deep-link';
+import { rememberPresentedDailyRhythmDay } from '@/lib/daily-rhythm-presentation';
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -87,7 +88,12 @@ export default function DailyRhythmDay() {
       setDailyProgress(null);
       void getDailyRhythmState()
         .then(state => {
-          if (!cancelled) setDailyProgress(state?.progress ?? null);
+          if (cancelled) return;
+          setDailyProgress(state?.progress ?? null);
+          const todayDay = state?.todayAvailableDay ?? state?.assignedDay ?? null;
+          if (user?.id && todayDay && day === todayDay) {
+            rememberPresentedDailyRhythmDay(user.id, todayDay);
+          }
         })
         .catch(error => {
           if (!cancelled) console.warn('[Daily Rhythm] fresh route state unavailable', error);
@@ -223,6 +229,10 @@ export default function DailyRhythmDay() {
     setCompleting(true);
     try {
       const completion = await completeStep(journeyId, day, '');
+      const todayDay = dailyRhythmState?.todayAvailableDay ?? dailyRhythmState?.assignedDay ?? null;
+      if (user?.id && todayDay && day === todayDay) {
+        rememberPresentedDailyRhythmDay(user.id, todayDay);
+      }
       setPostCompletionDestination(consumeOpeningDestination('/walk'));
       setJustCompleted(true);
       if (completion.dailyRhythmStartup?.state === 'COMPLETED') {

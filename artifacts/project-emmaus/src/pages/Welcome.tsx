@@ -15,6 +15,8 @@ import {
   safeGroupInviteDestination,
 } from "@/lib/groups-invite";
 import { waitForNativeDailyRhythmDeepLink } from "@/lib/native-daily-rhythm-deep-link";
+import { getDailyRhythmState } from "@/lib/journeys-api";
+import { hasPresentedDailyRhythmDay } from "@/lib/daily-rhythm-presentation";
 import BrandedSplash from "@/components/BrandedSplash";
 
 export default function Welcome() {
@@ -52,8 +54,22 @@ export default function Welcome() {
     }
 
     let cancelled = false;
-    void waitForNativeDailyRhythmDeepLink().then(nativePath => {
-      if (!cancelled && !nativePath) setLocation("/walk", { replace: true });
+    void waitForNativeDailyRhythmDeepLink().then(async nativePath => {
+      if (cancelled || nativePath) return;
+      try {
+        const state = await getDailyRhythmState();
+        const todayDay = state?.todayAvailableDay ?? state?.assignedDay ?? null;
+        if (
+          todayDay &&
+          !hasPresentedDailyRhythmDay(user.id, todayDay)
+        ) {
+          setLocation(`/daily-rhythm/day/${todayDay}?source=first-open`, { replace: true });
+          return;
+        }
+      } catch {
+        // A startup lookup failure must not blank the app.
+      }
+      if (!cancelled) setLocation("/walk", { replace: true });
     });
     return () => {
       cancelled = true;
