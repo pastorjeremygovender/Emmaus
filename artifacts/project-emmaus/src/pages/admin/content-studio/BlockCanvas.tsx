@@ -15,7 +15,7 @@
  */
 
 import React, { useState, useCallback, useRef } from 'react';
-import { Plus, GripVertical, Trash2, Copy, Sparkles, ChevronDown, Check, X as XIcon, Loader2 } from 'lucide-react';
+import { Plus, GripVertical, Trash2, Copy, Sparkles, ChevronDown, ChevronUp, Check, X as XIcon, Loader2 } from 'lucide-react';
 import {
   Block, BlockType, createBlock, getBlockMeta,
 } from '@/lib/blocks';
@@ -83,19 +83,19 @@ function AIMenu({
 
   return (
     <div
-      className="absolute right-0 top-full mt-1 z-30 w-52 bg-white border border-gray-200 rounded-xl shadow-xl py-1"
+      className="fixed inset-x-3 bottom-3 z-50 max-h-[60dvh] overflow-y-auto bg-white border border-gray-200 rounded-2xl shadow-2xl py-1 md:absolute md:inset-x-auto md:bottom-auto md:right-0 md:top-full md:mt-1 md:w-52 md:max-h-80 md:rounded-xl"
       onMouseLeave={onClose}
     >
-      <div className="px-3 py-1.5 border-b border-gray-100">
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">AI Actions</p>
+      <div className="px-4 md:px-3 py-2 border-b border-gray-100">
+        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">AI Actions</p>
       </div>
       {applicable.map(a => (
         <button
           key={a.id}
           onClick={() => { onSelect(a.id); onClose(); }}
-          className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors text-left"
+          className="w-full min-h-11 flex items-center gap-2 px-4 md:px-3 py-2 text-sm md:text-xs text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors text-left"
         >
-          <Sparkles size={10} className="text-teal-400 flex-shrink-0" />
+          <Sparkles size={13} className="text-teal-400 flex-shrink-0" />
           {a.label}
         </button>
       ))}
@@ -184,14 +184,14 @@ function renderBlockContent(
 
 function AddBetweenBtn({ onClick }: { onClick: () => void }) {
   return (
-    <div className="relative flex items-center justify-center h-6 group/add">
-      <div className="absolute inset-x-0 top-1/2 h-px bg-teal-200 opacity-0 group-hover/add:opacity-100 transition-opacity" />
+    <div className="relative flex items-center justify-center h-8 md:h-6 group/add">
+      <div className="absolute inset-x-0 top-1/2 h-px bg-teal-200 opacity-100 md:opacity-0 group-hover/add:opacity-100 transition-opacity" />
       <button
         onClick={onClick}
-        className="relative z-10 flex items-center justify-center w-5 h-5 rounded-full bg-white border border-gray-200 text-gray-400 hover:border-teal-400 hover:text-teal-600 hover:bg-teal-50 transition-all opacity-0 group-hover/add:opacity-100 shadow-sm"
+        className="relative z-10 flex items-center justify-center w-8 h-8 md:w-5 md:h-5 rounded-full bg-white border border-gray-200 text-gray-400 hover:border-teal-400 hover:text-teal-600 hover:bg-teal-50 transition-all opacity-100 md:opacity-0 group-hover/add:opacity-100 shadow-sm"
         title="Add block"
       >
-        <Plus size={11} />
+        <Plus size={14} className="md:w-[11px] md:h-[11px]" />
       </button>
     </div>
   );
@@ -269,6 +269,15 @@ export default function BlockCanvas({ blocks, onChange, journeyContext = '' }: P
     b.id = id;
     setNewBlockId(id);
     onChange(blocks.map(bl => bl.id === id ? b : bl));
+  }, [blocks, onChange]);
+
+  const moveBlock = useCallback((idx: number, direction: -1 | 1) => {
+    const nextIdx = idx + direction;
+    if (nextIdx < 0 || nextIdx >= blocks.length) return;
+    const next = [...blocks];
+    const [moved] = next.splice(idx, 1);
+    next.splice(nextIdx, 0, moved);
+    onChange(next);
   }, [blocks, onChange]);
 
   // ─── Slash menu ─────────────────────────────────────────────────────────
@@ -415,8 +424,8 @@ export default function BlockCanvas({ blocks, onChange, journeyContext = '' }: P
               onDrop={handleDrop(idx)}
               onDragEnd={handleDragEnd}
             >
-              {/* Drag handle */}
-              <div className={`flex flex-col items-center gap-0.5 flex-shrink-0 pt-1 transition-opacity ${showChrome ? 'opacity-100' : 'opacity-0'}`}>
+              {/* Desktop drag handle */}
+              <div className={`hidden md:flex flex-col items-center gap-0.5 flex-shrink-0 pt-1 transition-opacity ${showChrome ? 'opacity-100' : 'opacity-0'}`}>
                 <button
                   className="cursor-grab active:cursor-grabbing p-1 rounded-lg text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-colors"
                   onMouseDown={e => e.stopPropagation()}
@@ -443,10 +452,71 @@ export default function BlockCanvas({ blocks, onChange, journeyContext = '' }: P
                   () => insertAfter(block.id),
                   newBlockId === block.id,
                 )}
+
+                {/* Touch controls remain visible; phones do not reliably expose hover or HTML drag-and-drop. */}
+                <div className="md:hidden flex flex-wrap items-center gap-1.5 mt-3 pt-2 border-t border-gray-100">
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setAiMenuBlockId(aiMenuBlockId === block.id ? null : block.id)}
+                      disabled={isAiLoading}
+                      aria-label="AI actions"
+                      className={`min-h-10 inline-flex items-center gap-1.5 px-3 rounded-xl text-[12px] font-medium transition-colors ${
+                        isAiLoading || aiMenuBlockId === block.id
+                          ? 'text-teal-600 bg-teal-50'
+                          : 'text-gray-600 bg-gray-50 hover:bg-teal-50 hover:text-teal-600'
+                      }`}
+                    >
+                      {isAiLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                      AI
+                    </button>
+                    {aiMenuBlockId === block.id && (
+                      <AIMenu
+                        block={block}
+                        onSelect={(actionId) => handleAiAction(block, actionId)}
+                        onClose={() => setAiMenuBlockId(null)}
+                      />
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => moveBlock(idx, -1)}
+                    disabled={idx === 0}
+                    aria-label="Move block up"
+                    className="min-w-10 min-h-10 inline-flex items-center justify-center rounded-xl text-gray-500 bg-gray-50 disabled:opacity-30"
+                  >
+                    <ChevronUp size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveBlock(idx, 1)}
+                    disabled={idx === blocks.length - 1}
+                    aria-label="Move block down"
+                    className="min-w-10 min-h-10 inline-flex items-center justify-center rounded-xl text-gray-500 bg-gray-50 disabled:opacity-30"
+                  >
+                    <ChevronDown size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => duplicateBlock(block.id)}
+                    className="min-w-10 min-h-10 inline-flex items-center justify-center rounded-xl text-gray-500 bg-gray-50"
+                    aria-label="Duplicate block"
+                  >
+                    <Copy size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteBlock(block.id)}
+                    className="min-w-10 min-h-10 inline-flex items-center justify-center rounded-xl text-red-500 bg-red-50"
+                    aria-label="Delete block"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
 
-              {/* Right actions */}
-              <div className={`relative flex flex-col gap-0.5 flex-shrink-0 pt-0.5 transition-opacity ${showChrome ? 'opacity-100' : 'opacity-0'}`}>
+              {/* Desktop right actions */}
+              <div className={`hidden md:flex relative flex-col gap-0.5 flex-shrink-0 pt-0.5 transition-opacity ${showChrome ? 'opacity-100' : 'opacity-0'}`}>
                 {/* AI sparkle button */}
                 <div className="relative">
                   <button

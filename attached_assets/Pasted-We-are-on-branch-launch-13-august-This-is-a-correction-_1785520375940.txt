@@ -1,0 +1,135 @@
+We are on branch launch-13-august.
+
+This is a correction ticket. Two regressions are blocking the pilot:
+
+A. Active Walk/Journey no longer appears on Today’s Steps.
+B. Ask Emmaus does not retrieve Pastor Jeremy’s sermons and repeatedly defaults to Psalm 42.
+
+Do not add features.
+Do not redesign.
+Do not continue other launch-board work.
+Do not mark complete until both behaviours work in the published app.
+
+PART A — RESTORE ACTIVE ENGAGEMENT
+
+Locked rule:
+
+Any content a user intentionally begins from Next Steps must remain visible on Today’s Steps until it is completed, paused, or removed.
+
+This includes:
+- Walks
+- Journeys
+- Daily Devotionals
+- Sermon Companions
+- other eligible active content
+
+Required behaviour:
+
+1. Start a published Walk from Next Steps.
+2. Return to Today’s Steps.
+3. The active Walk appears immediately.
+4. It remains after refresh, logout/login, app restart, and republish.
+5. It opens the correct current day.
+6. It disappears only when completed, paused, or removed.
+7. Starting Room-linked content must not hide personal active content.
+8. Daily Rhythm, Daily Devotional, and Sermon Companion cards must remain unchanged.
+
+Investigate:
+- /api/member/engagements
+- /api/next-steps
+- journey progress status and IDs
+- active-item filters in Walk.tsx / Today’s Steps
+- recent commits that changed discovery cards, room-linked journeys, sermon companions, or engagement filtering
+
+Restore the last known working logic where possible. Do not rebuild it unnecessarily.
+
+PART B — FIX ASK EMMAUS RETRIEVAL
+
+Observed failures:
+- No “Pastor Jeremy preached…” references appear.
+- Different questions repeatedly recommend Psalm 42.
+- Recommendations are not meaningfully tailored.
+
+Trace one published request end-to-end using:
+“I have been struggling with anger.”
+
+Inspect:
+1. Sermon candidates retrieved
+2. Sermon titles, status, timestamps, URLs, and relevance scores
+3. Devotional candidates and relevance scores
+4. Walk/Journey candidates
+5. Bible Study candidates
+6. Sermon Companion candidates
+7. Context passed to the AI
+8. Structured response returned
+9. Client rendering
+
+Determine:
+- where Psalm 42 is hard-coded or incorrectly selected;
+- why sermon retrieval is absent;
+- whether production sermon data/index is empty, stale, filtered out, or queried incorrectly;
+- whether retrieval results are discarded before rendering.
+
+Required behaviour:
+
+1. Remove any hard-coded Psalm 42 fallback.
+2. Use ranked topic-based retrieval.
+3. Search real published ICC sermon data.
+4. Include genuine sermon matches in the AI context.
+5. Render:
+   - Scripture
+   - Pastor Jeremy sermon with real title and timestamp when available
+   - one relevant Walk/Journey
+   - one Bible Study
+   - one Daily Devotional
+   - one Sermon Companion when relevant
+   - prayer
+   - Your next step
+   - Room prayer suggestion when applicable
+6. Never invent sermons, timestamps, quotes, or links.
+7. If no genuine sermon match exists, omit that section naturally.
+
+PUBLISHED-APP ACCEPTANCE TESTS
+
+After implementation, publish and verify on the live mobile app:
+
+ACTIVE JOURNEY:
+- Start a Walk from Next Steps.
+- Confirm it appears on Today’s Steps.
+- Refresh.
+- Sign out/in.
+- Confirm it remains.
+
+ASK EMMAUS:
+Test:
+1. “I have been struggling with anger.”
+2. “I am afraid about the future.”
+3. “How can I pray when I don’t know what to say?”
+4. “Why should I forgive someone who hurt me?”
+
+Pass conditions:
+- Different questions return different relevant resources.
+- Psalm 42 appears only when genuinely relevant.
+- At least one question returns a genuine Pastor Jeremy sermon if relevant indexed sermon data exists.
+- No fabricated content.
+- Internal links work.
+- Current active Walk remains visible throughout testing.
+
+REGRESSION TEST
+
+Add automated coverage for:
+“Started eligible content remains on Today’s Steps until completed, paused, or removed.”
+
+DELIVERY
+
+- Fix only these two regressions.
+- Commit the smallest necessary changes.
+- Report:
+  1. exact root cause of each issue;
+  2. offending commit(s);
+  3. files changed;
+  4. production sermon/index status;
+  5. published-app test evidence;
+  6. any remaining limitation.
+
+Stop after both are verified in the published app.

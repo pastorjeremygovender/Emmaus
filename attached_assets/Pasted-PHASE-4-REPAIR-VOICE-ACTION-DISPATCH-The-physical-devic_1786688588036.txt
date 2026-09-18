@@ -1,0 +1,172 @@
+PHASE 4 — REPAIR VOICE ACTION DISPATCH
+
+The physical-device test proves speech recognition is working correctly.
+
+Example:
+
+User said:
+“please read today’s Psalms daily devotional”
+
+The transcript was correct.
+
+The failure occurs AFTER transcription.
+
+Emmaus did not execute the requested action.
+Instead it sent the request into the conversational Ask Emmaus path and generated a response saying it could not read the devotional aloud.
+
+This is specifically an ACTION DISPATCH / EXECUTION failure.
+
+DO NOT change:
+- speech recognition
+- transcription
+- TTS
+- Voice UI
+- lock-screen/background behaviour
+- Media Session
+- Bible reading
+- Ask Emmaus itself
+- existing content
+- content schemas
+
+FIRST TRACE THIS EXACT PIPELINE:
+
+speech
+→ transcript
+→ classifyIntent()
+→ action dispatcher
+→ resolver
+→ executor
+→ VoiceContentReader
+→ TTS
+
+For the exact transcript:
+
+“please read today’s Psalms daily devotional”
+
+log:
+
+[VOICE ACTION TRACE]
+transcript=
+classifiedIntent=
+confidence=
+actionType=
+contentType=
+titleHint=
+dispatcherMatched=
+resolverCalled=
+resolverResult=
+resolvedContentId=
+resolvedEntryId=
+sectionsCount=
+executorCalled=
+readingStarted=
+fallbackTriggered=
+fallbackReason=
+
+Find the FIRST point where the intended deterministic action is lost.
+
+IMPORTANT RULE:
+
+A recognized deterministic app command must NEVER go to conversational AI merely because execution fails.
+
+Instead:
+
+if intent = read-devotional
+and resolver fails
+
+log:
+
+[VOICE ACTION FAILED]
+reason=...
+
+and give a truthful operational response such as:
+
+“I couldn’t load today’s Psalms devotional.”
+
+Do NOT let Ask Emmaus fabricate:
+“I’m not able to read it aloud.”
+
+IMPLEMENT ONE CENTRAL ACTION DISPATCHER
+
+There should be one clear post-transcription decision point.
+
+Conceptually:
+
+const intent = classifyVoiceIntent(transcript)
+
+if (intent.type === deterministic) {
+    return executeVoiceAction(intent)
+}
+
+return sendToAskEmmaus(...)
+
+Deterministic actions include:
+
+- navigate
+- read-bible
+- read-daily-rhythm
+- read-devotional
+- read-sermon-companion
+- continue-walk
+- reading-control
+- media-control
+
+Conversational AI is ONLY the fallback for genuinely conversational requests.
+
+Do not allow deterministic actions to “fall through” simply because:
+- content resolver returned null
+- title matching failed
+- current entry was not found
+- content sections were empty
+- route action failed
+
+Those are execution errors and should be surfaced/logged as such.
+
+TEST THESE EXACT PHRASES:
+
+1.
+“Open My Bible”
+Expected:
+navigation executes.
+
+2.
+“Read Psalm 23”
+Expected:
+Bible resolver executes and reading starts.
+
+3.
+“Read today’s Psalms Daily Devotional”
+Expected:
+devotional resolver executes and reading starts.
+
+4.
+“Read today’s 10 Minutes with Jesus”
+Expected:
+Daily Rhythm resolver executes and reading starts.
+
+5.
+“Continue my devotional”
+Expected:
+current devotional resolver executes.
+
+6.
+“What does grace mean?”
+Expected:
+ONLY this type of request falls through to Ask Emmaus conversational AI.
+
+For every test provide the ACTION TRACE.
+
+I need proof of:
+
+transcript
+→ classified intent
+→ dispatcher
+→ action executor
+
+not only classifier unit tests.
+
+Do not make any other changes.
+
+Create a checkpoint first.
+
+Fix the dispatcher/execution path and STOP for physical-device testing.

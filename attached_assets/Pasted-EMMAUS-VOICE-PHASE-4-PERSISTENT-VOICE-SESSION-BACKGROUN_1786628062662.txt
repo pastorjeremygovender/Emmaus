@@ -1,0 +1,764 @@
+EMMAUS VOICE — PHASE 4
+PERSISTENT VOICE SESSION + BACKGROUND AUDIO FOUNDATION
+
+IMPORTANT
+
+Phases 1, 2 and 3 are working.
+
+Preserve all existing working behaviour.
+
+DO NOT rebuild:
+- transcription
+- TTS
+- VAD
+- interruption
+- automatic listening restart
+- Ask Emmaus
+- Voice intent classifier
+- Voice content reader
+- Bible/context integration
+- Hear Emmaus
+- existing Voice UI
+
+Create a checkpoint before changing working Voice code.
+
+==================================================
+PHASE 4 GOAL
+==================================================
+
+Emmaus Voice must become a persistent app-level session.
+
+Today the Voice session is still tied too closely to the screen/component that launched it.
+
+Fix this.
+
+Once the user intentionally starts Emmaus Voice:
+
+Voice should remain active while the user navigates around Emmaus.
+
+Example:
+
+User starts Voice Mode.
+
+User:
+"Open My Bible."
+
+Emmaus navigates to My Bible.
+
+Voice remains active.
+
+User:
+"Read Romans 8."
+
+Emmaus reads Romans 8.
+
+User manually opens Today's Steps.
+
+Voice remains active.
+
+User:
+"Read today's 10 Minutes with Jesus."
+
+Emmaus switches context and reads it.
+
+The user should NOT need to restart Emmaus Voice every time the visual route changes.
+
+==================================================
+1. MOVE VOICE SESSION STATE TO APP LEVEL
+==================================================
+
+Audit the current VoiceMode architecture.
+
+Identify which state is currently lost when the Voice component unmounts.
+
+Refactor ONLY the session lifecycle required for persistence.
+
+Create one app-level Voice Session controller/provider/store.
+
+Conceptually:
+
+EmmausVoiceSession
+
+It should own:
+
+- voice session active/inactive
+- listening state
+- thinking state
+- speaking state
+- paused state
+- conversation/session ID
+- current Voice context
+- current Bible context
+- current content context
+- current reading position
+- TTS playback state
+- microphone/recorder lifecycle
+- interruption state
+- navigation-triggered actions
+
+Do not create multiple Voice sessions.
+
+There must be ONE active Emmaus Voice session per app instance.
+
+==================================================
+2. VOICE MODE BECOMES A VIEW, NOT THE ENGINE
+==================================================
+
+The dedicated Voice Mode screen must no longer own the actual Voice engine lifecycle.
+
+It should display/control the app-level Voice session.
+
+Closing the Voice screen should NOT necessarily end Voice.
+
+Distinguish between:
+
+CLOSE VOICE VIEW
+and
+END VOICE SESSION
+
+These are different actions.
+
+Example:
+
+User leaves the Voice screen to see Psalm 23.
+
+The Voice session continues.
+
+User explicitly taps:
+
+End Voice
+
+Then:
+- microphone stops
+- audio stops
+- timers stop
+- Voice session context is closed
+
+==================================================
+3. GLOBAL VOICE INDICATOR
+==================================================
+
+When Emmaus Voice is active but the user is viewing another screen, display a compact persistent Voice indicator.
+
+Example:
+
+Emmaus Voice
+Listening…
+
+or:
+
+Emmaus Voice
+Reading Psalm 23
+
+Keep it subtle.
+
+Possible placement:
+- compact floating pill
+- small bottom bar above app navigation
+
+Do NOT obstruct:
+- Ask Emmaus
+- bottom navigation
+- Bible text
+- important action buttons
+
+Tapping the indicator should reopen the full Voice Mode screen.
+
+==================================================
+4. GLOBAL VOICE CONTROLS
+==================================================
+
+The compact Voice indicator should support only essential controls.
+
+For example:
+
+[ Emmaus Voice — Listening… ]
+
+Tap → reopen Voice Mode
+
+Optional:
+- pause microphone
+- stop speech
+
+Do not clutter the global indicator with every Voice function.
+
+The main Voice screen remains the full control surface.
+
+==================================================
+5. NAVIGATION MUST NOT DESTROY VOICE
+==================================================
+
+Audit all navigation paths triggered by Voice and manually by the user.
+
+Normal internal routing must NOT:
+
+- stop TTS
+- destroy current Voice context
+- terminate the conversation
+- restart the microphone pipeline from scratch
+- create duplicate Audio objects
+- create duplicate MediaRecorder instances
+
+Internal Emmaus navigation should preserve the Voice session.
+
+==================================================
+6. VOICE-INITIATED NAVIGATION
+==================================================
+
+Commands such as:
+
+"Open My Bible."
+
+"Open Today's Steps."
+
+"Show me the devotional."
+
+"Open Discover."
+
+"Show me Psalm 23."
+
+should use the existing router.
+
+After navigation:
+
+Voice remains active.
+
+If Emmaus was speaking:
+continue speaking where technically safe.
+
+If the user was listening:
+preserve appropriate session state.
+
+Do not restart the entire Voice conversation.
+
+==================================================
+7. MANUAL NAVIGATION
+==================================================
+
+This is equally important.
+
+The user may manually tap around Emmaus while Voice is active.
+
+Example:
+
+Voice is active.
+
+User manually taps:
+My Bible.
+
+Voice stays active.
+
+User manually opens Romans 8.
+
+User then says:
+
+"Read this chapter."
+
+Emmaus should understand the newly visible Bible context where available.
+
+Therefore update Voice/App context when relevant route/content changes occur.
+
+Do not require the user to restart Voice to pick up the new visual context.
+
+==================================================
+8. LIVE APP CONTEXT REFRESH
+==================================================
+
+Phase 3 identified that app context may not refresh during the session.
+
+Fix this in Phase 4.
+
+Do NOT repeatedly hammer the backend.
+
+Refresh Voice app context when meaningful events occur, such as:
+
+- route changes
+- Bible chapter changes
+- current translation changes
+- devotional opened
+- Walk/Journey step changes
+- Today's Steps state changes
+- Sermon Companion opened
+
+Prefer event/state-driven updates over constant polling.
+
+==================================================
+9. PRESERVE READING POSITION
+==================================================
+
+If Emmaus is reading structured content and visual navigation occurs, preserve the Voice reading position.
+
+Example:
+
+Emmaus is reading:
+
+10 Minutes with Jesus
+Reflection section
+
+User opens My Bible.
+
+Voice should not automatically reset the devotional reading position.
+
+If the user says:
+
+"Continue."
+
+Emmaus should know which active Voice reading task "continue" refers to.
+
+If the user deliberately starts a new reading task, update the active reading context.
+
+==================================================
+10. PAUSE VS END
+==================================================
+
+Create clear semantics.
+
+PAUSE VOICE:
+- stop listening
+- optionally pause current speech
+- preserve session/context
+
+RESUME:
+- resume the same Voice session
+
+END VOICE:
+- stop recording
+- stop playback
+- clean up audio resources
+- close session
+- clear transient Voice state
+
+The user should be able to pause Voice without losing the conversation.
+
+==================================================
+11. PAGE VISIBILITY / APP BACKGROUND
+==================================================
+
+Add safe handling for browser visibility changes.
+
+When the browser/app becomes hidden or backgrounded:
+
+Do NOT immediately destroy the Voice session.
+
+However:
+
+Microphone behaviour must respect browser/platform limitations.
+
+If recording is suspended by the OS/browser:
+- detect it
+- preserve session state
+- display a useful state when the user returns
+
+Do not silently create broken listening loops.
+
+==================================================
+12. BACKGROUND AUDIO FOUNDATION
+==================================================
+
+Where supported by the current browser/PWA environment, allow existing Emmaus speech/content audio playback to continue when the user:
+
+- switches to another screen inside Emmaus
+- minimizes the browser
+- locks the screen where browser policy permits
+
+Do NOT claim full native background support if the browser does not permit it.
+
+Implement the best supported web/PWA behaviour and report limitations accurately.
+
+Do not introduce hacks that violate browser security/autoplay policies.
+
+==================================================
+13. MEDIA SESSION API
+==================================================
+
+Investigate using the browser Media Session API for long-form Emmaus reading/audio where supported.
+
+If appropriate, integrate:
+
+metadata:
+- title
+- content type
+- current Scripture/devotional title
+
+controls:
+- play
+- pause
+- stop
+- next section where meaningful
+- previous section where meaningful
+
+Examples:
+
+Title:
+Psalm 23
+
+or:
+
+10 Minutes with Jesus — Day 12
+
+This should support lock-screen/media controls where the browser/device allows it.
+
+Feature-detect support.
+
+Do not make Voice dependent on Media Session API.
+
+==================================================
+14. BLUETOOTH / HEADPHONES / CAR AUDIO
+==================================================
+
+Do not build proprietary Bluetooth code.
+
+Use normal browser/system audio routing.
+
+Test that Emmaus audio works through:
+
+- phone speaker
+- wired headphones where available
+- Bluetooth headphones
+- Bluetooth speaker
+- car Bluetooth where practical
+
+Media controls should behave using standard platform APIs where supported.
+
+Do not hardcode specific device types.
+
+==================================================
+15. AUDIO FOCUS
+==================================================
+
+Ensure only one Emmaus audio output is active.
+
+If another Emmaus Voice/TTS request starts:
+
+stop or supersede the previous one appropriately.
+
+Do not allow:
+- multiple TTS responses talking simultaneously
+- Hear Emmaus playback overlapping Voice Mode
+- duplicated content reader playback
+
+The app-level Voice Session should own active Voice/TTS playback.
+
+==================================================
+16. GLOBAL INTERRUPTION
+==================================================
+
+Interruption must still work after navigation.
+
+Example:
+
+Emmaus is reading Romans 8.
+
+User navigates to Today's Steps.
+
+Emmaus continues speaking.
+
+User taps the global Voice indicator or microphone and interrupts.
+
+Current speech stops immediately.
+
+Listening begins.
+
+This must work no matter which Emmaus screen is visible.
+
+==================================================
+17. CURRENT VISUAL CONTEXT
+==================================================
+
+When useful, the Voice Session should know what the user is currently viewing.
+
+Examples:
+
+Bible:
+Romans 8
+
+Daily Devotional:
+Psalms Daily Devotional — current entry
+
+Walk:
+The Road to Emmaus — Step 3
+
+This should enrich natural commands such as:
+
+"Read this."
+
+"Explain this."
+
+"Read that verse again."
+
+"What does this mean?"
+
+Do not override explicit Voice context incorrectly.
+
+==================================================
+18. RETURN TO VOICE VIEW
+==================================================
+
+Support:
+
+"Go back to Voice."
+
+or:
+
+"Show Voice."
+
+This should reopen the dedicated Voice Mode UI without resetting the Voice session.
+
+==================================================
+19. SESSION SURVIVAL
+==================================================
+
+Normal component rerenders must not create a new Voice session.
+
+Normal SPA route changes must not create a new Voice session.
+
+If the browser performs a FULL page reload, it is acceptable for active microphone/audio runtime state to end.
+
+Do not attempt unsafe restoration of an active microphone after full reload.
+
+Conversation history/session metadata may still persist using the existing system where appropriate.
+
+==================================================
+20. CLEANUP
+==================================================
+
+When Voice is explicitly ended:
+
+clean up all:
+
+- microphone tracks
+- MediaRecorder
+- Audio objects
+- object URLs
+- speech streams
+- timers
+- VAD listeners
+- page visibility listeners owned by the session
+- Media Session handlers
+- pending TTS requests where cancellable
+- reading timers
+
+Verify no microphone indicator remains active after End Voice.
+
+==================================================
+21. MOBILE UI
+==================================================
+
+Test the persistent Voice indicator at realistic mobile widths.
+
+It must not overlap:
+
+- bottom nav
+- Ask Emmaus floating button
+- content text
+- primary CTA buttons
+- browser safe areas
+
+Use safe-area handling where appropriate.
+
+==================================================
+22. DO NOT BUILD WAKE WORD YET
+==================================================
+
+Do NOT implement in Phase 4:
+
+- "Hey Emmaus"
+- wake word detection
+- always-listening outside an active Voice session
+- background microphone service
+- native Android foreground service
+- native iOS background microphone
+- smart glasses
+- watches
+- Group Voice
+- LiveKit Voice agent
+
+Those are later phases.
+
+==================================================
+23. DO NOT MAKE UNSUPPORTED CLAIMS
+==================================================
+
+This is currently running in a web/PWA environment.
+
+Browser and OS restrictions may limit:
+
+- microphone access while backgrounded
+- automatic listening on lock screen
+- background execution
+- iOS Safari audio behaviour
+- Android browser process suspension
+
+Implement what is properly supported.
+
+Document what requires a future native app implementation.
+
+Do NOT simulate unsupported behaviour.
+
+==================================================
+24. EXACT QA TEST
+==================================================
+
+Test this end-to-end on mobile:
+
+TEST 1 — SESSION SURVIVES NAVIGATION
+
+Start Voice.
+
+Say:
+"Open My Bible."
+
+Expected:
+My Bible opens.
+Voice remains active.
+
+Say:
+"Read Romans 8."
+
+Expected:
+Emmaus reads Romans 8.
+
+TEST 2 — MANUAL NAVIGATION
+
+While Voice is still active:
+
+manually tap Today's Steps.
+
+Expected:
+Voice session remains alive.
+
+Say:
+"What's on this page?"
+
+Expected:
+Emmaus has refreshed context appropriately.
+
+TEST 3 — CONTENT SWITCH
+
+Say:
+"Read today's 10 Minutes with Jesus."
+
+Expected:
+Emmaus switches from Bible context to the real current Daily Rhythm content.
+
+TEST 4 — INTERRUPT AFTER NAVIGATION
+
+While Emmaus is reading:
+interrupt it.
+
+Expected:
+speech stops.
+Emmaus listens.
+
+TEST 5 — PAUSE
+
+Say:
+"Pause Voice."
+
+Expected:
+Voice session remains but microphone is not actively listening.
+
+Resume.
+
+Expected:
+same conversation/context continues.
+
+TEST 6 — GLOBAL INDICATOR
+
+Navigate through:
+Today's Steps
+My Bible
+Discover
+My Journey
+
+Expected:
+one compact Voice indicator remains available throughout.
+
+Tap it.
+
+Expected:
+Voice Mode reopens with the same session.
+
+TEST 7 — BACKGROUND AUDIO
+
+Start reading a longer piece of content.
+
+Minimize/background the browser.
+
+Expected:
+audio continues where the platform supports it.
+
+Record actual browser/device behaviour.
+
+TEST 8 — LOCK SCREEN
+
+Where supported:
+lock phone during long-form reading.
+
+Record:
+- whether audio continues
+- whether lock-screen media controls appear
+- which controls work
+
+Do not mark a failure as fixed by pretending unsupported browser behaviour works.
+
+TEST 9 — END
+
+End Voice.
+
+Expected:
+all microphone/audio activity terminates.
+Global indicator disappears.
+No Voice session remains active.
+
+==================================================
+25. REGRESSION TEST PHASES 1–3
+==================================================
+
+Verify:
+
+- transcription
+- normal Ask Emmaus conversation
+- automatic TTS
+- auto-restart
+- interruption
+- Bible reading
+- Bible context
+- Daily Rhythm
+- Daily Devotional
+- Walk/Journey
+- Sermon Companion
+- Today's Steps
+- navigation commands
+- content reader pause/continue/repeat
+- Hear Emmaus
+- ordinary text Ask Emmaus
+
+Do not sacrifice existing behaviour for persistence.
+
+==================================================
+26. PHASE 4 QA REPORT
+==================================================
+
+Before marking complete, report:
+
+1. Existing Voice lifecycle problem discovered.
+2. App-level Voice Session architecture implemented.
+3. Components/state moved or refactored.
+4. How duplicate microphone/TTS instances are prevented.
+5. How route changes update Voice context.
+6. How manual navigation is detected.
+7. Pause/resume behaviour.
+8. Media Session API support implemented.
+9. Android Chrome behaviour.
+10. iPhone Safari behaviour if tested.
+11. Background audio test results.
+12. Lock-screen test results.
+13. Bluetooth/headphone test results where tested.
+14. Browser/platform limitations.
+15. Which capabilities will require the future native app.
+16. Full regression results for Phases 1–3.
+
+Then STOP.
+
+Do not begin Phase 5 without approval.

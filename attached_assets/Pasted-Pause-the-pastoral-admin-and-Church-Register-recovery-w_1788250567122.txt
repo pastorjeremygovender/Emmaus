@@ -1,0 +1,58 @@
+Pause the pastoral-admin and Church Register recovery work. We now need to prepare yesterday’s important user-feedback fixes for production.
+
+Do not publish or deploy automatically.
+
+First protect the current work:
+
+- Confirm the current branch is codex/pastoral-admin-simplification.
+- Run git diff --check.
+- Commit all current pastoral-admin source changes locally with the message:
+  Checkpoint simplified pastoral person record
+- Do not include generated files, logs, secrets, credentials or database data.
+- Report the checkpoint commit ID.
+- Confirm the working tree is clean.
+
+Then switch locally to development/next-phase.
+
+Do not fetch, pull, push, merge, reset, rebase or delete any branch. GitHub authentication is currently unreliable, so use only the existing local development/next-phase branch.
+
+On development/next-phase:
+
+- Confirm the working tree is clean.
+- Identify the commits and changed files added since the last production deployment.
+- Confirm that the pending user-feedback work includes these required fixes:
+
+1. App loads correctly without the reported startup failure.
+2. Bible has not been changed from NIV to BSB, and NIV remains the intended default where licensing/configuration permits.
+3. Daily Rhythm advances according to the calendar day rather than requiring Finished to be pressed.
+4. Users can review every Daily Rhythm day made available since joining, including days they opened but did not mark Finished.
+5. Future Daily Rhythm days remain unavailable.
+6. The daily reminder is not incorrectly suppressed because the previous day was merely opened.
+7. “The Govender Family” is removed as the default group-name example.
+8. Emmaus image generation opens with a completely blank prompt field.
+9. Previous group-chat messages do not flash briefly when opening another/current chat.
+10. Existing Bible access, Groups, meetings, discipleship progress and authentication are not regressed.
+
+Run:
+
+- Full relevant typechecks
+- Full recursive production builds
+- git diff --check
+- Existing focused tests for Daily Rhythm, Bible selection, Groups/chat and image generation
+- A production-mode startup smoke test for the API and web app
+
+Do not modify production data.
+Do not run the Church Register recovery.
+Do not include or merge the pastoral-admin branch.
+Do not publish yet.
+
+Report:
+
+- Current branch and commit ID
+- Last known deployed commit if available
+- Exact commits waiting to be published
+- Pass/fail for every required user-feedback item
+- Build and test results
+- Database migration or environment-variable requirements
+- Whether development/next-phase is safe to publish
+- The exact Replit publishing action I should take only after all checks pass

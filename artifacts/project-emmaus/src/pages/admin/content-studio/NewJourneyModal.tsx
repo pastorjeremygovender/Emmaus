@@ -1,25 +1,16 @@
 /**
- * NewJourneyModal — 3-step creation wizard
+ * NewJourneyModal — 2-step creation wizard
  *
  * Step 1  Choose creation method: Build with Emmaus AI | Start from Scratch
- * Step 2  Choose content type  (6 options as selectable cards)
- * Step 3  Journey Details      (title, description, collection, journey type, estimated length)
+ * Step 2  Walk Details  (title, description, collection, walk type, estimated length)
  *
- * AI path    → JourneyBuilderWizard starting at screen 1, title + contentType pre-filled
+ * AI path    → JourneyBuilderWizard (content type defaulted to 'daily-devotional')
  * Scratch    → addJourney() → onCreated()
- *
- * Design rules (this is the reference pattern for all Emmaus creation workflows):
- *  • Modal always fits the viewport at 1366×768 minimum — max-h = 100dvh − padding
- *  • Only the content area scrolls; header and footer are always visible
- *  • Header: ← Back | Step title | ✕ Close — all three always present
- *  • Footer:  single primary CTA, full width, sticky
- *  • Selectable cards, not dense lists; larger text, higher contrast
  */
 
 import React, { useEffect, useState } from 'react';
 import {
-  X, Sparkles, PenLine, BookOpen, Headphones, Heart,
-  Users, Layers, ArrowLeft, ArrowRight, Loader2,
+  X, Sparkles, PenLine, ArrowLeft, ArrowRight, Loader2,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,31 +27,12 @@ interface Props {
   defaultCollectionId?: string;
 }
 
-type WizardStep      = 1 | 2 | 3;
-type CreationMethod  = 'ai' | 'scratch';
+type WizardStep     = 1 | 2;
+type CreationMethod = 'ai' | 'scratch';
 
-// ─── Content types ────────────────────────────────────────────────────────────
-
-const CONTENT_TYPES = [
-  { id: 'daily-devotional', label: 'Daily Devotional', Icon: BookOpen,   desc: 'Scripture, reflection, and prayer — one step per day' },
-  { id: 'bible-study',      label: 'Bible Study',       Icon: Layers,     desc: 'Observation, interpretation, and application' },
-  { id: 'prayer-journey',   label: 'Prayer Journey',    Icon: Heart,      desc: 'Guided prayer practices and contemplative steps' },
-  { id: 'sermon-companion', label: 'Sermon Companion',  Icon: Headphones, desc: 'Deepens a specific message or series' },
-  { id: 'small-group',      label: 'Small Group',       Icon: Users,      desc: 'Discussion questions and group activities' },
-  { id: 'core',             label: 'Core Journey',      Icon: PenLine,    desc: 'Foundational faith formation curriculum' },
-] as const;
-
-/** Map content type → sensible default journeyType for the Journey model */
-const CT_TO_JOURNEY_TYPE: Record<string, string> = {
-  'daily-devotional': 'core',
-  'bible-study':      'series',
-  'prayer-journey':   'core',
-  'sermon-companion': 'companion',
-  'small-group':      'course',
-  'core':             'core',
-};
-
-const JOURNEY_TYPE_OPTIONS = ['core', 'companion', 'series', 'course'];
+// Walks created from this modal are always journeyType='walk'.
+// The sub-type options below are retired — journeyType is not used for
+// sub-classification anywhere in the product.
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -68,9 +40,8 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
   const { user }       = useAuth();
   const { addJourney } = useJourney();
 
-  const [step,        setStep]        = useState<WizardStep>(1);
-  const [method,      setMethod]      = useState<CreationMethod | null>(null);
-  const [contentType, setContentType] = useState('daily-devotional');
+  const [step,   setStep]   = useState<WizardStep>(1);
+  const [method, setMethod] = useState<CreationMethod | null>(null);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [launchBuilder, setLaunchBuilder] = useState(false);
 
@@ -78,7 +49,7 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
     title:           '',
     description:     '',
     collectionId:    defaultCollectionId ?? '',
-    journeyType:     'core',
+    journeyType:     'walk',
     estimatedLength: '',
   });
   const [saving, setSaving] = useState(false);
@@ -91,22 +62,16 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
   const patchForm = (k: keyof typeof form, v: string) =>
     setForm(f => ({ ...f, [k]: v }));
 
-  /** Selecting a content type also updates the journeyType suggestion */
-  const handleContentTypeSelect = (id: string) => {
-    setContentType(id);
-    setForm(f => ({ ...f, journeyType: CT_TO_JOURNEY_TYPE[id] ?? 'core' }));
-  };
-
-  // ── Navigation ─────────────────────────────────────────────────────────────
+  // ── Navigation ──────────────────────────────────────────────────────────────
 
   const handleBack = () => {
     if (step === 1) { onClose(); return; }
     setError('');
-    setStep(s => (s - 1) as WizardStep);
+    setStep(1);
   };
 
   const handlePrimaryAction = () => {
-    if (step < 3)             { setStep(s => (s + 1) as WizardStep); return; }
+    if (step === 1) { setStep(2); return; }
     if (method === 'scratch') { handleCreate(); return; }
     setLaunchBuilder(true);
   };
@@ -129,19 +94,17 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
       });
       onCreated(created.id);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to create journey');
+      setError(e instanceof Error ? e.message : 'Failed to create walk');
       setSaving(false);
     }
   };
 
   // ── Builder hand-off ────────────────────────────────────────────────────────
-  // Hand off to JourneyBuilderWizard at screen 1 (skipping its own Step 1
-  // since we already collected content type + title in our wizard).
 
   if (launchBuilder) {
     return (
       <JourneyBuilderWizard
-        initialContentType={contentType}
+        initialContentType="daily-devotional"
         initialTitle={form.title}
         initialScreen={1}
         userId={user?.id}
@@ -155,25 +118,23 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
   // ── Derived values ──────────────────────────────────────────────────────────
 
   const STEP_TITLES: Record<WizardStep, string> = {
-    1: 'Create a Journey',
-    2: 'Choose Content Type',
-    3: 'Journey Details',
+    1: 'Create a Walk',
+    2: 'Walk Details',
   };
 
   const primaryDisabled =
     (step === 1 && method === null) ||
-    (step === 3 && (!form.title.trim() || saving));
+    (step === 2 && (!form.title.trim() || saving));
 
   const primaryLabel = (): React.ReactNode => {
-    if (step < 3)             return <><span>Continue</span><ArrowRight size={15} /></>;
-    if (saving)               return <><Loader2 size={15} className="animate-spin" /><span>Creating…</span></>;
-    if (method === 'ai')      return <><span>Build with Emmaus AI</span><Sparkles size={15} /></>;
-    return <span>Create Journey</span>;
+    if (step === 1)          return <><span>Continue</span><ArrowRight size={15} /></>;
+    if (saving)              return <><Loader2 size={15} className="animate-spin" /><span>Creating…</span></>;
+    if (method === 'ai')     return <><span>Build with Emmaus AI</span><Sparkles size={15} /></>;
+    return <span>Create Walk</span>;
   };
 
-  // Footer button colour: teal for AI / steps 1-2, dark for Scratch Step 3
   const footerBg =
-    step === 3 && method === 'scratch'
+    step === 2 && method === 'scratch'
       ? 'bg-gray-900 hover:bg-gray-800 text-white'
       : 'bg-teal-600 hover:bg-teal-700 text-white';
 
@@ -183,9 +144,8 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[calc(100dvh-2rem)]">
 
-        {/* ── Header — always visible ──────────────────────────────────────── */}
+        {/* Header */}
         <div className="flex-shrink-0 flex items-center px-5 pt-5 pb-4 border-b border-gray-100">
-          {/* Back / Cancel — fixed width so title stays centred */}
           <button
             onClick={handleBack}
             aria-label={step === 1 ? 'Close' : 'Back'}
@@ -195,12 +155,10 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
             {step === 1 ? 'Cancel' : 'Back'}
           </button>
 
-          {/* Step title — centred */}
           <h2 className="flex-1 text-[15px] font-semibold text-gray-900 text-center">
             {STEP_TITLES[step]}
           </h2>
 
-          {/* Close — fixed width, right-aligned */}
           <div className="w-20 flex-shrink-0 flex justify-end">
             <button
               onClick={onClose}
@@ -212,28 +170,28 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
           </div>
         </div>
 
-        {/* ── Step progress — 3 pills ──────────────────────────────────────── */}
+        {/* Progress pills — 2 steps */}
         <div className="flex-shrink-0 flex items-center gap-1.5 px-5 pt-3.5 pb-1">
-          {([1, 2, 3] as WizardStep[]).map(s => (
+          {([1, 2] as WizardStep[]).map(s => (
             <div
               key={s}
               className={`h-[3px] rounded-full flex-1 transition-all duration-300 ${
-                s <= step ? 'bg-teal-500' : 'bg-gray-200'
+                s <= step
+                  ? method === 'scratch' ? 'bg-gray-800' : 'bg-teal-500'
+                  : 'bg-gray-200'
               }`}
             />
           ))}
         </div>
 
-        {/* ── Scrollable content ───────────────────────────────────────────── */}
+        {/* Scrollable content */}
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
 
-          {/* ╔══════════════════════════════════════════════════════════════╗
-              ║ Step 1 — Choose creation method                              ║
-              ╚══════════════════════════════════════════════════════════════╝ */}
+          {/* ── Step 1 — Choose method ──────────────────────────────────────── */}
           {step === 1 && (
             <div className="space-y-3">
               <p className="text-[13px] text-gray-500 leading-relaxed mb-2">
-                How would you like to create this journey?
+                How would you like to create this walk?
               </p>
 
               {/* Build with AI */}
@@ -266,7 +224,7 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
                   )}
                 </div>
                 <p className="text-[13px] text-gray-600 leading-relaxed">
-                  Answer a few questions and Emmaus creates a complete journey — real Scripture, real sermon sources, structured steps. Always saved as Draft for you to review.
+                  Answer a few questions and Emmaus creates a complete walk — real Scripture, real sermon sources, structured steps. Always saved as Draft for you to review.
                 </p>
               </button>
 
@@ -300,62 +258,20 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
                   )}
                 </div>
                 <p className="text-[13px] text-gray-600 leading-relaxed">
-                  Create an empty journey and build your steps using the block editor. Full creative control from the very first word.
+                  Create an empty walk and build your steps using the block editor. Full creative control from the very first word.
                 </p>
               </button>
             </div>
           )}
 
-          {/* ╔══════════════════════════════════════════════════════════════╗
-              ║ Step 2 — Choose content type                                 ║
-              ╚══════════════════════════════════════════════════════════════╝ */}
+          {/* ── Step 2 — Walk details ───────────────────────────────────────── */}
           {step === 2 && (
-            <div>
-              <p className="text-[13px] text-gray-500 leading-relaxed mb-4">
-                What kind of journey is this?
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                {CONTENT_TYPES.map(({ id, label, Icon, desc }) => {
-                  const selected = contentType === id;
-                  return (
-                    <button
-                      key={id}
-                      onClick={() => handleContentTypeSelect(id)}
-                      className={`p-4 rounded-2xl border-2 text-left transition-all ${
-                        selected
-                          ? 'border-teal-500 bg-teal-50/80'
-                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 transition-colors ${
-                        selected ? 'bg-teal-500' : 'bg-gray-100'
-                      }`}>
-                        <Icon size={15} className={selected ? 'text-white' : 'text-gray-500'} />
-                      </div>
-                      <p className={`text-[13px] font-semibold leading-tight mb-1 ${
-                        selected ? 'text-teal-700' : 'text-gray-900'
-                      }`}>
-                        {label}
-                      </p>
-                      <p className="text-[11px] text-gray-500 leading-relaxed">{desc}</p>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ╔══════════════════════════════════════════════════════════════╗
-              ║ Step 3 — Journey details                                     ║
-              ╚══════════════════════════════════════════════════════════════╝ */}
-          {step === 3 && (
             <div className="space-y-4">
 
               {/* Title */}
               <div>
                 <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                  Title
-                  <span className="text-red-500 ml-0.5">*</span>
+                  Title <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -377,44 +293,30 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
                 <textarea
                   value={form.description}
                   onChange={e => patchForm('description', e.target.value)}
-                  placeholder="A short description for this journey…"
+                  placeholder="A short description for this walk…"
                   rows={2}
                   className="w-full px-3.5 py-2.5 text-[14px] text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent resize-none"
                 />
               </div>
 
-              {/* Collection + Journey Type */}
-              <div className="grid grid-cols-2 gap-3">
-                {collections.length > 0 && (
-                  <div>
-                    <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                      Journey
-                    </label>
-                    <select
-                      value={form.collectionId}
-                      onChange={e => patchForm('collectionId', e.target.value)}
-                      className="w-full px-3 py-2.5 text-[13px] text-gray-900 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
-                    >
-                      <option value="">None</option>
-                      {collections.map(c => (
-                        <option key={c.id} value={c.id}>{c.title}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                <div className={collections.length === 0 ? 'col-span-2' : ''}>
+              {/* Collection */}
+              {collections.length > 0 && (
+                <div>
                   <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                    Journey Type
+                    Collection
                   </label>
                   <select
-                    value={form.journeyType}
-                    onChange={e => patchForm('journeyType', e.target.value)}
+                    value={form.collectionId}
+                    onChange={e => patchForm('collectionId', e.target.value)}
                     className="w-full px-3 py-2.5 text-[13px] text-gray-900 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
                   >
-                    {JOURNEY_TYPE_OPTIONS.map(o => <option key={o}>{o}</option>)}
+                    <option value="">None</option>
+                    {collections.map(c => (
+                      <option key={c.id} value={c.id}>{c.title}</option>
+                    ))}
                   </select>
                 </div>
-              </div>
+              )}
 
               {/* Estimated length */}
               <div>
@@ -440,7 +342,7 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
           )}
         </div>
 
-        {/* ── Footer — always visible ──────────────────────────────────────── */}
+        {/* Footer */}
         <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100">
           <button
             onClick={handlePrimaryAction}

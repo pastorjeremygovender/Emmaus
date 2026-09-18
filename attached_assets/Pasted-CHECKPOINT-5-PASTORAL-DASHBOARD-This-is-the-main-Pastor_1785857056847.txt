@@ -1,0 +1,343 @@
+CHECKPOINT 5 — PASTORAL DASHBOARD
+
+This is the main Pastor Dashboard for Emmaus.
+
+Do NOT replace the existing Dashboard.
+
+Extend it into a true discipleship dashboard.
+
+DESIGN GOALS
+
+This dashboard should answer one question:
+
+"How are our people doing spiritually?"
+
+NOT
+
+"How many users do we have?"
+
+The dashboard should be clean, modern and information-rich without becoming cluttered.
+
+----------------------------------------------------
+
+SECTION 1
+
+TODAY
+
+Large cards across the top.
+
+• Church Attendance Today
+Present / Expected
+
+Example
+
+342 / 389
+
+----------------
+
+• Active Walks
+
+Currently in progress
+
+----------------
+
+• Daily Rhythm Today
+
+Completed today
+
+----------------
+
+• Prayer Requests
+
+Open
+
+----------------
+
+• New People This Week
+
+Visitors
+New Emmaus accounts
+
+----------------
+
+• People Needing Follow-up
+
+(red badge)
+
+----------------------------------------------------
+
+SECTION 2
+
+CARE SIGNALS
+
+This is the heart of the dashboard.
+
+Display as cards.
+
+Example
+
+⚠ Attendance dropped
+
+Jeremy Govender
+
+Expected Sunday attendance
+
+Missed 3 of last 4
+
+Last seen:
+12 days ago
+
+Button
+
+View Profile
+
+--------------------------------
+
+⚠ Daily Rhythm stopped
+
+Stopped 11 days ago
+
+--------------------------------
+
+⚠ Walk abandoned
+
+Prayer Walk
+
+Stopped at Day 4
+
+--------------------------------
+
+⚠ Made Free participant inactive
+
+--------------------------------
+
+⚠ Prayer request unanswered
+
+--------------------------------
+
+⚠ New believer
+
+Completed
+Coming to Jesus
+
+Needs follow-up
+
+--------------------------------
+
+Allow:
+
+Dismiss
+
+Snooze
+
+Mark Followed Up
+
+Open Profile
+
+----------------------------------------------------
+
+SECTION 3
+
+DISCIPLESHIP MOVEMENT
+
+Show growth this month.
+
+Cards.
+
+People who:
+
+Started Walks
+
+Completed Walks
+
+Started Rooms
+
+Joined Rooms
+
+Completed Daily Rhythm
+
+Finished Made Free
+
+Started Serving
+
+Baptised
+
+Each card opens filtered lists.
+
+----------------------------------------------------
+
+SECTION 4
+
+ENGAGEMENT
+
+Graphs.
+
+Attendance
+
+Last 12 Sundays
+
+Daily Rhythm activity
+
+Last 30 days
+
+Walk starts
+
+Walk completions
+
+Room activity
+
+Prayer requests
+
+----------------------------------------------------
+
+SECTION 5
+
+NEW BELIEVERS
+
+Dedicated panel.
+
+Recently completed:
+
+Coming to Jesus
+
+First Prayer Walk
+
+First Daily Rhythm
+
+Needs baptism
+
+Needs Room
+
+Needs follow-up
+
+----------------------------------------------------
+
+SECTION 6
+
+RECENT ACTIVITY
+
+Timeline.
+
+Newest first.
+
+Jeremy
+
+Completed Day 5
+
+Started Prayer Walk
+
+Joined Men's Room
+
+Submitted prayer request
+
+Completed Made Free
+
+Attendance recorded
+
+etc.
+
+----------------------------------------------------
+
+SECTION 7
+
+FOLLOW-UP QUEUE
+
+Table.
+
+Person
+
+Reason
+
+Priority
+
+Assigned To
+
+Last Contact
+
+Next Follow-up
+
+Buttons
+
+Open
+
+Complete
+
+Reschedule
+
+----------------------------------------------------
+
+SECTION 8
+
+QUICK ACTIONS
+
+Buttons
+
+Record Attendance
+
+Create Session
+
+New Journey
+
+Process Sermon
+
+View Care Signals
+
+Search Person
+
+----------------------------------------------------
+
+SECTION 9
+
+SEARCH
+
+Universal search bar.
+
+Search:
+
+Person
+
+Walk
+
+Room
+
+Meeting
+
+Sermon
+
+Prayer request
+
+----------------------------------------------------
+
+LIVE UPDATES
+
+Dashboard should refresh automatically every 30 seconds.
+
+No page reload.
+
+----------------------------------------------------
+
+PERFORMANCE
+
+Each dashboard widget loads independently.
+
+One slow query must never block the rest.
+
+Use separate React query hooks for every card.
+
+----------------------------------------------------
+
+MOBILE
+
+Collapse sections into stacked cards.
+
+Graphs become swipeable.
+
+Timeline becomes accordion.
+
+----------------------------------------------------
+
+Do not use placeholder data if real data exists.
+
+Use existing Care Signals, Attendance, Journey Progress, Daily Rhythm, Rooms, Sermons and Prayer Requests.
+
+Build this as the permanent Pastor Dashboard for Emmaus.

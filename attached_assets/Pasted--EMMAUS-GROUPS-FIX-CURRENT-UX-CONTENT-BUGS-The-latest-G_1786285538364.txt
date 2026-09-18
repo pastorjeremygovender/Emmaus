@@ -1,0 +1,268 @@
+# EMMAUS GROUPS — FIX CURRENT UX + CONTENT BUGS
+
+The latest Groups build still has several confusing behaviors.
+
+Fix these WITHOUT redesigning the backend or adding new features.
+
+==================================================
+1. REMOVE AMBIGUOUS "MEETING ACTIVE"
+==================================================
+
+The Group currently displays:
+
+"Meeting active"
+
+This is confusing.
+
+A meeting state should exist only when the Group Leader has deliberately pressed:
+
+Start Meeting
+
+Before that, the Group is simply in preparation mode.
+
+Use these states only:
+
+PREPARATION
+No meeting-status banner required.
+
+MEETING STARTED
+Display:
+
+Meeting in Progress
+
+Leader sees:
+
+End Meeting
+
+After End Meeting:
+Return to normal preparation/follow-up Group view.
+
+Do not automatically mark a Group as meeting-active when:
+
+- Discussion is opened
+- Content is opened
+- Leader controls are opened
+- A page refresh occurs
+
+Meeting state must only change from explicit Start Meeting / End Meeting actions.
+
+==================================================
+2. DISCUSSION SHOULD NOT BE A DROPDOWN SECTION
+==================================================
+
+Remove the expandable/collapsible arrow from the Discussion heading.
+
+Do not make Discussion behave like an accordion.
+
+Display a normal card:
+
+GROUP DISCUSSION
+
+Talk together about today's study.
+
+Open →
+
+Tapping opens the Group Discussion experience.
+
+Opening discussion must NOT automatically start a Meeting.
+
+Returning from Discussion must return cleanly to the same Group page and scroll position.
+
+==================================================
+3. FIX LEADER CONTROLS PANEL
+==================================================
+
+The current Controls screen/modal is taller than the viewport and gets cut off.
+
+It also has no obvious Back/Close navigation.
+
+Fix it.
+
+Leader Controls must:
+
+- Fit within the viewport
+- Be vertically scrollable when needed
+- Never extend underneath the bottom navigation
+- Have a clear header:
+
+← Leader Controls
+
+or
+
+X Leader Controls
+
+- Allow the user to close it at any time
+- Return to the Group exactly where they were
+
+On desktop:
+Use a centered modal/panel with a maximum height and internal scrolling.
+
+On mobile:
+Use a full-height sheet/page with a sticky header and Back/Close control.
+
+Never leave the user trapped inside Controls.
+
+==================================================
+4. SIMPLIFY LEADER CONTROLS
+==================================================
+
+Do not show every future tool as a giant grid.
+
+For now group the controls naturally:
+
+MEETING
+- Start Meeting / End Meeting
+
+CONTENT
+- Open Today's Study
+- Previous Step
+- Next Step
+- Present Bible
+
+DISCUSSION
+- Open Discussion
+- Prayer Time
+- Launch Poll
+- Ask Emmaus Together
+
+Only show actions that currently work.
+
+Do not show unfinished features.
+
+==================================================
+5. FIX CONTENT AUTO-ADDING BUG
+==================================================
+
+Critical:
+
+When I add a Walk to a Group, Emmaus is automatically adding:
+
+10 Minutes with Jesus
+
+This is incorrect.
+
+A Group must contain ONLY content deliberately selected by the Group Leader.
+
+If I add:
+
+The Road to Emmaus
+
+the Group should contain:
+
+The Road to Emmaus
+
+ONLY.
+
+Do not automatically add:
+
+10 Minutes with Jesus
+Daily Rhythm
+Default Walks
+Recommended content
+Seed content
+
+Audit the Group-content creation/update logic and identify why 10 Minutes with Jesus is being inserted automatically.
+
+Remove that behavior at the source.
+
+Do not merely hide the card in the UI.
+
+Existing Groups containing accidentally inserted 10 Minutes with Jesus should be cleaned up carefully without deleting legitimate user progress outside the Group.
+
+==================================================
+6. ONE PRIMARY ASSIGNED STUDY
+==================================================
+
+For now, each Group should have ONE primary assigned piece of content at a time.
+
+Examples:
+
+Walk
+Journey
+Daily Devotional
+
+The Group home should clearly show:
+
+TODAY'S STUDY
+
+The Road to Emmaus
+
+Step 2 of 3
+
+Open Study →
+
+Leader may later replace/change the assigned study deliberately.
+
+Do not silently attach extra content.
+
+==================================================
+7. GROUP HOME ORDER
+==================================================
+
+Keep the Group home simple.
+
+Recommended order:
+
+Group Name
+
+Today's Study
+
+Leader's Note
+
+Group Members / Preparation Status
+
+Next Meeting
+
+Group Discussion
+
+Prayer Requests
+
+Group Notes
+
+Ask Emmaus
+
+Leader-only controls should NOT dominate the page.
+
+==================================================
+8. NAVIGATION STANDARD
+==================================================
+
+Every secondary Group screen must have obvious Back/Close navigation.
+
+This includes:
+
+Leader Controls
+Discussion
+Prayer Requests
+Group Notes
+Polls
+Meeting scheduling
+Content selection
+
+Never rely on browser Back as the only way out.
+
+Never open a panel the user cannot visibly close.
+
+==================================================
+9. TEST THESE EXACT CASES
+==================================================
+
+Test:
+
+1. Open Group.
+2. Confirm no "Meeting active" banner exists unless Start Meeting was explicitly pressed.
+3. Add The Road to Emmaus.
+4. Confirm ONLY The Road to Emmaus is added.
+5. Confirm 10 Minutes with Jesus is NOT automatically added.
+6. Open Discussion.
+7. Confirm meeting state does not change.
+8. Return from Discussion.
+9. Open Leader Controls.
+10. Confirm entire Controls interface is usable and scrollable.
+11. Confirm clear Back/Close navigation.
+12. Start Meeting.
+13. Confirm "Meeting in Progress" appears.
+14. End Meeting.
+15. Confirm meeting state clears immediately.
+
+Report the root cause of the automatic 10 Minutes with Jesus insertion when complete.

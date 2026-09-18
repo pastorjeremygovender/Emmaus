@@ -13,7 +13,7 @@
  */
 
 import React from 'react';
-import { Plus, Loader2 } from 'lucide-react';
+import { Plus, Loader2, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface FilterConfig {
   tabs: readonly string[];
@@ -38,6 +38,8 @@ export interface ContentStudioListPageProps {
   /** When true and not loading, show emptyState instead of children */
   isEmpty?: boolean;
   emptyState?: React.ReactNode;
+  /** Optional content section rendered immediately before the list rows. */
+  beforeList?: React.ReactNode;
   children?: React.ReactNode;
 }
 
@@ -51,18 +53,19 @@ export default function ContentStudioListPage({
   loadingText = 'Loading…',
   isEmpty,
   emptyState,
+  beforeList,
   children,
 }: ContentStudioListPageProps) {
   return (
-    <div className="max-w-4xl mx-auto px-6 py-6">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-5 sm:py-6">
 
       {/* ── Page Header ─────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between mb-6">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
+        <div className="min-w-0">
           <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
           <p className="text-sm text-gray-500 mt-1">{description}</p>
         </div>
-        <div className="flex-shrink-0 ml-6">
+        <div className="flex-shrink-0 w-full sm:w-auto">
           {newButton}
         </div>
       </div>
@@ -76,12 +79,12 @@ export default function ContentStudioListPage({
 
       {/* ── Filter tabs ──────────────────────────────────────────────────────── */}
       {filters && (
-        <div className="flex gap-1 border-b border-gray-100 mb-6">
+          <div className="flex gap-1 overflow-x-auto scrollbar-none border-b border-gray-100 mb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
           {filters.tabs.map(tab => (
             <button
               key={tab}
               onClick={() => filters.onChange(tab)}
-              className={`px-3.5 py-2 text-[13px] font-medium border-b-2 transition-colors -mb-px ${
+              className={`flex-shrink-0 min-h-10 px-3.5 py-2 text-[13px] font-medium border-b-2 transition-colors -mb-px ${
                 filters.active === tab
                   ? 'border-teal-600 text-teal-700'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -102,8 +105,11 @@ export default function ContentStudioListPage({
       ) : isEmpty ? (
         <>{emptyState}</>
       ) : (
-        <div className="space-y-3">
-          {children}
+        <div>
+          {beforeList}
+          <div className="space-y-3">
+            {children}
+          </div>
         </div>
       )}
     </div>
@@ -121,3 +127,34 @@ export const menuBtnCls =
 
 export const newBtnCls =
   'flex items-center gap-1.5 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 transition-colors disabled:opacity-40';
+
+/** Accessible, compact controls for persisted list ordering. */
+export function ReorderButtons({
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
+  label = 'Reorder item',
+}: {
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  label?: string;
+}) {
+  return (
+    <span className="inline-flex items-center rounded-lg border border-gray-200 bg-white">
+      <button type="button" disabled={!canMoveUp} onClick={onMoveUp}
+        className="p-1.5 text-gray-500 hover:text-teal-700 hover:bg-teal-50 disabled:opacity-25 disabled:cursor-not-allowed"
+        aria-label={`${label}: move up`} title="Move up">
+        <ChevronUp size={13} />
+      </button>
+      <span className="h-4 border-l border-gray-200" />
+      <button type="button" disabled={!canMoveDown} onClick={onMoveDown}
+        className="p-1.5 text-gray-500 hover:text-teal-700 hover:bg-teal-50 disabled:opacity-25 disabled:cursor-not-allowed"
+        aria-label={`${label}: move down`} title="Move down">
+        <ChevronDown size={13} />
+      </button>
+    </span>
+  );
+}

@@ -1,16 +1,24 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
-import { useRooms } from '@/contexts/RoomsContext';
 import { BottomNav } from '@/components/BottomNav';
+import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
+import { SectionWrapper } from '@/components/SectionWrapper';
+import { FavouriteButton } from '@/components/FavouriteButton';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { LogOut, Users, ChevronRight, Pencil, Check, X } from 'lucide-react';
+import {
+  LogOut, Pencil, Check, X, ChevronRight,
+  Star, Clock, BookOpen, Headphones, Map, Users, ShieldCheck,
+} from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
+import { MemberHeaderActions } from '@/components/MemberHeaderActions';
+import { fetchFavourites, type Favourite } from '@/lib/favourites-api';
+import { fetchHistory, historyTimeLabel, type HistoryEntry } from '@/lib/history-api';
+import { motion } from 'framer-motion';
+import { getMemberProfile, type MemberProfile } from '@/lib/member-profile-api';
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function streakLabel(n: number): string {
   if (n === 0) return 'Your walk begins today';
@@ -18,21 +26,151 @@ function streakLabel(n: number): string {
   return `${n} days walking`;
 }
 
+const CONTENT_ICON: Record<string, React.ElementType> = {
+  journey:            Map,
+  'bible-study':      BookOpen,
+  devotional:         BookOpen,
+  'sermon-companion': Headphones,
+  sermon:             Headphones,
+  'bible-verse':      BookOpen,
+  'bible-chapter':    BookOpen,
+  'ask-emmaus':       Star,
+  room:               Users,
+};
+
+const CONTENT_LABEL: Record<string, string> = {
+  journey:            'Walk',
+  'bible-study':      'Bible Study',
+  devotional:         'Devotional',
+  'sermon-companion': 'Sermon Companion',
+  sermon:             'Sermon',
+  'bible-verse':      'Bible Verse',
+  'bible-chapter':    'Bible Chapter',
+  'ask-emmaus':       'Ask Emmaus',
+  room:               'Group',
+};
+
+// ─── Section wrapper ──────────────────────────────────────────────────────────
+
+
+
+// ─── Favourite row ────────────────────────────────────────────────────────────
+
+function FavouriteRow({
+  fav,
+  onOpen,
+  onRefresh,
+}: {
+  fav: Favourite;
+  onOpen: () => void;
+  onRefresh: () => void;
+}) {
+  const Icon = CONTENT_ICON[fav.content_type] ?? BookOpen;
+  return (
+    <div className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 hover:border-primary/25 transition-colors select-none">
+      <div className="flex items-center gap-2 min-w-0">
+        <button onClick={onOpen} className="flex-1 flex flex-col min-w-0 text-left">
+          <p className="text-[14px] font-semibold text-foreground leading-snug truncate">
+            {fav.content_title}
+          </p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            {CONTENT_LABEL[fav.content_type] ?? fav.content_type}
+          </p>
+        </button>
+        <FavouriteButton
+          contentType={fav.content_type as Parameters<typeof FavouriteButton>[0]['contentType']}
+          contentId={fav.content_id}
+          contentTitle={fav.content_title}
+          contentRoute={fav.content_route}
+          className="shrink-0"
+          size={15}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── History row ──────────────────────────────────────────────────────────────
+
+function HistoryRow({ entry, onOpen }: { entry: HistoryEntry; onOpen: () => void }) {
+  const Icon = CONTENT_ICON[entry.content_type] ?? BookOpen;
+  return (
+    <button
+      onClick={onOpen}
+      className="w-full text-left bg-card rounded-xl border border-border/50 px-3.5 py-2.5 hover:border-primary/25 active:opacity-75 transition-colors select-none"
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="flex-1 min-w-0">
+          <p className="text-[14px] font-semibold text-foreground leading-snug truncate">
+            {entry.content_title}
+          </p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            {historyTimeLabel(entry.viewed_at)}
+          </p>
+        </div>
+        <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" aria-hidden="true" />
+      </div>
+    </button>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export default function Personal() {
   const { user, signOut, updateName } = useAuth();
   const { progress, reflections, journeys } = useJourney();
-  const { getMyRooms, getUnreadCount } = useRooms();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [prayerRequest, setPrayerRequest] = useState('');
-  const [notifs, setNotifs] = useState(true);
+
+  // ── Profile editing ────────────────────────────────────────────────────────
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
 
+  // ── Favourites ─────────────────────────────────────────────────────────────
+  const [favourites, setFavourites] = useState<Favourite[]>([]);
+  const [favsLoading, setFavsLoading] = useState(true);
+
+  // ── History ────────────────────────────────────────────────────────────────
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [histLoading, setHistLoading] = useState(true);
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  const [memberProfile, setMemberProfile] = useState<MemberProfile | null>(null);
+  const [detailsPromptDismissed, setDetailsPromptDismissed] = useState(false);
+
+  const loadData = useCallback(async () => {
+    setFavsLoading(true);
+    setHistLoading(true);
+    try {
+      const [favs, hist] = await Promise.all([
+        fetchFavourites(),
+        fetchHistory(30),
+      ]);
+      setFavourites(favs);
+      setHistory(hist);
+    } catch { /* non-fatal */ }
+    finally {
+      setFavsLoading(false);
+      setHistLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    if (!user) return;
+    setMemberProfile(null);
+    const dismissalKey = `emmaus_personal_details_prompt_dismissed:${user.id}`;
+    setDetailsPromptDismissed(localStorage.getItem(dismissalKey) === 'true');
+    getMemberProfile()
+      .then(setMemberProfile)
+      .catch(() => {
+        // The profile page remains fully usable if the member record is unavailable.
+      });
+  }, [user?.id]);
+
   if (!user) return null;
 
-  const myRooms = getMyRooms(user.id);
-  const roomUnread = getUnreadCount(user.id);
+  // ── Derived ────────────────────────────────────────────────────────────────
 
   const coreJourneyId = '15-minutes-with-jesus';
   const coreProg = progress[coreJourneyId];
@@ -44,56 +182,59 @@ export default function Personal() {
     return { title: j ? `${j.title} — Day ${day}` : `Day ${day}`, text };
   });
 
-  const handleSignOut = () => {
-    signOut();
-    setLocation('/');
-  };
+  // ── Handlers ───────────────────────────────────────────────────────────────
 
-  const handleSavePrayer = () => {
-    if (!prayerRequest.trim()) return;
-    // Save to localStorage
-    const existing = JSON.parse(localStorage.getItem('emmaus_prayers') || '[]') as string[];
-    existing.push(prayerRequest.trim());
-    localStorage.setItem('emmaus_prayers', JSON.stringify(existing));
-    setPrayerRequest('');
-    toast({ title: 'Saved', description: 'Your prayer request has been saved.' });
-  };
+  const handleSignOut = () => { signOut(); setLocation('/'); };
 
   const displayedName = user.preferredName?.trim() || '';
   const initials = displayedName
     ? displayedName.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
     : '?';
 
-  const handleOpenNameEdit = () => {
-    setNameInput(displayedName);
-    setEditingName(true);
-  };
-
+  const handleOpenNameEdit = () => { setNameInput(displayedName); setEditingName(true); };
   const handleSaveName = () => {
     const name = nameInput.trim();
     updateName(name);
     setEditingName(false);
     toast({ title: 'Name updated', description: name ? `We'll call you ${name}.` : 'Your name has been cleared.' });
   };
-
-  const handleCancelNameEdit = () => {
-    setEditingName(false);
-    setNameInput('');
+  const handleCancelNameEdit = () => { setEditingName(false); setNameInput(''); };
+  const detailsIncomplete = memberProfile
+    ? !memberProfile.preferredName.trim() ||
+      !memberProfile.contactNumber ||
+      !memberProfile.physicalAddress ||
+      !memberProfile.dateOfBirth ||
+      !memberProfile.iccMembership
+    : false;
+  const dismissDetailsPrompt = () => {
+    setDetailsPromptDismissed(true);
+    localStorage.setItem(`emmaus_personal_details_prompt_dismissed:${user.id}`, 'true');
   };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
-      <main className="px-5 pt-12 max-w-[480px] mx-auto space-y-9">
+      <main className="relative px-5 pt-10 max-w-[480px] mx-auto space-y-4">
 
         {/* Profile header */}
-        <header className="flex items-center gap-5">
-          <div
-            className="w-[64px] h-[64px] rounded-full bg-primary/10 text-primary flex items-center justify-center text-[22px] font-sans font-semibold shrink-0"
-            aria-hidden="true"
-          >
-            {initials}
+        <motion.header
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="space-y-3"
+        >
+          <div className="flex justify-end">
+            <MemberHeaderActions compact />
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-5">
+            <div
+              className="w-[64px] h-[64px] rounded-full bg-primary/10 text-primary flex items-center justify-center text-[22px] font-sans font-semibold shrink-0"
+              aria-hidden="true"
+            >
+              {initials}
+            </div>
+            <div className="flex-1 min-w-0">
             {editingName ? (
               <div className="flex items-center gap-2">
                 <input
@@ -126,150 +267,166 @@ export default function Personal() {
                 </button>
               </div>
             )}
-            <p
-              className="text-[15px] text-muted-foreground mt-0.5"
-              data-testid="text-streak"
-            >
+            <p className="text-[15px] text-muted-foreground mt-0.5" data-testid="text-streak">
               {streakLabel(streak)}
             </p>
-          </div>
-        </header>
-
-        {/* Prayer Requests */}
-        <section className="space-y-3">
-          <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-            Prayer Requests
-          </h2>
-          <Card className="bg-card border-border">
-            <CardContent className="p-5 space-y-3">
-              <Label htmlFor="prayer-input" className="sr-only">
-                Prayer request
-              </Label>
-              <Textarea
-                id="prayer-input"
-                placeholder="What would you like prayer for today?"
-                value={prayerRequest}
-                onChange={(e) => setPrayerRequest(e.target.value)}
-                className="resize-none bg-background border-border text-[16px] leading-relaxed rounded-xl min-h-[100px]"
-                data-testid="input-prayer-request"
-              />
-              <Button
-                size="sm"
-                variant="secondary"
-                className="w-full h-11 text-base rounded-xl"
-                onClick={handleSavePrayer}
-                data-testid="button-save-prayer"
-              >
-                Save Prayer Request
-              </Button>
-            </CardContent>
-          </Card>
-        </section>
-
-        {/* Saved Reflections */}
-        <section className="space-y-3">
-          <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-            Saved Reflections
-          </h2>
-          {savedReflections.length === 0 ? (
-            <div className="p-8 border border-dashed border-border rounded-2xl text-center">
-              <p className="text-[15px] text-muted-foreground leading-relaxed">
-                Your reflections will appear here as you journey.
-              </p>
             </div>
+          </div>
+        </motion.header>
+
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.06 }}
+          className="rounded-2xl border border-primary/20 bg-primary/[0.045] px-4 py-3.5"
+        >
+          <button
+            type="button"
+            onClick={() => setLocation('/profile/personal-details')}
+            className="flex w-full items-center justify-between gap-3 text-left"
+            data-testid="button-personal-details"
+          >
+            <span className="min-w-0">
+              <span className="block text-[14px] font-semibold text-foreground">Personal details</span>
+              <span className="mt-0.5 block text-[12px] leading-5 text-muted-foreground">
+                Keep your church contact record up to date
+              </span>
+            </span>
+            <ChevronRight size={17} className="shrink-0 text-primary" aria-hidden="true" />
+          </button>
+          {detailsIncomplete && !detailsPromptDismissed && (
+            <div className="mt-3 flex items-start gap-3 border-t border-primary/15 pt-3">
+              <p className="flex-1 text-[12px] leading-5 text-primary/80">
+                A few details are still missing. Add them whenever you have a quiet moment.
+              </p>
+              <button
+                type="button"
+                onClick={dismissDetailsPrompt}
+                className="min-h-[32px] shrink-0 rounded-lg px-2 text-[12px] font-semibold text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
+                aria-label="Dismiss personal details reminder"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+        </motion.div>
+
+        {(user.role === 'admin' || user.role === 'superAdmin') && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.08 }}
+          >
+            <button
+              type="button"
+              onClick={() => setLocation('/admin')}
+              className="w-full flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-left text-primary hover:bg-primary/10 transition-colors"
+            >
+              <span className="flex items-center gap-2 text-[13px] font-medium">
+                <ShieldCheck size={16} aria-hidden="true" />
+                Admin panel
+              </span>
+              <ChevronRight size={16} aria-hidden="true" />
+            </button>
+          </motion.div>
+        )}
+
+        {/* Unified Ask Emmaus / Search bar */}
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.13 }}
+        >
+          <UnifiedEmmausInput launchOnly className="mt-4" />
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.18 }}
+          className="space-y-4"
+        >
+          {/* ── ⭐ Favourites ────────────────────────────────────────────────────── */}
+          <SectionWrapper color="amber" label="Favourites">
+          {favsLoading ? (
+            <div className="space-y-2">
+              {[1, 2].map(i => <div key={i} className="h-10 rounded-xl bg-amber-100/80 animate-pulse" />)}
+            </div>
+          ) : favourites.length === 0 ? (
+            <p className="text-[13px] text-amber-700/70 text-center py-2">
+              Tap the ⭐ on any walk, verse, or sermon to save it here.
+            </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
+              {favourites.map(fav => (
+                <FavouriteRow
+                  key={fav.id}
+                  fav={fav}
+                  onOpen={() => setLocation(fav.content_route)}
+                  onRefresh={loadData}
+                />
+              ))}
+            </div>
+          )}
+          </SectionWrapper>
+
+          {/* ── History ────────────────────────────────────────────────────────── */}
+          <SectionWrapper color="violet" label="History">
+          {histLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => <div key={i} className="h-10 rounded-xl bg-violet-100/80 animate-pulse" />)}
+            </div>
+          ) : history.length === 0 ? (
+            <p className="text-[13px] text-violet-700/70 text-center py-2">
+              Recently visited walks, sermons and Bible chapters will appear here.
+            </p>
+          ) : (
+            <div className="space-y-2">
+                {(showAllHistory ? history : history.slice(0, 5)).map(entry => (
+                  <HistoryRow
+                    key={entry.id}
+                    entry={entry}
+                    onOpen={() => setLocation(entry.content_route)}
+                  />
+                ))}
+                {!showAllHistory && history.length > 5 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllHistory(true)}
+                    className="w-full pt-1 text-[13px] font-medium text-violet-700/80 hover:text-violet-800 transition-colors"
+                  >
+                    View more
+                  </button>
+                )}
+            </div>
+          )}
+          </SectionWrapper>
+
+          {/* ── Saved Reflections ──────────────────────────────────────────────── */}
+          {savedReflections.length > 0 && (
+            <SectionWrapper color="emerald" label="Saved Reflections">
+            <div className="space-y-2">
               {savedReflections.map((r, i) => (
-                <div key={i} className="p-4 rounded-xl border border-border bg-card space-y-2">
-                  <h4 className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-                    {r.title}
-                  </h4>
-                  <p className="text-[15px] text-foreground italic leading-relaxed">"{r.text}"</p>
+                <div key={i} className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 space-y-1">
+                  <p className="text-[11px] font-semibold text-emerald-700 uppercase tracking-widest">{r.title}</p>
+                  <p className="text-[13px] text-foreground italic leading-relaxed">"{r.text}"</p>
                 </div>
               ))}
             </div>
+            </SectionWrapper>
           )}
-        </section>
 
-        {/* My Rooms */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              My Rooms
-            </h2>
-            {roomUnread > 0 && (
-              <span className="text-[11px] font-semibold text-primary">{roomUnread} new</span>
-            )}
-          </div>
-          {myRooms.length === 0 ? (
-            <button
-              onClick={() => setLocation('/rooms')}
-              className="w-full text-left p-4 rounded-xl border border-dashed border-border bg-background hover:border-primary/30 transition-all flex items-center gap-3"
-            >
-              <Users size={17} className="text-muted-foreground shrink-0" />
-              <span className="text-[15px] text-muted-foreground">Walk journeys with family or friends</span>
-            </button>
-          ) : (
-            <div className="space-y-2">
-              {myRooms.slice(0, 3).map(room => (
-                <button
-                  key={room.id}
-                  onClick={() => setLocation(`/rooms/${room.id}`)}
-                  className="w-full text-left p-4 rounded-xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3"
-                >
-                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <Users size={15} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[15px] font-medium text-foreground truncate">{room.name}</div>
-                    <div className="text-[12px] text-muted-foreground">{room.memberCount} {room.memberCount === 1 ? 'member' : 'members'}</div>
-                  </div>
-                  <ChevronRight size={15} className="text-muted-foreground shrink-0" />
-                </button>
-              ))}
-              {myRooms.length > 3 && (
-                <button
-                  onClick={() => setLocation('/rooms')}
-                  className="w-full text-center text-[13px] text-primary font-medium py-2 hover:underline"
-                >
-                  View all {myRooms.length} Rooms
-                </button>
-              )}
-            </div>
-          )}
-        </section>
-
-        {/* Settings */}
-        <section className="space-y-3">
-          <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-            Settings
-          </h2>
-          <div className="p-4 rounded-xl border border-border bg-card flex justify-between items-center min-h-[56px]">
-            <Label
-              htmlFor="notifications-toggle"
-              className="text-[16px] font-medium cursor-pointer"
-            >
-              Daily Reminders
-            </Label>
-            <Switch
-              id="notifications-toggle"
-              checked={notifs}
-              onCheckedChange={setNotifs}
-              data-testid="toggle-notifications"
-            />
-          </div>
-        </section>
-
-        {/* Sign Out */}
-        <Button
-          variant="ghost"
-          className="w-full h-12 text-destructive hover:text-destructive flex gap-2 text-base"
-          onClick={handleSignOut}
-          data-testid="button-sign-out"
-        >
-          <LogOut size={17} aria-hidden="true" />
-          Sign Out
-        </Button>
+          {/* Sign Out */}
+          <Button
+            variant="ghost"
+            className="w-full h-12 text-destructive hover:text-destructive flex gap-2 text-base"
+            onClick={handleSignOut}
+            data-testid="button-sign-out"
+          >
+            <LogOut size={17} aria-hidden="true" />
+            Sign Out
+          </Button>
+        </motion.div>
 
       </main>
       <BottomNav />

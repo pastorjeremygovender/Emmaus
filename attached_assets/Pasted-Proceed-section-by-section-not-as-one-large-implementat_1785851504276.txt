@@ -1,0 +1,369 @@
+Proceed section by section, not as one large implementation.
+
+The audit and architecture are approved.
+
+Do not redesign the plan and do not broaden the scope.
+
+We will build Phase 1 in controlled checkpoints so that each foundation is tested in the published application before the next layer is added.
+
+BUILD ORDER
+
+CHECKPOINT 1
+Database foundations, People integration, meeting types, meeting sessions and manual attendance register.
+
+CHECKPOINT 2
+Integrated person discipleship profile using existing Walk, Journey, Room and Emmaus activity data.
+
+CHECKPOINT 3
+Follow-up workflow and pastoral notes with permissions and audit logging.
+
+CHECKPOINT 4
+Rule-based care signals and positive discipleship milestones.
+
+CHECKPOINT 5
+Pastoral dashboard and Care Rule settings.
+
+Do not begin a later checkpoint until the previous checkpoint has been implemented, published and tested.
+
+==================================================
+CHECKPOINT 1 — BUILD NOW
+==================================================
+
+Build only the following now:
+
+1. Required database migrations.
+2. Canonical People integration.
+3. Attendance-only person support.
+4. Meeting types.
+5. Dated meeting sessions.
+6. Manual attendance register.
+7. Attendance history.
+8. Basic permissions required for attendance.
+9. Audit logging for attendance changes.
+
+Do not build the care-signal engine, dashboard alerts, follow-up workflow or advanced person profile yet.
+
+==================================================
+PEOPLE ARCHITECTURE
+==================================================
+
+The existing Emmaus user/profile record remains canonical whenever one exists.
+
+Attendance-only people may be stored in pastoral_persons or the equivalent audited structure.
+
+Rules:
+
+- pastoral_persons supplements existing users.
+- It must not become a second independent member database.
+- Include linked_user_id for later account linking.
+- Once linked, the person must appear as one person.
+- Do not duplicate attendance, notes or history after linking.
+- Prevent two attendance-only records from being linked to the same Emmaus account.
+- Search existing users and attendance-only people together through one service layer.
+
+==================================================
+DATABASE MIGRATIONS
+==================================================
+
+Create reversible production-safe migrations for concepts such as:
+
+pastoral_persons
+meeting_types
+meeting_sessions
+attendance_records
+person_attendance_expectations
+pastoral_audit_log
+
+Inspect existing naming conventions before finalising names.
+
+Every relevant record must include the existing church or tenant identifier.
+
+Add appropriate indexes for:
+
+- church/tenant
+- person
+- linked user
+- meeting type
+- meeting date
+- attendance status
+
+Do not copy Walk or Journey progress into these tables.
+
+==================================================
+MEETING TYPES
+==================================================
+
+Create reusable meeting types with:
+
+- Name
+- Category
+- Description, optional
+- Usual day and time, optional
+- Responsible ministry, optional
+- Active/inactive
+- Whether attendance is normally tracked
+- Whether missing attendance may later generate care signals
+- Created by
+- Created at
+- Updated at
+
+Seed or allow creation of examples such as:
+
+- Sunday Morning
+- Sunday Evening
+- Prayer Meeting
+- Bible Study
+- Youth
+- Men’s Meeting
+- Ladies’ Meeting
+- Made Free
+- Volunteer Training
+- Special Event
+
+Do not hard-code these permanently.
+
+==================================================
+MEETING SESSIONS
+==================================================
+
+Allow an authorised leader to create a dated session from a meeting type.
+
+Fields:
+
+- Meeting type
+- Date
+- Start time, optional
+- Location, optional
+- Notes, optional
+- Status: Scheduled, Completed, Cancelled
+- Attendance totals
+
+Cancelled sessions must never count as missed attendance.
+
+==================================================
+ATTENDANCE REGISTER
+==================================================
+
+Build a fast, reliable manual attendance register.
+
+The register must support:
+
+- Search all existing Emmaus users.
+- Search attendance-only people.
+- Alphabetical list.
+- Recent attenders.
+- Add visitor.
+- Link to an existing person if a match is found.
+- Select multiple people.
+- Mark selected Present.
+- Mark selected Visitor.
+- Mark selected Apology.
+- Mark selected Absent.
+- Mark selected Not Expected.
+- Correct an attendance record.
+- Save continuously or with a clear Save action.
+- Show a reliable “Attendance saved” confirmation.
+- Prevent duplicate attendance records for the same person and session.
+- Display totals by status.
+
+Do not default every person to Absent.
+
+A person with no attendance record must remain unrecorded until intentionally marked or the register is finalised.
+
+==================================================
+ATTENDANCE EXPECTATIONS
+==================================================
+
+Add a simple way to indicate which meetings a person normally attends.
+
+Examples:
+
+- Usually attends Sunday Morning.
+- Not expected at Sunday Evening.
+- Youth participant.
+- Made Free participant, restricted.
+
+This data will later power care rules.
+
+For now, only record and display expectations.
+
+Do not generate alerts yet.
+
+==================================================
+ATTENDANCE STATUSES
+==================================================
+
+Use:
+
+PRESENT
+VISITOR
+APOLOGY
+ABSENT
+NOT_EXPECTED
+
+Rules:
+
+- APOLOGY must not later count as unexplained absence.
+- NOT_EXPECTED must never count as absence.
+- Cancelled meetings must never count as absence.
+- Visitors must be searchable later and linkable to an Emmaus account.
+- Corrections must preserve audit history.
+
+==================================================
+ADMIN NAVIGATION
+==================================================
+
+Use the existing Admin shell.
+
+Under People, add:
+
+- People
+- Attendance
+
+Attendance should contain:
+
+- Meeting Types
+- Meeting Sessions
+- Attendance Register
+
+Do not create a separate application or duplicate admin shell.
+
+==================================================
+PEOPLE LIST — BASIC VERSION
+==================================================
+
+Create the basic combined People list now.
+
+Show:
+
+- Name
+- Person type: Emmaus User, Attendance-only, Visitor
+- Contact detail where authorised
+- Latest attendance
+- Meetings normally attended
+- Linked account status
+
+Filters:
+
+- All
+- Emmaus Users
+- Attendance-only
+- Visitors
+- Unlinked
+
+Do not add Walk-progress filters or care signals until Checkpoint 2 and Checkpoint 4.
+
+==================================================
+BASIC PERSON PAGE
+==================================================
+
+For Checkpoint 1, show only:
+
+- Basic details
+- Linked Emmaus account
+- Attendance expectations
+- Attendance history
+
+Do not build the full discipleship profile yet.
+
+==================================================
+PERMISSIONS
+==================================================
+
+Enforce server-side permissions.
+
+At minimum:
+
+ADMINISTRATOR
+- Manage meeting types, sessions and attendance.
+- Manage permissions.
+
+PASTOR
+- View people and attendance.
+- Correct records.
+
+ATTENDANCE_RECORDER
+- Create/open authorised meeting registers.
+- Record and correct attendance.
+- Cannot see pastoral notes or sensitive Walk information.
+
+CONTENT_ADMIN
+- No attendance access by default.
+
+MADE_FREE_AUTHORISED_LEADER
+- Only authorised Made Free records when relevant.
+
+Do not rely only on hidden frontend buttons.
+
+==================================================
+AUDIT LOGGING
+==================================================
+
+Every attendance correction must record:
+
+- Person
+- Meeting session
+- Previous status
+- New status
+- Changed by
+- Changed at
+- Reason, optional
+
+Keep pastoral auditing separate from the existing content audit log.
+
+==================================================
+PRIVACY
+==================================================
+
+For this checkpoint:
+
+- Do not expose private Walk progress.
+- Do not expose Ask Emmaus conversations.
+- Do not generate care judgments.
+- Do not send messages.
+- Do not create spiritual scores.
+- Restrict sensitive meeting participation server-side.
+- Maintain church/tenant isolation in every route.
+
+==================================================
+PUBLISHED TESTING
+==================================================
+
+Test this checkpoint in the published application:
+
+1. Create Sunday Morning as a meeting type.
+2. Create a dated Sunday Morning session.
+3. Search an existing Emmaus user.
+4. Mark that user Present.
+5. Add a visitor.
+6. Add an attendance-only person.
+7. Correct Present to Apology and confirm audit history.
+8. Mark someone Not Expected.
+9. Confirm no duplicate attendance record is created.
+10. Confirm totals are correct.
+11. Confirm attendance persists after refresh and republish.
+12. Link an attendance-only person to an existing Emmaus account.
+13. Confirm one unified person remains.
+14. Confirm Attendance Recorder cannot access restricted pastoral data.
+15. Confirm Content Admin has no attendance access by default.
+16. Confirm tenant/church isolation.
+17. Test mobile attendance entry.
+18. Confirm existing Admin, Sermons, Walks, Rooms and Bible features still work.
+
+==================================================
+REPORT BACK AFTER CHECKPOINT 1
+==================================================
+
+Report:
+
+1. Database migrations created.
+2. Existing tables and components reused.
+3. New routes and components.
+4. Permission rules implemented.
+5. Published URL tested.
+6. Test results.
+7. Any failed tests.
+8. Any duplication or migration issue found.
+9. Confirmation that no care signals or advanced dashboard work was started yet.
+
+After Checkpoint 1 is published and verified, stop and wait for approval before beginning the integrated discipleship profile.

@@ -17,6 +17,8 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import type { Journey } from '@/contexts/JourneyContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { accountStorageKey } from '@/lib/account-storage';
 
 export type EnrollmentState = 'active' | 'paused' | 'saved';
 export type EnrollmentMap = Record<string, EnrollmentState>;
@@ -31,7 +33,7 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
  * NOTE: 'core' is intentionally NOT in this set.  The startup migration
  * promotes the actual 10-Minutes-with-Jesus journey from 'core' → 'daily-rhythm',
  * so any remaining 'core' journey is an admin-created growth journey that must
- * count toward the limit and appear on Today's Steps.
+ * count toward the limit and appear on My Emmaus.
  */
 const EXEMPT_TYPES = new Set(['companion', 'devotional', 'daily-rhythm']);
 
@@ -39,18 +41,19 @@ export function isExemptJourney(j: Journey): boolean {
   return EXEMPT_TYPES.has(j.journeyType) || j.overloadExempt === true;
 }
 
-function load(): EnrollmentMap {
+function load(subject: string | null): EnrollmentMap {
+  if (!subject) return {};
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(accountStorageKey(STORAGE_KEY, subject));
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
   }
 }
 
-function persist(map: EnrollmentMap) {
+function persist(subject: string, map: EnrollmentMap) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+    localStorage.setItem(accountStorageKey(STORAGE_KEY, subject), JSON.stringify(map));
   } catch { /* ignore storage errors */ }
 }
 
@@ -81,27 +84,35 @@ async function callEngagementApi(
 }
 
 export function useEnrollment() {
-  const [enrollment, setEnrollmentState] = useState<EnrollmentMap>(() => load());
+  const { user } = useAuth();
+  const subject = user?.id ?? null;
+  const [enrollment, setEnrollmentState] = useState<EnrollmentMap>(() => load(subject));
+  const [loadedSubject, setLoadedSubject] = useState<string | null>(subject);
 
   // Keep all instances in sync when storage changes (e.g. from another component).
   useEffect(() => {
-    const handler = () => setEnrollmentState(load());
+    setEnrollmentState(load(subject));
+    setLoadedSubject(subject);
+    const handler = () => setEnrollmentState(load(subject));
     window.addEventListener(SYNC_EVENT, handler);
     return () => window.removeEventListener(SYNC_EVENT, handler);
-  }, []);
+  }, [subject]);
 
   const mutate = useCallback((journeyId: string, state: EnrollmentState) => {
+    if (!subject) return;
     setEnrollmentState(prev => {
       const next = { ...prev, [journeyId]: state };
-      persist(next);
+      persist(subject, next);
       window.dispatchEvent(new Event(SYNC_EVENT));
       return next;
     });
-  }, []);
+  }, [subject]);
+
+  const visibleEnrollment = loadedSubject === subject ? enrollment : {};
 
   const getState = useCallback(
-    (journeyId: string): EnrollmentState => enrollment[journeyId] ?? 'active',
-    [enrollment]
+    (journeyId: string): EnrollmentState => visibleEnrollment[journeyId] ?? 'active',
+    [visibleEnrollment]
   );
 
   /**
@@ -137,7 +148,7 @@ export function useEnrollment() {
       j =>
         !isExemptJourney(j) &&
         startedIds.has(j.id) &&
-        (enrollment[j.id] ?? 'active') === 'active'
+        (visibleEnrollment[j.id] ?? 'active') === 'active'
     ).length;
   }
 
@@ -149,7 +160,7 @@ export function useEnrollment() {
   }
 
   return {
-    enrollment,
+    enrollment: visibleEnrollment,
     getState,
     pauseJourney,
     resumeJourney,

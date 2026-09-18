@@ -1,3 +1,4 @@
+- [Emmaus single source of truth](../../docs/EMMAUS_SINGLE_SOURCE_OF_TRUTH.md) — AUTHORITATIVE CURRENT STATUS. Read first. Overrides older status notes when they conflict; prevents duplicate work and unsafe publishing.
 - [Bible Study Foundation](bible-study-foundation.md) — Stages 1–3: user_bible_data + bible_study_notes DB tables; 8-action verse sheet; VerseStudyPanel; admin Bible Study section.
 - [gpt-5 OpenAI compatibility](gpt5-openai-compat.md) — gpt-5 rejects temperature + max_tokens; needs max_completion_tokens ≥5000; ~90–150s/call; background seeder required.
 - [Sermon generation pipeline](sermon-generation-pipeline.md) — sermon-aware detection added; SERMON_CONFIRMATION_REQUIRED flow; THEME_CONFIRMATION_REQUIRED flow; parseVttTimed; detectSermonSection; redetectSermon; ConfirmSermonPhase/AdjustSermonPhase/ConfirmThemePhase.
@@ -6,7 +7,9 @@
 - [Create Journey wizard](create-journey-wizard.md) — 3-step modal (method → contentType → details); JourneyBuilderWizard gains initialTitle + initialScreen props; this is the reference pattern for all creation workflows.
 - [Member Home & Next-Step Engine](member-home-next-step-engine.md) — Walk.tsx home, daily-lock.ts, enrollment.ts, next-step-engine.ts; hooks must be before early returns.
 - [App entry point rule](app-entry-point.md) — resolveEntryRoute() always returns /walk (spec-locked). Previous logic routed members to their Daily Rhythm day — that was the root cause of wrong launch destination.
+- [Daily Open Architecture](daily-open-architecture.md) — resolveDailyOpenRoute must run in BOTH Welcome paths; Auth.tsx must redirect members to / not /walk; fast path needs journeyLoading guard + navigatedFastRef.
 - [Completion flow standardisation](completion-flow.md) — JourneyCompletionPanel shared component; source param pattern for return-destination routing; sermon companion routes from sermon_companion table not journeys table.
+- [Sermon Companion Overview flow](sermon-companion-overview.md) — new /sermon-companion/:id/overview page; discovery cards always → overview; Walk complete → overview; subtitle extracted from title "X: Y" pattern; "Days" renamed "Steps" everywhere.
 - [Continue rule & route guards](continue-rule.md) — resolveNextEntry/resolveNextStep helpers in lib/resolve-next-entry.ts; guards now redirect instead of showing dead-end messages; Step uses `day` not `dayNumber`.
 - [Back navigation system](back-navigation.md) — unified return-context.ts + EmmausBackButton; SourceKey union; tab-specific nextSteps sources; ?tab= URL param on /journeys; all content pages updated.
 - [Bible module architecture](bible-module.md) — full Bible module shipped; KJV John 1–3 seed data, BibleProvider (localStorage), 5 routes, verse-tap sheets, Preached Here links to admin sermons via JOHN_SERMON_LINKS.
@@ -28,3 +31,68 @@
 - [Step publish gap](step-publish-gap.md) — Published journey + Draft steps = empty walk + route-guard bounce; fixed by client filter + server auto-publish on journey publish.
 - [Walk card & completion flow](walk-card-completion-flow.md) — card is one clickable button → JourneyDetail; backSource thread preserves chain; completion always "Back to Walk".
 - [Journey step status inheritance](journey-step-status.md) — createStep always inherits parent journey status; refreshJourneyDuration counts Published steps only; startup migration repairs legacy Draft-steps-on-Published-journey data idempotently.
+- [Launch Board P2 fixes](launch-board-p2-fixes.md) — atomic devotional progress, invite token sessionStorage bridge, companion atomic publish, P2-7/SC-2/DEV-2/RM-1 deferred post-launch.
+- [prod-data-sync](prod-data-sync.md) — COALESCE rule protects authored content; tombstone table prevents seed resurrections; OLD_JOURNEY_IDS must stay current; write content in dev not production.
+- [AI Walk Pipeline Safety](ai-walk-pipeline-safety.md) — 4 fixes: orphan cleanup on failure, tombstone-before-delete, no step-exclusion-delete in prod-data-sync, step count mismatch = hard failure.
+- [journey-context-role-bug](journey-context-role-bug.md) — refreshJourneys/addStep/deleteStep must check 'admin' OR 'superAdmin'; missing superAdmin causes all Drafts to vanish for superAdmin users.
+- [Unified Sermons Module](unified-sermons-module.md) — canonical sermons DB table; 8-phase build; Ask Emmaus priority-1; Preached Here canonical-first; SermonHome member page.
+- [Canonical sermon store contract](canonical-sermon-store-contract.md) — transcript vs fullTranscript split; publishedAt in PATCH; atomic deleteSermonFully; skipServerPersist; detection metadata columns.
+- [Sermon Companion persistence](sermon-companion-persistence.md) — generated companions require verified days 1–5; replacements insert/verify before deleting the prior companion transactionally.
+- [ffmpeg production PATH fix](ffmpeg-production-path.md) — `which ffmpeg` fails in production; glob fallback `ls /nix/store/*-replit-runtime-path*/bin/ffmpeg` resolves it instantly.
+- [Pastoral Care Module](pastoral-care-module.md) — Checkpoint 1 schema (6 tables), permission model, personKey URL format, unified people list, frontend wiring, checkpoint boundaries.
+- [Discipleship Profile architecture](discipleship-profile.md) — Checkpoint 3 complete: 9-section profile; 6 new store functions + routes; PersonPage.tsx is thin orchestrator; pastoral_milestones table live.
+- [Care Signals Engine](care-signals-engine.md) — Checkpoint 4: discipleship_signals table, 18-rule engine, 5 routes, SignalsDashboard + CareSignalsSection; circular-import rule: engine file has no DB access.
+- [Pastoral Dashboard](pastoral-dashboard.md) — Checkpoint 5: 9-section dashboard as a separate nav item; dashboard-store.ts holds aggregate queries; useAutoFetch hook per section; prayer count from AdminContext (no DB table yet).
+- [Analytics Centre](analytics-centre.md) — Checkpoint 6: 11 analytics routes at /api/analytics; analytics-store.ts; column quirks (duration_days not step_count; completed_days not completed_steps; qualify status in joins).
+- [Pastoral Workflows](pastoral-workflows.md) — Checkpoint 7: ministry_tasks + task_templates + pastoral_workflow_notes tables; 9 workflow routes; 8 system templates seeded in app.ts (not startup-migrations); discipleship_signals.explanation not description.
+- [Admin Nav Refactor](admin-nav-refactor.md) — left nav order; Content Studio: Walks+Journeys split, Media Studio hidden, Bible Study removed; UnifiedBibleStudy 5-tab wrapper.
+- [Sermon Companion Single Source of Truth](sermon-companion-single-source.md) — root cause: journey-type companion merge in next-steps.ts; fix: remove merge; permanent Walk card; 5-day prompt; speaker attribution.
+- [Navigation Redesign](nav-redesign.md) — new bottom nav order; Discover page; My Journey expansion; AskEmmausBar; Favourites+History+Search backend+frontend; DB import is @workspace/db not ../lib/db.js.
+- [Unified Emmaus Input](unified-emmaus-input.md) — UnifiedEmmausInput replaces AskEmmausBar+search on Walk/Discover/Personal; intent detection routes to Ask Emmaus or grouped search; discoverActive hides Discover tabs.
+- [Rooms Four-Level Architecture](rooms-four-level-architecture.md) — V1 done: dual-dimension rooms (contentType + roomType), prayer requests, leader controls scaffold; LiveKit UI paused pending approval.
+- [Room media host authorization](rooms-four-level-architecture.md) — Text is open to authenticated members; audio/video hosting requires separate account permission plus Owner/Leader room role; admins retain both.
+- [Active meeting synchronization](active-meeting-synchronization.md) — opening a Room observes only; start/join are explicit attendance actions, and active Discussion requires exact room/session attendance.
+- [Foundation v1 Checkpoint](foundation-v1-checkpoint.md) — official restore point 2026-08-08; all systems verified; 3 pre-existing TS errors (canonical-sermon-store/analytics/workflows) are known, not regressions.
+- [Group Media Sharing](group-media-sharing.md) — rooms-api-media.ts is the media API layer; getLeaderAccess takes (userId, appRole) not (roomId, userId); roomsFetch must be exported.
+- [Voice Bible Translation](voice-bible-translation.md) — Phase 3.1: voice-bible.ts is the TTS translation resolver; BSB/ASV/KJV are TTS-safe (public domain); NIV/GNT/MSG excluded pending publisher TTS licence; remoteBibleProvider is the shared fetch singleton; translation stored in localStorage key 'emmaus_bible_translation'.
+- [Voice Session Persistence](voice-session-persistence.md) — Phase 4: engine lifted to VoiceSessionContext (app-level); VoiceMode is thin view; GlobalVoiceIndicator pill for non-voice screens; cancelledRef = session-ended not unmounted; pausedRef fixes stale-closure in auto-restart timer.
+- [Voice reader state machine](voice-reader-state-machine.md) — Section continuation fix: onended must call advanceReading() directly when isReadingSection; old mic→VAD→silence path fails in quiet rooms. Phantom transcript fix: reset vadSpokenRef at startListening start; reject blob if no VAD speech or blob<3000B.
+- [Voice LLM tool dispatch](voice-llm-tool-dispatch.md) — Sprint 2: POST /api/voice/conversation + voice-conversation-client.ts; 3 tools (read_content, navigate, continue_walk); Sprint 3: sentence streaming TTS queue.
+- [Voice interrupt architecture](voice-interrupt-architecture.md) — timing values (1000 ms startup, 600 ms gate, threshold 40); monitor must start before LLM call; interruptFired flag stops sentence drain; search_sermons tool added.
+- [ElevenLabs Voice Integration](elevenlabs-voice-integration.md) — normal Voice uses device speech + OpenAI mini transcription; paid TTS is explicit admin comparison only; service remains the abstraction layer.
+- [Publish pipeline](publish-pipeline.md) — data-safety workflow builds frontend before publish; .replit via verifyAndReplaceDotReplit; artifact.toml callback unavailable; prod DB read-only for agent; __TEST__ guard now in export-seed + integrity tests + startup migration.
+- [Completion card back navigation rule](completion-card-back-nav.md) — history.back() for all back buttons; setLocation only for forward "View Previous Steps →" links; wouter useLocation() is pathname-only (use window.location.search); ?from=walk means IMMEDIATE origin is Walk only.
+- [OLD_JOURNEY_IDS safety](old-journey-ids-safety.md) — deletes matching journeys+steps on every boot; admin-created walks with colliding IDs are wiped silently; audit log only has title/status not body content.
+- [Verified identity and role bootstrap](verified-identity-auth.md) — OIDC subject is immutable identity; roles stay DB-controlled; initial super-admin claim is one-time and non-repeatable.
+- [Supabase server-mediated authentication](supabase-server-auth.md) — Opaque sessions; per-tab subject assertions reject stale cross-tab requests; recovery authorization is one-use.
+- [TypeScript source test runtime](typescript-source-test-runtime.md) — API source-graph tests need tsx/esm because Node type stripping does not remap emitted .js specifiers to .ts.
+- [Bulk Bible Study imports](bulk-bible-study-imports.md) — server-reparsed previews; chapter-atomic Skip/Replace/Merge; authored Study data and member metadata stay protected.
+- [Daily Rhythm day groups](daily-rhythm-day-groups.md) — day-level memberships power manual browsing; widget/deep-link day routing stays explicit.
+- [Daily launch cold-start race](daily-launch-cold-start-race.md) — cold /walk loads can consume the one-shot check before authenticated journeys arrive; route through Welcome and retry only with real data.
+- [Daily Rhythm server authority](daily-rhythm-server-authority.md) — completion stays on the current day; a locked server decision unlocks one next step on a later local calendar date.
+- [Daily Rhythm correction safety](daily-rhythm-correction-safety.md) — retired verified snapshots must never crash production startup; skip guarded one-time corrections without mutating content.
+- [Bible Study coverage queue](bible-study-coverage-queue.md) — generation and progress views must use the canonical 66-book catalogue and prioritize unfinished coverage, not a seed-book shortlist.
+- [YouTube OAuth production origin](youtube-oauth-production-origin.md) — production callback must use emmaus.co.za and one-time state, not the returning browser session cookie.
+- [YouTube Whisper pending state](youtube-whisper-pending.md) — caption-miss markers need an explicit retry path; the bulk pipeline must not leave them stranded.
+- [Ask Emmaus and Voice canonical actions](ask-emmaus-voice-canonical-actions.md) — questions are not navigation; executable routes come only from the authenticated server catalogue.
+- [Authenticated JSON cache policy](authenticated-json-cache-policy.md) — browser 304 responses have no JSON body; authenticated client fetches must bypass conditional caching when they cannot rehydrate from a cache.
+- [Room navigation guards](room-navigation-guards.md) — room routes must bypass Daily Rhythm interception, and asynchronously loaded detail components must keep hooks above early returns.
+- [Shared room tool lifecycle](shared-room-tool-lifecycle.md) — chat and shared AI surfaces need durable session state plus the session SSE path; message SSE alone cannot close or recover tools.
+- [Room message reconciliation](room-message-reconciliation.md) — optimistic Room posts must use a client-generated ID shared by POST and SSE; field-based echo matching is only a fallback.
+- [Ask Emmaus capability router](ask-emmaus-capability-router.md) — typed app actions resolve from server-owned capabilities; preserve the Voice-context bypass in the shared service.
+- [Jarvis foundation](jarvis-foundation.md) — typed Ask Emmaus contract wraps legacy metadata; authenticated context is server-assembled and Voice remains outside the boundary.
+- [Ask Emmaus release gate](ask-emmaus-release-gate.md) — final visible latency follows normalization; TTFT alone is not a user-facing release measure.
+- [Dated devotional resolution](ask-emmaus-dated-devotionals.md) — Ask Emmaus resolves date-labelled devotionals by Johannesburg date, never progress; Daily Rhythm remains server-gated.
+- [Daily Reminders delivery](daily-reminders-delivery.md) — Web Push uses per-device ownership, timezone-instant completion suppression, and an at-most-once scheduled worker.
+- [Appearance preferences](appearance-preferences.md) — dark mode and text size are account-backed with local retry; scale typography utilities, never the entire layout root.
+- [Persistent meeting media](persistent-meeting-media.md) — LiveKit belongs above routes; media permissions follow explicit mode and device intent.
+- [Meeting presentation authority](meeting-presentation-authority.md) — presentation mutations and hydration are session-scoped; REST and SSE responses must pass the same stale-state checks.
+- [Pastoral resource allocation](discipleship-resource-allocation.md) — classify admin profile resources from authoritative source types/IDs, never display-title matching.
+- [Pastoral briefing rules](pastoral-briefing-rules.md) — Today uses a separate church-scoped, read-only evaluation policy; it must not create persisted pastoral side effects.
+- [Pastoral dashboard error boundaries](pastoral-dashboard-error-boundaries.md) — distinguish valid empty pastoral data from failed aggregates and preserve healthy sections.
+- [Member Personal Details](member-personal-details.md) — self-service profile fields stay on the auth-subject profile row and sync directly to Church Register.
+- [API artifact health path](api-artifact-health-path.md) — Replit promotion probes the API artifact preview path as well as the explicit health endpoint.
+- [Native Android build environment](android-phase1-build.md) — Capacitor 8 Android builds need standard OpenJDK 21 plus Android SDK 36; GraalVM is incompatible with the JDK image transform.
+- [Native WebView bootstrap](native-webview-bootstrap.md) — never block React mounting on an Android plugin bridge call; deep-link handoff may finish after the app renders.
+- [Release branch commit path](release-branch-commit.md) — source commits for the release branch use the connected GitHub API, not local Git remotes or resets.
+- [GitHub commit resolution](github-commit-resolution.md) — when a requested commit is absent locally, use the connected repository’s commit endpoint as the source of truth.

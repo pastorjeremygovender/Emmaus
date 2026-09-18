@@ -1,0 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap');
+
+:root {
+  --background: 35 25% 97%;
+  --foreground: 222 20% 18%;
+  --card: 35 20% 94%;
+  --card-foreground: 222 20% 18%;
+  --border: 35 15% 85%;
+  --primary: 168 38% 35%;
+  --primary-foreground: 35 25% 97%;
+  --muted: 35 15% 89%;
+  --muted-foreground: 222 10% 47%;
+  --radius: 0.75rem;
+  --font-sans: 'Inter', sans-serif;
+}
+
+.dark {
+  --background: 222 20% 12%;
+  --foreground: 35 25% 97%;
+  --card: 222 18% 17%;
+  --card-foreground: 35 25% 97%;
+  --border: 222 12% 28%;
+  --primary: 168 38% 50%;
+  --primary-foreground: 222 20% 12%;
+  --muted: 222 14% 23%;
+  --muted-foreground: 35 10% 68%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+}

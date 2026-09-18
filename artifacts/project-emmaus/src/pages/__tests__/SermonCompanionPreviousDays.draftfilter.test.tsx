@@ -126,7 +126,7 @@ describe('SermonCompanionPreviousDays — Draft entry filtering', () => {
     render(<SermonCompanionPreviousDays />);
 
     await waitFor(() => {
-      expect(screen.getByText(/no previous companion days/i)).toBeInTheDocument();
+      expect(screen.getByText(/no previous companion steps are available yet/i)).toBeInTheDocument();
     });
 
     expect(screen.queryByText('Hidden Day One')).not.toBeInTheDocument();
@@ -189,7 +189,7 @@ describe('SermonCompanionPreviousDays — Draft entry filtering', () => {
     render(<SermonCompanionPreviousDays />);
 
     await waitFor(() => {
-      expect(screen.getByText(/no previous companion days/i)).toBeInTheDocument();
+      expect(screen.getByText(/no previous companion steps are available yet/i)).toBeInTheDocument();
     });
   });
 });

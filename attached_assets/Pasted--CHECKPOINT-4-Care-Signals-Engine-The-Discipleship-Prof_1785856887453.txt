@@ -1,0 +1,375 @@
+# CHECKPOINT 4 – Care Signals Engine
+
+The Discipleship Profile is now complete.
+
+The next feature is the Care Signals Engine.
+
+This should become one of Emmaus' flagship features.
+
+The goal is NOT to analyse people.
+
+The goal is simply to notice meaningful discipleship changes that a pastor may otherwise miss.
+
+Emmaus must never diagnose motives or emotions.
+
+It only observes objective events and meaningful changes.
+
+Every signal must be explainable by data.
+
+Every signal must contain the exact evidence that triggered it.
+
+No AI guesses.
+
+No psychological conclusions.
+
+No hidden scoring.
+
+No "risk rating."
+
+Only observations.
+
+---
+
+## Design Principles
+
+Signals should feel like another caring leader quietly saying,
+
+"I noticed something you may want to know."
+
+Never
+
+"This person has a problem."
+
+---
+
+## Categories
+
+Create five signal categories.
+
+🟢 Celebration
+
+🔵 Growth
+
+🟡 Attention
+
+🟠 Follow-up
+
+🔴 Significant
+
+Each signal belongs to one category.
+
+---
+
+## Initial Signal Library
+
+### Celebration
+
+Completed first Walk
+
+Completed Made Free
+
+Completed Foundations
+
+Finished Bible Study
+
+Joined first Room
+
+Started serving
+
+100-day Daily Rhythm streak
+
+Baptised
+
+Accepted Christ
+
+Prayer request marked answered
+
+---
+
+### Growth
+
+Started a new Walk
+
+Started Daily Rhythm
+
+Joined a Room
+
+Started Bible Study
+
+Started serving
+
+Completed another milestone
+
+Consistent attendance for 8 weeks
+
+Regular Emmaus engagement
+
+---
+
+### Attention
+
+Attendance declining compared with previous pattern
+
+Daily Rhythm stopped
+
+Walk inactive for 14 days
+
+Bible Study inactive
+
+Room participation stopped
+
+Serving paused
+
+Prayer request open for more than 30 days
+
+---
+
+### Follow-up
+
+Missed three expected services
+
+No Emmaus activity for 30 days
+
+Stopped Made Free midway
+
+Stopped Foundations midway
+
+Left every Room
+
+Removed all active Walks
+
+Repeated attendance corrections
+
+---
+
+### Significant
+
+Accepted Christ
+
+Baptised
+
+Hospital visit recorded
+
+Bereavement recorded
+
+Marriage
+
+Birth of child
+
+Pastoral intervention recorded
+
+Major life milestone
+
+These should stay visible longer than ordinary signals.
+
+---
+
+## Signal Card
+
+Each signal should display
+
+Category colour
+
+Title
+
+Short explanation
+
+Evidence
+
+Date detected
+
+Status
+
+New
+
+Acknowledged
+
+Following Up
+
+Resolved
+
+Dismissed
+
+Assigned leader
+
+Optional pastoral note
+
+Every status change must be audited.
+
+---
+
+## Explainability
+
+Every signal must include exactly why it appeared.
+
+Example
+
+Attendance Declining
+
+Reason
+
+Attended 11 of previous 12 services.
+
+Attended 2 of last 6 services.
+
+Detected today.
+
+NOT
+
+"Jeremy appears to be disengaging."
+
+Never infer.
+
+Only report facts.
+
+---
+
+## Dashboard
+
+Create a Care Signals dashboard.
+
+Sections
+
+Today's Celebrations
+
+People Growing
+
+Needs Attention
+
+Follow-up Required
+
+Recently Resolved
+
+Each section should show
+
+Person
+
+Signal
+
+Detected
+
+Assigned leader
+
+Quick actions
+
+Open Profile
+
+Acknowledge
+
+Assign
+
+Resolve
+
+Dismiss
+
+---
+
+## Person Profile
+
+Add a Care Signals section directly below the Hero Summary.
+
+Newest first.
+
+Allow filtering
+
+Open
+
+Resolved
+
+Dismissed
+
+Celebrations
+
+Attention
+
+Significant
+
+---
+
+## Notifications
+
+Do NOT send notifications automatically.
+
+Only surface signals inside the Admin Dashboard.
+
+Future checkpoints may enable notifications.
+
+---
+
+## Rules Engine
+
+Build every signal as an independent rule.
+
+Each rule should have
+
+Name
+
+Enabled
+
+Threshold
+
+Severity
+
+Description
+
+Evidence builder
+
+Rules should be configurable later from Admin Settings.
+
+Adding a new signal should require creating one new rule only.
+
+Existing rules should never need modification.
+
+---
+
+## Future-proofing
+
+The engine must support future signals from
+
+Attendance
+
+Walks
+
+Daily Rhythm
+
+Bible Studies
+
+Rooms
+
+Serving
+
+Prayer Requests
+
+Sermons
+
+Media Studio
+
+Giving (optional future)
+
+Volunteer Scheduling
+
+Without redesigning the engine.
+
+---
+
+## Success Criteria
+
+When a pastor opens Emmaus on Monday morning they should immediately see
+
+Who should be celebrated
+
+Who is growing
+
+Who may need encouragement
+
+Who needs follow-up
+
+Why Emmaus generated each signal
+
+The dashboard should save pastors time while keeping discipleship—not administration—at the centre.
+
+No assumptions.
+
+No AI diagnoses.
+
+Only clear, explainable observations supported by objective data.

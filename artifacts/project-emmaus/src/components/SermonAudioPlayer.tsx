@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { getApiUrl } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { accountStorageKey } from '@/lib/account-storage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -46,6 +48,7 @@ export function SermonAudioPlayer({
   speaker,
   watchUrl,
 }: SermonAudioPlayerProps) {
+  const { user } = useAuth();
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const [playing, setPlaying] = useState(false);
@@ -56,13 +59,20 @@ export function SermonAudioPlayer({
   const [error, setError] = useState<string | null>(null);
   const [initialised, setInitialised] = useState(false);
 
-  const resumeKey = `emmaus_audio_pos_${audioUrl}`;
+  const resumeKey = user?.id
+    ? accountStorageKey(`emmaus_audio_pos_${audioUrl}`, user.id)
+    : null;
   const fullUrl = getApiUrl(audioUrl);
+
+  useEffect(() => {
+    setInitialised(false);
+    setCurrentTime(0);
+  }, [resumeKey]);
 
   // ── Restore position when sheet opens ───────────────────────────────────
 
   useEffect(() => {
-    if (!open || !audioRef.current) return;
+    if (!open || !audioRef.current || !resumeKey) return;
     if (initialised) return; // only on first open per mount
 
     const saved = parseFloat(localStorage.getItem(resumeKey) ?? 'NaN');
@@ -79,7 +89,7 @@ export function SermonAudioPlayer({
   // ── Save position when closing / unmounting ──────────────────────────────
 
   const savePosition = useCallback(() => {
-    if (audioRef.current && currentTime > 2) {
+    if (resumeKey && audioRef.current && currentTime > 2) {
       localStorage.setItem(resumeKey, String(Math.round(currentTime)));
     }
   }, [resumeKey, currentTime]);

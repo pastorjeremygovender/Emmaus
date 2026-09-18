@@ -1,7 +1,7 @@
 /**
  * Onboarding — first-time member experience.
  *
- * Shown once per account (tracked via localStorage 'emmaus_onboarded').
+ * Shown once per verified account.
  * Does NOT show on subsequent logins.
  *
  * Flow:
@@ -13,7 +13,7 @@
  *           "Let's begin by spending 10 Minutes with Jesus."
  *           [Begin 10 Minutes with Jesus] → /daily-rhythm/day/1 (or /walk)
  *
- * On complete: sets emmaus_onboarded = 'true' in localStorage.
+ * On complete: records an account-scoped browser marker.
  */
 
 import { useState, useEffect } from 'react';
@@ -78,7 +78,8 @@ export default function Onboarding() {
   // ── Step 1 handler ───────────────────────────────────────────────────────────
 
   function handleBegin() {
-    markOnboarded();
+    if (!user?.id) return;
+    markOnboarded(user.id);
     if (coreJourney) {
       startJourney(coreJourney.id);
       setLocation('/daily-rhythm/day/1');

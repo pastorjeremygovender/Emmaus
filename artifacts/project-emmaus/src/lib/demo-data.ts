@@ -1,3 +1,5 @@
+import { PASTOR_DISPLAY_NAME } from '@/lib/pastor-name';
+
 export const DEMO_USER = {
   id: 'demo-user-1',
   email: 'demo@emmaus.church',
@@ -49,7 +51,7 @@ export const DEMO_JOURNEYS = [
     status: "Published",
     sermon: {
       title: "God's Kindness Restores the Broken",
-      speaker: "Pastor Jeremy Govender",
+      speaker: PASTOR_DISPLAY_NAME,
       scripture: "2 Samuel 9",
       youtubeUrl: "https://www.youtube.com/watch?v=PLACEHOLDER_VIDEO_ID"
     }

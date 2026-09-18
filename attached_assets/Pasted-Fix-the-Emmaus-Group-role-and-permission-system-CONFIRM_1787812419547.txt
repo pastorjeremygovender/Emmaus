@@ -1,0 +1,282 @@
+Fix the Emmaus Group role and permission system.
+
+CONFIRMED BUG
+
+The “Emmaus Test” Group was created by ICC. ICC is correctly displayed with the crown as the Group Owner/Leader.
+
+Jeremy joined the Group as an ordinary member and has no crown or Leader designation. However, Jeremy can currently:
+
+- Add or edit the Leader’s Note
+- Add a Walk
+- Schedule a meeting
+- Start a meeting
+
+This is incorrect. An ordinary Group member must not receive Leader permissions because they are an Emmaus administrator, church administrator, content administrator, or Pastor elsewhere in the application.
+
+Group permissions must be determined by the user’s role inside that specific Group.
+
+REQUIRED GROUP ROLES
+
+Implement or confirm these three Group-specific roles:
+
+1. OWNER
+
+The person or church account that created the Group.
+
+The Owner may:
+
+- Edit Group details and settings
+- Add, change, or remove a Walk, Journey, or other Group content
+- Add or edit the Leader’s Note
+- Schedule, edit, or cancel meetings
+- Start and end meetings
+- Invite and remove members
+- Promote a member to Leader
+- Remove a Leader
+- Transfer ownership
+- Archive or delete the Group
+
+There must be only one Owner unless the existing architecture intentionally supports organisational ownership.
+
+2. LEADER
+
+A member explicitly appointed by the Owner or another authorized Leader.
+
+A Leader may:
+
+- Add, change, or remove Group content
+- Add or edit the Leader’s Note
+- Schedule, edit, or cancel meetings
+- Start and end meetings
+- Invite members
+- Use Group Leader tools
+- Manage members only where specifically permitted
+
+A Leader must be visibly marked as “Leader” in the member list. Use a suitable Leader badge or icon. Reserve the crown for the Owner.
+
+3. MEMBER
+
+A normal person who joins through an invitation or access code.
+
+A Member may:
+
+- View the Group
+- Read the Leader’s Note
+- View the selected Walk or Journey
+- View scheduled meeting details
+- Join a meeting after an Owner or Leader has started it
+- Participate in discussions and other permitted Group activities
+- Complete assigned content
+- Leave the Group
+
+A Member must not be able to:
+
+- Add, change, or remove a Walk, Journey, or other Group content
+- Add, edit, or delete the Leader’s Note
+- Schedule, edit, or cancel a meeting
+- Start or end a meeting
+- Access Leader meeting controls
+- Change Group settings
+- Promote, demote, invite, or remove members unless specifically authorized
+- Archive or delete the Group
+
+IMPORTANT PERMISSION RULE
+
+Global application roles and Group roles must remain separate.
+
+Being any of the following must not automatically grant leadership control inside every Group:
+
+- Emmaus administrator
+- ICC administrator
+- Church administrator
+- Content administrator
+- Pastor
+- Staff member
+- Group creator in another Group
+
+A user receives Group leadership permissions only when that user is the Owner or has explicitly been assigned the Leader role in that particular Group.
+
+Jeremy must remain an ordinary Member in the “Emmaus Test” Group unless ICC explicitly promotes Jeremy to Leader.
+
+USER INTERFACE FIX
+
+For an ordinary Member such as Jeremy, change the Group screen as follows:
+
+GROUP CONTENT
+
+- Display the selected Walk or Journey if one has been added.
+- If no content is selected, show:
+  “No Walk or Journey has been added yet.”
+- Do not show “Add a Walk.”
+- Do not make the empty content area tappable.
+
+LEADER’S NOTE
+
+- If a note exists, show it as read-only.
+- Do not show “Add note,” an edit icon, or any editable field.
+- If no note exists, either hide the section or show:
+  “No Leader’s Note has been added yet.”
+- Do not show the editable placeholder:
+  “Add a note for your group…”
+
+MEETING
+
+- Display scheduled meeting information as read-only.
+- Do not show “Schedule” or “Schedule a meeting.”
+- If no meeting is scheduled, show:
+  “No meeting has been scheduled yet.”
+
+START/JOIN BUTTON
+
+- Do not show “Start Meeting” to Members.
+- Before a Leader starts the meeting, either show no button or a disabled status:
+  “Meeting has not started.”
+- Once the Owner or a Leader starts the meeting, show:
+  “Join Meeting”
+- A Member tapping “Join Meeting” should enter the active meeting as a participant, never as a Leader or host.
+
+MEMBER LIST
+
+- Display the Owner with a crown and the label “Owner.”
+- Display appointed Leaders with a clear “Leader” badge.
+- Display ordinary users without a crown or Leader badge.
+- Continue showing “(you)” next to the current user.
+
+OWNER LEADERSHIP MANAGEMENT
+
+Add a safe way for the Owner to appoint a Member as Leader:
+
+- Open the Member’s menu
+- Select “Make Leader”
+- Show a confirmation:
+  “Make [name] a Leader of this Group?”
+- On confirmation, update that member’s Group-specific role to Leader
+
+Allow the Owner to select:
+
+- “Remove as Leader”
+
+This must return the person to the Member role without removing them from the Group.
+
+Do not allow an ordinary Member to promote themselves by manipulating the interface or API request.
+
+SERVER-SIDE SECURITY
+
+Do not fix this only by hiding buttons.
+
+Every protected Group action must check the authenticated user’s role for that exact Group on the server before making any change.
+
+Owner or Leader authorization is required for endpoints/actions that:
+
+- Add, change, or remove Group content
+- Create, edit, or delete a Leader’s Note
+- Schedule, update, or cancel a meeting
+- Start or end a meeting
+- Access host/Leader meeting credentials
+- Manage invitations where restricted
+- Promote, demote, or remove members
+- Change Group settings
+
+Owner-only authorization is required for:
+
+- Promoting or demoting Leaders, unless intentionally delegated
+- Transferring ownership
+- Archiving or deleting the Group
+
+Unauthorized requests must return HTTP 403 with a safe message such as:
+
+“You do not have permission to perform this Group action.”
+
+Do not rely on role information supplied by the client. Load the current user’s Group membership and role from the database for every protected mutation.
+
+LIVE MEETING SECURITY
+
+Meeting credentials or LiveKit tokens must reflect the Group role:
+
+- Owner/Leader: host or moderator permissions
+- Member: participant permissions only
+
+A Member must not be able to obtain a host token by directly calling the meeting-start or token endpoint.
+
+DATA AND MIGRATION SAFETY
+
+Do not delete or recreate existing Groups.
+
+Preserve:
+
+- Existing Groups
+- Owners
+- Leaders
+- Members
+- Invitations and access codes
+- Selected content
+- Leader’s Notes
+- Scheduled meetings
+- Discussions and messages
+- Existing meeting records
+
+Inspect the existing schema before changing it.
+
+If Group roles are missing or inconsistent, safely migrate existing records:
+
+- Existing Group creator becomes Owner
+- Existing explicitly appointed Group Leaders remain Leaders
+- Everyone else becomes Member
+- Do not promote all administrators or staff to Group Leaders
+
+If a Group was created by an organisation account such as ICC, preserve ICC as Owner.
+
+REACTIVE PERMISSION STATE
+
+After a user is promoted or demoted, refresh the Group permissions immediately.
+
+Do not require the user to sign out and sign in again.
+
+Ensure permission queries use the current Group ID and current authenticated user. Do not reuse cached leadership permissions from another Group.
+
+TEST BEFORE REPORTING COMPLETE
+
+Test using two genuinely separate accounts:
+
+Account A:
+ICC — Owner of “Emmaus Test”
+
+Account B:
+Jeremy — ordinary Member
+
+While signed in as Jeremy, confirm:
+
+- “Add a Walk” is not visible
+- “Add note” is not visible
+- Leader’s Note cannot be edited
+- “Schedule” is not visible
+- “Schedule a meeting” is not visible
+- “Start Meeting” is not visible
+- Group settings cannot be changed
+- Protected API requests return 403
+- Jeremy can read existing Group information
+- Jeremy can join only after ICC starts the meeting
+
+Then, while signed in as ICC:
+
+- Confirm ICC is displayed as Owner
+- Confirm ICC can add content
+- Confirm ICC can add a Leader’s Note
+- Confirm ICC can schedule and start a meeting
+- Promote Jeremy to Leader
+
+Return to Jeremy’s account and confirm:
+
+- Jeremy is visibly marked as Leader
+- Leader controls appear without signing out
+- Jeremy can perform authorized Leader actions
+
+Then use ICC to remove Jeremy as Leader and confirm:
+
+- Jeremy returns to Member
+- All Leader controls disappear immediately
+- Protected API actions return 403 again
+
+Check at mobile screen width and ensure Ask Emmaus does not cover any important Group action.
+
+Do not report this as fixed merely because the buttons were hidden. Verify both the user interface and server-side authorization using the published Emmaus production application.

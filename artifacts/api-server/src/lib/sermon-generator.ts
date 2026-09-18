@@ -17,12 +17,57 @@ import { randomUUID } from "node:crypto";
 import { getVideoMetadata } from "./youtube-client.js";
 import { listCaptionTracks, downloadCaptionTrack } from "./youtube-client.js";
 import { getValidAccessToken } from "./oauth-store.js";
-import { createCompanion, deleteCompanion } from "./sermon-companion-store.js";
-import { upsertAdminSermon } from "./admin-sermon-store.js";
+import {
+  createCompanion,
+  getCompanionBySermonId,
+  replaceCompanionForSermon,
+  verifyCompanionPersistence,
+  EXPECTED_GENERATED_COMPANION_DAYS,
+} from "./sermon-companion-store.js";
+import {
+  createSermon,
+  deleteSermonFully,
+  getSermonByYoutubeVideoId,
+  updateSermon as updateCanonicalSermon,
+} from "./canonical-sermon-store.js";
 import { logger } from "./logger.js";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const MODEL = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
+
+// ─── Model capability detection ───────────────────────────────────────────────
+
+/**
+ * True for models that reject sampling parameters such as `temperature`.
+ * gpt-5 and o-series reasoning models only accept the default temperature (1)
+ * and will return a 400 if any other value is sent.
+ */
+const IS_REASONING_MODEL = /^o\d/i.test(MODEL) || /^gpt-5/i.test(MODEL);
+
+/**
+ * Returns only the OpenAI completion parameters that the active model supports.
+ *
+ * Usage:
+ *   openai.chat.completions.create({
+ *     model: MODEL,
+ *     ...getSupportedModelOptions(),   // safe — omits temperature for gpt-5 / o-series
+ *     messages: [...],
+ *   })
+ *
+ * Rules:
+ * - Reasoning models (gpt-5, o-series): no temperature, no top_p, no penalties.
+ *   The API returns 400 "Unsupported value: 'temperature'" if these are included.
+ * - Standard models: temperature and other sampling params are allowed. Callers
+ *   that previously hard-coded a non-default temperature should migrate here.
+ *   Omit the parameter entirely (rather than sending 1) to let the model default apply.
+ */
+function getSupportedModelOptions(): Record<string, unknown> {
+  if (IS_REASONING_MODEL) return {};
+  // Standard models: return no extra params here — callers that truly need a
+  // non-default temperature can spread their own value, but the sermon pipeline
+  // no longer sets temperature explicitly (model defaults are sufficient).
+  return {};
+}
 
 // ─── Structured generation errors ────────────────────────────────────────────
 
@@ -512,7 +557,7 @@ The Big Idea is:
 
 Rules:
 - ONE sentence only — never a list, never a paragraph
-- Plain, pastoral language the pastor himself would use
+- Plain, pastoral language
 - No theological jargon ("Christocentric", "covenantal", "eschatological", etc.)
 - No vague generic phrases ("we should trust God", "faith is important")
 - Specific to THIS sermon — not a spiritual platitude that could apply to any sermon
@@ -691,15 +736,10 @@ export function hasPrescription(text: string): boolean {
 }
 
 // ─── Sermon-link builder ──────────────────────────────────────────────────────
-
-/**
- * Build a timestamped YouTube URL from a videoId and start time in seconds.
- * Returns '' when either input is missing or startSeconds is invalid.
- */
-export function buildSermonLink(videoId: string, startSeconds: number | null | undefined): string {
-  if (!videoId || startSeconds == null || !isFinite(startSeconds) || startSeconds < 0) return '';
-  return `https://www.youtube.com/watch?v=${videoId}&t=${Math.floor(startSeconds)}s`;
-}
+// Imported for use within this file; also re-exported so callers can import
+// from either sermon-generator or sermon-timestamp-utils directly.
+import { buildSermonLink, buildSermonTimeline } from "./sermon-timestamp-utils.js";
+export { buildSermonLink, buildSermonTimeline };
 
 // ─── OpenAI: companion generation ────────────────────────────────────────────
 
@@ -729,9 +769,21 @@ Never add "supporting verses" or "related passages".
 Never quote a verse merely because it fits the theme.
 
 DAYS RULE:
-Generate between 1 and 5 days based on the number of distinct ideas the preacher actually preached.
-Do not stretch weak material. Do not invent extra days merely to reach 5.
-If the sermon has only 2 or 3 clear ideas, generate only 2 or 3 days.
+Target exactly 5 days. Identify all the distinct ideas from the sermon and group or expand
+them into 5 days. Minor related ideas may be combined into a single day, or a strong point
+may be extended across two days, so long as every day is genuinely grounded in the transcript.
+Generate fewer than 5 only when the sermon genuinely cannot support 5 days of devotional material
+— for example, a short 10-minute sermon with only 2 clear ideas should yield 2 days, not a padded 5.
+Never invent ideas not present in the transcript to reach 5.
+
+SPEAKER RULE:
+Never refer to the speaker as "the pastor", "the preacher", or "the speaker".
+If a speakerName is provided in the context, use it naturally where attribution genuinely matters
+(e.g. "Pastor Jeremy reminded us...", "Pastor Jeremy drew our attention to...").
+Where personal attribution is not needed, prefer communal language:
+"we reflected on", "we saw", "we spoke about", "in the sermon we heard".
+Do not insert the speaker's name into every paragraph — use it sparingly and naturally.
+If no speakerName is provided, use only communal phrasing; never invent a name.
 
 EACH DAY MUST CONTAIN:
 - title: derived from what the preacher said, not invented
@@ -744,7 +796,10 @@ EACH DAY MUST CONTAIN:
   begin with "Lord," or "Father,"; never "Dear God"
 - nextStep: 1 sentence; one gentle, non-formulaic action directly from the
   preacher's emphasis; no counts, no repetition, no cards, no rituals
-- sources: at least one object identifying the sermon segment for this day
+- sources: at least one object identifying the sermon segment for this day.
+  Use the SERMON TIMESTAMP LANDMARKS provided below (if any) to set startSeconds.
+  Pick the landmark whose content most closely matches the idea for this day.
+  If no landmarks are provided, estimate startSeconds as best you can from context.
 
 Return ONLY valid JSON — no markdown, no explanation.
 
@@ -776,6 +831,14 @@ async function generateCompanion(context: {
   transcript: string;
   mainTheme: string;
   videoId: string;
+  /** Speaker's name (e.g. "Jeremy Govender"). Used in generated content instead of "the pastor". */
+  speakerName?: string;
+  /** VTT timed cues from the caption track — used to build real timestamp anchors. */
+  timedCues?: TimedCue[];
+  /** Detected sermon start time in seconds (used to filter timedCues to sermon window). */
+  sermonStartSecs?: number | null;
+  /** Detected sermon end time in seconds. */
+  sermonEndSecs?: number | null;
 }): Promise<{
   companionTitle: string;
   days: CompanionEntryDraft[];
@@ -786,16 +849,40 @@ async function generateCompanion(context: {
     ? `\n\nSermon transcript:\n${context.transcript.split(/\s+/).slice(0, 8000).join(" ")}`
     : "";
 
+  // Build real timestamp landmarks when timedCues are available so the model can
+  // anchor sources[0].startSeconds to genuine caption timestamps rather than guessing.
+  let timelineSnippet = "";
+  if (context.timedCues && context.timedCues.length > 0) {
+    const landmarks = buildSermonTimeline(
+      context.timedCues,
+      context.sermonStartSecs ?? null,
+      context.sermonEndSecs ?? null,
+    );
+    if (landmarks.length > 0) {
+      timelineSnippet = "\n\nSERMON TIMESTAMP LANDMARKS (real times — pick the nearest `secs` value for sources[0].startSeconds):\n"
+        + landmarks.map(l => `[${l.mmss} = ${l.secs}s] "${l.preview}"`).join("\n");
+    }
+  }
+
+  // Build a "Pastor X" style label for use in content, or fall back to communal phrasing.
+  // The SPEAKER RULE in COMPANION_SYSTEM governs how this is used — see that prompt.
+  const speakerLabel = context.speakerName
+    ? `Pastor ${context.speakerName.split(" ")[0]}`  // e.g. "Jeremy Govender" → "Pastor Jeremy"
+    : "";
+
   const userMsg = `Confirmed Main Theme: ${context.mainTheme}
 
 Sermon title: ${context.sermonTitle}
 Scripture: ${context.scriptureReference}
-Summary: ${context.summary}${transcriptSnippet}`;
+Speaker: ${speakerLabel || "(not specified — use communal 'we' language instead of any pastor reference)"}
+Summary: ${context.summary}${transcriptSnippet}${timelineSnippet}`;
 
   const res = await openai.chat.completions.create({
     model: MODEL,
-    // Low temperature: extraction and controlled summarisation, not creative generation.
-    temperature: 0.2,
+    // Do NOT set temperature here — reasoning models (gpt-5, o-series) reject any
+    // non-default value and return 400. Use getSupportedModelOptions() which returns
+    // {} for reasoning models, letting the API default (1) apply for all models.
+    ...getSupportedModelOptions(),
     messages: [
       { role: "system", content: COMPANION_SYSTEM },
       { role: "user", content: userMsg },
@@ -822,7 +909,16 @@ Summary: ${context.summary}${transcriptSnippet}`;
     const startSeconds = typeof firstSource.startSeconds === "number"
       ? firstSource.startSeconds
       : null;
-    const sermonLink = buildSermonLink(context.videoId, startSeconds);
+
+    // Only generate a seek link when we have real VTT timestamps to anchor it.
+    // Audio-first companions have no timed cues — the AI estimates relative to a
+    // plain-text transcript, which is unreliable for playback seek. Showing a chip
+    // that takes a member to the wrong moment is worse than showing none.
+    const hasRealTimestamps =
+      (context.timedCues && context.timedCues.length > 0) || Boolean(context.videoId);
+    const sermonLink = hasRealTimestamps
+      ? buildSermonLink(context.videoId, startSeconds, context.sermonStartSecs)
+      : '';
 
     // sermonIdea is stored in the `greeting` field (repurposed from personal greeting).
     const sermonIdea = typeof d.sermonIdea === "string" ? d.sermonIdea : "";
@@ -957,6 +1053,52 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
   const videoId = extractVideoId(youtubeUrl);
   if (!videoId) {
     throw new GenerationError("INVALID_YOUTUBE_URL", "Please enter a valid YouTube video link.");
+  }
+
+  // A retried request after a successful commit must return the durable result
+  // instead of creating a second sermon and companion for the same video.
+  const existingSermon = await getSermonByYoutubeVideoId(videoId);
+  if (existingSermon) {
+    const existingCompanion = await getCompanionBySermonId(existingSermon.id);
+    if (existingCompanion) {
+      const verifiedCompanion = await verifyCompanionPersistence(existingCompanion.id);
+      return {
+        sermon: {
+          id: existingSermon.id,
+          title: existingSermon.title,
+          speaker: existingSermon.speaker,
+          sermonDate: existingSermon.sermonDate,
+          series: existingSermon.series,
+          scriptureReference: existingSermon.scriptureReference,
+          youtubeUrl: existingSermon.youtubeUrl,
+          summary: existingSermon.summary,
+          topics: existingSermon.themes,
+          keywords: existingSermon.keywords,
+          transcript: existingSermon.fullTranscript || existingSermon.transcript,
+          sermonTranscript: existingSermon.transcript,
+          sermonStartTime: existingSermon.sermonStartTime,
+          sermonEndTime: existingSermon.sermonEndTime,
+          detectionConfidence: existingSermon.detectionConfidence,
+          detectionMethod: existingSermon.detectionMethod,
+          transcriptStatus: existingSermon.transcriptStatus,
+          aiIndexStatus: "none",
+          companionJourneyId: verifiedCompanion.id,
+          mainTheme: existingSermon.mainTheme,
+          status: "draft",
+          pastorEdited: false,
+          updatedAt: existingSermon.updatedAt,
+        },
+        companion: {
+          id: verifiedCompanion.id,
+          title: verifiedCompanion.title,
+          entries: verifiedCompanion.entries ?? [],
+        },
+      };
+    }
+    throw new GenerationError(
+      "GENERATION_FAILED",
+      "A sermon draft already exists for this YouTube video but its Companion is incomplete. Open the existing draft instead of retrying.",
+    );
   }
 
   // 1. Fetch metadata
@@ -1181,7 +1323,11 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
       summary: draftFields.summary,
       transcript: sermonTranscript,   // ← sermon only
       mainTheme,
+      speakerName: draftFields.speaker || undefined,  // ← drives speaker attribution in content
       videoId,                         // ← needed for timestamped sermon links
+      timedCues,                        // ← real VTT timestamps for landmark anchoring
+      sermonStartSecs: detectionStartSecs,
+      sermonEndSecs:   detectionEndSecs,
     });
   } catch (err) {
     logger.error({ err }, "sermon-generator: OpenAI companion generation failed");
@@ -1197,13 +1343,11 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     sermonLinksGenerated: companionDraft.days.filter(d => d.sermonLink).length,
   }, "sermon-generator: companion draft parsed");
 
-  // Validate companion — must have at least 1 entry with substantive reflection.
-  // No longer enforces exactly 5 days: the model generates as many days as the
-  // sermon content genuinely supports.
+  // Validate companion — the first successful save must contain all five days.
   const emptyEntries = companionDraft.days.filter(
     d => !d.reflection || d.reflection.trim().length < 30,
   );
-  if (companionDraft.days.length < 1 || companionDraft.days.length > 5 || emptyEntries.length > 0) {
+  if (companionDraft.days.length !== EXPECTED_GENERATED_COMPANION_DAYS || emptyEntries.length > 0) {
     logger.error({
       entryCount: companionDraft.days.length,
       emptyEntryCount: emptyEntries.length,
@@ -1215,17 +1359,102 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     );
   }
 
-  // 7. Save companion to DB — only reached when both AI outputs passed validation
-  const sermonId = randomUUID();
-  logger.info({ sermonId }, "sermon-generator: saving companion to DB");
-  const savedCompanion = await createCompanion({
-    sermonId,
-    title: companionDraft.companionTitle,
-    numberOfDays: companionDraft.days.length,  // store actual days, not a fixed 5
-    entries: companionDraft.days,
-  });
+  // 7. Persist sermon record directly to canonical DB — only reached when both AI
+  //    outputs passed validation. We create the canonical record first so its UUID
+  //    can be used as the FK on the companion; this replaces the old JSON→dual-write
+  //    path via admin-sermon-store / admin-drafts.json.
+  const now = new Date().toISOString();
 
-  // 7. Build sermon draft record — store both full and sermon-only transcripts
+  // Simple book-ID extractor (mirrors former syncToCanonical logic)
+  function parseBookIds(ref: string): string[] {
+    if (!ref) return [];
+    const lower = ref.toLowerCase();
+    const bookMap: Array<[RegExp, string]> = [
+      [/\bjohn\b/, "john"], [/\bluke\b/, "luke"], [/\bmark\b/, "mark"],
+      [/\bmatthew\b/, "matthew"], [/\bacts\b/, "acts"], [/\bromans\b/, "romans"],
+      [/\bgenesis\b/, "genesis"], [/\bpsalm/, "psalms"], [/\bproverbs\b/, "proverbs"],
+      [/\bisaiah\b/, "isaiah"], [/\bephesians\b/, "ephesians"],
+      [/\bphilippians\b/, "philippians"], [/\bhebrews\b/, "hebrews"],
+      [/\bcolossians\b/, "colossians"], [/\bgalatians\b/, "galatians"],
+    ];
+    return bookMap.filter(([re]) => re.test(lower)).map(([, id]) => id);
+  }
+
+  logger.info({
+    title: draftFields.title,
+    speaker: draftFields.speaker || "(empty — for pastor review)",
+    scriptureReference: draftFields.scriptureReference || "(empty — for pastor review)",
+    mainTheme,
+  }, "sermon-generator: persisting canonical sermon record");
+
+  let canonicalSermon: Awaited<ReturnType<typeof createSermon>>;
+  try {
+    canonicalSermon = await createSermon({
+      legacyJsonId:        null,
+      title:               draftFields.title,
+      speaker:             draftFields.speaker,
+      sermonDate:          meta.publishedAt.split("T")[0],
+      series:              draftFields.series,
+      scriptureReference:  draftFields.scriptureReference,
+      scriptureBookIds:    parseBookIds(draftFields.scriptureReference),
+      scriptureChapters:   [],
+      youtubeUrl:          meta.youtubeUrl,
+      youtubeVideoId:      videoId,
+      audioPath:           "",
+      notes:               "",
+      // transcript = sermon-section only (used by Ask Emmaus and companion generation)
+      transcript:          sermonTranscript || fullTranscript,
+      // fullTranscript = original full recording (retained for re-detection)
+      fullTranscript:      fullTranscript,
+      transcriptStatus:    fullTranscript ? "complete" : "none",
+      summary:             draftFields.summary,
+      themes:              draftFields.topics,
+      sections:            [],
+      keywords:            draftFields.keywords,
+      mainTheme,
+      // Detection metadata — preserved for editor re-detect and boundary display
+      sermonStartTime:     detectionStartSecs != null ? secsToHHMMSS(detectionStartSecs) : "",
+      sermonEndTime:       detectionEndSecs != null ? secsToHHMMSS(detectionEndSecs) : "",
+      detectionConfidence: detectionConfidence ?? 0,
+      detectionMethod:     detectionMethod ?? "none",
+      status:              "Draft",
+      processingStage:     "idle",
+      processingError:     "",
+    });
+  } catch (sermonErr) {
+    logger.error({ err: sermonErr }, "sermon-generator: canonical sermon creation failed");
+    throw new Error("Failed to persist sermon draft. Please try again.");
+  }
+
+  const sermonId = canonicalSermon.id;
+  logger.info({ sermonId }, "sermon-generator: canonical sermon created, saving companion");
+
+  // Create companion linked to the canonical sermon UUID
+  let savedCompanion: Awaited<ReturnType<typeof createCompanion>> | null = null;
+  try {
+    savedCompanion = await createCompanion({
+      sermonId,           // sermon_id text column
+      sermonUuid: sermonId, // sermon_uuid FK to sermons.id
+      title: companionDraft.companionTitle,
+      numberOfDays: EXPECTED_GENERATED_COMPANION_DAYS,
+      entries: companionDraft.days,
+      expectedDays: EXPECTED_GENERATED_COMPANION_DAYS,
+    });
+    savedCompanion = await verifyCompanionPersistence(savedCompanion.id);
+  } catch (companionErr) {
+    logger.error({ err: companionErr, sermonId }, "sermon-generator: companion creation failed — rolling back canonical sermon");
+    try {
+      await deleteSermonFully(sermonId);
+      logger.info({ sermonId }, "sermon-generator: canonical sermon rolled back");
+    } catch (delErr) {
+      logger.error({ err: delErr, sermonId }, "sermon-generator: canonical sermon rollback also failed");
+    }
+    throw new Error("Failed to persist sermon draft. Please try again.");
+  }
+
+  logger.info({ sermonId, companionId: savedCompanion.id }, "sermon-generator: sermon record persisted server-side");
+
+  // Build the return sermon object for the frontend (mirrors former SermonDraftFields shape)
   const sermon: SermonDraftFields = {
     id: sermonId,
     title: draftFields.title,
@@ -1249,36 +1478,8 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     mainTheme,
     status: "draft",
     pastorEdited: false,
-    updatedAt: new Date().toISOString(),
+    updatedAt: now,
   };
-
-  // 7. Persist sermon record server-side.
-  //    The companion (step 5) is already in PostgreSQL. If sermon persistence
-  //    fails we must delete the companion to avoid an orphaned DB record.
-  //    Both records being present is the only valid "draft exists" state.
-  logger.info({
-    sermonId,
-    companionId: savedCompanion.id,
-    title: sermon.title,
-    speaker: sermon.speaker || "(empty — for pastor review)",
-    scriptureReference: sermon.scriptureReference || "(empty — for pastor review)",
-    mainTheme: sermon.mainTheme,
-    summaryLength: sermon.summary?.length ?? 0,
-    companionEntryCount: savedCompanion.entries?.length ?? 0,
-  }, "sermon-generator: persisting sermon record");
-  try {
-    await upsertAdminSermon({ ...sermon, createdAt: sermon.updatedAt });
-    logger.info({ sermonId, companionId: savedCompanion.id }, "sermon-generator: sermon record persisted server-side");
-  } catch (sermonErr) {
-    logger.error({ err: sermonErr, sermonId }, "sermon-generator: sermon persistence failed — rolling back companion");
-    try {
-      await deleteCompanion(savedCompanion.id);
-      logger.info({ companionId: savedCompanion.id }, "sermon-generator: companion rolled back");
-    } catch (delErr) {
-      logger.error({ err: delErr, companionId: savedCompanion.id }, "sermon-generator: companion rollback also failed");
-    }
-    throw new Error("Failed to persist sermon draft. Please try again.");
-  }
 
   return {
     sermon,
@@ -1288,4 +1489,136 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
       entries: savedCompanion.entries ?? [],
     },
   };
+}
+
+// ─── Audio-first pipeline ─────────────────────────────────────────────────────
+
+/**
+ * Generates sermon metadata + 5-day companion from a Whisper transcript,
+ * updating an EXISTING sermon record (already created with admin-provided
+ * metadata from the New Sermon form).
+ *
+ * Unlike generateFromUrl, this path:
+ * - Skips YouTube metadata fetch (no video ID needed)
+ * - Auto-confirms sermon detection and theme (no client confirmation gates)
+ * - Updates the existing sermon record rather than creating a new one
+ * - Replaces any existing companion with a freshly generated one
+ */
+export async function generateSermonContentFromTranscript(
+  sermonId: string,
+  fullTranscript: string,
+  opts: {
+    title?: string;
+    speaker?: string;
+    /** Emits live sub-stage updates so the polling client sees granular progress. */
+    onProgress?: (stage: string) => Promise<void> | void;
+  } = {}
+): Promise<void> {
+  const { onProgress } = opts;
+
+  // 1. Auto-detect sermon section (no confirmation gate)
+  await onProgress?.("detecting");
+  let sermonTranscript = fullTranscript;
+  let detectionStartSecs: number | null = null;
+  let detectionEndSecs: number | null = null;
+  let detectionConfidence = 0.95;
+  let detectionMethod: "ai-auto" | "ai-confirmed" | "manual" | "none" = "none";
+
+  try {
+    const detection = await detectSermonSection(fullTranscript, undefined);
+    sermonTranscript     = detection.sermonTranscript;
+    detectionStartSecs   = detection.startSecs;
+    detectionEndSecs     = detection.endSecs;
+    detectionConfidence  = detection.confidence;
+    detectionMethod      = "ai-auto";
+    logger.info({ sermonId, confidence: detection.confidence }, "sermon-generator: sermon section detected (audio-first)");
+  } catch (detErr) {
+    logger.warn({ err: detErr, sermonId }, "sermon-generator: detection failed, using full transcript");
+  }
+
+  // 2. Generate main theme (auto, no confirmation)
+  let mainTheme = "";
+  try {
+    mainTheme = await generateMainTheme(sermonTranscript);
+  } catch (themeErr) {
+    logger.warn({ err: themeErr, sermonId }, "sermon-generator: theme generation failed");
+  }
+
+  // 3. Generate sermon draft fields from the transcript
+  await onProgress?.("drafting");
+  const draftFields = await generateSermonDraft({
+    title:       opts.title ?? "",
+    description: "",
+    transcript:  sermonTranscript,
+  });
+
+  // 4. Generate 5-day companion
+  await onProgress?.("companion");
+  const companionDraft = await generateCompanion({
+    sermonTitle:        draftFields.title || opts.title || "Sermon",
+    scriptureReference: draftFields.scriptureReference,
+    summary:            draftFields.summary,
+    transcript:         sermonTranscript,
+    mainTheme,
+    speakerName:        opts.speaker || draftFields.speaker || undefined,
+    videoId:            "",
+    // Pass detected sermon start so buildSermonLink can convert the AI's 0-based
+    // transcript estimates into absolute offsets within the full uploaded audio file.
+    sermonStartSecs:    detectionStartSecs ?? 0,
+    sermonEndSecs:      detectionEndSecs ?? undefined,
+  });
+  const emptyEntries = companionDraft.days.filter(
+    d => !d.reflection || d.reflection.trim().length < 30,
+  );
+  if (companionDraft.days.length !== EXPECTED_GENERATED_COMPANION_DAYS || emptyEntries.length > 0) {
+    logger.error({
+      sermonId,
+      entryCount: companionDraft.days.length,
+      emptyEntryCount: emptyEntries.length,
+    }, "sermon-generator: audio-first companion is incomplete — refusing to replace durable content");
+    throw new GenerationError(
+      "GENERATION_FAILED",
+      "Emmaus couldn't generate all five Companion entries. Your existing Companion was not changed.",
+    );
+  }
+
+  // 5. Update existing sermon record with generated content. Keep the
+  // processing stage non-terminal until the companion is persisted below:
+  // the editor polls READY_FOR_REVIEW and immediately hydrates the companion,
+  // so publishing that stage before the insert creates a reload race.
+  await updateCanonicalSermon(sermonId, {
+    transcript:          sermonTranscript,
+    fullTranscript:      fullTranscript,
+    transcriptStatus:    "complete",
+    summary:             draftFields.summary,
+    themes:              draftFields.topics,
+    keywords:            draftFields.keywords,
+    mainTheme,
+    sermonStartTime:     detectionStartSecs != null ? secsToHHMMSS(detectionStartSecs) : "",
+    sermonEndTime:       detectionEndSecs   != null ? secsToHHMMSS(detectionEndSecs)   : "",
+    detectionConfidence,
+    detectionMethod,
+    scriptureReference:  draftFields.scriptureReference,
+    processingStage:     "companion",
+    processingError:     "",
+  });
+
+  // 6. Replace any existing companion transactionally. The old companion stays
+  // intact if inserting or verifying the new parent/children fails.
+  const savedCompanion = await replaceCompanionForSermon({
+    sermonId,
+    title:       companionDraft.companionTitle,
+    entries:     companionDraft.days,
+    expectedDays: EXPECTED_GENERATED_COMPANION_DAYS,
+  });
+  const verifiedCompanion = await verifyCompanionPersistence(savedCompanion.id);
+
+  // Only expose the terminal stage after both the sermon fields and its
+  // companion (including all entries) are durable.
+  await updateCanonicalSermon(sermonId, {
+    processingStage: "READY_FOR_REVIEW",
+    processingError: "",
+  });
+
+  logger.info({ sermonId, companionId: verifiedCompanion.id, days: verifiedCompanion.entries?.length ?? 0 }, "sermon-generator: audio-first pipeline complete");
 }

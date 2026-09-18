@@ -10,9 +10,11 @@ import type { Journey } from '@/lib/journeys-api';
 import { listCollections } from '@/lib/collections-api';
 import { StatusBadge } from '../shared';
 import ContentStudioListItem from './ContentStudioListItem';
-import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls } from './ContentStudioListPage';
+import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls, ReorderButtons } from './ContentStudioListPage';
 import NewJourneyModal from './NewJourneyModal';
 import DeleteJourneyDialog from './DeleteJourneyDialog';
+import GroupMembershipBadge from './GroupMembershipBadge';
+import { moveVisibleOrder, reorderContent } from '@/lib/content-reorder-api';
 
 interface Props {
   collectionId?: string;
@@ -84,8 +86,31 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
         j.tags?.some(t => t.toLowerCase().includes(q))
       );
     }
-    return [...list].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
+    return [...list].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
   }, [journeys, query, statusTab, typeFilter, collectionId, standaloneOnly]);
+
+  const reorderable = useMemo(() => {
+    let list = (journeys as Journey[]).filter(j => j.journeyType !== 'daily-rhythm' && j.journeyType !== 'companion' && j.status !== 'Archived');
+    if (collectionId) list = list.filter(j => (j as any).collectionId === collectionId);
+    if (standaloneOnly) list = list.filter(j => !(j as any).collectionId);
+    return [...list].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+  }, [journeys, collectionId, standaloneOnly]);
+
+  const moveJourney = async (id: string, direction: -1 | 1) => {
+    const visible = filtered.filter(journey => journey.status !== 'Archived');
+    const nextIds = moveVisibleOrder(
+      reorderable.map(journey => journey.id),
+      visible.map(journey => journey.id),
+      id,
+      direction,
+    );
+    if (nextIds.join(',') === reorderable.map(journey => journey.id).join(',')) return;
+    await reorderContent('journey', nextIds, {
+      scope: collectionId ? 'collection' : standaloneOnly ? 'standalone' : 'library',
+      parentId: collectionId,
+    });
+    await refreshJourneys?.();
+  };
 
   const handleCreated = useCallback((id: string) => {
     setShowNew(false);
@@ -127,7 +152,7 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
     setTimeout(() => setDeleteSuccess(''), 4000);
   };
 
-  const pageTitle = isLibrary ? 'Walk Library' : (standaloneOnly ? 'Standalone Walks' : 'Walks');
+  const pageTitle = isLibrary ? 'Walks' : (standaloneOnly ? 'Standalone Walks' : 'Walks');
   const pageDescription = isLibrary
     ? 'Every walk across all journeys and standalone.'
     : (standaloneOnly ? 'Walks without a journey assignment.' : 'All walks in this journey.');
@@ -177,19 +202,22 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
         isEmpty={filtered.length === 0}
         emptyState={
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center mb-4">
-              <BookOpen size={22} className="text-gray-300" />
+            <div className="w-14 h-14 rounded-2xl bg-teal-50 flex items-center justify-center mb-4">
+              <BookOpen size={22} className="text-teal-300" />
             </div>
-            <p className="text-sm font-medium text-gray-600">
-              {query ? 'No journeys match that search.' : 'No journeys here yet.'}
+            <p className="text-sm font-medium text-gray-700">
+              {query ? 'No walks match that search.' : statusTab !== 'All' ? `No ${statusTab} walks.` : 'No walks here yet.'}
             </p>
-            {!query && (
-              <button
-                onClick={() => setShowNew(true)}
-                className="mt-5 px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 transition-colors"
-              >
-                Create First Journey
-              </button>
+            {!query && statusTab === 'All' && (
+              <>
+                <p className="text-xs text-gray-400 mt-1">Create your first walk to get started.</p>
+                <button
+                  onClick={() => setShowNew(true)}
+                  className="mt-5 px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 transition-colors"
+                >
+                  Create a Walk
+                </button>
+              </>
             )}
             {query && (
               <button onClick={() => setQuery('')} className="mt-3 text-xs text-teal-600 hover:text-teal-800">
@@ -205,7 +233,7 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
           </div>
         )}
 
-        {filtered.map(j => {
+        {filtered.map((j, index) => {
           const cfg = TYPE_CONFIG[j.journeyType] ?? TYPE_CONFIG.core;
           const isMenuOpen = openMenuId === j.id;
           const metaParts: string[] = [];
@@ -254,10 +282,26 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
                   )}
                 </span>
               }
-              status={<StatusBadge status={j.status} />}
+              status={
+                <span className="flex items-center gap-1.5 flex-wrap">
+                  <StatusBadge status={j.status} />
+                  <GroupMembershipBadge targetType="journey" targetId={j.id} compact />
+                </span>
+              }
               onClick={() => onEdit(j.id)}
               actions={
                 <>
+                    {j.status !== 'Archived' && (() => {
+                      const visible = filtered.filter(item => item.status !== 'Archived');
+                      const reorderIndex = visible.findIndex(item => item.id === j.id);
+                      return <ReorderButtons
+                        canMoveUp={reorderIndex > 0}
+                         canMoveDown={reorderIndex >= 0 && reorderIndex < visible.length - 1}
+                        onMoveUp={() => void moveJourney(j.id, -1)}
+                        onMoveDown={() => void moveJourney(j.id, 1)}
+                        label={j.title}
+                      />;
+                    })()}
                   <button
                     onClick={() => onEdit(j.id)}
                     className={`${actionBtnCls} flex items-center gap-1`}

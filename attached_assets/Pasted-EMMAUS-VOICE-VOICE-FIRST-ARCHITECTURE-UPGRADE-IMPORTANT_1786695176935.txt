@@ -1,0 +1,737 @@
+EMMAUS VOICE — VOICE-FIRST ARCHITECTURE UPGRADE
+
+IMPORTANT
+
+Emmaus Voice is now technically functional, but physical-device testing demonstrates that the current interaction model is not good enough for production.
+
+This is not primarily another isolated bug-fix task.
+
+The current Voice experience still feels like operating an app through voice commands rather than having a natural conversation with Emmaus.
+
+Examples from physical-device testing:
+
+- “Open the Bible” was understood but did not reliably navigate.
+- Psalms Daily Devotional eventually began reading but skipped the beginning.
+- User frequently has to speak louder, more clearly or repeat commands.
+- Turn-taking feels fragile.
+- Commands must be phrased too deliberately.
+- Interruption is inconsistent.
+- Content reading state is fragile.
+- The experience feels like a gimmick rather than the preferred interface.
+
+THIS IS NOT THE STANDARD.
+
+Emmaus Voice is intended to become a PRIMARY INTERFACE to Emmaus.
+
+A user should be able to use Emmaus naturally:
+
+while driving
+walking
+working
+at the gym
+with headphones
+with the screen locked
+or while visually navigating the app.
+
+The user must not have to learn command syntax.
+
+==================================================
+CORE PRODUCT PRINCIPLE
+==================================================
+
+Emmaus Voice should feel like talking to someone who understands Emmaus.
+
+NOT:
+
+speech command
+→ classifier
+→ fragile command
+→ response
+
+BUT:
+
+continuous natural conversation
+→ understand intent in context
+→ call the appropriate Emmaus application capability
+→ continue the conversation naturally
+
+Voice must become a conversational shell over Emmaus.
+
+==================================================
+DO NOT REBUILD EMMAUS
+==================================================
+
+Preserve existing canonical systems:
+
+- Ask Emmaus
+- My Bible
+- Daily Rhythm
+- 10 Minutes with Jesus
+- Daily Devotionals
+- Psalms Daily Devotional
+- Sermon Companion
+- Walks
+- Journeys
+- Today's Steps
+- user progress
+- Bible translation system
+- content database
+- routing
+- background audio
+- lock-screen media controls
+
+These become TOOLS available to Voice.
+
+Do not create Voice-specific duplicate content systems.
+
+==================================================
+1. AUDIT CURRENT VOICE ARCHITECTURE
+==================================================
+
+Before changing code, document the current realtime path:
+
+microphone
+→ VAD
+→ recording
+→ transcription
+→ intent classification
+→ resolver
+→ action execution
+→ Ask Emmaus
+→ TTS
+→ listening restart
+
+Identify where the architecture currently requires discrete command turns.
+
+Identify latency introduced at every stage.
+
+Identify where:
+
+- mic closes
+- audio upload occurs
+- transcription completes
+- classifier executes
+- action executes
+- response generation starts
+- first audio byte plays
+- mic reopens
+
+Provide measured timings where possible.
+
+==================================================
+2. BUILD A REALTIME CONVERSATION SESSION
+==================================================
+
+Emmaus Voice should operate as one persistent realtime conversation.
+
+The user should NOT experience obvious:
+
+record
+stop
+upload
+wait
+answer
+restart
+
+cycles.
+
+Speech input should be streamed/processed continuously where the existing platform and APIs support it.
+
+Voice state should conceptually become:
+
+LISTENING / USER SPEAKING
+↕
+UNDERSTANDING
+↕
+EMMAUS SPEAKING
+
+without repeatedly destroying and recreating the entire session.
+
+The session already survives navigation from Phase 4.
+
+Preserve that.
+
+==================================================
+3. APP CAPABILITIES BECOME VOICE TOOLS
+==================================================
+
+Create a clean Voice Tool / Action interface over existing Emmaus capabilities.
+
+Conceptual examples:
+
+navigateApp(destination)
+
+getTodaysSteps()
+
+getBiblePassage({
+  book,
+  chapter,
+  verseStart?,
+  verseEnd?,
+  translation?
+})
+
+getCurrentDailyRhythm()
+
+getDailyRhythmEntry(...)
+
+getCurrentDevotional({
+  titleHint?
+})
+
+getDevotionalEntry(...)
+
+getCurrentSermonCompanion()
+
+getActiveWalks()
+
+getWalkCurrentStep(...)
+
+getCurrentVisualContext()
+
+openContent(...)
+
+startReading(...)
+
+pauseReading()
+
+resumeReading()
+
+stopReading()
+
+nextReadingSection()
+
+previousReadingSection()
+
+getReadingContext()
+
+Do not copy data into these functions.
+
+Each tool must call the existing canonical Emmaus service/query.
+
+==================================================
+4. STOP RELYING ON EXACT PHRASE MATCHING
+==================================================
+
+Do not require exact commands such as:
+
+“Read today's Psalms Daily Devotional.”
+
+These should all be understood naturally:
+
+“Let's do Psalms.”
+
+“Can you read today's Psalms devotional?”
+
+“What's today's Psalms one?”
+
+“Read the devotional for today.”
+
+“Can we carry on with Psalms?”
+
+“Do my devotional.”
+
+“Let's do today's reading.”
+
+Use conversational context to disambiguate.
+
+If genuinely ambiguous, Emmaus asks one short natural question.
+
+Example:
+
+“Do you mean 10 Minutes with Jesus or your Psalms devotional?”
+
+==================================================
+5. NATURAL NAVIGATION
+==================================================
+
+These should all work:
+
+“Open the Bible.”
+
+“Take me to the Bible.”
+
+“Can I see Psalm 23?”
+
+“Go to today's stuff.”
+
+“Show me my walks.”
+
+“Back.”
+
+“Go back to what I was reading.”
+
+Navigation should happen while the conversation continues.
+
+The user should NOT have to restart Voice after navigation.
+
+==================================================
+6. CONTENT READING MUST BE ATOMICALLY INITIALIZED
+==================================================
+
+Current physical-device failure:
+
+Psalms Daily Devotional started reading but missed the beginning.
+
+This is unacceptable.
+
+When a reading request starts:
+
+FIRST:
+
+1. resolve content
+2. resolve current entry
+3. retrieve ALL readable sections
+4. validate section order
+5. initialize reading index = 0
+6. establish reading context
+7. only THEN start TTS
+
+Do not begin speaking while content is still being asynchronously assembled.
+
+A new reading request starts at the FIRST readable section unless the user explicitly asks to resume.
+
+Example:
+
+“Read today's Psalms devotional.”
+
+must start at the beginning.
+
+“Continue my Psalms devotional.”
+
+may resume.
+
+These are different actions.
+
+==================================================
+7. ONE CONTINUOUS READING QUEUE
+==================================================
+
+Structured content should become one logical reading queue.
+
+Example:
+
+Greeting
+Scripture
+Reflection
+Prayer
+Closing
+
+The user should experience:
+
+Greeting → natural pause → Scripture → natural pause → Reflection → Prayer → Closing
+
+NOT:
+
+section
+stop
+listen
+section
+stop
+listen
+
+The session remains interruptible throughout.
+
+==================================================
+8. TRUE BARGE-IN
+==================================================
+
+This is critical.
+
+The user must be able to interrupt Emmaus naturally.
+
+Emmaus:
+
+“The Lord is my shepherd—”
+
+User:
+
+“Hang on.”
+
+Emmaus stops quickly.
+
+User:
+
+“What does shepherd mean there?”
+
+Emmaus answers using the current verse as context.
+
+User:
+
+“Okay, carry on.”
+
+Emmaus resumes.
+
+The user should NOT need to:
+
+tap microphone
+wait for Listening
+raise their voice
+repeat themselves
+
+Target natural conversational interruption.
+
+==================================================
+9. DO NOT REQUIRE LOUD OR ARTIFICIAL SPEECH
+==================================================
+
+Physical-device testing shows the user currently feels forced to:
+
+- speak louder
+- speak unusually clearly
+- repeat commands
+
+Tune input handling for normal conversational speech.
+
+Audit:
+
+- microphone gain
+- VAD thresholds
+- speech onset
+- speech end detection
+- noise suppression
+- echo cancellation
+- minimum speech duration
+- silence thresholds
+- post-TTS microphone timing
+
+Do not optimize only for a quiet desktop environment.
+
+Test at:
+
+normal indoor speaking volume
+phone held normally
+phone on a desk
+Bluetooth headset where available
+
+==================================================
+10. CONTEXT MAKES SHORT LANGUAGE POSSIBLE
+==================================================
+
+Emmaus should remember what is happening.
+
+Example:
+
+User:
+“Read Psalm 23.”
+
+Emmaus reads.
+
+User:
+“Stop.”
+
+User:
+“What does that mean?”
+
+Emmaus knows what “that” refers to.
+
+User:
+“Keep going.”
+
+Emmaus resumes.
+
+Later:
+
+User:
+“Let's do the devotional instead.”
+
+Emmaus understands the context switch.
+
+Context should include:
+
+- current visual screen
+- active reading content
+- current section
+- current Scripture
+- previous user request
+- previous Emmaus response
+- current active devotional/walk where relevant
+
+==================================================
+11. CONVERSATION AND ACTIONS MUST WORK TOGETHER
+==================================================
+
+Voice should not have a rigid separation where the user must know whether something is an “action” or “question.”
+
+Example:
+
+“Open Romans 8 and explain what Paul is saying.”
+
+Emmaus should be able to:
+
+1. navigate to Romans 8
+2. retrieve Romans 8
+3. establish context
+4. explain it
+
+Example:
+
+“Read today's devotional and then pray with me about it.”
+
+Emmaus should:
+
+1. resolve devotional
+2. read it
+3. retain context
+4. pray conversationally afterward
+
+This is the experience we are building toward.
+
+==================================================
+12. STOP MAKING THE USER FIGHT THE STATE MACHINE
+==================================================
+
+The user should not need to know whether Emmaus is currently:
+
+LISTENING
+THINKING
+SPEAKING
+READING
+
+The state machine exists for engineering purposes.
+
+The interaction should feel continuous.
+
+UI states may remain visible, but the user should not have to wait for a specific label before speaking.
+
+==================================================
+13. LATENCY TARGET
+==================================================
+
+Measure latency on physical-device-like conditions.
+
+Track:
+
+speech-end → transcript
+transcript → action start
+transcript → first response audio
+interrupt speech → Emmaus audio stop
+
+Report measurements.
+
+Optimize for perceived responsiveness.
+
+Do not mask latency with unnecessary animation.
+
+==================================================
+14. GRACEFUL RECOVERY
+==================================================
+
+If Emmaus mishears something:
+
+do not fail silently.
+
+Example:
+
+“I didn't catch the last part.”
+
+If an action cannot execute:
+
+“I found your Psalms devotional, but I couldn't load today's entry.”
+
+Do not fabricate an answer.
+
+Do not pretend a capability is unavailable when the underlying problem is technical.
+
+==================================================
+15. VOICE SHOULD BE ABLE TO DRIVE EMMAUS
+==================================================
+
+Long-term interaction expectation:
+
+User:
+
+“Emmaus.”
+
+“What's on for today?”
+
+“Let's do 10 Minutes with Jesus.”
+
+“Pause.”
+
+“Open that Scripture.”
+
+“Read it.”
+
+“What does that mean?”
+
+“Go back.”
+
+“Continue the devotional.”
+
+“Pray with me about that.”
+
+“What else do I have today?”
+
+The user should be able to move through this entire sequence without touching the screen.
+
+That is the Phase objective.
+
+==================================================
+16. KEEP TOUCH UI FULLY FUNCTIONAL
+==================================================
+
+Voice becoming the preferred interaction method must NOT make touch interaction secondary technically.
+
+Everything should still work normally by touch.
+
+Voice calls the same underlying application actions.
+
+Touch and Voice are two interfaces to the same Emmaus application.
+
+==================================================
+17. DO NOT ADD WAKE WORD YET
+==================================================
+
+Do not build:
+
+“Hey Emmaus”
+
+always-on microphone
+native background microphone service
+
+yet.
+
+First make an intentionally started Voice Session genuinely excellent.
+
+==================================================
+18. FIRST BUILD SCOPE
+==================================================
+
+Do NOT attempt every Emmaus feature at once.
+
+First prove the new Voice interaction model with FIVE capabilities:
+
+1. normal Ask Emmaus conversation
+
+2. navigation:
+“Open My Bible”
+
+3. Bible:
+“Read Psalm 23”
+
+4. Daily Rhythm:
+“Read today's 10 Minutes with Jesus”
+
+5. Daily Devotional:
+“Read today's Psalms devotional”
+
+These must all operate within ONE continuous Voice session.
+
+==================================================
+19. CONVERSATIONAL ACCEPTANCE TEST
+==================================================
+
+This is the critical test.
+
+Start ONE Voice Session.
+
+User says naturally, without exaggerated speech:
+
+“Open the Bible for me.”
+
+Expected:
+Bible opens.
+
+Then:
+
+“Psalm 23.”
+
+Expected:
+Emmaus understands this means Psalm 23 in the current Bible context and begins reading.
+
+While reading:
+
+“Hang on.”
+
+Expected:
+Emmaus stops promptly.
+
+User:
+
+“What does that mean?”
+
+Expected:
+Emmaus answers from the current passage context.
+
+User:
+
+“Okay, carry on.”
+
+Expected:
+reading resumes correctly.
+
+Then:
+
+“Actually let's do today's Psalms devotional.”
+
+Expected:
+Emmaus switches context and reads the CURRENT real Psalms Daily Devotional FROM THE BEGINNING.
+
+Then:
+
+“Stop there.”
+
+Expected:
+Emmaus stops.
+
+Then:
+
+“What else do I have today?”
+
+Expected:
+Emmaus understands current app/user context and answers naturally.
+
+THIS entire sequence should work without restarting Voice.
+
+==================================================
+20. PRODUCT STANDARD
+==================================================
+
+Do not call this complete because individual APIs work.
+
+Do not call it complete because classifier tests pass.
+
+Do not call it complete because TTS plays.
+
+Do not call it complete because a command works when spoken perfectly.
+
+The standard is:
+
+A normal person can simply TALK to Emmaus.
+
+They do not have to understand the system.
+
+They do not have to speak like they are giving commands to a machine.
+
+They do not have to repeat themselves constantly.
+
+They do not have to touch the phone after beginning a Voice session.
+
+Emmaus understands context, performs actions, reads its real content and continues the conversation naturally.
+
+==================================================
+21. BEFORE IMPLEMENTATION
+==================================================
+
+Before coding, give me a concise architecture assessment:
+
+A. Which parts of the current Voice stack should be KEPT.
+
+B. Which parts are responsible for the current command-and-control feeling.
+
+C. What must change to create a genuinely realtime conversational experience.
+
+D. Which existing Emmaus services can become Voice tools/actions.
+
+E. Whether the upgrade can be made incrementally without destabilizing the working app.
+
+F. Proposed implementation sequence.
+
+DO NOT CODE UNTIL THIS architecture assessment is complete.
+
+Make a checkpoint first.
+
+This is no longer about making Voice technically work.
+
+We are making Emmaus Voice good enough that users would CHOOSE to use Voice instead of touching the screen.

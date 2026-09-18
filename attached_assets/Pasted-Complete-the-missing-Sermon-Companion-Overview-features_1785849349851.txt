@@ -1,0 +1,284 @@
+Complete the missing Sermon Companion Overview features.
+
+CURRENT RESULT:
+The Sermon Companion Overview currently shows:
+
+- generic introduction
+- progress card
+- Continue Companion button
+- five-step list
+
+This is only part of the requested implementation.
+
+Do not redesign the progress card or step list again. Keep those working components and add the missing sections.
+
+==================================================
+1. FIX INITIAL SCROLL POSITION
+==================================================
+
+Whenever the Sermon Companion Overview opens, scroll to the top.
+
+Do not restore the scroll position from:
+
+- Today’s Steps
+- Next Steps
+- a previously opened step
+- an earlier visit to the overview
+
+On route entry and when the companion ID changes, reset the overview scroll container to position 0.
+
+Test both:
+
+- opening from Next Steps
+- opening from Today’s Steps
+
+==================================================
+2. COMPLETE THE TOP OF THE OVERVIEW
+==================================================
+
+The top section must contain:
+
+Label:
+THIS WEEK’S SERMON
+
+Sermon title
+
+Speaker
+
+Date
+
+Main Scripture
+
+Main Theme
+
+Use the actual published sermon record.
+
+Example layout:
+
+God Uses the Unlikely
+
+Pastor Jeremy Govender
+3 August 2026
+
+Main Scripture
+Judges 7
+
+Main Theme
+God often works through unlikely people so that the glory belongs to Him.
+
+Do not display placeholders or generic values when actual sermon metadata exists.
+
+==================================================
+3. SERMON-SPECIFIC INTRODUCTION
+==================================================
+
+Replace the generic text:
+
+“A 5-step companion based on this week’s sermon — designed to help you reflect, respond and live it out.”
+
+with the actual Companion introduction generated and saved in Admin.
+
+For this sermon, the introduction should describe the central message of “God Uses the Unlikely.”
+
+The overview must read the introduction from the published companion record.
+
+Do not hard-code one generic sentence for every sermon.
+
+==================================================
+4. LISTEN, WATCH AND READ
+==================================================
+
+Directly below the introduction, add a compact media-actions row:
+
+Listen
+Watch
+Read
+
+LISTEN:
+- Play the uploaded sermon audio.
+- Use the audio URL saved on the sermon record.
+
+WATCH:
+- Open or play the saved YouTube URL.
+
+READ:
+- Open the full sermon transcript.
+
+Conditional behaviour:
+
+- Hide Listen only when no audio exists.
+- Hide Watch only when no YouTube URL exists.
+- Hide Read only when no transcript exists.
+
+Do not show disabled actions for unavailable media.
+
+The uploaded audio already exists for this sermon, so Listen should be visible.
+
+==================================================
+5. SERMON TIMESTAMPS
+==================================================
+
+Each generated Companion step should contain its relevant sermon timestamp where available.
+
+On the Overview step list, a timestamp may appear as a small secondary label.
+
+Example:
+
+STEP 1
+God Uses the Unlikely
+From the sermon · 12:48
+
+Inside the step, show:
+
+From this week’s sermon
+12:48
+
+Tapping the timestamp must:
+
+- open the sermon player
+- seek to that point
+- begin playback
+
+Do not invent timestamps.
+
+Use the timestamp stored with the generated step.
+
+==================================================
+6. RELATED CONTENT
+==================================================
+
+Below the five-step list, add a section:
+
+CONTINUE EXPLORING
+
+Show only relevant available items:
+
+- Related Bible Study
+- Related Walk
+- Related Scriptures
+- Ask Emmaus about this sermon
+
+Use actual relationships from the Emmaus Knowledge Index.
+
+Do not use hard-coded demo links.
+
+If no related Bible Study or Walk has been indexed yet, omit that card rather than showing an empty placeholder.
+
+Related Scriptures should show the real Scripture references connected to this sermon.
+
+==================================================
+7. ASK EMMAUS SERMON CONTEXT
+==================================================
+
+Add an action:
+
+Ask Emmaus about this sermon
+
+When selected, open Ask Emmaus with this context already attached:
+
+- sermon ID
+- companion ID
+- sermon title
+- main theme
+- transcript/index scope
+
+Ask Emmaus should understand that the question concerns “God Uses the Unlikely” before searching the wider Emmaus knowledge base.
+
+Do not prefill a visible question unless needed.
+
+Display a small context label in Ask Emmaus:
+
+Discussing:
+God Uses the Unlikely
+
+==================================================
+8. KNOWLEDGE INDEX CONNECTION
+==================================================
+
+Confirm that the published sermon and companion are indexed automatically.
+
+The index entry must include:
+
+- sermon ID
+- companion ID
+- title
+- speaker
+- date
+- series
+- main Scripture
+- supporting Scriptures
+- main theme
+- sermon summary
+- topics
+- keywords
+- transcript
+- timestamped transcript segments
+- audio URL
+- YouTube URL
+- Companion introduction
+- all five step titles
+- all five step contents
+- each step timestamp
+- prayer themes
+- applications
+
+The index must be searchable by Ask Emmaus.
+
+Do not create a second disconnected copy of the sermon data.
+
+==================================================
+9. FLOATING ASK EMMAUS BUTTON
+==================================================
+
+The floating Ask Emmaus button still overlaps the step list.
+
+Keep its current screen position, but add sufficient bottom padding to the Sermon Companion scroll container so that:
+
+- Step 5
+- related resources
+- all final buttons
+
+can scroll fully above both:
+
+- the floating Ask Emmaus button
+- the fixed bottom navigation
+
+Use safe-area-aware padding.
+
+==================================================
+10. DATA SOURCE REQUIREMENT
+==================================================
+
+The complete Overview must use the same published sermon and companion records created in Admin.
+
+Do not use:
+
+- legacy devotional records
+- static demo data
+- duplicated hard-coded content
+- old cached companion content
+
+All screens must use the current companion ID shown in the route.
+
+==================================================
+11. ACCEPTANCE TEST
+==================================================
+
+Test using “God Uses the Unlikely.”
+
+1. Open from Next Steps.
+2. Page begins at the top.
+3. Speaker, date, Scripture and Main Theme appear.
+4. The sermon-specific introduction appears.
+5. Listen appears and plays the uploaded audio.
+6. Watch appears only if a YouTube URL exists.
+7. Read opens the actual transcript.
+8. Progress and the five-step list still work.
+9. Step timestamps use real sermon positions.
+10. Related Scriptures appear.
+11. Ask Emmaus opens with the sermon context attached.
+12. The final content scrolls above the floating Ask Emmaus button.
+13. Refreshing the page preserves the content and companion ID.
+14. Opening from Today’s Steps also starts at the top and uses the same record.
+
+Do not report the Sermon Companion Overview as complete until all fourteen tests pass on the published version.

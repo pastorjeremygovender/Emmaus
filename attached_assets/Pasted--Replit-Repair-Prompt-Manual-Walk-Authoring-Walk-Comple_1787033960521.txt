@@ -1,0 +1,273 @@
+# Replit Repair Prompt — Manual Walk Authoring / Walk Complete Bug
+
+We have discovered a structural bug in Emmaus Content Studio while manually authoring a Walk.
+
+This is **not a request to create or rewrite any content**.
+
+The content already entered must be preserved exactly.
+
+## Context
+
+A Walk called:
+
+**Who Is God?**
+
+was manually created inside the Journey:
+
+**Come and See**
+
+The Walk was configured with:
+
+**5 Steps**
+
+The administrator then manually entered:
+
+* Walk Introduction
+* Day 1
+* Day 2
+* Day 3
+* Day 4
+* Day 5
+
+All of this content must remain untouched.
+
+## Current bug
+
+When the Walk was created with 5 Steps, the editor initially showed:
+
+* Walk Introduction
+* Day 1
+* Walk Complete
+
+Instead of generating the five configured Day/Step slots immediately.
+
+The administrator then advanced through the Walk by clicking what appeared to be **Walk Complete**.
+
+Each time this happened, Emmaus dynamically created the next Day.
+
+This caused the following behaviour:
+
+* After Day 1, Walk Complete effectively became Day 2
+* After Day 2, it became Day 3
+* This continued through Day 5
+* After completing Day 5 and clicking Walk Complete, Emmaus incorrectly created:
+
+**Day 6 — Walk Complete**
+
+The left navigation now shows:
+
+* Walk Introduction
+* Day 1
+* Day 2
+* Day 3
+* Day 4
+* Day 5
+* Day 6
+* Walk Complete
+
+This is incorrect because the Walk was configured with only 5 Steps.
+
+## Required fix
+
+Fix the manual Walk authoring engine so that the configured number of Steps is respected.
+
+For a Walk created with 5 Steps, the editor should generate and preserve this structure from the beginning:
+
+* Walk Introduction
+* Day 1
+* Day 2
+* Day 3
+* Day 4
+* Day 5
+* Walk Complete
+
+The administrator must not have to click Walk Complete in order to manufacture the next Day.
+
+## Walk Complete behaviour
+
+Walk Complete must be a distinct final stage.
+
+It must never:
+
+* create another Day
+* increment the Step count
+* behave as a hidden next-step generator
+* inherit or prepopulate the title "Walk Complete" into a normal Day
+* permit Day 6 in a Walk configured for 5 Steps
+
+After the administrator saves Day 5, the next destination should be the genuine Walk Complete editor.
+
+## Preserve existing content
+
+Do not delete, overwrite, migrate, regenerate, reorder, rewrite or otherwise alter the content already entered into:
+
+* Walk Introduction
+* Day 1
+* Day 2
+* Day 3
+* Day 4
+* Day 5
+
+The administrator spent time entering this manually.
+
+Preserve all existing values exactly as stored.
+
+## Repair the current Who Is God? Walk
+
+For the existing Walk:
+
+**Who Is God?**
+
+remove only the erroneously created empty **Day 6** record if it contains no genuine authored content.
+
+Do not remove Day 6 blindly if it contains content. First confirm that it is the erroneous empty record created by this bug.
+
+The corrected Walk should contain:
+
+* Walk Introduction
+* Day 1
+* Day 2
+* Day 3
+* Day 4
+* Day 5
+* Walk Complete
+
+## Walk Complete editor
+
+Walk Complete should have its own completion-message authoring experience.
+
+Do not treat it as a standard numbered Day.
+
+It should allow the administrator to create a short final completion experience, such as:
+
+* Completion heading/title
+* Completion message
+* Optional Scripture/reference if already supported by the architecture
+* Optional encouragement/reflection if already supported
+* Optional next-Walk or next-Journey invitation if supported
+
+Do not redesign this broadly. Use the existing Emmaus patterns wherever possible.
+
+If a dedicated Walk Complete schema already exists, restore/fix its routing and rendering rather than creating a duplicate system.
+
+## New Walk behaviour
+
+For all future manually created Walks:
+
+If the administrator enters:
+
+**Number of Steps: 5**
+
+Emmaus must immediately create or expose exactly:
+
+* Day 1
+* Day 2
+* Day 3
+* Day 4
+* Day 5
+
+plus:
+
+* Walk Introduction
+* Walk Complete
+
+If the administrator enters 7 Steps, expose exactly Day 1 through Day 7.
+
+The number entered during Walk creation must be the source of truth unless the administrator deliberately changes the Step count later through a supported editing flow.
+
+## Existing content compatibility
+
+Do not break:
+
+* Daily Rhythm
+* Daily Devotionals
+* Sermon Companions
+* existing Walks
+* existing Journeys
+* user progress
+* published content
+* pause/resume behaviour
+* current navigation
+* Bulk Import
+
+This repair must be scoped specifically to Walk/Journey manual authoring and completion-stage behaviour.
+
+## Important architectural requirement
+
+Emmaus must remain fully self-supporting for content creation.
+
+Replit is being used here only to repair a platform defect.
+
+After this fix, an administrator must be able to create and publish a complete Journey and Walk entirely through Emmaus Content Studio without developer intervention.
+
+Do not introduce any workflow that requires editing source code, database records manually, or returning to Replit for normal content creation.
+
+## Testing required
+
+After implementing the repair, test at least these scenarios:
+
+### Scenario 1 — Existing Walk
+
+Open:
+
+**Come and See → Who Is God?**
+
+Confirm:
+
+* Walk Introduction remains intact
+* Day 1 remains intact
+* Day 2 remains intact
+* Day 3 remains intact
+* Day 4 remains intact
+* Day 5 remains intact
+* erroneous empty Day 6 is gone
+* Walk Complete opens a genuine completion editor
+* saving Day 5 does not create Day 6
+
+### Scenario 2 — New 5-Step Walk
+
+Create a temporary draft Walk with 5 Steps.
+
+Confirm the editor immediately shows:
+
+* Walk Introduction
+* Day 1
+* Day 2
+* Day 3
+* Day 4
+* Day 5
+* Walk Complete
+
+Then delete the temporary test Walk.
+
+### Scenario 3 — Different Step count
+
+Create a temporary draft Walk with a different Step count, such as 3.
+
+Confirm the editor shows exactly:
+
+* Walk Introduction
+* Day 1
+* Day 2
+* Day 3
+* Walk Complete
+
+Then delete the temporary test Walk.
+
+## Do not redesign unrelated UI
+
+Do not change colours, fonts, navigation, cards, layouts, tabs, Content Studio structure or any unrelated feature.
+
+Fix this bug only.
+
+## Completion report
+
+When finished, report:
+
+1. The root cause of the bug.
+2. What code/data behaviour was changed.
+3. Whether any existing authored content was altered.
+4. Confirmation that the Who Is God? Walk now contains exactly 5 Days plus Walk Introduction and Walk Complete.
+5. Confirmation that Walk Complete is now a real completion stage.
+6. Confirmation that future Walks respect their configured Step count.
+7. What manual admin-side test I should perform next.

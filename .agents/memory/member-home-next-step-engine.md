@@ -28,7 +28,7 @@ description: Walk with Jesus home screen, next-step engine, enrollment state, da
 
 ## Navigation
 
-BottomNav labels changed: "Today's Steps"→"Walk", "Next Steps"→"Journeys", "My Bible"→"Bible", "My Walk"→"Personal". Icons updated: Footprints / Library / BookOpen / User.
+BottomNav labels: "My Emmaus"→"/walk", "Discover"→"/journeys", "My Bible"→"/bible", "My Journey"→"/personal". Icons updated: Footprints / Library / BookOpen / User.
 
 ## Two-Journey limit
 
@@ -40,7 +40,7 @@ Enforced in `Journeys.tsx` via `canActivateMore(journeys, startedIds)`. When blo
 ## Walk screen fixed section order (correction sprint)
 
 Order is now FIXED — the next-step engine may not rearrange it:
-1. 15 Minutes with Jesus (always first, most prominent, `bg-primary/5` treatment)
+1. 10 Minutes with Jesus (always first, most prominent, `bg-primary/5` treatment)
 2. This Week's Sermon Devotional (companion journey type)
 3. Daily Devotional (devotional journey type — hidden cleanly if none published)
 4. Continue Your Journeys (active non-exempt growth journeys only)
@@ -53,3 +53,18 @@ Removed from Walk: "Ready for you" card, Ask Emmaus inline card, Browse Journeys
 `Welcome.tsx` is a pure auto-transitioning splash (no buttons). Uses sessionStorage key `emmaus_splash_shown` to skip during in-app SPA navigation but show on fresh load/reload. Waits for `max(2s, auth resolved)` then navigates: authenticated → `/walk`, unauthenticated → `/auth`. The old Welcome page had buttons — that pattern is replaced by the pure splash; unauthenticated users land on /auth directly.
 
 **Why:** Spec requires splash on every fresh launch without skipping for authenticated users, but no repeat during tab navigation.
+
+## First-time My Emmaus defaults
+
+Brand-new member accounts are initialized once on the server, across each independent
+progress system. The “First Steps - Come and See” default is a collection card, so its
+first published child journey is seeded rather than looking for a journey with the
+collection's title.
+
+**Why:** Collection-backed cards are the member-facing unit, while progress belongs to a
+child journey. Account-backed initialization prevents removed defaults from returning on
+later visits or another device.
+
+**How to apply:** Keep the initialization one-time and engagement-aware: seed only when
+the profile has no initialization marker and no existing journey, devotional, or companion
+engagement; never repopulate after removal.

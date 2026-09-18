@@ -1,0 +1,175 @@
+# EMMAUS GROUPS — REMOVE DUPLICATE DISCUSSION + GROUP NOTES
+
+The current active meeting UI still contains duplicate controls.
+
+Fix this now.
+
+Do NOT add new features.
+
+====================================================
+1. GROUP DISCUSSION — KEEP ONE ENTRY POINT ONLY
+====================================================
+
+There are currently THREE Discussion entry points:
+
+- Group Discussion card inside the green Meeting in Progress area
+- separate Group Discussion card lower on the page
+- Open Discussion inside Meeting Tools
+
+This is incorrect.
+
+KEEP ONLY:
+
+Meeting Tools
+→ Open Discussion
+
+REMOVE the other two Discussion cards from the main Group page.
+
+====================================================
+2. OPEN DISCUSSION MUST GO DIRECTLY TO DISCUSSION
+====================================================
+
+Currently:
+
+Meeting Tools
+→ Open Discussion
+
+returns the user to the Group page where the other Discussion cards are shown.
+
+This effectively does nothing.
+
+Fix it.
+
+Required behaviour:
+
+Meeting Tools
+→ Open Discussion
+→ immediately open the actual Group Discussion experience
+
+Do not route back through the Group home first.
+
+Do not require another tap.
+
+====================================================
+3. DISCUSSION EXPERIENCE
+====================================================
+
+When Open Discussion is tapped:
+
+open the real discussion interface directly.
+
+It should support the existing discussion functionality.
+
+The user must be able to return using:
+
+← Back
+
+Back should return to:
+
+Meeting Tools
+
+or the active Group meeting, depending on the existing navigation stack.
+
+Do not create a circular loop.
+
+====================================================
+4. GROUP NOTES — KEEP ONE ENTRY POINT ONLY
+====================================================
+
+Group Notes currently appears more than once.
+
+KEEP:
+
+Group Notes inside the green Meeting in Progress box.
+
+REMOVE:
+
+the separate Group Notes card lower down the main Group page.
+
+There must be exactly ONE Group Notes entry point during an active meeting.
+
+====================================================
+5. GROUP NOTES ACTION
+====================================================
+
+Tapping Group Notes inside the Meeting in Progress box must open the actual Group Notes interface directly.
+
+Do not bounce through another duplicate card.
+
+====================================================
+6. ACTIVE MEETING PAGE
+====================================================
+
+After cleanup, the main active meeting page should contain:
+
+Meeting in Progress
+
+[ Meeting Tools ]
+[ End Meeting ]
+
+[ Group Notes ]
+
+Today's Study
+
+Members Present
+
+Prayer Requests
+
+Ask Emmaus floating button
+
+Do NOT show separate:
+
+Group Discussion card
+Group Notes card
+
+Discussion is accessed through Meeting Tools.
+
+====================================================
+7. MEETING TOOLS
+====================================================
+
+Keep:
+
+Start Live Video
+Open Discussion
+Prayer Time
+Launch Poll
+Ask Emmaus Together
+
+Open Discussion must open the actual Discussion interface immediately.
+
+====================================================
+8. GLOBAL DUPLICATE AUDIT
+====================================================
+
+Search the active Group meeting components for multiple renders of:
+
+Discussion
+Group Discussion
+Open Discussion
+Group Notes
+
+There must be ONE canonical component/action for each purpose.
+
+Do not hide duplicates with CSS.
+
+Remove obsolete render paths at the source.
+
+====================================================
+QA
+====================================================
+
+Test in the published app:
+
+1. Start Meeting.
+2. Confirm there is NO Discussion card on the main Group page.
+3. Confirm Group Notes appears once inside Meeting in Progress.
+4. Open Meeting Tools.
+5. Tap Open Discussion.
+6. Confirm actual Discussion opens immediately.
+7. Return to meeting.
+8. Tap Group Notes in Meeting in Progress.
+9. Confirm actual Group Notes opens immediately.
+10. Confirm there are no duplicate Discussion or Notes entry points anywhere.
+
+Do not mark complete until this exact published flow works.

@@ -1,0 +1,78 @@
+name: Build unified Emmaus Android app
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - release/emmaus-unified
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  signed-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EMMAUS_ANDROID_KEYSTORE_PATH: app/emmaus-release.jks
+      EMMAUS_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.EMMAUS_ANDROID_KEYSTORE_PASSWORD }}
+      EMMAUS_ANDROID_KEY_ALIAS: ${{ secrets.EMMAUS_ANDROID_KEY_ALIAS }}
+      EMMAUS_ANDROID_KEY_PASSWORD: ${{ secrets.EMMAUS_ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - run: corepack enable
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Restore permanent signing key
+        working-directory: artifacts/project-emmaus/android/app
+        env:
+          KEYSTORE_BASE64: ${{ secrets.EMMAUS_ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE_BASE64"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > emmaus-release.jks
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x artifacts/project-emmaus/android/gradlew
+
+      - name: Verify signing and sync web assets
+        run: |
+          pnpm --filter @workspace/project-emmaus run android:verify -- --require-signing
+          pnpm --filter @workspace/project-emmaus run android:sync
+
+      - name: Build signed APK and Play bundle
+        working-directory: artifacts/project-emmaus/android
+        run: ./gradlew assembleRelease bundleRelease
+
+      - name: Upload signed APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: emmaus-unified-1.2.0-rc10-signed-apk
+          path: artifacts/project-emmaus/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Google Play bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: emmaus-unified-1.2.0-rc10-play-aab
+          path: artifacts/project-emmaus/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14

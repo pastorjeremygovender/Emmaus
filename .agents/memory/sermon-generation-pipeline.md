@@ -25,6 +25,14 @@ description: Root causes, fixes, and architecture of the URL-first sermon draft 
 
 This prevents `safeParseJson` returning `{}` (empty AI content) from flowing through to a saved blank draft.
 
+## Companion persistence boundary
+
+The audio-first pipeline must not publish `READY_FOR_REVIEW` until the companion header and all entries have been inserted. The editor treats that stage as a reload signal and can otherwise hydrate the sermon before its companion exists.
+
+**Why:** Marking the sermon ready first creates a race where the generated five-day companion appears in memory but disappears after navigation or refresh.
+
+**How to apply:** Keep companion creation before the terminal processing stage, and keep editor publish callbacks dependent on the current companion state.
+
 ## `safeParseJson()` — truncation repair
 
 When `finish_reason === "length"`, the response was cut off. `safeParseJson()` in `sermon-generator.ts` tries:

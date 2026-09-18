@@ -5,18 +5,20 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Plus, BookHeart, MoreHorizontal, Archive, Trash2, Loader2, ArrowLeft, X } from 'lucide-react';
+import { Plus, BookHeart, MoreHorizontal, Archive, Trash2 } from 'lucide-react';
 import {
   listAllSeries,
-  createSeries,
   archiveSeries,
   permanentDeleteSeries,
   type DevotionalSeries,
 } from '@/lib/devotionals-api';
-import { StatusBadge, Field } from '../shared';
+import { StatusBadge } from '../shared';
 import { useAuth } from '@/contexts/AuthContext';
 import ContentStudioListItem from './ContentStudioListItem';
-import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls } from './ContentStudioListPage';
+import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls, ReorderButtons } from './ContentStudioListPage';
+import { moveVisibleOrder, reorderContent } from '@/lib/content-reorder-api';
+import NewSeriesModal from './NewSeriesModal';
+import GroupMembershipBadge from './GroupMembershipBadge';
 
 const STATUS_TABS = ['All', 'Draft', 'Published', 'Archived'] as const;
 
@@ -39,15 +41,9 @@ export default function DevotionalSeriesList({ onEdit }: Props) {
   const [series, setSeries]         = useState<DevotionalSeries[]>([]);
   const [loading, setLoading]       = useState(true);
   const [statusTab, setStatusTab]   = useState<string>('All');
-  const [showNew, setShowNew]       = useState(false);
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [showNewModal, setShowNewModal] = useState(false);
+  const [openMenuId, setOpenMenuId]     = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DevotionalSeries | null>(null);
-
-  // New series form
-  const [newTitle, setNewTitle] = useState('');
-  const [newType, setNewType]   = useState('general');
-  const [saving, setSaving]     = useState(false);
-  const [formError, setFormError] = useState('');
 
   const auth = user ? { userId: user.id, userRole: user.role } : undefined;
 
@@ -65,22 +61,25 @@ export default function DevotionalSeriesList({ onEdit }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
-  const filtered = series.filter(s => statusTab === 'All' || s.status === statusTab);
+  const filtered = series
+    .filter(s => statusTab === 'All' || s.status === statusTab)
+    .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.createdAt.localeCompare(b.createdAt));
 
-  const handleCreate = async () => {
-    if (!newTitle.trim()) { setFormError('Title is required.'); return; }
-    setSaving(true); setFormError('');
-    try {
-      const created = await createSeries({ title: newTitle.trim(), seriesType: newType }, auth);
-      setShowNew(false);
-      setNewTitle('');
-      setSaving(false);
-      load();
-      onEdit(created.id);
-    } catch (e: unknown) {
-      setFormError(e instanceof Error ? e.message : "We couldn't create this series. Please try again.");
-      setSaving(false);
-    }
+  const reorderable = series
+    .filter(item => item.status !== 'Archived')
+    .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.createdAt.localeCompare(b.createdAt));
+
+  const moveSeries = async (id: string, direction: -1 | 1) => {
+    const visible = filtered.filter(item => item.status !== 'Archived');
+    const nextIds = moveVisibleOrder(
+      reorderable.map(item => item.id),
+      visible.map(item => item.id),
+      id,
+      direction,
+    );
+    if (nextIds.join(',') === reorderable.map(item => item.id).join(',')) return;
+    await reorderContent('devotional-series', nextIds);
+    await load();
   };
 
   const handleArchive = async (s: DevotionalSeries) => {
@@ -102,7 +101,7 @@ export default function DevotionalSeriesList({ onEdit }: Props) {
         title="Daily Devotionals"
         description="Short daily devotional series for members."
         newButton={
-          <button onClick={() => setShowNew(true)} className={newBtnCls}>
+          <button onClick={() => setShowNewModal(true)} className={newBtnCls}>
             <Plus size={14} /> New Series
           </button>
         }
@@ -111,33 +110,49 @@ export default function DevotionalSeriesList({ onEdit }: Props) {
         loadingText="Loading devotionals…"
         isEmpty={!loading && filtered.length === 0}
         emptyState={
-          <div className="rounded-2xl border border-dashed border-gray-200 p-10 text-center">
-            <BookHeart size={28} className="text-gray-300 mx-auto mb-3" />
-            <p className="text-sm text-gray-500">
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-teal-50 flex items-center justify-center mb-4">
+              <BookHeart size={22} className="text-teal-300" />
+            </div>
+            <p className="text-sm font-medium text-gray-700">
               {statusTab === 'All' ? 'No devotional series yet.' : `No ${statusTab} series.`}
             </p>
             {statusTab === 'All' && (
-              <button
-                onClick={() => setShowNew(true)}
-                className="mt-3 text-sm text-teal-600 hover:text-teal-700 font-medium"
-              >
-                Create your first series
-              </button>
+              <>
+                <p className="text-xs text-gray-400 mt-1">Create your first series to get started.</p>
+                <button
+                  onClick={() => setShowNewModal(true)}
+                  className="mt-5 px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 transition-colors"
+                >
+                  Create a Series
+                </button>
+              </>
             )}
           </div>
         }
       >
-        {filtered.map(s => (
+        {filtered.map((s, index) => (
           <ContentStudioListItem
             key={s.id}
             iconBg="bg-teal-50"
             iconContent={<BookHeart size={16} className="text-teal-600" />}
             title={s.title}
             meta={TYPE_LABELS[s.seriesType] ?? s.seriesType}
-            status={<StatusBadge status={s.status} />}
+            status={
+              <span className="flex items-center gap-1.5 flex-wrap">
+                <StatusBadge status={s.status} />
+                <GroupMembershipBadge targetType="daily-devotional" targetId={s.id} compact />
+              </span>
+            }
             onClick={() => onEdit(s.id)}
             actions={
               <>
+                {s.status !== 'Archived' && (() => {
+                  const visible = filtered.filter(item => item.status !== 'Archived');
+                  const reorderIndex = visible.findIndex(item => item.id === s.id);
+                  return <ReorderButtons canMoveUp={reorderIndex > 0} canMoveDown={reorderIndex >= 0 && reorderIndex < visible.length - 1}
+                    onMoveUp={() => void moveSeries(s.id, -1)} onMoveDown={() => void moveSeries(s.id, 1)} label={s.title} />;
+                })()}
                 <button onClick={() => onEdit(s.id)} className={actionBtnCls}>
                   Edit
                 </button>
@@ -176,95 +191,16 @@ export default function DevotionalSeriesList({ onEdit }: Props) {
         ))}
       </ContentStudioListPage>
 
-      {/* ── New series modal — new creation-wizard standard ──────────────── */}
-      {showNew && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[calc(100dvh-2rem)]">
-
-            {/* Header — ← Cancel | title | ✕ */}
-            <div className="flex-shrink-0 flex items-center px-5 pt-5 pb-4 border-b border-gray-100">
-              <button
-                onClick={() => { setShowNew(false); setNewTitle(''); setFormError(''); }}
-                aria-label="Cancel"
-                className="flex items-center gap-1.5 text-[13px] font-medium text-gray-500 hover:text-gray-900 transition-colors w-20 flex-shrink-0"
-              >
-                <ArrowLeft size={14} />
-                Cancel
-              </button>
-              <h2 className="flex-1 text-[15px] font-semibold text-gray-900 text-center">
-                New Devotional Series
-              </h2>
-              <div className="w-20 flex-shrink-0 flex justify-end">
-                <button
-                  onClick={() => { setShowNew(false); setNewTitle(''); setFormError(''); }}
-                  aria-label="Close"
-                  className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-700 transition-colors"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            </div>
-
-            {/* Step progress — single pill (1-step wizard) */}
-            <div className="flex-shrink-0 flex items-center gap-1.5 px-5 pt-3.5 pb-1">
-              <div className="h-[3px] rounded-full flex-1 bg-teal-500" />
-            </div>
-
-            {/* Scrollable content */}
-            <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                    Title <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    autoFocus
-                    type="text"
-                    value={newTitle}
-                    onChange={e => setNewTitle(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' && !saving && newTitle.trim()) handleCreate();
-                    }}
-                    placeholder="e.g. Psalms Daily Devotional"
-                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-[14px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                    Series Type
-                  </label>
-                  <select
-                    value={newType}
-                    onChange={e => setNewType(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-[13px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
-                  >
-                    {Object.entries(TYPE_LABELS).map(([v, l]) => (
-                      <option key={v} value={v}>{l}</option>
-                    ))}
-                  </select>
-                </div>
-                {formError && (
-                  <p className="text-[13px] text-red-600 font-medium">{formError}</p>
-                )}
-              </div>
-            </div>
-
-            {/* Footer — single full-width CTA */}
-            <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100">
-              <button
-                onClick={handleCreate}
-                disabled={saving || !newTitle.trim()}
-                className="w-full h-12 rounded-2xl text-[15px] font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-700 text-white"
-              >
-                {saving
-                  ? <><Loader2 size={15} className="animate-spin" /><span>Creating…</span></>
-                  : <span>Create Series</span>
-                }
-              </button>
-            </div>
-
-          </div>
-        </div>
+      {/* ── New series modal ─────────────────────────────────────────────── */}
+      {showNewModal && (
+        <NewSeriesModal
+          onClose={() => setShowNewModal(false)}
+          onCreated={(id) => {
+            setShowNewModal(false);
+            load();
+            onEdit(id);
+          }}
+        />
       )}
 
       {/* ── Permanent delete confirm ──────────────────────────────────────── */}

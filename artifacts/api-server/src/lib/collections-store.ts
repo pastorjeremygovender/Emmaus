@@ -5,7 +5,7 @@
  * Journeys carry a nullable collection_id; collections themselves are standalone.
  */
 
-import { eq, asc, desc } from "drizzle-orm";
+import { eq, and, asc, desc, isNull } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { collectionsTable, journeysTable } from "@workspace/db/schema";
 import type { Collection, InsertCollection } from "@workspace/db/schema";
@@ -56,10 +56,11 @@ export async function listCollections(): Promise<CollectionSummary[]> {
     .from(collectionsTable)
     .orderBy(asc(collectionsTable.displayOrder), desc(collectionsTable.createdAt));
 
-  // Count journeys per collection (all statuses + published-only)
+  // Count journeys per collection (all non-deleted statuses + published-only)
   const journeys = await db
     .select({ id: journeysTable.id, collectionId: journeysTable.collectionId, status: journeysTable.status })
-    .from(journeysTable);
+    .from(journeysTable)
+    .where(isNull(journeysTable.deletedAt));
 
   const countMap: Record<string, number> = {};
   const publishedCountMap: Record<string, number> = {};
@@ -85,7 +86,7 @@ export async function getCollection(id: string): Promise<CollectionSummary | nul
   const journeys = await db
     .select({ id: journeysTable.id, status: journeysTable.status })
     .from(journeysTable)
-    .where(eq(journeysTable.collectionId, id));
+    .where(and(eq(journeysTable.collectionId, id), isNull(journeysTable.deletedAt)));
 
   const publishedCount = journeys.filter(j => j.status === 'Published').length;
   return toSummary(rows[0], journeys.length, publishedCount);
@@ -119,7 +120,7 @@ export async function updateCollection(
   const journeys = await db
     .select({ id: journeysTable.id })
     .from(journeysTable)
-    .where(eq(journeysTable.collectionId, id));
+    .where(and(eq(journeysTable.collectionId, id), isNull(journeysTable.deletedAt)));
 
   return toSummary(rows[0], journeys.length);
 }
@@ -142,6 +143,6 @@ export async function getJourneysInCollection(collectionId: string) {
   return db
     .select()
     .from(journeysTable)
-    .where(eq(journeysTable.collectionId, collectionId))
-    .orderBy(asc(journeysTable.createdAt));
+    .where(and(eq(journeysTable.collectionId, collectionId), isNull(journeysTable.deletedAt)))
+    .orderBy(asc(journeysTable.displayOrder), asc(journeysTable.createdAt));
 }

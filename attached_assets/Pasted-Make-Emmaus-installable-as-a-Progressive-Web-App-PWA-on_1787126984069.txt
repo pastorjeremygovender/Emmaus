@@ -1,0 +1,151 @@
+Make Emmaus installable as a Progressive Web App (PWA) on iPhone and Android while preserving the existing application exactly as it currently works.
+
+IMPORTANT SAFETY RULES
+
+* Do not redesign any screen.
+* Do not change existing navigation.
+* Do not alter the production database.
+* Do not change authentication logic except for the production-only visibility rules below.
+* Do not remove or alter any existing Emmaus content, Walks, Journeys, Bible functionality, Ask Emmaus, Groups, Sermons, Daily Rhythm, or admin functionality.
+* Do not replace the existing React app.
+* Do not migrate to React Native or Capacitor.
+* Work only on PWA/installability and production-safe login visibility.
+
+PART 1 — PRODUCTION LOGIN SAFETY
+
+The public production login page currently displays:
+
+* Continue with Demo
+* Continue as Demo Admin
+* Continue as Super Admin
+
+On the PUBLIC PRODUCTION deployment:
+
+1. Hide/remove "Continue as Demo Admin".
+2. Hide/remove "Continue as Super Admin".
+3. Do not delete the underlying admin functionality or roles.
+4. Admin users must still be able to authenticate normally and access /admin according to their existing permissions.
+5. Development/testing environments may retain the demo admin tools if they are needed.
+6. Do not weaken or bypass any authentication or authorization checks.
+
+PART 2 — PWA SUPPORT
+
+Add proper Progressive Web App support to the existing Emmaus application.
+
+Use:
+
+App name:
+Emmaus
+
+Short name:
+Emmaus
+
+Primary production URL:
+https://emmaus.co.za
+
+Start URL:
+/
+
+Display mode:
+standalone
+
+Orientation:
+portrait-primary where appropriate, but do not prevent normal tablet use.
+
+Create/configure a valid web app manifest.
+
+Provide proper PWA icons including at minimum:
+
+* 192x192
+* 512x512
+* maskable-compatible icon where appropriate
+* Apple touch icon
+
+Use the existing Emmaus branding/logo if already available in the project. Do not invent a new logo or redesign the brand.
+
+Add the necessary HTML metadata for:
+
+* manifest
+* theme color
+* Apple mobile web app capability
+* Apple mobile web app title
+* Apple touch icon
+
+Add a service worker using a safe modern implementation appropriate to the current project stack.
+
+SERVICE WORKER RULES
+
+The service worker must not aggressively cache authenticated API responses, private user data, admin responses, Ask Emmaus responses, Bible progress, user progress, or dynamic application data.
+
+Cache only safe static assets/app shell resources where appropriate.
+
+Network-first or equivalent safe behaviour should be used for dynamic/authenticated content.
+
+Do not make Emmaus behave as though stale user data is current.
+
+The app must continue working normally online even if the service worker fails.
+
+PART 3 — INSTALL EXPERIENCE
+
+Ensure Emmaus qualifies as an installable PWA on supported Android browsers.
+
+For iPhone/iPad:
+
+* Ensure Add to Home Screen produces a proper Emmaus icon.
+* When launched from the Home Screen, Emmaus should open in standalone app mode without normal Safari browser chrome where supported.
+
+Do not create an intrusive install popup yet.
+
+If an install prompt component is required, create the capability but leave any user-facing automatic prompt disabled until reviewed.
+
+PART 4 — DOMAIN
+
+Treat https://emmaus.co.za as the canonical production domain.
+
+Do not remove the existing replit.app deployment URL.
+
+Do not change DNS configuration.
+
+Do not make any changes to xneelo.
+
+PART 5 — VERIFICATION
+
+Before making changes, inspect the current project structure and identify:
+
+* framework/build system
+* existing manifest files
+* existing service worker
+* existing icons
+* current auth routing
+* how production vs development environment is detected
+
+Then implement only what is needed.
+
+After implementation, verify:
+
+1. Existing Emmaus UI is visually unchanged.
+2. Login still works.
+3. Normal users cannot see Demo Admin or Super Admin shortcuts in production.
+4. Existing admin users can still access /admin after authentication.
+5. Daily Rhythm still loads normally.
+6. User progress still persists.
+7. Ask Emmaus still works.
+8. Bible still works.
+9. The manifest is reachable in production.
+10. The service worker registers successfully.
+11. Emmaus is recognised as installable by a supported browser.
+12. Launching from the Home Screen uses standalone display mode.
+13. No production database migration or destructive database action was performed.
+
+Do not publish automatically.
+
+When finished, report:
+
+* exactly which files were changed
+* what PWA functionality was added
+* whether any existing PWA support was already present
+* how I can test installation on Android
+* how I can test Add to Home Screen on iPhone
+* any limitations you discovered
+
+Make a checkpoint before changing files.

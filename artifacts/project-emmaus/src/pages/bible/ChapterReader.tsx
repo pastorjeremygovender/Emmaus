@@ -2,21 +2,24 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { getApiUrl } from '@/lib/api';
 import { SermonAudioPlayer } from '@/components/SermonAudioPlayer';
-import { BottomNav } from '@/components/BottomNav';
 import {
   ArrowLeft, Heart, FileText, Bookmark, X, Check,
   ChevronLeft, ChevronRight, Loader2, ExternalLink, RefreshCw, ChevronDown,
-  BookOpen, Share2, Highlighter, MessageSquare, Sparkles, ArrowLeftRight,
+  BookOpen, Share2, Highlighter, MessageSquare, Sparkles, ArrowLeftRight, Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { goBackOrFallback } from '@/lib/return-context';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { getBibleBook, getPrevBook, getNextBook } from '@/lib/bible-data';
 import { useBible, HighlightColor } from '@/contexts/BibleContext';
 import { useChapter } from '@/hooks/useChapter';
 import { getVerseSermonLinks } from '@/data/sermon-verse-links';
-import { BibleReferencePicker } from '@/components/BibleReferencePicker';
+import { BibleBookChapterSheet } from '@/components/BibleBookChapterSheet';
 import { VerseStudyPanel, type StudyVerse } from '@/components/VerseStudyPanel';
 import { useTranslations, type TranslationMeta } from '@/hooks/useTranslations';
+import { BottomNav } from '@/components/BottomNav';
+import { FavouriteButton } from '@/components/FavouriteButton';
+import { setPendingMessage, setReturnDestination, sourceSectionFromPath } from '@/lib/emmaus-pending';
 
 const HIGHLIGHT_CLASSES: Record<HighlightColor, string> = {
   amber: 'bg-amber-100/80 dark:bg-amber-900/30',
@@ -39,11 +42,13 @@ export default function ChapterReader() {
   const journeyId      = queryParams.get('journey');
   const returnTo       = queryParams.get('returnTo');       // set when opened from Daily Rhythm
   const startVerseParam = queryParams.get('startVerse');    // set when opened with a verse ref
+  const endVerseParam = queryParams.get('endVerse');        // optional range endpoint
   const qs = journeyId ? `?journey=${journeyId}` : '';
 
   const {
     translationId, setTranslation,
     markChapterOpened,
+    rememberChapter,
     getHighlight, addHighlight, removeHighlight,
     isFavourite, addFavourite, removeFavourite,
     getNote, saveNote, getChapterNotes,
@@ -57,6 +62,8 @@ export default function ChapterReader() {
   const book = getBibleBook(resolvedBookId);
 
   const { chapter: chapterData, loading, error, retry } = useChapter(resolvedBookId, chapterNum, translationId);
+  const selectedTranslation = translations.find(item => item.id === translationId);
+  const publicDomainFallback = translations.find(item => item.id === 'bsb');
 
   const [verseSheet, setVerseSheet] = useState<{ verse: number; text: string } | null>(null);
   const [noteText, setNoteText] = useState('');
@@ -99,7 +106,10 @@ export default function ChapterReader() {
   const scrollSaveKey = `emmaus_scroll_${resolvedBookId}_${chapterNum}`;
   const scrollBeforeTranslation = useRef<number | null>(null);
   const dropdownWrapperRef = useRef<HTMLDivElement>(null);
-  const prevTranslationRef = useRef<string>(translationId);
+
+  // ── Swipe navigation ──────────────────────────────────────────────────────
+  const swipeTouchStartX = useRef<number | null>(null);
+  const swipeTouchStartY = useRef<number | null>(null);
 
   const chapterNotes = getChapterNotes(resolvedBookId, chapterNum);
 
@@ -113,12 +123,13 @@ export default function ChapterReader() {
   // Mark chapter opened; restore scroll when data arrives
   useEffect(() => {
     if (!book || !chapterData) return;
-    markChapterOpened({
+     markChapterOpened({
       bookId: book.id,
       bookName: book.name,
       chapter: chapterNum,
       chapterHeading: chapterData.heading,
     });
+     rememberChapter(book.id, chapterNum, translationId);
     if (scrollBeforeTranslation.current !== null) {
       const y = scrollBeforeTranslation.current;
       scrollBeforeTranslation.current = null;
@@ -144,7 +155,7 @@ export default function ChapterReader() {
     }
     window.scrollTo(0, 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book?.id, chapterNum, chapterData?.heading]);
+  }, [book?.id, chapterNum, chapterData?.heading, translationId, rememberChapter]);
 
   // Pre-fill note when verse sheet opens
   useEffect(() => {
@@ -165,18 +176,10 @@ export default function ChapterReader() {
     return () => document.removeEventListener('pointerdown', handleOutside);
   }, [translationDropdownOpen]);
 
-  // Track last known-good translation
+  // Keep the selected translation visible on failure. In particular, an NIV
+  // outage must never silently turn into BSB.
   useEffect(() => {
-    if (chapterData && !loading && !error) prevTranslationRef.current = translationId;
-  }, [chapterData, loading, error, translationId]);
-
-  // Revert on translation load failure
-  useEffect(() => {
-    if (error && prevTranslationRef.current && prevTranslationRef.current !== translationId) {
-      setTranslation(prevTranslationRef.current);
-      setTranslationError('This translation could not be loaded just now.');
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    setTranslationError(error);
   }, [error]);
 
   // Fetch book intro + chapter overview when book/chapter changes (non-critical)
@@ -185,12 +188,29 @@ export default function ChapterReader() {
     setChapterOverview(null);
     setIntroExpanded(false);
 
-    fetch(getApiUrl(`/api/bible/book-intro/${encodeURIComponent(resolvedBookId)}`))
+    // BS-1: use query-param routes that read from the DB (Published rows),
+    // not the legacy path-param routes that returned static hardcoded data.
+    // BS-2: map DB snake_case column names to the shape this component expects.
+    fetch(getApiUrl(`/api/bible/book-intro?bookId=${encodeURIComponent(resolvedBookId)}`))
       .then(r => r.ok ? r.json() : null)
-      .then(data => setBookIntro(data))
+      .then(data => {
+        if (!data) { setBookIntro(null); return; }
+        setBookIntro({
+          author: data.author_attribution ?? data.author ?? '',
+          dateWritten: data.date_range ?? data.dateWritten ?? '',
+          theme: Array.isArray(data.major_themes)
+            ? data.major_themes.join(', ')
+            : (data.theme ?? ''),
+          keyVerse: Array.isArray(data.key_passages) && data.key_passages[0]
+            ? data.key_passages[0]
+            : (data.keyVerse ?? ''),
+          keyVerseRef: data.keyVerseRef ?? '',
+          overview: data.purpose ?? data.historical_setting ?? data.overview ?? '',
+        });
+      })
       .catch(() => {/* non-critical */});
 
-    fetch(getApiUrl(`/api/bible/chapter-overview/${encodeURIComponent(resolvedBookId)}/${chapterNum}`))
+    fetch(getApiUrl(`/api/bible/chapter-overview?bookId=${encodeURIComponent(resolvedBookId)}&chapter=${chapterNum}`))
       .then(r => r.ok ? r.json() : null)
       .then(data => setChapterOverview(data?.summary ?? null))
       .catch(() => {/* non-critical */});
@@ -222,7 +242,7 @@ export default function ChapterReader() {
       <div className="min-h-[100dvh] flex items-center justify-center p-8 bg-background">
         <div className="text-center space-y-4">
           <p className="text-muted-foreground">Book not found.</p>
-          <Button variant="outline" onClick={() => setLocation('/bible')}>Back to My Bible</Button>
+          <Button variant="outline" onClick={() => goBackOrFallback('/bible', setLocation)}>Back to My Bible</Button>
         </div>
       </div>
     );
@@ -250,7 +270,14 @@ export default function ChapterReader() {
     ? `${book.shortName} ${nextChapterNum}`
     : nextBook ? `${nextBook.shortName} 1` : '';
 
-  const currentTranslation = translations.find(t => t.id === translationId) ?? translations[0];
+  const currentTranslation: TranslationMeta = translations.find(t => t.id === translationId) ?? {
+    id: translationId,
+    name: translationId === 'niv' ? 'New International Version' : translationId.toUpperCase(),
+    abbreviation: translationId.toUpperCase(),
+    language: 'en',
+    copyright: '',
+    provider: ['niv', 'gnt', 'msg'].includes(translationId) ? 'api.bible' : 'local',
+  };
   const bookmarked = isBookmarked(book.id, chapterNum);
 
   // Navigate chapters — save scroll so it can be restored on back
@@ -261,7 +288,6 @@ export default function ChapterReader() {
 
   function handleSetTranslation(id: string) {
     if (id === translationId) { setTranslationDropdownOpen(false); return; }
-    prevTranslationRef.current = translationId;
     scrollBeforeTranslation.current = window.scrollY;
     setTranslationError(null);
     setTranslation(id);
@@ -303,17 +329,19 @@ export default function ChapterReader() {
     setLocation(`/bible/read/${newBookId}/${newChapter}${qs}`);
   }
 
-  // Share verse via Web Share API (with clipboard fallback)
+  // Share verse via Web Share API (with clipboard fallback).
+  // deepLink: null suppresses the "Continue your journey" block — verse shares
+  // stand alone and don't need a deep link to a specific verse.
   async function handleShare(verseNum: number, text: string) {
     const ref = `${book!.name} ${chapterNum}:${verseNum}`;
-    const shareData = { title: ref, text: `"${text}" — ${ref}` };
+    const { shareContent } = await import('@/lib/share');
     try {
-      if (navigator.share) {
-        await navigator.share(shareData);
-      } else {
-        await navigator.clipboard.writeText(`"${text}" — ${ref}`);
-      }
-    } catch { /* cancelled */ }
+      await shareContent({
+        title: ref,
+        reflection: `"${text}"`,
+        deepLink: null,
+      });
+    } catch { /* cancelled or clipboard unavailable */ }
   }
 
   // Save verse prayer — prepends the verse reference to the prayer text
@@ -336,66 +364,101 @@ export default function ChapterReader() {
     });
   }
 
-  return (
-    <div className="min-h-[100dvh] bg-background">
+  // Any open overlay should suppress swipe so the gesture doesn't fire through panels
+  const anyOverlayOpen =
+    !!verseSheet || !!studyPanelVerse || !!compareSheet ||
+    notesOpen || pickerOpen || preachedHereOpen ||
+    translationDropdownOpen || !!preachedHerePlayer;
 
-      {/* ── Bible Reference Picker overlay ──────────────────────────────────── */}
-      {pickerOpen && (
-        <BibleReferencePicker
-          currentBookId={resolvedBookId}
-          currentChapter={chapterNum}
-          onNavigate={handlePickerNavigate}
-          onClose={() => setPickerOpen(false)}
-        />
-      )}
+  function handleSwipeTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    swipeTouchStartX.current = t.clientX;
+    swipeTouchStartY.current = t.clientY;
+  }
+
+  function handleSwipeTouchEnd(e: React.TouchEvent) {
+    if (anyOverlayOpen) return;
+    if (swipeTouchStartX.current === null || swipeTouchStartY.current === null) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - swipeTouchStartX.current;
+    const dy = t.clientY - swipeTouchStartY.current;
+    swipeTouchStartX.current = null;
+    swipeTouchStartY.current = null;
+
+    const MIN_SWIPE = 60; // px — minimum horizontal travel
+    // Only treat as a horizontal swipe if the lateral movement clearly dominates vertical
+    if (Math.abs(dx) < MIN_SWIPE || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+
+    if (dx < 0 && nextPath) {
+      // Swiped left → next chapter
+      navigateChapter(nextPath);
+    } else if (dx > 0 && prevPath) {
+      // Swiped right → previous chapter
+      navigateChapter(prevPath);
+    }
+  }
+
+  return (
+    <div
+      className="min-h-[100dvh] bg-background"
+      onTouchStart={handleSwipeTouchStart}
+      onTouchEnd={handleSwipeTouchEnd}
+    >
+
+      {/* ── Bible Book + Chapter sheet ───────────────────────────────────────── */}
+      <BibleBookChapterSheet
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        currentBookId={resolvedBookId}
+        currentChapter={chapterNum}
+        onNavigate={handlePickerNavigate}
+      />
 
       {/* ── Sticky Header ───────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/50">
-        <div className="flex items-center h-14 px-4 max-w-[600px] mx-auto gap-2">
+      <header className="sticky top-0 z-20 bg-muted/30 backdrop-blur-sm border-b border-border/50">
+        <div className="relative flex items-center h-14 px-4 max-w-[600px] mx-auto">
 
           {/* Back — returns to caller (Daily Rhythm) or My Bible home */}
           <button
-            onClick={() => setLocation(returnTo ?? '/bible')}
+            onClick={() => goBackOrFallback(returnTo ?? '/bible', setLocation)}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
             aria-label={returnTo ? 'Back to 10 Minutes with Jesus' : 'Back to My Bible'}
           >
             <ArrowLeft size={22} />
           </button>
 
-          {/* Combined book/chapter + translation selector */}
-          <div className="flex-1 flex justify-center">
-            <div
-              className="inline-flex items-stretch border border-border rounded-xl overflow-hidden bg-card shadow-sm"
-              ref={dropdownWrapperRef}
-            >
-              {/* LEFT: Book & Chapter — opens BibleReferencePicker */}
+          {/* Combined book/chapter + translation pill — absolutely centred */}
+          <div className="absolute left-1/2 -translate-x-1/2" ref={dropdownWrapperRef}>
+            <div className="inline-flex items-stretch border border-border/50 rounded-full overflow-hidden bg-muted/30">
+
+              {/* LEFT: Book & Chapter */}
               <button
                 onClick={() => { setTranslationDropdownOpen(false); setPickerOpen(true); }}
-                className="flex items-center gap-1.5 px-3 py-2 hover:bg-muted/60 active:bg-muted transition-colors min-h-[40px]"
-                aria-label={`Current reading: ${book.name} chapter ${chapterNum}. Tap to change.`}
+                className="flex items-center gap-1 px-3.5 py-2 hover:bg-muted/60 active:bg-muted transition-colors min-h-[36px]"
+                aria-label={`Currently reading ${book.name} chapter ${chapterNum}. Tap to change.`}
               >
-                <span className="text-[15px] font-semibold text-foreground">
-                  {book.shortName} {chapterNum}
+                <span className="text-[14px] font-semibold text-foreground whitespace-nowrap">
+                  {book.name} {chapterNum}
                 </span>
-                <ChevronDown size={13} className="text-muted-foreground" />
+                <ChevronDown size={12} className="text-muted-foreground" />
               </button>
 
               {/* Divider */}
-              <div className="w-px bg-border/70 my-2" />
+              <div className="w-px bg-border/60 my-2" />
 
-              {/* RIGHT: Translation — opens translation dropdown */}
+              {/* RIGHT: Translation */}
               <button
                 onClick={() => setTranslationDropdownOpen(v => !v)}
-                className="flex items-center gap-1 px-3 py-2 hover:bg-muted/60 active:bg-muted transition-colors min-h-[40px]"
-                aria-label={`Current translation: ${currentTranslation?.name ?? ''}. Tap to change.`}
+                className="flex items-center gap-0.5 px-3 py-2 hover:bg-muted/60 active:bg-muted transition-colors min-h-[36px]"
+                aria-label={`Translation: ${currentTranslation?.name ?? ''}. Tap to change.`}
                 aria-expanded={translationDropdownOpen}
                 aria-haspopup="listbox"
               >
-                <span className="text-[12px] font-bold text-foreground">
+                <span className="text-[12px] font-bold text-muted-foreground">
                   {currentTranslation?.abbreviation ?? '—'}
                 </span>
                 <ChevronDown
-                  size={11}
+                  size={10}
                   className={['text-muted-foreground transition-transform', translationDropdownOpen ? 'rotate-180' : ''].join(' ')}
                 />
               </button>
@@ -405,7 +468,7 @@ export default function ChapterReader() {
                 <div
                   role="listbox"
                   aria-label="Select translation"
-                  className="absolute right-4 top-14 w-56 bg-popover border border-border rounded-xl shadow-lg z-50 overflow-hidden"
+                  className="absolute top-14 left-1/2 -translate-x-1/2 w-56 bg-popover border border-border rounded-2xl shadow-lg z-50 overflow-hidden"
                 >
                   {translations.map(t => (
                     <button
@@ -427,29 +490,22 @@ export default function ChapterReader() {
             </div>
           </div>
 
-          {/* Spacer — balances the back button */}
-          <div className="w-11 shrink-0" />
         </div>
 
-        {/* Chapter heading (sub-line) */}
+        {/* Chapter heading sub-line */}
         {chapterData?.heading && (
-          <div className="text-center pb-2 px-4">
-            <span className="text-[11px] text-muted-foreground truncate">{chapterData.heading}</span>
+          <div className="flex justify-center pb-1 px-4">
+            <span className="text-[11px] text-muted-foreground">{chapterData.heading}</span>
           </div>
         )}
 
-        {/* Chapter overview banner — one-sentence "chapter at a glance" */}
-        {chapterOverview && (
-          <div className="px-4 pb-2">
-            <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-primary/5 border border-primary/15">
-              <BookOpen size={13} className="text-primary/70 mt-0.5 shrink-0" />
-              <p className="text-[12px] text-muted-foreground leading-[1.5] italic">{chapterOverview}</p>
-            </div>
-          </div>
-        )}
+        {/* Verse-tap hint */}
+        <div className="flex justify-center pb-2 px-4">
+          <span className="text-[11px] text-muted-foreground/60">Tap any verse to open Bible Study options.</span>
+        </div>
 
-        {/* Preached Here badge — appears when ICC sermons reference this chapter */}
-        {preachedHereSermons.length > 0 && (
+        {/* Preached Here badge — appears when chapter-specific or book-level ICC sermons exist */}
+        {(preachedHereSermons.length > 0 || preachedHereBookSermons.length > 0) && (
           <div className="flex justify-center pb-2 px-4">
             <button
               onClick={() => setPreachedHereOpen(true)}
@@ -470,133 +526,100 @@ export default function ChapterReader() {
       </header>
 
       {/* ── Scripture ───────────────────────────────────────────────────────── */}
-      <main className="px-5 pt-8 pb-40 max-w-[600px] mx-auto">
+      <main
+        className="max-w-[600px] mx-auto"
+        style={{ paddingBottom: 'calc(7.5rem + env(safe-area-inset-bottom, 0px))' }}
+      >
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <Loader2 size={28} className="text-primary animate-spin" />
             <p className="text-[14px] text-muted-foreground">Loading {book.name} {chapterNum}…</p>
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+          <div className="flex flex-col items-center justify-center py-24 gap-4 text-center px-5">
             <p className="text-[16px] text-muted-foreground">{error}</p>
             <Button variant="outline" onClick={retry} className="gap-2">
               <RefreshCw size={15} />Try again
             </Button>
           </div>
         ) : !chapterData ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+          <div className="flex flex-col items-center justify-center py-24 gap-4 text-center px-5">
             <p className="text-[16px] text-muted-foreground">
-              {book.name} {chapterNum} is not available in this translation.
+              {book.name} {chapterNum} is not available in {selectedTranslation?.abbreviation ?? translationId.toUpperCase()}.
             </p>
-            <Button variant="outline" onClick={() => setLocation('/bible')}>Back to My Bible</Button>
+            <p className="max-w-sm text-[13px] leading-relaxed text-muted-foreground">
+              The selected translation stays unchanged. You can read this chapter in a public-domain translation instead.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {publicDomainFallback && (
+                <Button
+                  onClick={() => {
+                    scrollBeforeTranslation.current = window.scrollY;
+                    setTranslation(publicDomainFallback.id);
+                  }}
+                >
+                  Read in {publicDomainFallback.abbreviation}
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => setTranslationDropdownOpen(true)}>
+                Choose translation
+              </Button>
+            </div>
+            <Button variant="ghost" onClick={() => goBackOrFallback('/bible', setLocation)}>
+              Back to My Bible
+            </Button>
           </div>
         ) : (
-          <div className="space-y-0">
+          <div>
 
-            {/* Book intro card — shown on chapter 1 only */}
-            {chapterNum === 1 && bookIntro && (
-              <div className="mb-6 rounded-2xl border border-primary/20 bg-primary/5 overflow-hidden">
-                <button
-                  onClick={() => setIntroExpanded(v => !v)}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
-                >
-                  <div className="w-8 h-8 bg-primary/15 rounded-xl flex items-center justify-center shrink-0">
-                    <Info size={15} className="text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-foreground">About {book.name}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">{bookIntro.theme}</p>
-                  </div>
-                  <ChevronDown
-                    size={15}
-                    className={['text-muted-foreground transition-transform shrink-0', introExpanded ? 'rotate-180' : ''].join(' ')}
-                  />
-                </button>
-
-                {introExpanded && (
-                  <div className="px-4 pb-4 space-y-3 border-t border-primary/10">
-                    <p className="text-[14px] text-foreground leading-[1.7] pt-3">{bookIntro.overview}</p>
-
-                    <div className="rounded-xl bg-background/60 border border-primary/10 p-3.5 space-y-1">
-                      <p className="text-[12px] font-semibold text-primary/80 uppercase tracking-widest">Key Verse</p>
-                      <p className="text-[14px] text-foreground italic leading-[1.6]">"{bookIntro.keyVerse}"</p>
-                      <p className="text-[12px] text-muted-foreground font-medium">— {bookIntro.keyVerseRef}</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-xl bg-background/60 border border-border/50 p-3">
-                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Author</p>
-                        <p className="text-[13px] text-foreground leading-snug">{bookIntro.author}</p>
-                      </div>
-                      <div className="rounded-xl bg-background/60 border border-border/50 p-3">
-                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Written</p>
-                        <p className="text-[13px] text-foreground leading-snug">{bookIntro.dateWritten}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {chapterData.verses.map(v => {
-              const hl = getHighlight(book.id, chapterNum, v.verse);
-              const fav = isFavourite(book.id, chapterNum, v.verse);
-              const note = getNote(book.id, chapterNum, v.verse);
-              return (
-                <span
-                  id={`verse-${v.verse}`}
-                  key={v.verse}
-                  onClick={() => setVerseSheet({ verse: v.verse, text: v.text })}
-                  className={[
-                    'inline cursor-pointer leading-[1.85] transition-colors rounded-sm',
-                    hl ? HIGHLIGHT_CLASSES[hl.color] : 'hover:bg-muted/50',
-                  ].join(' ')}
-                >
-                  <sup className="text-[10px] font-semibold text-primary/70 mr-0.5 select-none">{v.verse}</sup>
-                  <span className="font-sans text-[19px] text-foreground">{v.text}</span>
-                  {(fav || note) && (
-                    <span className="inline-flex items-center gap-0.5 mx-1 align-middle">
-                      {fav && <Heart size={10} className="text-primary fill-primary" />}
-                      {note && <FileText size={10} className="text-muted-foreground" />}
-                    </span>
-                  )}
-                  {' '}
-                </span>
-              );
-            })}
+            {/* Scripture zone */}
+            <div className="px-5 py-8">
+              {chapterData.verses.map(v => {
+                const hl = getHighlight(book.id, chapterNum, v.verse);
+                const deepLinked = startVerseParam !== null &&
+                  Number.isInteger(Number(startVerseParam)) &&
+                  v.verse >= Number(startVerseParam) &&
+                  v.verse <= (endVerseParam ? Number(endVerseParam) : Number(startVerseParam));
+                const fav = isFavourite(book.id, chapterNum, v.verse);
+                const note = getNote(book.id, chapterNum, v.verse);
+                return (
+                  <span
+                    id={`verse-${v.verse}`}
+                    key={v.verse}
+                    onClick={() => setVerseSheet({ verse: v.verse, text: v.text })}
+                    className={[
+                      'inline cursor-pointer leading-[1.85] transition-colors rounded-sm',
+                      deepLinked ? 'bg-primary/15 ring-1 ring-primary/30' :
+                        hl ? HIGHLIGHT_CLASSES[hl.color] : 'hover:bg-muted/50',
+                    ].join(' ')}
+                  >
+                    <sup className="text-[10px] font-semibold text-primary/70 mr-0.5 select-none">{v.verse}</sup>
+                    <span className="font-sans text-[19px] text-foreground">{v.text}</span>
+                    {(fav || note) && (
+                      <span className="inline-flex items-center gap-0.5 mx-1 align-middle">
+                        {fav && <Heart size={10} className="text-primary fill-primary" />}
+                        {note && <FileText size={10} className="text-muted-foreground" />}
+                      </span>
+                    )}
+                    {' '}
+                  </span>
+                );
+              })}
+            </div>
           </div>
         )}
       </main>
 
-      {/* ── Fixed Bottom Toolbar ─────────────────────────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 z-10 bg-background/95 backdrop-blur-sm border-t border-border/50 safe-area-bottom">
+      {/* ── Standard App Navigation ─────────────────────────────────────────── */}
+      <BottomNav />
+
+      {/* ── Chapter Navigation — sits directly above the app nav ─────────────── */}
+      {/* bottom = BottomNav height (h-16=4rem) + device safe-area inset */}
+      <div
+        className="fixed left-0 right-0 z-20 bg-muted/30 backdrop-blur-sm border-t border-border/50"
+        style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}
+      >
         <div className="max-w-[600px] mx-auto">
-
-          {/* Tool row — Notes and Save/Bookmark only */}
-          <div className="flex items-center justify-around h-12 px-6 border-b border-border/30">
-            <button
-              onClick={() => setNotesOpen(true)}
-              className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-foreground transition-colors p-2 relative"
-              aria-label="Chapter notes"
-            >
-              <FileText size={18} />
-              <span className="text-[9px]">Notes</span>
-              {chapterNotes.length > 0 && (
-                <span className="absolute top-1 right-1 w-4 h-4 bg-primary text-[8px] text-primary-foreground rounded-full flex items-center justify-center font-bold">
-                  {chapterNotes.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={handleToggleBookmark}
-              className={['flex flex-col items-center gap-0.5 transition-colors p-2', bookmarked ? 'text-primary' : 'text-muted-foreground hover:text-foreground'].join(' ')}
-              aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark this chapter'}
-            >
-              <Bookmark size={18} className={bookmarked ? 'fill-primary' : ''} />
-              <span className="text-[9px]">{bookmarked ? 'Saved' : 'Save'}</span>
-            </button>
-          </div>
 
           {/* Chapter navigation row */}
           <div className="flex items-center h-14 px-2">
@@ -729,15 +752,27 @@ export default function ChapterReader() {
                   {/* Ask Emmaus */}
                   <button
                     onClick={() => {
+                      const prompt = `Help me understand ${ref}: "${verseSheet.text}"`;
+                      setPendingMessage(prompt, {
+                        entryPoint: 'bible',
+                        bookId: book.id,
+                        bookName: book.name,
+                        chapter: chapterNum,
+                        chapterHeading: ref,
+                        verseText: verseSheet.text,
+                      });
+                      setReturnDestination({
+                        pathname: `${window.location.pathname}${window.location.search}`,
+                        scrollY: Math.round(window.scrollY),
+                        sourceSection: sourceSectionFromPath(window.location.pathname),
+                      });
                       setVerseSheet(null);
-                      setLocation(
-                        `/personal/ask-emmaus/conversation?verse=${encodeURIComponent(ref)}&q=${encodeURIComponent(`Help me understand ${ref}: "${verseSheet.text}"`)}`
-                      );
+                      setLocation('/personal/ask-emmaus/conversation');
                     }}
                     className="flex flex-col items-center gap-1.5 p-3 rounded-xl border bg-card border-border hover:bg-primary/5 hover:border-primary/30 transition-colors"
                   >
                     <Sparkles size={20} className="text-muted-foreground" />
-                    <span className="text-[11px] font-medium text-foreground">Ask AI</span>
+                    <span className="text-[11px] font-medium text-foreground">Ask Emmaus</span>
                   </button>
 
                   {/* Compare translations */}
@@ -955,7 +990,6 @@ export default function ChapterReader() {
         translations={translations}
       />
 
-      <BottomNav />
     </div>
   );
 }

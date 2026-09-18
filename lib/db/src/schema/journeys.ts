@@ -7,6 +7,7 @@ import {
   jsonb,
   uuid,
   unique,
+  index,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -51,13 +52,26 @@ export const journeysTable = pgTable("journeys", {
   themeColor: text("theme_color"),   // hex colour, e.g. '#3B82F6' — nullable
   version: integer("version").notNull().default(1),  // incremented on each publish
 
+  // Smart content indicators — set when admin opts-in to notifying members on publish.
+  // null = never opted in; a timestamp value = "notify as of this date" (7-day NEW window).
+  notifyPublishedAt: timestamp("notify_published_at"),
+
   // Content Studio grouping (nullable — uncollected journeys still work)
   collectionId: text("collection_id"),
+  // Admin-controlled presentation order. Never changes day/progress semantics.
+  displayOrder: integer("display_order").notNull().default(0),
+
+  // Display label prefix for steps. null = auto-derive from journeyType:
+  //   'daily-rhythm' → "Day"; all other types → "Step".
+  // Admin can override with any string: "Day", "Step", or a custom value.
+  stepLabelPrefix: text("step_label_prefix"),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   createdBy: text("created_by"),
   updatedBy: text("updated_by"),
+  // Soft-delete: set by DELETE /journeys/:id, invisible to all queries when not null.
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const insertJourneySchema = createInsertSchema(journeysTable).omit({
@@ -83,6 +97,8 @@ export const journeyStepsTable = pgTable("journey_steps", {
     .notNull()
     .references(() => journeysTable.id, { onDelete: "cascade" }),
   day: integer("day").notNull(),  // step number; unique within journey
+  // Presentation order only; `day` remains the canonical progress key.
+  displayOrder: integer("display_order").notNull().default(0),
 
   // Core display
   title: text("title").notNull().default(""),
@@ -129,8 +145,18 @@ export const journeyStepsTable = pgTable("journey_steps", {
   // They are displayed only via the dedicated /journey/:id/complete page.
   isCompletionStep: boolean("is_completion_step").notNull().default(false),
 
+  // Optional per-step display label (e.g. "1 January"). Overrides the journey-level
+  // prefix+number formula when non-empty. Used for date-keyed reading plans.
+  displayLabel: text("display_label"),
+
+  // Optional share image — stored as an object-storage path ("/objects/...").
+  // When set, members see a "Take this with you" card with Save + Share actions.
+  shareImageUrl: text("share_image_url"),
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  // Soft-delete: set by DELETE /journeys/:id/steps/:day, invisible to all queries when not null.
+  deletedAt: timestamp("deleted_at"),
 }, (table) => [
   // Enforce step uniqueness within a journey so (journeyId, day) is a reliable key
   unique("journey_steps_journey_id_day_unique").on(table.journeyId, table.day),
@@ -141,8 +167,64 @@ export const insertJourneyStepSchema = createInsertSchema(journeyStepsTable).omi
   createdAt: true,
   updatedAt: true,
 });
+
+// Manual groups inside the Daily Rhythm journey. A step may appear in more
+// than one group; membership order is independent from the canonical day.
+export const dailyRhythmGroupsTable = pgTable("daily_rhythm_groups", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  journeyId: text("journey_id").notNull().references(() => journeysTable.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description").default(""),
+  status: text("status").notNull().default("Draft"),
+  displayOrder: integer("display_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const dailyRhythmGroupItemsTable = pgTable("daily_rhythm_group_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  groupId: uuid("group_id").notNull().references(() => dailyRhythmGroupsTable.id, { onDelete: "cascade" }),
+  stepId: uuid("step_id").notNull().references(() => journeyStepsTable.id, { onDelete: "cascade" }),
+  displayOrder: integer("display_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  unique("daily_rhythm_group_items_group_step_unique").on(table.groupId, table.stepId),
+]);
+
+export type DailyRhythmGroup = typeof dailyRhythmGroupsTable.$inferSelect;
+export type DailyRhythmGroupItem = typeof dailyRhythmGroupItemsTable.$inferSelect;
 export type InsertJourneyStep = z.infer<typeof insertJourneyStepSchema>;
 export type JourneyStep = typeof journeyStepsTable.$inferSelect;
+
+// Server-authoritative Daily Rhythm opening decisions. This ledger is
+// intentionally separate from progress: opening a step is not completion.
+export const dailyRhythmOpeningLedgerTable = pgTable(
+  "daily_rhythm_opening_ledger",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    journeyId: text("journey_id").notNull().references(() => journeysTable.id, { onDelete: "cascade" }),
+    localDate: text("local_date").notNull(),
+    localTimezone: text("local_timezone").notNull().default("Africa/Johannesburg"),
+    assignedDay: integer("assigned_day").notNull(),
+    targetStepId: uuid("target_step_id").references(() => journeyStepsTable.id, { onDelete: "set null" }),
+    state: text("state").notNull(),
+    completedToday: boolean("completed_today").notNull().default(false),
+    destination: text("destination").notNull(),
+    reason: text("reason").notNull(),
+    decisionId: uuid("decision_id").notNull().defaultRandom(),
+    launchSessionId: text("launch_session_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("daily_rhythm_opening_user_date_unique").on(table.userId, table.localDate),
+    unique("daily_rhythm_opening_decision_unique").on(table.decisionId),
+    index("daily_rhythm_opening_user_idx").on(table.userId, table.updatedAt),
+  ],
+);
+
+export type DailyRhythmOpeningLedger = typeof dailyRhythmOpeningLedgerTable.$inferSelect;
 
 // ─── User Journey Progress ──────────────────────────────────────────────────────
 
@@ -153,10 +235,23 @@ export const userJourneyProgressTable = pgTable("user_journey_progress", {
     .notNull()
     .references(() => journeysTable.id, { onDelete: "cascade" }),
   currentDay: integer("current_day").notNull().default(1),
+  dailyRhythmUnlockAt: timestamp("daily_rhythm_unlock_at"),
   completedDays: jsonb("completed_days").$type<number[]>().notNull().default([]),
   startedAt: timestamp("started_at").defaultNow().notNull(),
   lastCompletedAt: timestamp("last_completed_at"),
+  dailyRhythmTimezone: text("daily_rhythm_timezone").notNull().default("Africa/Johannesburg"),
+  lastDailyOpenDate: text("last_daily_open_date"),
+  dailyRhythmStartupSession: text("daily_rhythm_startup_session"),
+  dailyRhythmStartupDate: text("daily_rhythm_startup_date"),
   status: text("status").notNull().default("active"),  // active|completed|paused|dropped
+  // Set to NOW() when the member opens/views the content — used by badge computation.
+  lastOpenedAt: timestamp("last_opened_at"),
+  // Non-destructive hide: card removed from Today's Steps without losing any progress.
+  // Automatically cleared (set to false) when the member opens the Walk from Next Steps.
+  hiddenFromToday: boolean("hidden_from_today").notNull().default(false),
+  // The member-facing surface that originally started this progress.
+  // Nullable for legacy rows whose origin cannot be recovered safely.
+  displayOrigin: text("display_origin"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

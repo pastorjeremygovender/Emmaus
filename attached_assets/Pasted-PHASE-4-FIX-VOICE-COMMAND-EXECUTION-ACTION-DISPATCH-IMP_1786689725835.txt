@@ -1,0 +1,539 @@
+PHASE 4 — FIX VOICE COMMAND EXECUTION / ACTION DISPATCH
+
+IMPORTANT: THIS IS A TARGETED REPAIR.
+
+Create a checkpoint before making changes.
+
+Do NOT redesign Emmaus Voice.
+Do NOT change the Voice UI.
+Do NOT replace speech recognition.
+Do NOT change the working TTS pipeline.
+Do NOT change Media Session / lock-screen playback.
+Do NOT rewrite Ask Emmaus.
+Do NOT create duplicate content systems.
+Do NOT hardcode content.
+Do NOT begin Phase 5.
+
+PHYSICAL DEVICE TEST RESULT
+
+Speech recognition is working.
+
+Emmaus correctly transcribes what the user says.
+
+The problem is that correctly recognized commands are NOT reliably being converted into actual Emmaus app actions.
+
+Example physical-device test:
+
+User says:
+
+“Please read today’s Psalms Daily Devotional.”
+
+Emmaus correctly recognizes/transcribes the request.
+
+But instead of opening/resolving/reading the actual Psalms Daily Devotional, Emmaus generates a conversational response such as:
+
+“While I'm not able to read the Psalms Daily Devotional aloud...”
+
+That proves the failure is AFTER speech recognition.
+
+The problem is:
+
+TRANSCRIPT
+→ INTENT
+→ ACTION DISPATCH
+→ ACTION EXECUTION
+
+We need to repair that pipeline.
+
+==================================================
+1. TRACE THE EXISTING PIPELINE BEFORE CHANGING CODE
+==================================================
+
+Inspect the complete path from finalized speech transcript to execution.
+
+Identify:
+
+- where final transcript is received
+- where classifyVoiceIntent() is called
+- where deterministic intents are recognized
+- where navigation commands are executed
+- where Bible reading commands are executed
+- where Daily Rhythm commands are executed
+- where devotional commands are executed
+- where Walk/Journey commands are executed
+- where reading controls are executed
+- where Ask Emmaus conversational fallback occurs
+
+Do NOT assume the classifier is the problem.
+
+The existing classifier tests previously passed.
+
+We need to determine whether the classified intent is actually reaching an executor.
+
+==================================================
+2. ADD ONE END-TO-END ACTION TRACE
+==================================================
+
+For every finalized voice command temporarily log:
+
+[VOICE ACTION TRACE]
+
+{
+  transcript,
+  classifiedIntent,
+  intentCategory,
+  confidence,
+  contentType,
+  titleHint,
+  actionRequested,
+  dispatcherMatched,
+  executorSelected,
+  resolverCalled,
+  resolverResult,
+  resolvedContentId,
+  resolvedStepId,
+  resolvedRoute,
+  sectionsCount,
+  actionExecuted,
+  readingStarted,
+  navigationExecuted,
+  fallbackTriggered,
+  fallbackReason
+}
+
+This trace must follow ONE real command from transcript all the way to execution.
+
+Do not merely show classifier unit-test results.
+
+==================================================
+3. CENTRALIZE POST-TRANSCRIPTION DISPATCH
+==================================================
+
+There must be one authoritative decision point after a transcript is finalized.
+
+Conceptually:
+
+const intent = classifyVoiceIntent(transcript);
+
+if (isDeterministicVoiceAction(intent)) {
+    return executeVoiceAction(intent);
+}
+
+return handleConversationalRequest(...);
+
+Do not implement this exact pseudocode blindly if an equivalent architecture already exists.
+
+Reuse the existing architecture wherever possible.
+
+The important rule is:
+
+DETERMINISTIC COMMAND
+→ EXECUTE APP ACTION
+
+CONVERSATIONAL QUESTION
+→ ASK EMMAUS
+
+==================================================
+4. DEFINE DETERMINISTIC ACTIONS
+==================================================
+
+These categories must be treated as executable actions rather than conversational prompts:
+
+NAVIGATION
+
+Examples:
+
+“Open My Bible”
+“Go to Today’s Steps”
+“Open Next Steps”
+“Open My Journey”
+“Go back”
+
+Expected:
+Execute actual application navigation.
+
+----------------------------
+
+BIBLE READING
+
+Examples:
+
+“Read Psalm 23”
+“Read John 3”
+“Read Romans 8”
+“Continue reading”
+“Next chapter”
+
+Expected:
+Resolve Bible content and use the existing reading/TTS pipeline.
+
+NOTE:
+
+Psalm 23 reading has already worked on a physical device.
+
+DO NOT BREAK IT.
+
+----------------------------
+
+DAILY RHYTHM / 10 MINUTES WITH JESUS
+
+Examples:
+
+“Read today’s Daily Rhythm”
+“Read today’s 10 Minutes with Jesus”
+“Read 10 Minutes with Jesus”
+
+Expected:
+
+Resolve the user's CURRENT Daily Rhythm entry from the canonical Emmaus content/progress system.
+
+Then begin reading the real stored content aloud.
+
+Do not summarize it.
+Do not generate substitute content.
+
+----------------------------
+
+DAILY DEVOTIONAL
+
+Examples:
+
+“Read today’s devotional”
+“Read today’s Psalms Daily Devotional”
+“Read my Psalms devotional”
+“Continue my devotional”
+
+Expected:
+
+Resolve the correct active devotional.
+
+If a title is supplied, use it to identify the correct devotional.
+
+Then resolve the user's current/today entry using the SAME canonical progress/date logic used by the visible Emmaus UI.
+
+Read the actual stored content.
+
+----------------------------
+
+SERMON COMPANION
+
+Examples:
+
+“Read my sermon companion”
+“Continue the sermon devotional”
+
+Expected:
+
+Resolve current Sermon Companion content and read it.
+
+----------------------------
+
+WALKS / JOURNEYS
+
+Examples:
+
+“Continue my walk”
+“Continue my journey”
+
+Expected:
+
+Resolve current active content and current step, then read it.
+
+----------------------------
+
+READING CONTROLS
+
+Examples:
+
+“Stop”
+“Pause”
+“Continue”
+“Next section”
+“Repeat that”
+“Explain that”
+“Pray with me”
+
+Expected:
+
+Execute against the current reading session.
+
+Do not send these to generic Ask Emmaus while a reading session is active.
+
+==================================================
+5. CRITICAL FALLBACK RULE
+==================================================
+
+A deterministic command must NEVER silently fall through to conversational AI simply because execution failed.
+
+For example:
+
+intent = READ_DEVOTIONAL
+
+but devotional resolver returns null
+
+MUST NOT become:
+
+Ask Emmaus:
+“I cannot read the devotional aloud...”
+
+Instead:
+
+log:
+
+[VOICE ACTION FAILED]
+
+{
+  transcript,
+  intent,
+  contentType,
+  titleHint,
+  resolverStage,
+  failureReason
+}
+
+Then return a truthful operational response such as:
+
+“I couldn't load today's Psalms devotional.”
+
+This distinction is essential.
+
+There are TWO different situations:
+
+A. Emmaus does not understand the request.
+
+B. Emmaus understands the action but cannot execute it.
+
+Situation B is an engineering/execution failure and must NOT be disguised by an AI-generated conversational response.
+
+==================================================
+6. USE CANONICAL EMMAUS CONTENT
+==================================================
+
+Voice must consume the SAME content used by the visible Emmaus application.
+
+Do not:
+
+- create voice-only devotionals
+- duplicate Daily Rhythm data
+- create another progress system
+- hardcode today's entry
+- hardcode Day numbers
+- hardcode Psalms devotional content
+- maintain separate voice progress
+
+Voice should act as another interface into Emmaus.
+
+The architecture should effectively be:
+
+                 EMMAUS
+
+       ┌────────────┴────────────┐
+       │                         │
+      UI                       VOICE
+       │                         │
+       └────────────┬────────────┘
+                    │
+             SAME APP ACTIONS
+                    │
+        SAME CONTENT / PROGRESS
+                    │
+                 DATABASE
+
+Voice is not a separate application.
+
+==================================================
+7. VERIFY ACTION EXECUTION
+==================================================
+
+Test these exact commands end-to-end.
+
+TEST 1
+
+“Open My Bible”
+
+Expected:
+
+intent = navigation
+dispatcher selects navigation executor
+actual My Bible route opens
+
+PASS only if navigation physically executes.
+
+----------------------------
+
+TEST 2
+
+“Read Psalm 23”
+
+Expected:
+
+intent = Bible reading
+Bible resolver called
+Psalm 23 retrieved
+reading starts
+
+Protect the currently working Bible path.
+
+----------------------------
+
+TEST 3
+
+“Read today’s 10 Minutes with Jesus”
+
+Expected:
+
+intent = Daily Rhythm/content reading
+current Daily Rhythm resolved
+real current entry retrieved
+sections constructed
+TTS begins
+
+----------------------------
+
+TEST 4
+
+“Read today’s Psalms Daily Devotional”
+
+Expected:
+
+intent = devotional reading
+titleHint identifies Psalms Daily Devotional
+current entry resolved
+actual content retrieved
+sections constructed
+TTS begins
+
+THIS IS THE CURRENT PHYSICAL-DEVICE FAILURE.
+
+----------------------------
+
+TEST 5
+
+“Read my Psalms devotional”
+
+Expected:
+
+same resolver as Test 4.
+
+----------------------------
+
+TEST 6
+
+“Continue my devotional”
+
+Expected:
+
+current active devotional + progress resolved
+reading begins/continues
+
+----------------------------
+
+TEST 7
+
+“What does grace mean?”
+
+Expected:
+
+This is NOT an app action.
+
+It should reach Ask Emmaus conversational AI.
+
+==================================================
+8. VERIFY REAL EXECUTION, NOT JUST CLASSIFICATION
+==================================================
+
+For each test report:
+
+TRANSCRIPT
+↓
+CLASSIFIED INTENT
+↓
+DISPATCHER
+↓
+EXECUTOR
+↓
+RESOLVER
+↓
+RESOLVED OBJECT
+↓
+ACTION
+↓
+RESULT
+
+I do NOT want a report saying:
+
+“Classifier: 30/30 passed.”
+
+That is insufficient.
+
+We already know speech recognition and much of intent classification work.
+
+We need proof that the requested ACTION EXECUTES.
+
+==================================================
+9. REGRESSION PROTECTION
+==================================================
+
+Do not break functionality already demonstrated on a physical phone:
+
+- speech transcription
+- Psalm 23 Bible reading
+- TTS playback
+- active Voice Session
+- background audio
+- lock-screen playback
+- lock-screen media controls
+
+Also protect:
+
+- Ask Emmaus conversational responses
+- existing visible app navigation
+- Today’s Steps
+- Daily Rhythm progress
+- devotional progress
+- Bible UI
+
+==================================================
+10. PHASE 4 PASS CRITERIA
+==================================================
+
+Phase 4 is NOT complete merely because:
+
+- transcription works
+- classifier tests pass
+- TTS works
+- Psalm 23 works
+- lock-screen controls work
+
+Phase 4 passes when a user can naturally SPEAK an Emmaus action and Emmaus actually PERFORMS that action.
+
+At minimum physical-device verification must ultimately demonstrate:
+
+“Open My Bible”
+→ My Bible opens
+
+“Read Psalm 23”
+→ Psalm 23 is read
+
+“Read today’s 10 Minutes with Jesus”
+→ today's real content is read
+
+“Read today’s Psalms Daily Devotional”
+→ today's real devotional is read
+
+“What does grace mean?”
+→ Ask Emmaus answers conversationally
+
+Do the targeted repair.
+
+Run end-to-end tests.
+
+Give me a concise:
+
+PHASE 4 — VOICE ACTION EXECUTION QA REPORT
+
+Include the action trace for Tests 1–7.
+
+Then STOP.
+
+Do not proceed to any further Voice phase until I have tested this on the physical device.

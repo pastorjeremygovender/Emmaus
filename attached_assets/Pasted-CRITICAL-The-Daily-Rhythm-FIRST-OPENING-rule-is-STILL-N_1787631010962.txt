@@ -1,0 +1,299 @@
+CRITICAL: The Daily Rhythm FIRST OPENING rule is STILL NOT WORKING in real production use.
+
+This morning I tested Emmaus with TWO DIFFERENT USER ACCOUNTS.
+
+The required behaviour is:
+
+FIRST opening of Emmaus on a new calendar day
+→ automatically open the user's current 10 Minutes with Jesus Daily Rhythm Step.
+
+SUBSEQUENT openings that same day
+→ open Today's Steps.
+
+This did NOT behave correctly this morning with two separate accounts.
+
+This is after your report that:
+
+- 25/25 Daily Rhythm authority tests passed
+- 41/41 regression tests passed
+- per-user daily opening state passed
+- production builds passed
+
+Therefore DO NOT simply rerun those tests and tell me they pass.
+
+The automated test environment is clearly not reproducing something that occurs during the real Emmaus/PWA startup lifecycle.
+
+I need you to investigate the ACTUAL production startup sequence.
+
+PRIMARY SUSPECT
+
+Investigate whether the server-side "first opening today" state is being CONSUMED before Daily Rhythm is actually rendered.
+
+For example:
+
+App starts
+→ startup/destination endpoint called
+→ server records first opening as consumed
+→ authentication/session restoration or React startup causes another request
+→ second request sees first opening already consumed
+→ app routes to Today's Steps
+
+If anything similar is happening, this would explain why API tests pass while real PWA behaviour fails.
+
+Do not assume this is the cause. TRACE IT and prove the actual cause.
+
+TRACE THE COMPLETE REAL STARTUP FLOW
+
+Starting from a completely closed installed Emmaus PWA or production browser session, trace:
+
+1. PWA/browser launch
+2. Service worker startup
+3. React application mount
+4. authentication/session restoration
+5. auth redirects/callbacks
+6. user/profile loading
+7. Today data loading
+8. Daily Rhythm progress loading
+9. daily-startup destination request
+10. any React effects that call startup APIs
+11. any rerenders/remounts
+12. any duplicate API requests
+13. final routing decision
+14. Daily Rhythm rendering or Today's Steps rendering
+
+I need to know EXACTLY which requests occur and in what order.
+
+ADD TEMPORARY DIAGNOSTIC LOGGING
+
+Add safe temporary server-side diagnostic logging for the Daily Rhythm startup decision.
+
+For each startup request log:
+
+- timestamp
+- anonymised/internal user identifier
+- server calendar date
+- Africa/Johannesburg date
+- stored "last_daily_open_date"
+- current Daily Rhythm Step
+- completion state
+- current Step unlock date
+- whether this request was classified as FIRST_OPEN_TODAY
+- requested startup destination
+- returned startup destination
+- whether this request mutated "last_daily_open_date"
+- request/trace ID
+- relevant route/API endpoint
+
+Do not log passwords, tokens, email addresses or sensitive user data.
+
+Also log the client startup sequence enough to correlate requests using a trace/session ID.
+
+CRITICAL ARCHITECTURAL QUESTION
+
+The system must NOT consume the user's first-daily-opening state merely because a background/preload/startup API request happened.
+
+The first-opening state should correspond to:
+
+"The app has successfully decided to present Daily Rhythm as the user's first destination today."
+
+It should not mean:
+
+"Some startup endpoint happened to be queried once."
+
+Investigate whether the current implementation incorrectly combines:
+
+"CHECK first opening"
+
+and
+
+"MARK first opening consumed"
+
+in a way that allows preload, duplicate calls or aborted navigation to consume the daily opening.
+
+REQUIRED IDEMPOTENT STARTUP BEHAVIOUR
+
+Multiple startup requests belonging to the SAME actual app launch must return a consistent destination.
+
+Example:
+
+05:30 app starts.
+
+Startup request A:
+→ DAILY_RHYTHM
+
+Startup request B caused milliseconds later by React/auth/session startup:
+→ must NOT suddenly return TODAY'S_STEPS and override request A.
+
+The same app launch must resolve consistently to Daily Rhythm.
+
+Only a genuinely later/reopened app session should resolve to Today's Steps.
+
+Design this robustly.
+
+Potential approaches may include a startup/session identifier or a separate acknowledgement of successful routing, but choose the architecture that is safest for Emmaus.
+
+Do not implement a fragile client-only workaround.
+
+TEST AGAINST THE REAL FAILURE MODE
+
+The previous 25 tests are no longer sufficient.
+
+Add production-realistic startup tests that reproduce:
+
+TEST A — Duplicate startup requests
+
+New calendar day.
+
+Same user.
+
+Two or more startup destination calls occur almost simultaneously as part of ONE app startup.
+
+Result:
+
+ALL requests associated with that startup must resolve consistently so that Daily Rhythm actually opens.
+
+The first request must not consume the state and cause the second request to redirect to Today's Steps.
+
+TEST B — React remount
+
+Simulate:
+
+app mount
+→ startup call
+→ component remount
+→ startup call again
+
+Result:
+
+Daily Rhythm still opens on first daily launch.
+
+TEST C — Authentication restoration
+
+Simulate:
+
+PWA startup
+→ auth session restoration
+→ routing evaluation before/after auth
+→ repeated data fetching
+
+Result:
+
+first daily launch ends in Daily Rhythm.
+
+TEST D — Service worker/PWA startup
+
+Test using the actual installed-PWA startup path, not only API fixtures.
+
+Result:
+
+first opening today → Daily Rhythm.
+
+TEST E — Real production browser
+
+Use the deployed production build.
+
+Fresh normal test account/day state.
+
+Close browser/PWA completely.
+
+Launch production Emmaus.
+
+Result:
+
+Daily Rhythm.
+
+TEST F — Second genuine launch
+
+After Test E has successfully reached Daily Rhythm:
+
+close Emmaus completely.
+
+Launch again.
+
+Result:
+
+Today's Steps.
+
+TEST G — Two independent users
+
+Repeat Test E with two independent normal users.
+
+Both users must independently reach Daily Rhythm on their first daily opening.
+
+TEST H — First launch with incomplete Step
+
+User has an incomplete previous Step.
+
+First launch next calendar day:
+
+→ automatically open that same incomplete Daily Rhythm Step.
+
+TEST I — First launch with completed Step
+
+Previous Step completed on an earlier date.
+
+First launch next date:
+
+→ unlock exactly one new Step and open it automatically.
+
+IMPORTANT
+
+Do NOT alter the existing progression protections while fixing first-opening routing.
+
+These rules remain permanent:
+
+- maximum one new Daily Rhythm Step per calendar day
+- completion never immediately advances
+- navigation never advances
+- incomplete Step remains current
+- future Steps are server protected
+- progression is user-specific
+- concurrency protections remain intact
+
+We are fixing FIRST-OPEN ROUTING, not weakening Daily Rhythm progression.
+
+BEFORE WRITING CODE
+
+Report the actual root cause you discover.
+
+I specifically want to know:
+
+1. How many startup/destination requests does the real PWA make during one launch?
+
+2. Does the first request mutate the daily-opening state?
+
+3. Does a subsequent request then receive Today's Steps?
+
+4. Is React mounting/rerendering more than once?
+
+5. Does authentication restoration cause the routing logic to run twice?
+
+6. Does the PWA/service worker affect startup?
+
+7. Is "last_daily_open_date" being written too early?
+
+8. What exact event currently determines that the user's "first opening" has occurred?
+
+Then make the fix.
+
+DO NOT DECLARE THIS FIXED BASED ONLY ON API TESTS
+
+The existing automated suite passed while two real user accounts failed this morning.
+
+Therefore I require BOTH:
+
+- automated tests
+  AND
+- a production-realistic PWA/browser startup test
+
+before this task can be called fixed.
+
+The permanent Emmaus rule remains:
+
+FIRST REAL OPENING OF EMMAUS EACH NEW CALENDAR DAY
+→ 10 MINUTES WITH JESUS / DAILY RHYTHM
+
+AFTER THAT FIRST DAILY OPENING
+→ TODAY'S STEPS
+
+The first opening must not be silently consumed by background API calls, preload requests, React lifecycle behaviour, authentication restoration, or duplicate startup requests.

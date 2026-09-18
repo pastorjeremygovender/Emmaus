@@ -1,0 +1,20 @@
+BUILD REQUEST: Jarvis foundation for Emmaus. Replit FREE MODE ONLY. Never select Power, Max, or paid mode.
+
+Jarvis is not an AI feature; it is the natural, intuitive virtual embodiment of Emmaus itself—one calm, Jesus-centred companion across Today’s Steps, My Bible, Walks, Journeys, sermons and Groups.
+
+Before editing:
+- Record current branch, HEAD, git status, untracked assets and recent branch topology.
+- Inspect the completed Ask Emmaus architectural audit and current frontend/API/retrieval/user-state/link/safety code.
+- Preserve all existing work, especially Daily Rhythm card commit 1ce2321, the diagnosed Luke fix proposal, Android proof work, uploaded briefs, and the recently added deployment startup diagnostics/timeouts. Do not overwrite or mix them into Jarvis.
+- Create a new isolated branch from the correct current app base: feature/jarvis-foundation. Do not publish.
+
+Build the first production-quality end-to-end vertical slice, not a mock-up and not voice:
+1) A shared authenticated-user context assembler using existing owner-scoped reads: current Daily Rhythm, active Walks/Journeys and next step, stored Bible position, current sermon/devotional context, safe display identity. Graceful partial failure. Never expose other users, admin/pastoral data, hidden content, raw IDs, secrets or retrieval internals.
+2) A strict typed response/action contract separating pastoral text, Scripture references, Emmaus content references, suggested next action, and allowlisted navigation/action. Support: “What should I do today?”, “Continue where I left off”, “Read today’s Daily Rhythm/devotional”, “Open/read a Bible passage”, “What did Pastor Jeremy preach about [topic]?”, and “What is Emmaus/how do I use it?”. Use canonical existing route builders only. No arbitrary tools, queries, admin/messaging/attendance/group/destructive actions.
+3) Emmaus response composition enforcing: Jesus first; Scripture primary; Holy Spirit transforms; local church matters; no certainty where Scripture is silent; Scripture → Reflection → Prayer → Next Step. Natural pastoral prose, consistent Bible/Christian capitalisation, verified links, honest no-results, integrated sermons, existing safeguarding.
+4) Refactor current Ask Emmaus to consume the contract while preserving calm mobile/PWA accessibility, loading/error states and compatibility. Contextual suggestions without surveillance language. No member-facing “AI”, “assistant”, “bot”, “Jarvis”, model or vendor. Reusable hooks/components for later app-wide use; no unrelated redesign.
+5) Tests for owner scope, partial-source failure, intent routing, Scripture parsing/capitalisation, canonical links, no fabricated content, safeguarding, rendering and navigation. Privacy-safe stage diagnostics without logging message bodies, prayers, profiles, notes, secrets or raw content.
+
+Exclude: voice, always-listening, background monitoring, notifications, pastoral alerts, database/schema/data changes, Secrets/env/DNS/deployment/.replit/package changes, publishing, Luke fix, Daily Rhythm styling, unrelated TypeScript cleanup.
+
+Use existing libraries. Run focused tests, relevant regressions, TypeScript/build and git diff --check; separate pre-existing failures. Review privacy/security and scope. Commit logical checkpoints and leave the branch clean. Final report: starting base, branch, commits, files, architecture, intents, tests/build, limitations, exact manual test script.

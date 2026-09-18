@@ -1,0 +1,108 @@
+Fix the sermon audio upload size limit and upload handling.
+
+CURRENT PROBLEM:
+The New Sermon form allows audio uploads, but rejects an 82.6 MB sermon because the maximum file size is only 25 MB.
+
+This limit is unsuitable for normal church sermon recordings.
+
+REQUIRED CHANGES:
+
+1. Increase the maximum sermon audio/video upload size to at least 250 MB.
+
+Accepted formats must remain:
+
+- MP3
+- M4A
+- WAV
+- MP4
+- MPEG
+- WEBM
+
+2. Update every layer of the upload system.
+
+Do not change only the text displayed in the form.
+
+Audit and update:
+
+- frontend file-size validation
+- backend request limits
+- API upload limits
+- storage-provider limits
+- multipart/form-data configuration
+- server timeout settings
+- database metadata handling
+
+The actual upload must accept files up to 250 MB.
+
+3. Update the upload text to display:
+
+MP3, M4A, WAV, MP4, MPEG or WEBM · Maximum 250 MB
+
+4. For large files, show real upload progress:
+
+Uploading sermon audio… 0–100%
+
+Do not leave the user with an unresponsive screen while the upload is running.
+
+5. Disable the Create Sermon button while the file is actively uploading.
+
+6. When the upload succeeds, show:
+
+Audio uploaded successfully
+
+Then allow the sermon to be created.
+
+7. If the upload fails, preserve all information already entered in the form.
+
+Do not clear:
+
+- sermon title
+- speaker
+- date
+- main Scripture
+- series
+- notes
+- transcript
+- any other entered information
+
+8. Show a useful error message instead of a generic failure.
+
+Examples:
+
+- “The upload was interrupted. Please try again.”
+- “This file format is not supported.”
+- “The file exceeds the 250 MB maximum.”
+
+9. Do not require pastors to compress ordinary sermon recordings using an external website.
+
+10. If the current hosting or storage method cannot reliably receive a 250 MB file through the application server, implement direct-to-storage uploading using a signed upload URL.
+
+The preferred architecture is:
+
+Browser → cloud object storage
+
+Do not route the entire large file through the normal application server if that causes request-size or timeout failures.
+
+11. Preserve the uploaded audio URL on the sermon record so that it can later be used for:
+
+- sermon playback
+- transcription
+- Sermon Companion generation
+- Ask Emmaus sermon retrieval
+- timestamped sermon references
+
+ACCEPTANCE TEST:
+
+Use the current 82.6 MB sermon file.
+
+Confirm that:
+
+1. The file is accepted.
+2. Upload progress is shown.
+3. The upload completes successfully.
+4. The sermon can be created.
+5. The audio remains attached after refreshing the admin page.
+6. The uploaded sermon appears in the admin sermon list.
+7. No manual compression is required.
+
+Do not report this as fixed until the 82.6 MB file has been successfully uploaded and retained.

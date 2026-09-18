@@ -54,6 +54,9 @@ type StudyNote = {
   original_language_note: string;
   jesus_connection: string;
   apply_it: string;
+  key_truth: string;
+  reflection_question: string;
+  related_scriptures: string;
   cross_references: unknown[];
   key_themes: string[];
   important_people: string[];
@@ -62,6 +65,7 @@ type StudyNote = {
 
 type ChapterOverview = {
   id: string;
+  title: string;
   summary: string;
   main_themes: string[];
   important_people: string[];
@@ -83,7 +87,7 @@ type PreachedHereSermon = {
 
 // ─── Section accordion — only renders if content is non-empty ─────────────────
 
-function StudySection({
+export function StudySection({
   icon, title, content, defaultOpen = false,
 }: {
   icon: React.ReactNode;
@@ -110,6 +114,78 @@ function StudySection({
       {open && (
         <div className="pb-4">
           <p className="text-[15px] text-foreground leading-[1.7] whitespace-pre-wrap">{content}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Key Truth section — bold takeaway callout ────────────────────────────────
+
+function KeyTruthSection({ content }: { content: string | undefined }) {
+  const [open, setOpen] = useState(false);
+  if (!content) return null;
+
+  return (
+    <div className="border-b border-border/50 last:border-0">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center gap-3 py-4 text-left"
+      >
+        <span className="text-orange-500 shrink-0"><Flame size={17} /></span>
+        <span className="flex-1 text-[15px] font-semibold text-foreground">Key Truth</span>
+        {open
+          ? <ChevronUp size={16} className="text-muted-foreground shrink-0" />
+          : <ChevronDown size={16} className="text-muted-foreground shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="pb-4">
+          <div className="rounded-xl bg-orange-500/8 border border-orange-500/20 px-4 py-3.5">
+            <p className="text-[15px] font-semibold text-foreground leading-[1.65] whitespace-pre-wrap">
+              {content}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Reflection section — interactive question callout ────────────────────────
+
+function ReflectionSection({ content }: { content: string | undefined }) {
+  const [open, setOpen] = useState(false);
+  if (!content) return null;
+
+  return (
+    <div className="border-b border-border/50 last:border-0">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center gap-3 py-4 text-left"
+      >
+        <span className="text-amber-500 shrink-0"><Lightbulb size={17} /></span>
+        <span className="flex-1 text-[15px] font-semibold text-foreground">Reflection</span>
+        {open
+          ? <ChevronUp size={16} className="text-muted-foreground shrink-0" />
+          : <ChevronDown size={16} className="text-muted-foreground shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="pb-4">
+          <div className="rounded-xl bg-amber-500/8 border border-amber-500/25 px-4 py-4">
+            <div className="flex items-start gap-3">
+              <div className="w-7 h-7 rounded-full bg-amber-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                <span className="text-[13px] font-bold text-amber-600 leading-none">?</span>
+              </div>
+              <p className="text-[15px] text-foreground leading-[1.7] whitespace-pre-wrap italic">
+                {content}
+              </p>
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-2 px-1">
+            Take a moment to sit with this question.
+          </p>
         </div>
       )}
     </div>
@@ -208,6 +284,11 @@ function ChapterOverviewSection({
             </div>
           ) : (
             <div className="space-y-3">
+                {overview.title && (
+                  <h3 className="text-[16px] font-bold text-foreground leading-snug">
+                    {overview.title}
+                  </h3>
+                )}
               {overview.summary && (
                 <p className="text-[15px] text-foreground leading-[1.7]">{overview.summary}</p>
               )}
@@ -270,7 +351,7 @@ function PreachedHereSection({ sermons }: { sermons: PreachedHereSermon[] }) {
         <div className="pb-4">
           {sermons.length === 0 ? (
             <p className="text-[14px] text-muted-foreground italic">
-              No sermons linked to this chapter yet.
+              No sermons found for this passage yet.
             </p>
           ) : (
             <div className="space-y-2.5">
@@ -335,7 +416,7 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
       `/api/bible/cross-references?bookId=${verse.bookId}&chapter=${verse.chapter}&verse=${verse.verse}`
     );
     const overviewUrl = getApiUrl(
-      `/api/bible/chapter-overview/${verse.bookId}/${verse.chapter}`
+      `/api/bible/chapter-overview?bookId=${encodeURIComponent(verse.bookId)}&chapter=${verse.chapter}`
     );
 
     Promise.all([
@@ -345,8 +426,10 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
       fetch(overviewUrl).then(r => r.ok ? r.json() : null).catch(() => null),
     ]).then(([note, rawSermons, refs, overview]) => {
       setStudyNote(note as StudyNote | null);
-      const sd = rawSermons as { chapterSermons?: PreachedHereSermon[]; sermons?: PreachedHereSermon[] };
-      setSermons(sd.chapterSermons ?? sd.sermons ?? []);
+      const sd = rawSermons as { chapterSermons?: PreachedHereSermon[]; bookSermons?: PreachedHereSermon[]; sermons?: PreachedHereSermon[] };
+      // Prefer chapter-specific results; fall back to book-level when none found
+      const chapterHits = sd.chapterSermons ?? [];
+      setSermons(chapterHits.length > 0 ? chapterHits : (sd.bookSermons ?? sd.sermons ?? []));
       setCrossRefs(Array.isArray(refs) ? refs : []);
       setChapterOverview((overview as ChapterOverview | null) ?? null);
     }).finally(() => setLoading(false));
@@ -357,7 +440,8 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
 
   const hasAnyContent = studyNote && (
     studyNote.content || studyNote.context_note || studyNote.historical_note ||
-    studyNote.original_language_note || studyNote.jesus_connection || studyNote.apply_it
+    studyNote.original_language_note || studyNote.jesus_connection || studyNote.apply_it ||
+    studyNote.key_truth || studyNote.reflection_question || studyNote.related_scriptures
   );
 
   return (
@@ -365,6 +449,7 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
       <SheetContent
         side="bottom"
         className="rounded-t-2xl h-[92dvh] flex flex-col p-0 overflow-hidden"
+        hideDefaultClose
       >
         {/* Header */}
         <div className="flex items-start gap-3 px-5 pt-5 pb-4 border-b border-border/50 shrink-0">
@@ -416,7 +501,6 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
                   icon={<BookOpen size={17} />}
                   title="Explanation"
                   content={studyNote?.content}
-                  defaultOpen
                 />
 
                 {/* 2. Passage Context */}
@@ -426,32 +510,45 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
                   content={studyNote?.context_note}
                 />
 
-                {/* 3. Historical Background */}
+                {/* 3. Key Truth */}
+                <KeyTruthSection content={studyNote?.key_truth} />
+
+                {/* 4. Reflection */}
+                <ReflectionSection content={studyNote?.reflection_question} />
+
+                {/* 5. Practical Application */}
+                <StudySection
+                  icon={<Footprints size={17} />}
+                  title="Practical Application"
+                  content={studyNote?.apply_it}
+                />
+
+                {/* 6. Related Scriptures */}
+                <StudySection
+                  icon={<Link2 size={17} />}
+                  title="Related Scriptures"
+                  content={studyNote?.related_scriptures}
+                />
+
+                {/* 7. Historical Background */}
                 <StudySection
                   icon={<Clock size={17} />}
                   title="Historical Background"
                   content={studyNote?.historical_note}
                 />
 
-                {/* 4. Original Language */}
+                {/* 8. Original Language */}
                 <StudySection
                   icon={<LetterText size={17} />}
                   title="Original Language"
                   content={studyNote?.original_language_note}
                 />
 
-                {/* 5. How This Points to Jesus */}
+                {/* 9. How This Points to Jesus */}
                 <StudySection
-                  icon={<Flame size={17} />}
+                  icon={<BookMarked size={17} />}
                   title="How This Points to Jesus"
                   content={studyNote?.jesus_connection}
-                />
-
-                {/* 6. Apply It */}
-                <StudySection
-                  icon={<Lightbulb size={17} />}
-                  title="Apply It"
-                  content={studyNote?.apply_it}
                 />
 
                 {/* 7. Cross References — DB-backed, tap to navigate */}
@@ -473,7 +570,7 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
                       No study notes yet for this passage
                     </p>
                     <p className="text-[13px] text-muted-foreground">
-                      Study notes are being added for {verse?.bookName}. Check back soon.
+                      Notes are available for some passages in {verse?.bookName ?? 'this book'} — this passage hasn't been covered yet.
                     </p>
                   </div>
                 )}

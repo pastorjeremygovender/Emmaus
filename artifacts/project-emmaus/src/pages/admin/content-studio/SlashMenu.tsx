@@ -23,6 +23,13 @@ const GROUPS: { id: string; label: string }[] = [
 export default function SlashMenu({ query, anchor, onSelect, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [mobile, setMobile] = useState(() => window.innerWidth < 768);
+
+  useEffect(() => {
+    const updateMode = () => setMobile(window.innerWidth < 768);
+    window.addEventListener('resize', updateMode);
+    return () => window.removeEventListener('resize', updateMode);
+  }, []);
 
   const filtered = BLOCK_REGISTRY.filter(
     m =>
@@ -62,21 +69,21 @@ export default function SlashMenu({ query, anchor, onSelect, onClose }: Props) {
 
   // Close on click outside
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const handler = (e: PointerEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         onClose();
       }
     };
-    window.addEventListener('mousedown', handler);
-    return () => window.removeEventListener('mousedown', handler);
+    window.addEventListener('pointerdown', handler);
+    return () => window.removeEventListener('pointerdown', handler);
   }, [onClose]);
 
   if (filtered.length === 0) {
     return (
       <div
         ref={ref}
-        style={{ position: 'fixed', top: anchor.top, left: anchor.left, zIndex: 9999 }}
-        className="bg-white border border-gray-200 rounded-xl shadow-xl p-3 w-64"
+        style={mobile ? undefined : { position: 'fixed', top: anchor.top, left: anchor.left, zIndex: 9999 }}
+        className="fixed inset-x-3 bottom-3 z-[9999] bg-white border border-gray-200 rounded-2xl shadow-2xl p-4 md:w-64 md:rounded-xl"
       >
         <p className="text-xs text-gray-400 text-center">No block types found</p>
       </div>
@@ -93,12 +100,12 @@ export default function SlashMenu({ query, anchor, onSelect, onClose }: Props) {
   return (
     <div
       ref={ref}
-      style={{ position: 'fixed', top: anchor.top, left: anchor.left, zIndex: 9999 }}
-      className="bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden w-64 max-h-80 overflow-y-auto"
+      style={mobile ? undefined : { position: 'fixed', top: anchor.top, left: anchor.left, zIndex: 9999 }}
+      className="fixed inset-x-3 bottom-3 z-[9999] bg-white border border-gray-200 rounded-2xl shadow-2xl overflow-hidden max-h-[60dvh] overflow-y-auto md:w-64 md:max-h-80 md:rounded-xl"
     >
-      <div className="px-3 pt-2 pb-1">
+      <div className="px-4 md:px-3 pt-3 md:pt-2 pb-2 md:pb-1">
         <p className="text-[11px] text-gray-400 uppercase tracking-wide font-medium">
-          {query ? `"${query}"` : 'Blocks'} — ↑↓ to navigate, ↵ to insert
+          {query ? `"${query}"` : 'Blocks'} <span className="hidden md:inline">— ↑↓ to navigate, ↵ to insert</span>
         </p>
       </div>
       {grouped.map(group => (
@@ -112,9 +119,9 @@ export default function SlashMenu({ query, anchor, onSelect, onClose }: Props) {
             return (
               <button
                 key={meta.type}
-                onMouseEnter={() => setActiveIdx(idx)}
-                onMouseDown={e => { e.preventDefault(); onSelect(meta.type); }}
-                className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
+            onMouseEnter={() => setActiveIdx(idx)}
+            onPointerDown={e => { e.preventDefault(); onSelect(meta.type); }}
+            className={`w-full min-h-12 md:min-h-0 flex items-center gap-3 px-4 md:px-3 py-2 text-left transition-colors ${
                   active ? 'bg-teal-50' : 'hover:bg-gray-50'
                 }`}
               >

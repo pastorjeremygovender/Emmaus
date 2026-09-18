@@ -14,6 +14,9 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { EmbeddedScripture } from '@/components/EmbeddedScripture';
+import { ShareButton } from '@/components/ShareButton';
+import { ShareImageCard } from '@/components/ShareImageCard';
+import type { SharePayload } from '@/lib/share';
 
 // ─── Greeting personalization ─────────────────────────────────────────────────
 
@@ -207,6 +210,25 @@ export interface DailyRhythmReadingProps {
    *   Preview:      a mocked non-interactive Continue affordance
    */
   actionButton?: React.ReactNode;
+
+  /**
+   * Pre-built share payload. When provided (member view only), a subtle
+   * Share button is rendered above the action button. Omit for admin previews.
+   */
+  sharePayload?: SharePayload;
+
+  /**
+   * Optional per-step display label (e.g. "1 January").
+   * When provided and non-empty, replaces the default "Day N" sub-heading.
+   */
+  displayLabel?: string;
+
+  /**
+   * Optional share image — object-storage path ("/objects/…").
+   * When present, a "Take this with you" card is rendered above the Share button.
+   * Omit for admin previews.
+   */
+  shareImageUrl?: string | null;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -224,6 +246,9 @@ export function DailyRhythmReading({
   returnPath,
   previewMode = false,
   actionButton,
+  sharePayload,
+  displayLabel,
+  shareImageUrl,
 }: DailyRhythmReadingProps) {
 
   // ── Greeting text ───────────────────────────────────────────────────────────
@@ -238,15 +263,15 @@ export function DailyRhythmReading({
   const greetingRest = firstBreak === -1 ? '' : greetingFull.slice(firstBreak + 2).trim();
 
   return (
-    <div className="px-5 pt-10 max-w-[640px] mx-auto">
+    <div className="px-4 pt-8 max-w-[640px] mx-auto">
 
       {/* ── Identity header — centered ─────────────────────────────────────── */}
-      <section className="mb-10 text-center">
+      <section className={shareImageUrl ? "mb-4 text-center" : "mb-7 text-center"}>
         <p className="text-[14px] font-medium text-muted-foreground tracking-wide mb-1">
           10 Minutes with Jesus
         </p>
         <p className="text-[13px] text-muted-foreground mb-4">
-          Day {day}
+          {displayLabel?.trim() || `Day ${day}`}
         </p>
         <h1 className="text-[26px] font-semibold text-foreground leading-snug">
           {title || (previewMode
@@ -255,40 +280,56 @@ export function DailyRhythmReading({
         </h1>
       </section>
 
-      {/* ── Greeting — left-aligned, body weight ───────────────────────────── */}
+      {/* ── Share image — shown directly under the title ────────────────────── */}
+      {shareImageUrl && (
+        <div className="mb-7">
+          <ShareImageCard shareImageUrl={shareImageUrl} />
+        </div>
+      )}
+
+      {/* ── Greeting ───────────────────────────────────────────────────────── */}
       {(mentorIntro || previewMode) && (
-        <section className="mb-10">
-          {previewMode && (
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Greeting · personalized automatically per member
-            </p>
-          )}
-          {mentorIntro ? (
-            <>
-              {/* Salutation line — slightly stronger weight, body scale */}
-              <p className="text-[17px] font-medium text-foreground leading-[1.65]">
-                {greetingLead}
+        <section className="mb-3.5">
+          <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">
+                Welcome
+                {previewMode && (
+                  <span className="ml-1.5 font-normal normal-case tracking-normal text-amber-600/70">
+                    · personalized per member
+                  </span>
+                )}
+              </h2>
+            </div>
+            {mentorIntro ? (
+              <>
+                <p className="text-[17px] font-medium text-foreground leading-[1.65]">
+                  {greetingLead}
+                </p>
+                {greetingRest && (
+                  <div className="mt-[0.65em]">
+                    <BodyParagraphs text={greetingRest} />
+                  </div>
+                )}
+              </>
+            ) : previewMode ? (
+              <p className="text-[17px] text-muted-foreground/40 leading-[1.65]">
+                Welcome will appear here…
               </p>
-              {/* Remaining paragraphs */}
-              {greetingRest && (
-                <div className="mt-[0.65em]">
-                  <BodyParagraphs text={greetingRest} />
-                </div>
-              )}
-            </>
-          ) : previewMode ? (
-            <p className="text-[17px] text-muted-foreground/40 leading-[1.65]">
-              Greeting will appear here…
-            </p>
-          ) : null}
+            ) : null}
+          </div>
         </section>
       )}
 
       {/* ── Today's Reading ────────────────────────────────────────────────── */}
       {(scripture || previewMode) && (
-        <section className="mb-10">
-          <SectionLabel>Today's Reading</SectionLabel>
-          <div className="mt-3">
+        <section className="mb-3.5">
+          <div className="rounded-2xl border border-sky-200/60 bg-sky-50/60 px-4 py-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-sky-700">Today's Reading</h2>
+            </div>
             {scripture ? (
               <EmbeddedScripture scripture={scripture} returnPath={returnPath} />
             ) : previewMode ? (
@@ -310,14 +351,17 @@ export function DailyRhythmReading({
 
       {/* ── Reflection ─────────────────────────────────────────────────────── */}
       {(devotional || previewMode) && (
-        <section className="mb-10">
-          <SectionLabel>Reflection</SectionLabel>
-          <div className="mt-3">
+        <section className="mb-3.5">
+          <div className="rounded-2xl border border-violet-200/60 bg-violet-50/60 px-4 py-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">Consider This</h2>
+            </div>
             {devotional ? (
               <BodyParagraphs text={devotional} />
             ) : previewMode ? (
               <p className="text-[17px] text-muted-foreground/40 leading-[1.65]">
-                Reflection will appear here…
+                Consider This will appear here…
               </p>
             ) : null}
           </div>
@@ -326,9 +370,12 @@ export function DailyRhythmReading({
 
       {/* ── Prayer ─────────────────────────────────────────────────────────── */}
       {(prayerPrompt || previewMode) && (
-        <section className="mb-10">
-          <SectionLabel>Prayer</SectionLabel>
-          <div className="mt-3">
+        <section className="mb-3.5">
+          <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/60 px-4 py-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">Prayer</h2>
+            </div>
             {prayerPrompt ? (
               <BodyParagraphs text={prayerPrompt} />
             ) : previewMode ? (
@@ -342,9 +389,12 @@ export function DailyRhythmReading({
 
       {/* ── Your Next Step ──────────────────────────────────────────────────── */}
       {(actionStep || previewMode) && (
-        <section className="mb-10">
-          <SectionLabel>Your Next Step</SectionLabel>
-          <div className="mt-3">
+        <section className="mb-3.5">
+          <div className="rounded-2xl border border-orange-200/60 bg-orange-50/60 px-4 py-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-orange-700">Your Next Step</h2>
+            </div>
             {actionStep ? (
               <BodyParagraphs text={actionStep} />
             ) : previewMode ? (
@@ -358,12 +408,17 @@ export function DailyRhythmReading({
 
       {/* ── Closing ────────────────────────────────────────────────────────── */}
       {closingText && (
-        <section className="mb-8">
+        <section className="mt-2 mb-6">
           <BodyParagraphs
             text={closingText}
             className="!text-[16px] !text-muted-foreground"
           />
         </section>
+      )}
+
+      {/* ── Share (text) — above the action button so it's clearly about the content ── */}
+      {sharePayload && !previewMode && (
+        <ShareButton payload={sharePayload} />
       )}
 
       {/* ── Action button slot ──────────────────────────────────────────────── */}

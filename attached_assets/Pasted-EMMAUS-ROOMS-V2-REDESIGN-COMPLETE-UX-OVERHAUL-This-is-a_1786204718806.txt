@@ -1,0 +1,367 @@
+EMMAUS ROOMS V2 REDESIGN (COMPLETE UX OVERHAUL)
+
+This is a complete UI/UX redesign of Emmaus Rooms.
+
+Do NOT modify the existing backend, LiveKit integration, permissions, invitations, database schema or APIs.
+
+This is a presentation and navigation redesign only.
+
+THE DESIGN PRINCIPLE
+
+Emmaus Rooms is NOT a chat application.
+
+It is NOT a Zoom clone.
+
+It is NOT a Discord server.
+
+A Room exists for one reason:
+
+To help people walk through today's Emmaus content together.
+
+Every screen should reinforce that purpose.
+
+REMOVE THE CURRENT ROOM DETAIL LAYOUT
+
+Remove the current sections:
+
+Leader Controls
+Members
+Discussion & Chat card
+Multiple stacked panels
+Separate feature-first layout
+
+Replace it with a study-first layout.
+
+NEW ROOM LAYOUT
+← Prayer Walk
+
+Walking through:
+
+Who Is God?
+
+Step 2 of 5
+
+────────────────────────
+
+🟢 Walking Together
+
+Jeremy
+Sarah
+Mike
+
+Invite Someone
+
+────────────────────────
+
+▶ Gather Together
+
+(Start Video)
+
+────────────────────────
+
+Continue Today's Step
+
+────────────────────────
+
+Discuss Together
+
+12 Messages
+
+────────────────────────
+
+Prayer Wall
+
+5 Prayer Requests
+
+────────────────────────
+
+Shared Progress
+
+Jeremy ✓
+Sarah ✓
+Mike
+
+────────────────────────
+
+Ask Emmaus
+
+The study is always the centre of the Room.
+
+Video, chat and prayer exist to support the study.
+
+WALKING TOGETHER
+
+Replace "Members".
+
+Heading:
+
+Walking Together
+
+Show:
+
+avatars
+names
+online indicator
+
+Small button:
+
+Invite Someone
+
+Never use the word "Members".
+
+GATHER TOGETHER
+
+Replace all references to:
+
+Video
+
+Video Call
+
+LiveKit
+
+Camera
+
+Meeting
+
+Use:
+
+Gather Together
+
+When nobody is gathering:
+
+Show
+
+▶ Gather Together
+
+When gathering is active:
+
+🟢 Gathering in progress
+
+Join Gathering
+
+CONTINUE TODAY'S STEP
+
+This becomes the primary action.
+
+Instead of opening a separate page...
+
+Open the Emmaus content inside the Room.
+
+The Room never disappears.
+
+DISCUSS TOGETHER
+
+Rename
+
+Discussion & Chat
+
+to
+
+Discuss Together
+
+Show:
+
+Latest message preview
+
+Unread count
+
+Tap opens discussion.
+
+PRAYER WALL
+
+Rename
+
+Prayer Requests
+
+to
+
+Prayer Wall
+
+Show:
+
+number of requests
+
+Tap opens prayer panel.
+
+SHARED PROGRESS
+
+Show who has completed today's step.
+
+Example:
+
+Jeremy ✓
+
+Sarah
+
+Mike ✓
+
+Jane
+
+Users immediately see who is keeping up.
+
+ASK EMMAUS
+
+Always visible at the bottom.
+
+If Ask Emmaus is opened from inside a Room:
+
+It understands:
+
+Current Walk
+
+Current Step
+
+Current Discussion
+
+Current Prayer Requests
+
+Current Scripture
+
+Current Room Context
+
+It answers in the context of the Room.
+
+DURING A GATHERING
+
+When Gather Together is active:
+
+Show a large responsive video area.
+
+Under the video:
+
+Today's Study
+
+Continue Step
+
+Discuss Together
+
+Prayer Wall
+
+The study remains visible.
+
+Video never becomes the whole application.
+
+REMOVE LEADER CONTROLS
+
+Do not display
+
+Leader Controls
+
+Instead...
+
+When the user is a Room Leader...
+
+Show a small gear icon.
+
+Opening it reveals:
+
+Guide Group
+
+Open Scripture
+
+Open Today's Step
+
+Highlight Verse
+
+Start Gathering
+
+End Gathering
+
+Invite Someone
+
+These remain hidden from normal members.
+
+FUTURE PLACEHOLDERS
+
+Keep hidden placeholders (no visible disabled buttons) for future capabilities:
+
+Open Scripture for Everyone
+Highlight Verse
+Polls
+Shared Whiteboard
+Emmaus Voice
+Shared Notes
+
+Backend support can remain.
+
+Do not expose unfinished features.
+
+ROOM HEADER
+
+Header should show:
+
+← Prayer Walk
+
+Walking through:
+
+Who Is God?
+
+Step 2 of 5
+
+Users should immediately know:
+
+what they're studying
+
+where they are
+
+what step they're on
+
+MOBILE FIRST
+
+This interface must feel like a modern messaging app.
+
+Large touch targets.
+
+Minimal scrolling.
+
+One primary action per section.
+
+No clutter.
+
+EMMAUS DESIGN LANGUAGE
+
+Every label must reinforce discipleship.
+
+Replace technology words with Emmaus language.
+
+Instead of:
+
+Members
+
+Video
+
+Meeting
+
+Chat
+
+Leader Controls
+
+Use:
+
+Walking Together
+
+Gather Together
+
+Discuss Together
+
+Prayer Wall
+
+Guide Group
+
+The Room should feel like a shared discipleship experience rather than a video meeting.
+
+IMPORTANT
+
+Do not change:
+
+LiveKit integration
+APIs
+Database
+Invitations
+Permissions
+Authentication
+Video logic
+
+This task is a complete UI/UX redesign only.
+
+Before marking complete, test the entire Room flow on desktop and mobile to ensure it feels intuitive for a first-time user with no explanation required.

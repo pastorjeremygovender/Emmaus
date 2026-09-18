@@ -1,0 +1,598 @@
+Rebuild Ask Emmaus as the authoritative intelligence and assistance layer for the entire Emmaus application.
+
+This is a production implementation task, not a planning exercise, prompt-only change, UI mock-up or partial proof of concept.
+
+CURRENT PROBLEM
+
+Ask Emmaus answers general Christian questions reasonably well, but it does not reliably understand Emmaus itself.
+
+For example, when asked, “Where can I find devotionals?”, it invented an “Emmaus resource library”, suggested contacting a pastor and displayed unrelated sermons. It should have identified this as an Emmaus navigation/help request, explained the real location and offered the correct action.
+
+Previous attempts have added more prompt instructions and broad retrieval. That has not solved the architectural problem. Do not add another oversized prompt and do not create another parallel search system.
+
+PRIMARY OUTCOME
+
+Ask Emmaus must:
+
+1. Understand the actual structure, features and resources of Emmaus.
+2. Use the signed-in user’s real state and permissions.
+3. Answer general pastoral questions Scripture-first.
+4. Use relevant, verified ICC/Emmaus resources where appropriate.
+5. Help users find, open, read, play and continue content.
+6. Never invent Emmaus features, resources, routes, links or availability.
+7. Produce one canonical response that can be rendered as text or spoken by Voice.
+8. Preserve what currently works well for general questions such as “What is faith?” and “I’m afraid.”
+
+Voice is not a separate intelligence system. Ask Emmaus Voice must eventually submit its transcript to the same canonical Ask Emmaus endpoint and speak the resulting answer. Do not build a separate Voice prompt, knowledge base or agent.
+
+WORKING METHOD
+
+Before editing:
+
+1. Create the required checkpoint.
+2. Inspect the current Ask Emmaus request flow, system prompt, retrieval pipeline, resource indexing, response parsing, link generation, cards, authentication, user context and Voice integration.
+3. Identify why unrelated resource cards are being returned.
+4. Identify every existing canonical application service used by:
+
+   * My Bible
+   * Daily Devotional
+   * Daily Rhythm
+   * sermons
+   * Bible Studies
+   * Walks
+   * Journeys
+   * saved progress and continuation
+5. Reuse those canonical services. Do not build duplicate content stores for Ask Emmaus.
+6. Preserve unrelated user changes.
+7. Implement the system described below.
+8. Add automated tests and run them.
+9. Restart the relevant workflows and inspect runtime logs.
+10. Report honestly what is implemented, tested, partially implemented or still dependent on real-device testing.
+
+Do not stop after writing an audit or proposing follow-up tasks. Implement the safe, production-relevant work in this task.
+
+1. BUILD A SERVER-OWNED EMMAUS CAPABILITY REGISTRY
+
+Create one authoritative, typed registry describing the features Ask Emmaus may discuss or operate.
+
+Include at minimum:
+
+* Today’s Steps
+* My Bible
+* Daily Devotional
+* Daily Rhythm
+* sermons
+* Bible Studies
+* Walks
+* Journeys
+* Discover
+* My Journey
+* saved Bible position
+* active Walk and Journey progress
+* Ask Emmaus
+
+Each capability must define:
+
+* canonical ID
+* canonical display name
+* aliases users might say
+* accurate description
+* actual location in Emmaus
+* canonical route or route-builder
+* supported operations
+* required authentication
+* eligibility or permission rules
+* whether its content is global or user-scoped
+* resolver/service used to retrieve it
+
+The model must never invent this information.
+
+Use the registry to answer product-help questions such as:
+
+* “Where can I find devotionals?”
+* “What is a Walk?”
+* “How do I continue my Journey?”
+* “Where is the Bible?”
+* “What can Emmaus do?”
+
+2. ADD A DETERMINISTIC REQUEST ROUTER
+
+Before broad AI answering or resource retrieval, classify every request into a typed intent:
+
+* APP_HELP
+* DIRECT_ACTION
+* BIBLE_READ
+* BIBLE_CONTINUE
+* RESOURCE_SEARCH
+* PASTORAL_QUESTION
+* GENERAL_BIBLICAL_QUESTION
+* AMBIGUOUS
+
+The classifier may use a model where necessary, but its output must conform to a strict server-validated schema.
+
+Required fields should include:
+
+* intent
+* requested capability
+* requested operation
+* Bible reference, if present
+* resource query, if present
+* confidence
+* whether clarification is required
+
+Use deterministic handling for clear commands and common feature questions.
+
+Examples:
+
+“Where can I find devotionals?”
+→ APP_HELP
+→ Daily Devotional capability
+→ explain the real location and offer the verified open action
+→ do not run sermon retrieval
+
+“Read today’s devotional.”
+→ DIRECT_ACTION
+→ retrieve today’s actual published devotional for the signed-in user
+→ return a Read to Me action
+→ do not invent content
+
+“Read Psalm 23.”
+→ BIBLE_READ
+→ resolve the canonical Bible reference
+→ retrieve Psalm 23
+→ return the passage and Read to Me action
+
+“Continue reading my Bible.”
+→ BIBLE_CONTINUE
+→ use the signed-in user’s saved Bible position
+
+“What have we preached about the prodigal son?”
+→ RESOURCE_SEARCH
+→ search verified sermon records specifically
+
+“What is faith?”
+→ GENERAL_BIBLICAL_QUESTION
+→ Scripture-first response
+→ retrieve genuinely relevant Emmaus resources
+
+“I’m afraid.”
+→ PASTORAL_QUESTION
+→ personable Scripture-first response
+→ retrieve genuinely relevant ICC/Emmaus resources where available
+
+If a request is genuinely ambiguous, ask one short clarification. Do not guess and navigate automatically.
+
+3. PROVIDE VERIFIED EMMAUS TOOLS
+
+Create or formalize typed, authenticated server-side operations that call the existing canonical services. Include the equivalent of:
+
+* describeEmmausFeature
+* getTodaysDevotional
+* getEligibleDailyRhythm
+* readBiblePassage
+* continueBible
+* findSermons
+* findBibleStudies
+* findDevotionals
+* findWalks
+* findJourneys
+* getActiveWalks
+* getActiveJourneys
+* continueWalk
+* continueJourney
+* resolveResource
+* buildCanonicalResourceAction
+
+Use the project’s naming conventions rather than copying these names blindly.
+
+Every operation must:
+
+* validate its input;
+* enforce authentication and authorization server-side;
+* respect publication status;
+* return canonical IDs and structured data;
+* return only real resources;
+* return a validated action rather than an invented URL;
+* fail safely and clearly.
+
+Daily Rhythm must remain user-dependent. It may only expose:
+
+* today’s eligible/unlocked Rhythm;
+* previously completed content the user is allowed to revisit.
+
+Never expose, recommend or describe future locked Daily Rhythm content.
+
+4. SEPARATE ANSWER GENERATION FROM EVIDENCE AND ACTIONS
+
+Define a strict canonical response contract. It should contain the equivalent of:
+
+* response type
+* display answer
+* speakable answer
+* verified Scripture references
+* verified Emmaus resource references
+* validated actions
+* optional clarification
+* retrieval diagnostics for server logs only
+
+Every Scripture reference must contain:
+
+* normalized canonical book name
+* chapter
+* start verse when specified
+* end verse when specified
+* canonical internal Bible destination
+* a stable reference ID
+
+Every resource reference must contain:
+
+* canonical resource ID
+* type
+* title
+* summary
+* canonical action
+* relevance reason
+* sermon timestamp when verified
+* publication and eligibility confirmation
+
+The model may compose the wording, but it may not generate:
+
+* raw internal URLs;
+* resource IDs;
+* sermon titles;
+* sermon timestamps;
+* resource availability;
+* Bible routes;
+* feature locations.
+
+Those must come from server-owned records and resolvers.
+
+The frontend must render links and cards from the structured response. Do not scrape model prose to discover resources if a structured reference is available.
+
+Inline references in the paragraph must be clickable when they correspond to a verified Scripture or Emmaus resource. The matching card may also appear below, but the paragraph reference itself must be actionable.
+
+5. RESTORE SCRIPTURE-FIRST BEHAVIOUR
+
+For pastoral and biblical questions:
+
+1. Establish the answer from Scripture.
+2. Use Scripture accurately and in context.
+3. Normalize and link all explicit Bible references.
+4. Then incorporate relevant ICC/Emmaus material.
+5. Offer a helpful next step when appropriate.
+
+Do not use “Scripture-first” to mean that every request must trigger theological retrieval. App navigation questions should receive direct, accurate application assistance.
+
+Capitalize all canonical Bible book names everywhere, including:
+
+* prose;
+* Scripture cards;
+* Bible Study titles;
+* recommendation cards;
+* routes and labels.
+
+For example, use “John 21:20–23”, never “john 21:20–23”.
+
+6. MAKE EMMAUS RESOURCES MEANINGFUL
+
+Search across all published and eligible resource types:
+
+* sermons
+* devotionals
+* Bible Studies
+* Walks
+* Journeys
+* other established Emmaus resources
+
+However, do not append resources merely because keyword similarity produced a result.
+
+Apply:
+
+* intent-aware retrieval;
+* resource-type filters;
+* a meaningful relevance threshold;
+* deduplication;
+* publication checks;
+* permission checks;
+* maximum result limits;
+* a clear relevance reason.
+
+A navigation question such as “Where are devotionals?” must not display sermons.
+
+For a broad question such as “What is faith?”, relevant church resources should inform the answer where appropriate and be referenced naturally, for example:
+
+“Pastor Jeremy explores this further in [verified sermon title].”
+
+That inline sermon title must open or play the verified sermon at its verified timestamp. Render the corresponding sermon card as supporting evidence.
+
+If no genuinely relevant ICC resource is found, give the Scripture-first answer without fabricating or forcing a church resource.
+
+Use “Pastor Jeremy”, not “Pastor Govender”, in conversational answer text and attribution labels unless a formal stored title specifically requires the full name.
+
+7. FIX THE KNOWLEDGE-BASE LIFECYCLE
+
+Ensure all published resources become available automatically.
+
+Publishing, updating, unpublishing or deleting an eligible resource must enqueue an idempotent index synchronization operation.
+
+Implement:
+
+* event-driven indexing;
+* atomic replacement where appropriate;
+* deletion/unpublish cleanup;
+* retry handling;
+* a scheduled reconciliation process that detects missing, stale and orphaned index records;
+* observable server logs and metrics;
+* an admin-visible status or diagnostic endpoint if an appropriate admin area already exists.
+
+Do not rely only on manual reindexing.
+
+Confirm that the sermon pipeline still indexes all eligible sermons and searchable segments. Do not damage the existing sermon archive or timestamps.
+
+8. USE USER CONTEXT CORRECTLY
+
+The canonical Ask Emmaus request must include authenticated, server-derived user context where relevant:
+
+* tenant/church
+* display name
+* permissions
+* saved Bible position
+* current Daily Rhythm eligibility
+* completed Daily Rhythms
+* active Walks
+* active Journeys
+* progress
+* resource access
+
+Do not trust client-supplied claims about access.
+
+Personalization should feel natural, not repetitive. Acknowledge the user appropriately without forcing their name into every answer.
+
+9. CONTROL LATENCY
+
+Ask Emmaus has become noticeably slower. Instrument the request pipeline and log timings for:
+
+* authentication/context loading;
+* intent routing;
+* each retrieval source;
+* model time to first token;
+* full generation;
+* validation;
+* total request duration.
+
+Improve latency by:
+
+* routing before retrieval;
+* skipping irrelevant retrievers;
+* running independent relevant searches in parallel;
+* applying timeouts;
+* limiting retrieved context;
+* deduplicating before model input;
+* caching the capability registry and safe global metadata;
+* streaming the answer as soon as practical;
+* loading recommendation cards without blocking the initial answer where the existing UI can support it safely.
+
+Do not sacrifice correctness or user eligibility for speed.
+
+10. PRESERVE A SINGLE CANONICAL ASK EMMAUS SERVICE
+
+Text Ask Emmaus and Voice must not have separate intelligence.
+
+Create or preserve one canonical server endpoint/service that accepts text and returns the structured Ask Emmaus response.
+
+Voice will later perform:
+
+tap microphone
+→ record one utterance
+→ transcribe
+→ send transcript to canonical Ask Emmaus
+→ receive the identical structured response
+→ speak the speakable answer
+→ keep microphone off until the next tap
+
+Do not implement always-listening, wake words, automatic interruption, autonomous agent behaviour or a separate Voice retrieval pipeline in this task.
+
+Do not spend time rebuilding Voice until the typed acceptance tests below pass. The purpose of this task is to fix Ask Emmaus itself.
+
+11. SAFE LINK AND NAVIGATION REQUIREMENTS
+
+Every link and action must be built from canonical identifiers.
+
+Bible links must open:
+
+* the correct book;
+* the correct chapter;
+* the requested starting verse;
+* the requested passage range where supported.
+
+They must not merely open the beginning of the Bible book.
+
+Resource links must resolve to an existing, published, authorized destination.
+
+Before rendering an action, validate:
+
+* resource existence;
+* resource type;
+* publication state;
+* user eligibility;
+* route parameters;
+* sermon timestamp bounds where applicable.
+
+Never render a model-authored or unvalidated URL.
+
+12. REQUIRED REGRESSION AND ACCEPTANCE TESTS
+
+Create automated tests using real application fixtures and production-equivalent routing.
+
+At minimum test:
+
+A. “Where can I find devotionals?”
+
+Expected:
+
+* classified as APP_HELP;
+* accurately identifies the real location;
+* offers a verified action to open the devotional area or today’s devotional;
+* no unrelated sermons;
+* no invented resource library;
+* no suggestion to contact a pastor unless genuinely required.
+
+B. “Read today’s devotional.”
+
+Expected:
+
+* retrieves the correct published devotional;
+* provides a validated Read to Me action;
+* does not confuse it with Daily Rhythm;
+* does not navigate to an irrelevant page.
+
+C. “Read Psalm 23.”
+
+Expected:
+
+* canonical Bible reference;
+* correct passage;
+* no irrelevant navigation;
+* Read to Me ready.
+
+D. “Read John 3:16.”
+
+Expected:
+
+* opens/reads John 3:16 specifically;
+* correct capitalization;
+* working exact Bible destination.
+
+E. “Continue reading my Bible.”
+
+Expected:
+
+* resumes the authenticated user’s saved position;
+* does not use another user’s state.
+
+F. “Read today’s Daily Rhythm.”
+
+Expected:
+
+* returns only the signed-in user’s eligible content;
+* never exposes future locked content.
+
+G. “Continue my Walk.”
+
+Expected:
+
+* continues the user’s active Walk when unambiguous;
+* asks a short clarification if multiple eligible Walks exist.
+
+H. “Continue my Journey.”
+
+Expected:
+
+* same rules as Walks using canonical Journey progress.
+
+I. “What have we preached about the prodigal son?”
+
+Expected:
+
+* searches the sermon archive deliberately;
+* returns only verified relevant sermons;
+* includes validated timestamps when available;
+* provides working inline references and cards.
+
+J. “What is faith?”
+
+Expected:
+
+* preserves the quality of the existing general answer;
+* Scripture first;
+* all Scripture references clickable;
+* includes genuinely relevant verified church material where available;
+* does not force irrelevant resources.
+
+K. “I’m afraid.”
+
+Expected:
+
+* warm, relational acknowledgment;
+* Scripture-first pastoral response;
+* relevant verified Emmaus support when available;
+* no invented claims or links.
+
+L. “What can Emmaus help me with?”
+
+Expected:
+
+* answers from the authoritative capability registry;
+* accurately explains actual features and available actions.
+
+Also test:
+
+* no published matching resource;
+* unpublished resources;
+* unauthorized resources;
+* malformed model output;
+* invalid IDs;
+* invalid Bible aliases;
+* exact verse routing;
+* no signed-in user;
+* search/index timeout;
+* duplicate resources;
+* stale index entry;
+* empty Daily Rhythm eligibility;
+* Voice transcript and typed text producing the same canonical result.
+
+13. BROWSER-LEVEL VERIFICATION
+
+After automated tests pass, verify the key flows in the running application at mobile viewport sizes.
+
+Click every rendered Scripture and resource action used in the acceptance fixtures.
+
+Confirm:
+
+* exact destinations;
+* exact verse positioning;
+* working sermon timestamps;
+* correct Bible capitalization;
+* no dead links;
+* no irrelevant cards;
+* no automatic navigation from merely mentioning a Bible reference;
+* no frontend runtime errors.
+
+Do not claim real-device Voice behaviour has been verified unless it was tested on an authenticated supported device.
+
+14. DEFINITION OF DONE
+
+This task is complete only when:
+
+* Ask Emmaus accurately understands its own application features;
+* application-help questions use the capability registry;
+* direct actions use authenticated canonical services;
+* pastoral answers remain Scripture-first and personable;
+* relevant sermons and other Emmaus resources are reliably retrieved;
+* irrelevant resources are suppressed;
+* all displayed references come from verified structured records;
+* Bible and resource links work;
+* new published content is indexed automatically;
+* Daily Rhythm is user-scoped;
+* text and future Voice share one canonical response service;
+* the required automated tests pass;
+* key browser flows have been verified;
+* relevant workflows restart without new errors;
+* performance timings are recorded and obvious unnecessary latency is removed.
+
+FINAL REPORT
+
+At completion, provide:
+
+1. Root causes found.
+2. Architecture implemented.
+3. Files and services changed.
+4. Retrieval/indexing changes.
+5. Link-validation changes.
+6. Latency measurements before and after.
+7. Tests added and exact results.
+8. Browser flows verified.
+9. Anything requiring production data, deployment or real-device verification.
+10. A clear classification of fully implemented, partially implemented and not implemented items.
+
+Do not mark the task complete merely because builds pass. Judge completion against the user-visible acceptance tests above.

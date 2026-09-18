@@ -154,7 +154,7 @@ describe('DevotionalPreviousDays — Draft entry filtering', () => {
     render(<DevotionalPreviousDays />);
 
     await waitFor(() => {
-      expect(screen.getByText(/no previous entries/i)).toBeInTheDocument();
+      expect(screen.getByText(/no entries are available yet/i)).toBeInTheDocument();
     });
 
     // No Review links must appear
@@ -200,7 +200,7 @@ describe('DevotionalPreviousDays — Draft entry filtering', () => {
     render(<DevotionalPreviousDays />);
 
     await waitFor(() => {
-      expect(screen.getByText(/no previous entries/i)).toBeInTheDocument();
+      expect(screen.getByText(/no entries are available yet/i)).toBeInTheDocument();
     });
   });
 });

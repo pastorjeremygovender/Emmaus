@@ -1,0 +1,288 @@
+# CHECKPOINT 3 – Build the Discipleship Profile Dashboard
+
+The Attendance system is now functioning well. I want to evolve it into one of Emmaus' flagship features.
+
+This is no longer an Attendance page.
+
+It is now the **Discipleship Profile**.
+
+The goal is that a pastor should understand a person's spiritual journey in under 15 seconds.
+
+Do NOT redesign the overall Admin interface.
+
+Keep the existing Emmaus design language, spacing and components.
+
+Use clean cards, generous whitespace and clear visual hierarchy.
+
+Do NOT remove any existing functionality. Reorganize and enhance it.
+
+---
+
+## 1. Hero Summary Card
+
+Create a large summary card at the top of the profile.
+
+Display:
+
+• Profile photo (if available)
+• Person name
+• Church status
+    - Active this week
+    - Active this month
+    - Needs Follow-up
+    - New Attendee
+• Current church
+• Current Room(s)
+• Current Walk(s)
+• Serving team(s)
+• Last attendance
+• Emmaus account linked / not linked
+
+At the bottom generate a short pastoral summary based ONLY on existing data.
+
+Examples:
+
+"Jeremy has attended consistently, is progressing through two Walks, serves in Kids Ministry and currently has no care signals."
+
+OR
+
+"Attendance has declined after previously consistent engagement. Daily Rhythm has stopped. A pastoral follow-up may be appropriate."
+
+Do NOT invent information.
+
+The summary must come from rules and existing data.
+
+---
+
+## 2. Journey Timeline
+
+Create a vertical timeline underneath the Hero card.
+
+Newest events first.
+
+Each event contains:
+
+• icon
+• title
+• date
+• optional subtitle
+
+Example
+
+TODAY
+Completed Prayer Walk Day 18
+
+YESTERDAY
+Attended Sunday Morning Service
+
+LAST WEEK
+Started Romans Walk
+
+JULY
+Completed Made Free
+
+JUNE
+Attendance declined
+
+MAY
+Joined Men's Room
+
+MARCH
+Baptised
+
+JANUARY
+Accepted Christ
+
+The timeline must automatically combine events from every Emmaus module.
+
+Attendance
+
+Walks
+
+Devotionals
+
+Bible Studies
+
+Rooms
+
+Serving
+
+Milestones
+
+Sermons
+
+Future modules must be able to insert events without changing this component.
+
+This timeline should become the person's discipleship story.
+
+---
+
+## 3. Spiritual Rhythm
+
+Replace statistics with a simple contribution-style engagement grid similar to GitHub.
+
+Each square represents one day.
+
+Activity includes:
+
+• Daily Rhythm
+• Walk progress
+• Bible Study
+• Devotionals
+• Prayer
+• Rooms
+
+The purpose is to show consistency, not numbers.
+
+---
+
+## 4. Attendance Rhythm
+
+Show a clean monthly attendance pattern.
+
+Example
+
+Jan █████
+
+Feb ████□
+
+Mar █████
+
+Apr █████
+
+May ████□
+
+Jun ██□□□
+
+Jul ████□
+
+Aug █████
+
+Avoid percentages.
+
+Avoid complicated graphs.
+
+The trend should be understood immediately.
+
+---
+
+## 5. Life Milestones
+
+Create a dedicated section for permanent milestones.
+
+Examples
+
+• Accepted Christ
+• Baptised
+• Joined Church
+• Completed Foundations
+• Completed Made Free
+• Started Serving
+• Leadership Training
+• Mission Trip
+• Preached
+
+These should remain permanently visible and not disappear into the activity timeline.
+
+---
+
+## 6. Current Discipleship
+
+Create a dedicated section showing what the person is actively engaged in.
+
+Display:
+
+Current Walks
+
+Current Daily Devotionals
+
+Bible Studies
+
+Rooms
+
+Serving Teams
+
+Progress bars
+
+Last activity
+
+Current streak where appropriate
+
+This section should answer one question:
+
+"What is this person currently doing?"
+
+---
+
+## 7. Attendance History
+
+Move Attendance History lower down the page.
+
+Collapse it by default.
+
+Allow expansion.
+
+Attendance history supports the profile.
+
+It should not dominate the profile.
+
+---
+
+## 8. Administrative Information
+
+Move technical information to the bottom.
+
+Contact details
+
+Emmaus account link
+
+Permissions
+
+Attendance expectations
+
+Audit history
+
+Administrative information should never appear before discipleship information.
+
+---
+
+## 9. Component Architecture
+
+Each section must be built as an independent reusable component.
+
+HeroSummary
+
+JourneyTimeline
+
+SpiritualRhythm
+
+AttendanceRhythm
+
+LifeMilestones
+
+CurrentDiscipleship
+
+AttendanceHistory
+
+AdminDetails
+
+Future checkpoints must be able to add additional sections without modifying existing ones.
+
+---
+
+## Design Philosophy
+
+This page should not feel like church management software.
+
+It should feel like reading someone's journey of following Jesus.
+
+When a pastor opens the page they should immediately understand:
+
+• Who this person is
+• Whether they are currently active
+• How they are growing
+• What they are currently doing
+• What has changed recently
+• Whether pastoral follow-up may be appropriate
+
+The page should communicate a discipleship story rather than a collection of database records.

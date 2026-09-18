@@ -11,27 +11,13 @@ import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getMessages, type StoredMessage } from '@/lib/emmaus-client';
 import { BottomNav } from '@/components/BottomNav';
+import { goBackOrFallback } from '@/lib/return-context';
 import { ScriptureCard } from '@/components/emmaus/ScriptureCard';
 import { NextStepCard } from '@/components/emmaus/NextStepCard';
+import { NextStepsCard } from '@/components/emmaus/NextStepsCard';
 import { ResourceCard } from '@/components/emmaus/ResourceCard';
-
-function renderProse(text: string) {
-  const paragraphs = text.split(/\n{2,}/).filter(Boolean);
-  if (paragraphs.length <= 1) {
-    return (
-      <p className="text-[16px] text-foreground leading-[1.75] font-sans">{text}</p>
-    );
-  }
-  return (
-    <div className="space-y-4">
-      {paragraphs.map((p, i) => (
-        <p key={i} className="text-[16px] text-foreground leading-[1.75] font-sans">
-          {p}
-        </p>
-      ))}
-    </div>
-  );
-}
+import { SermonRecommendationCard } from '@/components/emmaus/SermonRecommendationCard';
+import { InlineScriptureProse } from '@/components/emmaus/InlineScriptureProse';
 
 export default function AskEmmausHistory() {
   const { user } = useAuth();
@@ -53,7 +39,7 @@ export default function AskEmmausHistory() {
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[560px] mx-auto">
           <button
-            onClick={() => setLocation('/personal/ask-emmaus')}
+            onClick={() => goBackOrFallback('/personal/ask-emmaus', setLocation)}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Back to Ask Emmaus"
           >
@@ -90,7 +76,17 @@ export default function AskEmmausHistory() {
               </div>
             ) : (
               <div className="space-y-5">
-                {renderProse(msg.content)}
+                <InlineScriptureProse
+                  text={msg.content}
+                  references={msg.metadata?.scriptureReferences ?? (msg.metadata?.scripture ? [msg.metadata.scripture] : [])}
+                  resources={[
+                    ...(msg.metadata?.recommendations ?? []),
+                    ...(msg.metadata?.sermonRecommendations ?? []).map((sermon) => ({
+                      title: sermon.title,
+                      path: sermon.openPath ?? sermon.watchUrl,
+                    })),
+                  ]}
+                />
                 {msg.metadata && (
                   <div className="space-y-3">
                     {msg.metadata.scripture && (
@@ -102,6 +98,13 @@ export default function AskEmmausHistory() {
                     {msg.metadata.recommendations.slice(0, 3).map((rec, i) => (
                       <ResourceCard key={i} recommendation={rec} />
                     ))}
+                    {msg.metadata.sermonRecommendations?.slice(0, 3).map((sermon) => (
+                      <SermonRecommendationCard key={sermon.sermonId} sermon={sermon} />
+                    ))}
+                    {/* P2-5: render nextSteps array (read/pray/continue/listen cards) */}
+                    {msg.metadata.nextSteps && msg.metadata.nextSteps.length > 0 && (
+                      <NextStepsCard steps={msg.metadata.nextSteps} />
+                    )}
                   </div>
                 )}
               </div>

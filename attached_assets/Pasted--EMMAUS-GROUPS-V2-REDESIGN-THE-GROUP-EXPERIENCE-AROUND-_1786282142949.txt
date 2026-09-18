@@ -1,0 +1,415 @@
+# EMMAUS GROUPS V2
+# REDESIGN THE GROUP EXPERIENCE AROUND DISCIPLESHIP
+
+We have reached an important conclusion.
+
+Emmaus Groups are NOT chat rooms.
+
+Emmaus Groups are NOT Zoom meetings.
+
+Emmaus Groups exist to help people grow together through Emmaus content.
+
+Everything else exists to support that purpose.
+
+DO NOT rewrite the backend.
+
+DO NOT rewrite LiveKit.
+
+DO NOT rewrite permissions.
+
+DO NOT rewrite invitations.
+
+DO NOT rewrite chat.
+
+DO NOT rewrite database tables.
+
+This task is purely a UX redesign using the existing backend.
+
+==================================================
+THE NEW GROUP LIFECYCLE
+==================================================
+
+Emmaus Groups now have four simple phases.
+
+1. Create Group
+
+2. Prepare
+
+3. Meet
+
+4. Continue
+
+The interface should reflect these phases naturally.
+
+==================================================
+GROUP HOME
+==================================================
+
+Completely redesign the Group home.
+
+The Group home should immediately answer four questions.
+
+1. What are we studying?
+
+2. What has the leader said?
+
+3. Who has prepared?
+
+4. When are we meeting?
+
+NOT
+
+How do I start a session?
+
+NOT
+
+Should I gather?
+
+NOT
+
+Should I enable video?
+
+Those are implementation details.
+
+==================================================
+NEW GROUP HOME LAYOUT
+==================================================
+
+Prayer Walk
+
+Tuesday 19:00
+
+------------------------------------
+
+TODAY'S STUDY
+
+10 Minutes with Jesus
+
+Day 3
+
+Complete before Tuesday evening
+
+[ Open Study ]
+
+------------------------------------
+
+LEADER'S NOTE
+
+Welcome everyone.
+
+Please complete today's study before Tuesday evening.
+
+When we meet we will discuss:
+
+• Question one
+
+• Question two
+
+• Question three
+
+(Edit button for leader only.)
+
+------------------------------------
+
+GROUP MEMBERS
+
+Jeremy ✓ Completed
+
+Peter ✓ Completed
+
+Sarah Reading
+
+John Not Started
+
+Each member shows
+
+Online / Offline indicator
+
+Preparation status
+
+Leader badge
+
+------------------------------------
+
+NEXT MEETING
+
+Tuesday
+
+19:00
+
+Meeting starts in
+
+2 Days
+
+(Start Meeting button visible to Group Leader only.)
+
+------------------------------------
+
+DISCUSSION
+
+Open Discussion
+
+(PRAYER REQUESTS)
+
+(GROUP NOTES)
+
+(ASK EMMAUS)
+
+These remain available but are secondary to the study.
+
+==================================================
+REMOVE TECHNICAL TERMINOLOGY
+==================================================
+
+Remove all references to:
+
+Guided Session
+
+Gather Together
+
+Meeting Active
+
+Start Guided Session
+
+Room
+
+Conference
+
+Live Gathering
+
+Replace with natural language.
+
+==================================================
+START MEETING
+==================================================
+
+There should be ONE primary leader action.
+
+Start Meeting
+
+Nothing else.
+
+When Start Meeting is pressed:
+
+Meeting banner appears.
+
+Leader controls become visible.
+
+Discussion becomes active.
+
+Prayer Requests become editable.
+
+Attendance tracking starts.
+
+Present tools become available.
+
+Voice notes become available.
+
+Video becomes available ONLY if enabled for this Group type.
+
+Everything activates automatically.
+
+No additional setup.
+
+==================================================
+END MEETING
+==================================================
+
+Leader presses
+
+End Meeting
+
+The Group returns to Preparation mode.
+
+Discussion remains.
+
+Prayer Requests remain.
+
+Group Notes remain.
+
+Shared progress remains.
+
+Attendance is saved.
+
+==================================================
+CONTENT VISIBILITY
+==================================================
+
+The assigned Walk, Journey or Devotional should be visible immediately after joining the Group.
+
+This is intentional.
+
+Members should complete the content before the meeting.
+
+Leader has one optional setting:
+
+Reveal study only when meeting starts
+
+Default should be OFF.
+
+Preparation is encouraged.
+
+==================================================
+LEADER NOTE
+==================================================
+
+Add a dedicated Leader Note section.
+
+Leader can edit at any time.
+
+Supports:
+
+Plain text
+
+Scripture references
+
+Simple formatting
+
+Displayed prominently near the top.
+
+==================================================
+GROUP MEMBERS
+==================================================
+
+Display for every member:
+
+Name
+
+Leader badge (if applicable)
+
+Online / Offline
+
+Preparation status
+
+Completed
+
+Reading
+
+Not Started
+
+Later we will add:
+
+Prayer requested
+
+Needs follow-up
+
+Missed previous meeting
+
+Do not build those yet.
+
+==================================================
+DISCUSSION
+==================================================
+
+Discussion is always available.
+
+Support:
+
+Text
+
+Voice Notes
+
+Images
+
+Bible verses
+
+Files
+
+Links
+
+Discussion should feel familiar and effortless.
+
+==================================================
+PRESENT
+==================================================
+
+Rename all sharing tools to:
+
+Present
+
+Examples:
+
+Present Bible
+
+Present Image
+
+Present Slides
+
+Present Video
+
+These controls only appear after Start Meeting.
+
+==================================================
+LIVE VIDEO
+==================================================
+
+Video is NOT part of the normal workflow.
+
+Video only appears if:
+
+The Group type supports Live Meetings
+
+AND
+
+The Group Leader is authorised
+
+Otherwise no video controls should be shown.
+
+==================================================
+GROUP TYPES
+==================================================
+
+The system already supports permissions.
+
+Expand the concept of Group Types.
+
+Examples:
+
+Personal
+
+Family
+
+Friends
+
+Marriage
+
+Discipleship
+
+Leadership
+
+Church
+
+Only Church and Leadership Groups may use Live Meetings by default.
+
+This should be configurable from Admin.
+
+==================================================
+DESIGN GOAL
+==================================================
+
+A first-time user should understand the entire Group within 15 seconds.
+
+They should immediately know:
+
+What are we studying?
+
+Who is in the Group?
+
+Have I completed today's study?
+
+When are we meeting?
+
+What did the leader ask me to do?
+
+Everything else should stay out of the way until needed.
+
+==================================================
+IMPORTANT
+
+The current backend architecture is strong.
+
+This task is about making the experience feel like leading a Bible study rather than operating meeting software.
+
+Keep the existing backend.
+
+Redesign the interface around simplicity, preparation, and discipleship.

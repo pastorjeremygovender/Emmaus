@@ -1,0 +1,257 @@
+We are NOT adding new features.
+
+We are redesigning Emmaus Rooms so that a first-time user instantly understands how to use it.
+
+This is a UX redesign only.
+
+Do not change the existing database, permissions, LiveKit integration, security model or backend architecture.
+
+----------------------------------
+ROOM HEADER
+----------------------------------
+
+Keep:
+
+← Back
+
+Room Name
+
+Replace the settings icon with a simple overflow (...) menu.
+
+Move all room management into this menu.
+
+Leader menu:
+
+• Rename Room
+• Invite Members
+• Delete Room
+
+Member menu:
+
+• Leave Room
+
+Nothing else belongs here.
+
+----------------------------------
+PRIMARY ACTION
+----------------------------------
+
+The top of every Room should always show ONE obvious primary action.
+
+If NO Live gathering is active:
+
+Display a large card.
+
+Leader sees:
+
+🟢 Gather Together
+
+Subtitle:
+
+Start a live gathering with your group.
+
+Single tap starts the LiveKit session.
+
+No confirmation dialogs.
+
+No technical wording.
+
+No mention of LiveKit.
+
+Members see:
+
+No gathering happening right now.
+
+Waiting for the leader to begin.
+
+----------------------------------
+WHEN A GATHERING IS ACTIVE
+----------------------------------
+
+Replace the card with:
+
+🟢 Jeremy is gathering now
+
+Large button:
+
+Join Gathering
+
+One tap joins.
+
+After joining, replace the card with the embedded live video.
+
+The video should appear naturally inside the Room.
+
+Not full screen.
+
+Not another page.
+
+Exactly like another Emmaus content card.
+
+Provide:
+
+Expand
+
+Collapse
+
+End Gathering (leader only)
+
+Leave Gathering (members)
+
+----------------------------------
+CONTENT
+----------------------------------
+
+Remove the Explore Content card.
+
+The Room should already know what is being studied.
+
+Replace with:
+
+Today's Study
+
+10 Minutes with Jesus
+
+Step 3 of 30
+
+Continue →
+
+If no study has been attached yet:
+
+Choose something to study together.
+
+----------------------------------
+DISCUSSION
+----------------------------------
+
+Rename
+
+Open Discussion
+
+to
+
+Group Discussion
+
+Subtitle:
+
+Talk together about today's study.
+
+----------------------------------
+PRAYER
+----------------------------------
+
+Rename Prayer Wall to
+
+Prayer Requests
+
+Show latest requests immediately.
+
+Do not require another page just to read them.
+
+Keep Add Prayer Request.
+
+----------------------------------
+SHARED PROGRESS
+----------------------------------
+
+Improve the layout.
+
+Display:
+
+Name
+
+Current Step
+
+Completed %
+
+Last Active
+
+Use clean progress bars.
+
+----------------------------------
+ASK EMMAUS
+----------------------------------
+
+Keep the Ask Emmaus card.
+
+Subtitle:
+
+Ask about today's study, today's Scripture or your discussion.
+
+----------------------------------
+LEADER EXPERIENCE
+----------------------------------
+
+The leader should never need instructions.
+
+The workflow should simply be:
+
+Open Room
+
+↓
+
+Tap Gather Together
+
+↓
+
+Everyone joins
+
+↓
+
+Study together
+
+↓
+
+End Gathering
+
+Nothing more.
+
+----------------------------------
+MEMBER EXPERIENCE
+----------------------------------
+
+Members should never see controls they cannot use.
+
+If the leader has not started:
+
+Show:
+
+Waiting for today's gathering.
+
+If active:
+
+Show:
+
+Join Gathering
+
+If already connected:
+
+Show embedded video.
+
+----------------------------------
+DESIGN
+----------------------------------
+
+The entire page should feel like Emmaus.
+
+Not like Zoom.
+
+Not like Teams.
+
+Not like Discord.
+
+The Room exists to help people walk with Jesus together.
+
+Every card should reinforce discipleship rather than technology.
+
+Remove unnecessary controls.
+
+Remove technical wording.
+
+Reduce taps wherever possible.
+
+The objective is that a first-time church member can use the Room without anyone explaining it.
+
+Do not break existing functionality.
+
+Redesign the experience around simplicity.

@@ -1,0 +1,123 @@
+The YouTube OAuth connection is now working, but the full indexing pipeline is failing.
+
+Current behaviour:
+
+- YouTube connected successfully.
+- Full indexing pipeline previously started succeeding.
+- I left the process running.
+- When I returned later, OAuth showed as disconnected.
+- Sermons I had already approved had reverted back to Pending.
+- I reconnected OAuth successfully.
+- Now when I run Full Indexing Pipeline, it reports Failed.
+- The indexed count remains stuck at 2179.
+- Sermons that previously processed successfully now fail.
+
+Please diagnose this as a persistence/indexing problem, not as another OAuth redirect problem.
+
+Important requirements:
+
+1. Approved sermon status must persist permanently.
+   A sermon that has been approved must not revert to Pending because:
+
+- OAuth expires,
+- a background job fails,
+- the app restarts,
+- the server redeploys,
+- or the YouTube connection is temporarily unavailable.
+
+2. OAuth tokens must persist correctly.
+   Please check:
+
+- access token storage
+- refresh token storage
+- refresh token reuse
+- token expiry handling
+- whether a new OAuth connection overwrites or loses the refresh token
+- whether tokens are stored only in memory
+- whether deployment/restart clears them
+- whether the token belongs to the correct tenant/admin account
+
+3. Diagnose why Full Indexing Pipeline fails at 2179.
+   Do not simply retry the whole pipeline.
+
+Find the exact:
+
+- sermon/video/item being processed when failure occurs
+- exception/error message
+- API response
+- database error
+- indexing provider error
+- timeout
+- rate-limit/quota error
+- malformed transcript/content issue
+
+Add useful server-side logging if it does not already exist.
+
+4. Make indexing resumable and idempotent.
+   The pipeline must not start from scratch every time.
+
+It should:
+
+- skip items already successfully indexed
+- retry failed items
+- preserve completed work
+- continue from the last successful item
+- prevent duplicate embeddings/index records
+- record a clear status for each item
+
+Recommended per-item states:
+pending
+processing
+indexed
+failed
+
+A failed item should also store:
+
+- error message
+- failed_at
+- retry_count
+
+5. Separate editorial approval from indexing status.
+   These must not be the same field.
+
+For example:
+approval_status = pending / approved / rejected
+
+index_status = pending / processing / indexed / failed
+
+OAuth connection state must not alter either of these values.
+
+6. Check whether the displayed count of 2179 is coming from:
+
+- database records
+- vector/index records
+- a cached count
+- or an in-memory counter
+
+Verify the real number of successfully indexed records.
+
+7. Add safe retry behaviour.
+   For the Full Indexing Pipeline:
+
+- continue processing other items if one item fails where safe
+- collect failures
+- show the final number indexed, skipped and failed
+- allow Retry Failed rather than reprocessing everything
+
+8. Preserve the current working OAuth redirect configuration:
+   https://emmaus.co.za/api/youtube-archive/oauth/callback
+
+Do not revert OAuth back to the *.replit.dev callback.
+
+Before making changes, identify and report the root cause.
+
+After fixing it, report:
+
+- why OAuth disconnected
+- why approved sermons reverted to Pending
+- why indexing stopped at 2179
+- what data was actually lost versus only displayed incorrectly
+- files changed
+- database/schema changes
+- how indexing now resumes safely
+- and how I should test it.

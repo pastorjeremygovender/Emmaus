@@ -1,0 +1,359 @@
+STOP adding new features.
+
+This task is a UI CONSOLIDATION pass.
+
+The functionality now exists. The problem is that the UI contains duplicate buttons, duplicate states and old components that should have been replaced.
+
+The goal is to make Emmaus Groups feel like one coherent product.
+
+====================================================
+GENERAL RULE
+====================================================
+
+For every purpose there must be ONE component.
+
+Do NOT leave old UI visible after replacing it.
+
+Search the entire Groups feature and remove duplicate controls, duplicate cards, duplicate banners and obsolete placeholders.
+
+====================================================
+1. START MEETING
+====================================================
+
+Currently there are two buttons:
+
+• Start Meeting
+• Start Meeting Now
+
+This is incorrect.
+
+There must only be ONE primary action.
+
+Before meeting:
+
+[ Start Meeting ]
+
+After tapping:
+
+replace it with
+
+[ End Meeting ]
+
+Do not render both.
+
+====================================================
+2. MEETING STATUS
+====================================================
+
+There must only ever be ONE meeting status.
+
+Never display both:
+
+Meeting Active
+
+Meeting in Progress
+
+Guided Session Active
+
+Choose ONE.
+
+Use:
+
+🟢 Meeting in Progress
+
+When inactive this banner disappears.
+
+====================================================
+3. ASK EMMAUS
+====================================================
+
+There are currently two Ask Emmaus entry points.
+
+Choose ONE strategy.
+
+Preferred:
+
+Keep the floating Ask Emmaus button.
+
+While inside a Group it automatically becomes Group-aware.
+
+It should answer using:
+
+• today's study
+• discussion
+• group notes
+• prayer requests
+
+Remove the separate Ask Emmaus card from the page.
+
+There must only be ONE Ask Emmaus entry point.
+
+====================================================
+4. GROUP DISCUSSION
+====================================================
+
+There must be one Discussion card.
+
+Do not duplicate it.
+
+When the meeting has not started:
+
+Discussion closed until meeting begins.
+
+When meeting starts:
+
+Open Discussion
+
+When meeting ends:
+
+Discussion archived.
+
+====================================================
+5. TODAY'S STUDY
+====================================================
+
+This still feels like a devotional.
+
+Replace labels like
+
+Continue
+
+with
+
+Open Today's Study
+
+or
+
+Present Today's Study
+
+Leaders are guiding a meeting.
+
+Not reading privately.
+
+====================================================
+6. VISIBLE NOW
+====================================================
+
+Current label:
+
+Visible Now
+
+This is unclear.
+
+Replace with
+
+Hidden until meeting
+
+(toggle)
+
+When switched on:
+
+Visible to members
+
+This is much clearer.
+
+====================================================
+7. LEADER NOTE
+====================================================
+
+Move Leader Note immediately below Today's Study.
+
+Purpose:
+
+Introduce today's discussion.
+
+Example:
+
+Leader's Note
+
+"Tonight we'll focus on forgiveness."
+
+====================================================
+8. MEETING TOOLS
+====================================================
+
+Rename
+
+Controls
+
+to
+
+Meeting Tools
+
+Inside Meeting Tools keep:
+
+Open Today's Study
+
+Present Bible
+
+Previous Step
+
+Next Step
+
+Prayer Time
+
+Launch Poll
+
+Ask Emmaus Together
+
+Complete Meeting
+
+Every Meeting Tools screen MUST have:
+
+← Back
+
+The current screen is cut off and traps the user.
+
+Fix the layout.
+
+====================================================
+9. PAGE FLOW
+====================================================
+
+The page must flow like a meeting.
+
+Not a collection of features.
+
+Order:
+
+Meeting Status
+
+Today's Study
+
+Leader Note
+
+Members
+
+Discussion
+
+Prayer Requests
+
+Group Notes
+
+Ask Emmaus (floating only)
+
+Meeting Tools
+
+End Meeting
+
+====================================================
+10. PREPARATION MODE
+====================================================
+
+Before the meeting:
+
+Show
+
+Today's Study
+
+Leader Note
+
+Members
+
+Preparation progress
+
+Meeting schedule
+
+Discussion closed
+
+====================================================
+11. MEETING MODE
+====================================================
+
+When Start Meeting is pressed:
+
+Entire page changes to meeting mode.
+
+Show
+
+Meeting in Progress
+
+End Meeting
+
+Discussion
+
+Prayer Requests
+
+Group Notes
+
+Meeting Tools
+
+Today's Study
+
+Hide preparation-only controls.
+
+====================================================
+12. POST MEETING
+====================================================
+
+After End Meeting
+
+Return to preparation mode.
+
+Keep
+
+attendance
+
+discussion
+
+notes
+
+prayer requests
+
+meeting history
+
+Do not lose data.
+
+====================================================
+13. REMOVE ALL OLD UI
+====================================================
+
+Search every Groups component.
+
+Delete:
+
+old buttons
+
+old banners
+
+duplicate cards
+
+obsolete placeholders
+
+unused layouts
+
+legacy meeting states
+
+There should never be two ways to perform the same action.
+
+====================================================
+14. FINAL QA
+====================================================
+
+Before marking complete verify:
+
+✓ exactly ONE Start Meeting button
+
+✓ exactly ONE Meeting status
+
+✓ exactly ONE Group Discussion
+
+✓ exactly ONE Ask Emmaus entry point
+
+✓ no duplicated meeting controls
+
+✓ no cut-off modal screens
+
+✓ every modal has Back or Close
+
+✓ page feels like ONE unified workflow
+
+Do not stop after compiling.
+
+Publish the app.
+
+Open the published build.
+
+Test every state yourself.
+
+Only mark complete once the published app behaves exactly as described.

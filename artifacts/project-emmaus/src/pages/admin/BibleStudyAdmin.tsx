@@ -11,9 +11,15 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   BookOpen, Plus, Edit2, Trash2, Eye, EyeOff, ChevronDown, ChevronUp,
   Loader2, Check, X, AlertCircle, Link2,
+  Globe, Clock, LetterText, Flame, Lightbulb, Footprints, BookMarked, ScanEye,
+  Filter, Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getBibleBook, BIBLE_BOOKS } from '@/lib/bible-data';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { StudySection } from '@/components/VerseStudyPanel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -52,6 +58,9 @@ type StudyNote = {
   original_language_note: string;
   jesus_connection: string;
   apply_it: string;
+  key_truth: string;
+  reflection_question: string;
+  related_scriptures: string;
   status: 'Draft' | 'In Review' | 'Published' | 'Archived';
   created_by: string;
   updated_by: string;
@@ -78,6 +87,9 @@ const EMPTY_FORM: Omit<StudyNote, 'id' | 'created_by' | 'updated_by' | 'created_
   original_language_note: '',
   jesus_connection: '',
   apply_it: '',
+  key_truth: '',
+  reflection_question: '',
+  related_scriptures: '',
   status: 'Draft',
 };
 
@@ -107,6 +119,7 @@ function StudyNoteForm({
 }) {
   const [form, setForm] = useState({ ...EMPTY_FORM, ...initial });
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['content']));
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   function toggle(key: string) {
     setExpandedSections(prev => {
@@ -227,18 +240,21 @@ function StudyNoteForm({
         </select>
       </div>
 
-      {/* Content sections */}
+      {/* Content sections — ordered to match spec */}
       <div className="space-y-3">
-        {field('content', 'Explanation', 'What does this verse/passage mean? Write a clear explanation...', 'content')}
-        {field('context_note', 'Passage Context', 'What comes before and after? How does this fit the narrative?', 'context_note')}
-        {field('historical_note', 'Historical Background', 'What cultural or historical details help us understand this?', 'historical_note')}
-        {field('original_language_note', 'Original Language', 'Significant Hebrew/Greek word insights or nuances...', 'original_language_note')}
-        {field('jesus_connection', 'How This Points to Jesus', 'How does this verse or passage point toward Christ?', 'jesus_connection')}
-        {field('apply_it', 'Apply It', 'What practical application can a reader take from this today?', 'apply_it')}
+        {field('content',              'Explanation',        'What does this verse/passage mean? Write a clear explanation…',             'content')}
+        {field('context_note',         'Passage Context',    'What comes before and after? How does this fit the narrative?',             'context_note')}
+        {field('key_truth',            'Key Truth',          'What is the central truth or principle of this passage?',                   'key_truth')}
+        {field('reflection_question',  'Reflection',         'A question that invites the reader to personally reflect…',                 'reflection_question')}
+        {field('apply_it',             'Practical Application', 'What practical step can a reader take from this today?',                'apply_it')}
+        {field('related_scriptures',   'Related Scriptures', 'e.g. John 3:16, Romans 5:8 — comma-separated references',                 'related_scriptures')}
+        {field('historical_note',      'Historical Background', 'What cultural or historical details help us understand this?',          'historical_note')}
+        {field('original_language_note', 'Original Language', 'Significant Hebrew/Greek word insights or nuances…',                     'original_language_note')}
+        {field('jesus_connection',     'How This Points to Jesus', 'How does this verse or passage point toward Christ?',                'jesus_connection')}
       </div>
 
       {/* Actions */}
-      <div className="flex gap-2 pt-2">
+      <div className="flex gap-2 pt-2 flex-wrap">
         <Button
           onClick={() => onSave(form)}
           disabled={saving}
@@ -247,10 +263,73 @@ function StudyNoteForm({
           {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
           {saving ? 'Saving…' : 'Save note'}
         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setPreviewOpen(true)}
+          className="rounded-xl gap-2"
+        >
+          <ScanEye size={15} />
+          Preview
+        </Button>
         <Button variant="ghost" onClick={onCancel} className="rounded-xl">
           Cancel
         </Button>
       </div>
+
+      {/* Preview dialog — renders the note exactly as members see it */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-lg w-full max-h-[85dvh] flex flex-col p-0 overflow-hidden rounded-2xl">
+          <DialogHeader className="px-5 pt-5 pb-4 border-b border-border/50 shrink-0">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-1">
+                  Preview — {(() => {
+                    const book = getBibleBook(form.book_id);
+                    const name = book?.name ?? form.book_id;
+                    const verseRange = form.verse_end && form.verse_end !== form.verse_start
+                      ? `${form.verse_start}–${form.verse_end}`
+                      : String(form.verse_start);
+                    return `${name} ${form.chapter}:${verseRange}`;
+                  })()}
+                </p>
+                <DialogTitle className="text-[15px] font-bold text-foreground leading-snug">
+                  {form.title || <span className="text-muted-foreground italic font-normal">No title</span>}
+                </DialogTitle>
+              </div>
+            </div>
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1.5">
+              <ScanEye size={11} />
+              This is how the note will appear to members
+            </p>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto px-5 pb-8">
+            {/* Check if any content exists */}
+            {!(form.content || form.context_note || form.key_truth || form.reflection_question ||
+               form.apply_it || form.related_scriptures || form.historical_note ||
+               form.original_language_note || form.jesus_connection) ? (
+              <div className="py-10 text-center">
+                <BookOpen size={28} className="text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-[14px] text-muted-foreground">No content to preview yet.</p>
+                <p className="text-[13px] text-muted-foreground mt-1">Fill in at least one section to see a preview.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border/50 pt-2">
+                <StudySection icon={<BookOpen size={17} />}      title="Explanation"              content={form.content}                defaultOpen />
+                <StudySection icon={<Globe size={17} />}         title="Passage Context"          content={form.context_note} />
+                <StudySection icon={<Flame size={17} />}         title="Key Truth"                content={form.key_truth} />
+                <StudySection icon={<Lightbulb size={17} />}     title="Reflection"               content={form.reflection_question} />
+                <StudySection icon={<Footprints size={17} />}    title="Practical Application"    content={form.apply_it} />
+                <StudySection icon={<Link2 size={17} />}         title="Related Scriptures"       content={form.related_scriptures} />
+                <StudySection icon={<Clock size={17} />}         title="Historical Background"    content={form.historical_note} />
+                <StudySection icon={<LetterText size={17} />}    title="Original Language"        content={form.original_language_note} />
+                <StudySection icon={<BookMarked size={17} />}    title="How This Points to Jesus" content={form.jesus_connection} />
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -465,7 +544,9 @@ function CrossRefAdmin({ headers }: { headers: Record<string, string> }) {
           <div className="py-12 text-center">
             <Link2 size={32} className="text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-[14px] text-muted-foreground">No cross references yet.</p>
-            <p className="text-[13px] text-muted-foreground mt-1">Add pairs to link related verses in the study panel.</p>
+            <p className="text-[13px] text-muted-foreground mt-1">
+              Add canonical passage links here. AI-generated suggestions remain attached to Draft passage notes until you review and add them.
+            </p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -498,9 +579,9 @@ function CrossRefAdmin({ headers }: { headers: Record<string, string> }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export default function BibleStudyAdmin() {
+export default function BibleStudyAdmin({ defaultTab = 'notes' }: { defaultTab?: 'notes' | 'crossrefs' }) {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'notes' | 'crossrefs'>('notes');
+  const [activeTab, setActiveTab] = useState<'notes' | 'crossrefs'>(defaultTab);
   const [notes, setNotes] = useState<StudyNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -508,11 +589,10 @@ export default function BibleStudyAdmin() {
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filterBook, setFilterBook] = useState('');
+  const [filterMissing, setFilterMissing] = useState(false);
 
   const headers = {
     'Content-Type': 'application/json',
-    'x-user-id': user?.id ?? 'admin',
-    'x-user-role': user?.role ?? 'admin',
   };
 
   async function load() {
@@ -535,6 +615,14 @@ export default function BibleStudyAdmin() {
   }
 
   useEffect(() => { load(); }, [filterBook]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Derived: notes missing at least one AI-enrichment field
+  const missingCount = notes.filter(n =>
+    !n.key_truth || !n.reflection_question || !n.related_scriptures
+  ).length;
+  const displayedNotes = filterMissing
+    ? notes.filter(n => !n.key_truth || !n.reflection_question || !n.related_scriptures)
+    : notes;
 
   async function handleSave(data: Partial<StudyNote>) {
     setSaving(true);
@@ -666,9 +754,39 @@ export default function BibleStudyAdmin() {
             </div>
           )}
 
+          {/* Enrichment completeness banner */}
+          {!creating && !editing && notes.length > 0 && (
+            <div className={[
+              'flex items-center gap-3 px-4 py-3 rounded-xl text-[13px]',
+              missingCount === 0
+                ? 'bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800'
+                : 'bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800',
+            ].join(' ')}>
+              <Sparkles size={15} className="shrink-0" />
+              <span className="flex-1">
+                {missingCount === 0
+                  ? `All ${notes.length} notes have Key Truth, Reflection, and Related Scriptures.`
+                  : `${missingCount} of ${notes.length} notes are missing at least one AI-enrichment field.`}
+              </span>
+              {missingCount > 0 && (
+                <button
+                  onClick={() => setFilterMissing(v => !v)}
+                  className={[
+                    'text-[12px] font-semibold px-2.5 py-1 rounded-lg transition-colors',
+                    filterMissing
+                      ? 'bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200'
+                      : 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800',
+                  ].join(' ')}
+                >
+                  {filterMissing ? 'Show all' : 'Show incomplete'}
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Filter */}
           {!creating && !editing && (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <select
                 value={filterBook}
                 onChange={e => setFilterBook(e.target.value)}
@@ -679,8 +797,19 @@ export default function BibleStudyAdmin() {
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
               </select>
+              {filterMissing && (
+                <button
+                  onClick={() => setFilterMissing(false)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 text-[13px] font-medium"
+                >
+                  <Filter size={13} />
+                  Incomplete only
+                  <X size={12} className="ml-0.5" />
+                </button>
+              )}
               <span className="text-[13px] text-muted-foreground">
-                {notes.length} {notes.length === 1 ? 'note' : 'notes'}
+                {displayedNotes.length} {displayedNotes.length === 1 ? 'note' : 'notes'}
+                {filterMissing && notes.length !== displayedNotes.length && ` of ${notes.length}`}
               </span>
             </div>
           )}
@@ -691,15 +820,24 @@ export default function BibleStudyAdmin() {
               <div className="flex items-center justify-center py-12">
                 <Loader2 size={24} className="text-primary animate-spin" />
               </div>
-            ) : notes.length === 0 ? (
+            ) : displayedNotes.length === 0 ? (
               <div className="py-12 text-center">
                 <BookOpen size={32} className="text-muted-foreground/30 mx-auto mb-3" />
-                <p className="text-[14px] text-muted-foreground">No study notes yet.</p>
-                <p className="text-[13px] text-muted-foreground mt-1">Create your first note to add study content to the Bible reader.</p>
+                {filterMissing ? (
+                  <>
+                    <p className="text-[14px] text-muted-foreground">All notes are fully enriched.</p>
+                    <p className="text-[13px] text-muted-foreground mt-1">Every note has a Key Truth, Reflection, and Related Scriptures.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[14px] text-muted-foreground">No study notes yet.</p>
+                    <p className="text-[13px] text-muted-foreground mt-1">Create your first note to add study content to the Bible reader.</p>
+                  </>
+                )}
               </div>
             ) : (
               <div className="space-y-2.5">
-                {notes.map(note => (
+                {displayedNotes.map(note => (
                   <div key={note.id}>
                     {editing?.id === note.id ? (
                       <div className="p-5 rounded-2xl border border-primary/20 bg-primary/5 space-y-4">
@@ -714,7 +852,12 @@ export default function BibleStudyAdmin() {
                         />
                       </div>
                     ) : (
-                      <div className="flex items-start gap-3 p-4 rounded-2xl border border-border bg-card hover:border-border/70 transition-colors">
+                      <div className={[
+                        'flex items-start gap-3 p-4 rounded-2xl border bg-card hover:border-border/70 transition-colors',
+                        (!note.key_truth || !note.reflection_question || !note.related_scriptures)
+                          ? 'border-amber-200 dark:border-amber-800'
+                          : 'border-border',
+                      ].join(' ')}>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-[14px] font-semibold text-foreground">{refLabel(note)}</p>
@@ -728,6 +871,27 @@ export default function BibleStudyAdmin() {
                           {note.content && (
                             <p className="text-[13px] text-muted-foreground mt-1 line-clamp-2">{note.content}</p>
                           )}
+                          {/* AI enrichment field indicators */}
+                          <div className="flex gap-1.5 mt-2 flex-wrap">
+                            {[
+                              { label: 'Key Truth', value: note.key_truth },
+                              { label: 'Reflection', value: note.reflection_question },
+                              { label: 'Scriptures', value: note.related_scriptures },
+                            ].map(({ label, value }) => (
+                              <span
+                                key={label}
+                                className={[
+                                  'text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1',
+                                  value
+                                    ? 'bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400'
+                                    : 'bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400',
+                                ].join(' ')}
+                              >
+                                {value ? <Check size={9} /> : <X size={9} />}
+                                {label}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           {/* Publish / Unpublish toggle */}

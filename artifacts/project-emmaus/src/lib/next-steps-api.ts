@@ -12,9 +12,12 @@ export type MemberProgressState = 'not-started' | 'in-progress' | 'completed' | 
 
 export type ContentType =
   | 'journey'
+  | 'daily-rhythm'
   | 'bible-study'
   | 'sermon-devotional'
   | 'daily-devotional';
+
+export type Badge = 'NEW' | 'UPDATED' | null;
 
 export interface NextStepsItem {
   id: string;
@@ -28,10 +31,14 @@ export interface NextStepsItem {
     scriptureReference?: string;
     coverImageUrl?: string;
     collectionId?: string;
+    /** Stable creation timestamp used by the default Discover sort. */
+    createdAt?: string;
     publishedAt?: string;
     subtitle?: string;
+    topic?: string;
     /** For daily-devotional items: the member's current day (next to complete). */
     currentDay?: number;
+      displayOrder?: number;
   };
   /** Member-facing route, e.g. /journey/:id/day/:n or /devotional/:id/day/:n */
   route: string;
@@ -40,13 +47,26 @@ export interface NextStepsItem {
    * null means the content is fully complete — no primary action should be shown.
    */
   primaryActionLabel: string | null;
+  /** Smart Content Indicator badge — 'NEW' | 'UPDATED' | null */
+  badge?: Badge;
 }
 
 export interface JourneyCollectionGroup {
   id: string;
   title: string;
   description?: string;
+  displayOrder?: number;
   journeys: NextStepsItem[];
+}
+
+/** A published, member-visible manual group with personalised content items. */
+export interface ContentGroupEntry {
+  id: string;
+  title: string;
+  description?: string;
+  coverImageUrl?: string;
+  displayOrder: number;
+  items: NextStepsItem[];
 }
 
 export interface NextStepsData {
@@ -55,6 +75,7 @@ export interface NextStepsData {
   standaloneJourneys: NextStepsItem[];
   currentSermonCompanion: NextStepsItem | null;
   previousSermonCompanions: NextStepsItem[];
+  contentGroups: ContentGroupEntry[];
 }
 
 export async function resumeEngagement(
@@ -66,15 +87,18 @@ export async function resumeEngagement(
 }
 
 export async function fetchNextSteps(params?: {
-  userId?: string;
   currentCompanionId?: string;
 }): Promise<NextStepsData> {
   const qs = new URLSearchParams();
-  if (params?.userId) qs.set('userId', params.userId);
   if (params?.currentCompanionId) qs.set('currentCompanionId', params.currentCompanionId);
 
   const url = `/api/next-steps${qs.toString() ? `?${qs}` : ''}`;
-  const res = await fetch(url);
+  // credentials:'include' sends the session cookie so the server can resolve
+  // user identity via extractUserId() and return personalised progress + badges.
+  // Discovery includes account-specific progress and badges. A conditional
+  // browser request can produce a body-less 304, which this JSON client
+  // cannot rehydrate.
+  const res = await fetch(url, { credentials: 'include', cache: 'no-store' });
   if (!res.ok) throw new Error(`Failed to load Next Steps (${res.status})`);
   return res.json() as Promise<NextStepsData>;
 }

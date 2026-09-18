@@ -4,8 +4,7 @@
  * These endpoints are for authorised pastors and content editors only.
  * They are NOT accessible to normal members.
  *
- * Identity: X-User-Id header (dev/demo mode).
- * Permission: caller must supply userRole; 'admin' or 'superAdmin' required.
+ * Identity and role come only from the verified server session.
  *
  * POST /api/writing-assistant/generate  — generate or regenerate draft fields
  * POST /api/writing-assistant/refine    — focused single-field editing action
@@ -21,25 +20,14 @@ import {
   type WritingStyle,
 } from "../lib/writing-assistant.js";
 import { logger } from "../lib/logger.js";
+import { requireAdmin } from "../emmaus/auth.js";
 
 const router = Router();
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
 function resolveWritingAssistantAuth(req: Request, res: Response): string | null {
-  const userId = String(req.body?.userId ?? req.headers["x-user-id"] ?? "").trim();
-  if (!userId) {
-    res.status(401).json({ error: "Authentication required" });
-    return null;
-  }
-
-  const role = String(req.body?.userRole ?? "").trim();
-  if (role !== "admin" && role !== "superAdmin") {
-    res.status(403).json({ error: "The Writing Assistant is only available to authorised editors." });
-    return null;
-  }
-
-  return userId;
+  return requireAdmin(req, res);
 }
 
 // ─── POST /api/writing-assistant/generate ─────────────────────────────────────

@@ -1,0 +1,314 @@
+ELEVENLABS IS NOW CONNECTED — VALIDATE SPRINT 2 + SPRINT 3 END TO END
+
+The Replit Secret has now been added:
+
+ELEVENLABS_API_KEY
+
+Do NOT redesign Emmaus Voice.
+Do NOT begin another sprint.
+Do NOT add more features.
+Do NOT refactor working Phase 1–4 functionality.
+
+Sprint 2 and Sprint 3 have already been implemented.
+
+The task now is to verify that the completed architecture is actually using ElevenLabs correctly and is ready for PHYSICAL DEVICE TESTING.
+
+==================================================
+1. VERIFY THE SECRET
+==================================================
+
+Confirm server-side that:
+
+process.env.ELEVENLABS_API_KEY
+
+is available.
+
+Do NOT print the key.
+Do NOT expose it to the browser.
+Do NOT return it from any API route.
+Do NOT put it in client-side environment variables.
+
+Log only:
+
+[VOICE ELEVENLABS]
+apiKeyConfigured=true/false
+
+==================================================
+2. VERIFY ELEVENLABS STT
+==================================================
+
+Confirm that the active Emmaus Voice path is actually using ElevenLabs Speech-to-Text where Sprint 2 intended it.
+
+I want proof of the runtime provider.
+
+Log:
+
+[VOICE STT]
+provider=elevenlabs
+model=
+audioDurationMs=
+transcriptionLatencyMs=
+transcript=
+
+Do not silently fall back to the previous STT provider during this test unless ElevenLabs genuinely fails.
+
+If fallback occurs, log:
+
+fallback=true
+reason=
+
+==================================================
+3. VERIFY ELEVENLABS STREAMING TTS
+==================================================
+
+Confirm that Emmaus spoken responses are now using ElevenLabs streaming TTS.
+
+Measure:
+
+textReadyAt
+firstAudioChunkAt
+playbackStartedAt
+generationCompletedAt
+
+Report:
+
+timeToFirstAudioMs=
+
+The purpose is to reduce the noticeable pause before Emmaus begins speaking.
+
+Do not wait for the entire audio response before playback if the Sprint 2 streaming architecture supports incremental playback.
+
+==================================================
+4. VERIFY SPRINT 2 TOOL CALLING
+==================================================
+
+Confirm that natural language requests can result in actual Emmaus tool/action execution.
+
+Test:
+
+A.
+“Open the Bible for me.”
+
+Expected:
+navigate_app tool executes
+My Bible opens
+
+B.
+“Psalm 23.”
+
+Expected:
+conversation context understands this refers to Bible content
+Bible tool resolves Psalm 23
+reading begins
+
+C.
+“Let's do today's 10 Minutes with Jesus.”
+
+Expected:
+Daily Rhythm tool resolves the real current entry
+reading begins FROM THE BEGINNING
+
+D.
+“Let's do today's Psalms devotional.”
+
+Expected:
+Daily Devotional tool resolves the real current Psalms entry
+reading begins FROM THE BEGINNING
+
+E.
+“What does grace mean?”
+
+Expected:
+normal Ask Emmaus conversation
+no unnecessary app tool call
+
+==================================================
+5. VERIFY SPRINT 3 CONTEXT CHAINING
+==================================================
+
+Run this as ONE continuous session:
+
+User:
+“Open the Bible for me.”
+
+Then:
+“Psalm 23.”
+
+Then while/after reading:
+“Hang on.”
+
+Then:
+“What does that mean?”
+
+Then:
+“Okay, carry on.”
+
+Then:
+“Actually let's do today's Psalms devotional.”
+
+Then:
+“Stop there.”
+
+Then:
+“What else do I have today?”
+
+Verify that Emmaus retains enough context to understand:
+
+- “Psalm 23” after opening Bible
+- “that” refers to current Scripture/content
+- “carry on” means resume current reading
+- “today's Psalms devotional” switches content context
+- “what else do I have today?” refers to Emmaus Today's Steps/current user context
+
+Do not require exact command wording.
+
+==================================================
+6. VERIFY READING START POSITION
+==================================================
+
+We previously had a serious bug where Psalms Daily Devotional began partway through the content.
+
+For a NEW reading request:
+
+reading index MUST initialize to 0 / first readable section.
+
+Before speaking:
+
+1. resolve complete entry
+2. retrieve all sections
+3. sort them into canonical stored order
+4. set reading index
+5. establish reading context
+6. THEN begin playback
+
+Log:
+
+[VOICE READING START]
+content=
+entry=
+sectionsTotal=
+initialSectionIndex=
+initialSectionLabel=
+
+For new reading requests:
+
+initialSectionIndex must be 0.
+
+“Continue…” / “carry on…” may resume instead.
+
+==================================================
+7. VERIFY NATURAL SPEECH INPUT
+==================================================
+
+We are specifically trying to eliminate the feeling that the user must:
+
+- speak loudly
+- exaggerate pronunciation
+- repeat requests
+- wait for a specific Listening state
+
+Test normal conversational volume.
+
+Report current values for:
+
+VAD onset
+silence/end-of-turn threshold
+post-TTS microphone delay
+echo cancellation
+noise suppression
+auto gain control
+
+Do not arbitrarily retune them unless testing shows a real issue.
+
+==================================================
+8. VERIFY BARGE-IN
+==================================================
+
+While Emmaus is speaking, user says:
+
+“Hang on.”
+
+Expected:
+
+- current audio stops promptly
+- user speech is captured
+- the session remains active
+- context remains intact
+
+Measure:
+
+userSpeechDetectedAt
+emmausAudioStoppedAt
+
+Report:
+
+bargeInLatencyMs=
+
+==================================================
+9. VERIFY LOCAL FAST CONTROLS
+==================================================
+
+These should remain deterministic and immediate:
+
+Stop
+Pause
+Continue/Resume
+End Voice
+
+They should NOT require an LLM round trip.
+
+Most importantly:
+
+END must always end the Voice session regardless of whether Emmaus is:
+
+LISTENING
+THINKING
+SPEAKING
+READING
+EXECUTING A TOOL
+
+==================================================
+10. REGRESSION PROTECTION
+==================================================
+
+Confirm we have NOT broken:
+
+- Voice session persistence
+- background audio
+- lock-screen controls
+- Bible reading
+- Ask Emmaus conversation
+- Daily Rhythm progress
+- Daily Devotional progress
+- touch navigation
+- existing app routes
+
+==================================================
+11. DO NOT CLAIM SUCCESS FROM UNIT TESTS ALONE
+==================================================
+
+I need a runtime QA report.
+
+Provide:
+
+EMMAUS VOICE — SPRINT 2/3 RUNTIME QA
+
+Include:
+
+1. ElevenLabs secret detected
+2. active STT provider
+3. active TTS provider
+4. transcription latency
+5. time to first audio
+6. tool call results A–E
+7. full continuous context-chain test
+8. reading-start verification
+9. barge-in latency
+10. Stop/End tests
+11. any known limitation requiring physical-device verification
+
+Then STOP.
+
+Do not begin any further Voice development.
+
+I will republish and test this build on a physical phone.

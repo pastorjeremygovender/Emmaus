@@ -46,3 +46,10 @@ Route params must be cast with `String(req.params.id)` — not used directly. Th
 
 ## Route Mount
 All youtube-archive routes are mounted bare (no extra `/api` prefix) because the router is registered at `/api` already.
+
+## Durable Archive State
+Editorial video decisions, transcript segments, job checkpoints, OAuth data, and embeddings are mirrored in PostgreSQL; archive JSON files are migration/fallback caches only.
+
+**Why:** Deployment filesystems can be replaced, which otherwise makes approvals, refresh tokens, and indexing progress appear to roll back.
+
+**How to apply:** Any new archive operational state must use the durable state bridge or another database-backed store; do not make a JSON file the sole source of truth.

@@ -1,0 +1,342 @@
+EMMAUS VOICE — TARGETED EXECUTION REPAIR
+
+Physical-device testing after the ElevenLabs + Sprint 2/3 work still shows TWO concrete failures.
+
+FAILURE 1 — BIBLE NAVIGATION IS BROKEN
+
+The Voice session recognizes the request, attempts navigation, but the app lands on:
+
+“We couldn't find what you were looking for.”
+
+This is visible in the physical-device recording.
+
+Therefore:
+
+Voice understanding is NOT the problem.
+The target route/action is wrong.
+
+FAILURE 2 — CONTENT IS RESOLVING BUT AUDIO PLAYBACK IS WRONG
+
+Daily Rhythm / devotional titles are now appearing, which means content lookup is at least partially working.
+
+However, the requested content is not being played correctly.
+
+This means we now have:
+
+content resolution → partially working
+audio playback / reading queue → failing
+
+STOP ALL OTHER VOICE DEVELOPMENT.
+
+Do NOT:
+- tune ElevenLabs
+- change STT provider
+- change TTS provider
+- add more tools
+- add more conversational features
+- change VAD
+- redesign Voice UI
+- begin another sprint
+
+Fix ONLY:
+
+A. canonical Bible navigation
+B. canonical content-to-audio playback
+
+==================================================
+A. FIX BIBLE NAVIGATION USING THE REAL APP ROUTE
+==================================================
+
+Do not guess the Bible route.
+
+Find exactly what happens when the user manually taps:
+
+My Bible
+
+in the bottom navigation.
+
+Trace the real UI action:
+
+component
+→ handler
+→ router function
+→ destination route
+→ route params
+
+Then make Voice call THAT EXACT SAME APPLICATION ACTION.
+
+Create/reuse one canonical function such as:
+
+appActions.openBible()
+
+Both:
+
+touch UI
+and
+Voice
+
+must ultimately use the same navigation implementation.
+
+Do NOT let Voice use a separate route string such as:
+
+/walk/bible
+/bible
+/my-bible
+
+unless that is literally the route used by the working UI.
+
+==================================================
+BIBLE TEST
+==================================================
+
+TEST 1
+
+Start Voice.
+
+Say:
+
+“Open the Bible.”
+
+Expected:
+
+The exact same My Bible screen opens as when the bottom-navigation My Bible icon is tapped.
+
+PASS only if the real screen opens.
+
+Log:
+
+[VOICE BIBLE NAV]
+
+utterance=
+toolCall=
+canonicalAction=
+route=
+routeMatched=
+finalURL=
+renderedComponent=
+success=
+
+==================================================
+B. SEPARATE CONTENT RESOLUTION FROM AUDIO PLAYBACK
+==================================================
+
+The UI now appears to know which content was requested.
+
+Do not touch the resolver unless logs show it is wrong.
+
+Trace what happens AFTER the requested content has been resolved.
+
+For:
+
+“Read today’s Psalms Daily Devotional”
+
+log:
+
+[VOICE CONTENT PLAYBACK]
+
+contentResolved=
+contentId=
+entryId=
+entryTitle=
+sectionsTotal=
+sections=
+readingIndex=
+ttsProvider=
+ttsRequestStarted=
+firstAudioChunk=
+audioElementCreated=
+audioPlaybackStarted=
+audioEnded=
+nextSectionScheduled=
+nextSectionStarted=
+playbackFailure=
+failureReason=
+
+We need to locate the FIRST failure after content resolution.
+
+==================================================
+C. BUILD ONE RELIABLE READING QUEUE
+==================================================
+
+Resolved Emmaus content should become one ordered reading queue.
+
+Example:
+
+[
+  { label: "Greeting", text: "..." },
+  { label: "Scripture", text: "..." },
+  { label: "Reflection", text: "..." },
+  { label: "Prayer", text: "..." },
+  { label: "Closing", text: "..." }
+]
+
+Then:
+
+index 0
+→ ElevenLabs TTS
+→ audio starts
+→ audio completes
+→ index 1
+→ TTS
+→ audio completes
+→ index 2
+...
+
+Continue automatically until the content is finished or the user interrupts.
+
+DO NOT:
+
+- show the title and stop
+- synthesize one section and reset the reader
+- return to normal LISTENING between sections
+- increment the reading index before audio actually begins
+- start from an old reading index for a NEW request
+
+==================================================
+D. NEW REQUEST MUST START AT SECTION ZERO
+==================================================
+
+These are different:
+
+“Read today’s Psalms devotional.”
+
+= NEW READ
+
+Must set:
+
+readingIndex = 0
+
+“Continue my Psalms devotional.”
+
+= RESUME
+
+May use stored reading position.
+
+Make this distinction explicit.
+
+Before any NEW content starts playing:
+
+resolved all sections = true
+readingIndex = 0
+queue initialized = true
+
+Only then start TTS.
+
+==================================================
+E. VERIFY ELEVENLABS AUDIO IS ACTUALLY BEING PLAYED
+==================================================
+
+Do not assume that because ElevenLabs returned audio, the browser played it.
+
+Trace:
+
+HTTP/WebSocket response received
+→ audio bytes/chunks received
+→ decoded/formatted correctly
+→ browser audio source created
+→ play() called
+→ play() promise resolved/rejected
+
+Log browser playback errors explicitly.
+
+Especially check:
+
+- MIME/content type
+- streaming audio format
+- MediaSource compatibility if used
+- audio element lifecycle
+- autoplay restrictions
+- stale audio refs
+- old audio being stopped by Voice state transitions
+- interruption/VAD code accidentally cancelling the new audio
+- section transition cleanup destroying the audio element
+
+==================================================
+F. DO NOT LET LISTENING STATE CANCEL READING
+==================================================
+
+Check carefully whether Voice does this:
+
+TTS starts
+→ state changes
+→ startListening()
+→ microphone/cleanup code stops current audio
+
+If yes, fix the ownership of playback state.
+
+During structured content reading:
+
+VoiceSession remains active
+ReadingSession remains active
+TTS owns output
+Barge-in monitor may listen separately
+Normal new-utterance recorder must not repeatedly reset playback
+
+==================================================
+G. TEST ONLY THESE THREE CASES
+==================================================
+
+TEST A
+
+“Open the Bible.”
+
+PASS:
+My Bible opens.
+
+TEST B
+
+“Read today’s 10 Minutes with Jesus.”
+
+PASS:
+
+- correct title appears
+- real current entry resolves
+- FIRST section is read
+- remaining sections continue automatically
+- no gaps requiring another command
+
+TEST C
+
+“Read today’s Psalms Daily Devotional.”
+
+PASS:
+
+- correct title appears
+- correct current entry resolves
+- starts from the beginning
+- all sections play in order
+
+==================================================
+H. DO NOT REPORT A PASS BECAUSE THE TITLE APPEARS
+==================================================
+
+A title appearing means only:
+
+resolver worked.
+
+It does NOT mean Voice reading works.
+
+For B and C, PASS requires actual audible playback from beginning through multiple sections.
+
+==================================================
+I. PROVIDE THIS QA REPORT
+==================================================
+
+EMMAUS VOICE — EXECUTION REPAIR QA
+
+1. Exact working My Bible route/action.
+2. Why Voice previously navigated to Not Found.
+3. Whether Daily Rhythm resolver is correct.
+4. Whether Psalms resolver is correct.
+5. First failure found in the audio playback chain.
+6. ElevenLabs audio format being returned.
+7. Whether browser play() succeeds.
+8. Section queue trace for 10 Minutes with Jesus.
+9. Section queue trace for Psalms Daily Devotional.
+10. Any failure that still requires physical-device verification.
+
+Create a checkpoint first.
+
+Fix only these two paths.
+
+Then STOP.

@@ -1,0 +1,233 @@
+Pilot Feature — Smart New Content Indicators
+
+We are on branch:
+
+launch-13-august
+
+Objective:
+
+Help members discover newly published discipleship content without cluttering the interface.
+
+This is a lightweight discovery feature.
+
+Do not redesign cards.
+Do not add notifications.
+Do not add animations.
+Do not change existing navigation.
+
+SUPPORTED CONTENT
+
+Apply to:
+
+- Walks
+- Journeys
+- Bible Studies
+- Daily Devotionals
+- Sermon Companions
+
+Do NOT apply this to Daily Rhythm.
+
+==================================================
+NEXT STEPS (DISCOVERY)
+==================================================
+
+Next Steps is for discovering new content.
+
+Display badges as follows:
+
+🟢 NEW
+
+Show when:
+
+- content is published;
+- it was published within the configured "new" period (default 7 days);
+- the user has never opened that content.
+
+As soon as the user opens the content once, remove NEW for that user.
+
+🔵 UPDATED
+
+Show when:
+
+- the user has previously opened the content;
+AND
+- meaningful new published content has been added since their last visit.
+
+Examples:
+
+- new days added
+- new study added
+- additional devotional content
+
+Do NOT trigger UPDATED for:
+
+- spelling fixes
+- grammar fixes
+- formatting
+- metadata edits
+
+UPDATED overrides NEW.
+
+==================================================
+TODAY'S STEPS (ACTION)
+==================================================
+
+Today's Steps is NOT a discovery page.
+
+It answers one question:
+
+"What should I continue today?"
+
+Therefore:
+
+❌ NEVER show NEW badges.
+
+✅ Show UPDATED only.
+
+UPDATED should appear ONLY when:
+
+- the content is already active on Today's Steps;
+AND
+- genuinely new published content has been added since the member last opened it.
+
+Example:
+
+A member is on Day 5 of a Walk.
+
+You publish Days 6–10.
+
+Their active Walk on Today's Steps displays:
+
+🔵 UPDATED
+
+Once they open the Walk again, UPDATED disappears.
+
+==================================================
+ADMIN PUBLISH OPTION
+==================================================
+
+When publishing content in Content Studio add:
+
+☐ Notify members this is new content
+
+Defaults:
+
+First publication:
+ON
+
+Minor update:
+OFF
+
+Only generate NEW or UPDATED when this option is enabled.
+
+==================================================
+BADGE DESIGN
+==================================================
+
+Small badge.
+
+Top-right corner.
+
+No animation.
+
+No pulsing.
+
+No counters.
+
+Only one badge visible.
+
+UPDATED has priority over NEW.
+
+==================================================
+PERSISTENCE
+==================================================
+
+Track badge state per user.
+
+NEW disappears after first open.
+
+UPDATED disappears after viewing the updated content.
+
+One user's actions must never affect another user's badges.
+
+==================================================
+DO NOT SHOW BADGES ON
+==================================================
+
+- unpublished content
+- draft content
+- admin-only content
+- completed content unless genuinely updated
+
+==================================================
+ACCEPTANCE TESTS
+==================================================
+
+Published mobile app:
+
+NEXT STEPS
+
+1. Publish a new Walk.
+→ NEW appears.
+
+2. Open it.
+→ NEW disappears.
+
+3. Publish additional days.
+→ UPDATED appears.
+
+4. Open it again.
+→ UPDATED disappears.
+
+TODAY'S STEPS
+
+5. Start a Walk.
+
+6. Publish additional days.
+
+→ UPDATED appears on the active Walk.
+
+→ NEW never appears.
+
+7. Open the Walk.
+
+→ UPDATED disappears.
+
+Verify Daily Rhythm never displays badges.
+
+==================================================
+REGRESSION TESTS
+==================================================
+
+Confirm this feature does NOT affect:
+
+- Today's Steps layout
+- Active Walks
+- Daily Rhythm
+- Ask Emmaus
+- Rooms
+- Bible
+- Progress tracking
+- Completion cards
+
+==================================================
+DELIVERY
+==================================================
+
+Create one reusable badge system shared across all supported content.
+
+Do not duplicate logic.
+
+Commit the smallest coherent implementation.
+
+Republish.
+
+Report:
+
+1. files changed;
+2. badge logic;
+3. admin publish option;
+4. per-user persistence;
+5. published mobile verification.
+
+Stop after this feature is verified.

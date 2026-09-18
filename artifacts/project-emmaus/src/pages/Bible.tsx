@@ -1,47 +1,78 @@
 import { useLocation } from 'wouter';
 import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Search, History, ChevronDown, Library } from 'lucide-react';
+import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
+import { SectionWrapper } from '@/components/SectionWrapper';
+import { motion } from 'framer-motion';
+import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Library } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { useTranslations } from '@/hooks/useTranslations';
 import MyLibrary from '@/pages/bible/MyLibrary';
+import { MemberHeaderActions } from '@/components/MemberHeaderActions';
 
 type Tab = 'home' | 'library';
 
 export default function Bible() {
   useEffect(() => { window.scrollTo(0, 0); }, []);
-  const [, setLocation] = useLocation();
-  const { lastRead, favourites, bookmarks, notes, prayers, highlights, translationId, setTranslation } = useBible();
-  const [showTranslations, setShowTranslations] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>('home');
-  const { translations } = useTranslations();
+  const [location, setLocation] = useLocation();
+  const { lastRead, favourites, bookmarks, notes, prayers, highlights } = useBible();
+  const [activeTab, setActiveTab] = useState<Tab>(() => (
+    new URLSearchParams(window.location.search).get('tab') === 'library' ? 'library' : 'home'
+  ));
 
-  const currentTranslation = translations.find(t => t.id === translationId) ?? translations[0];
+  // Keep the selected Bible tab addressable. This also makes a library link
+  // survive remounts and gives members a reliable deep link to their saved
+  // notes, highlights, bookmarks, and prayers.
+  useEffect(() => {
+    setActiveTab(new URLSearchParams(window.location.search).get('tab') === 'library' ? 'library' : 'home');
+  }, [location]);
+
+  function openTab(tab: Tab) {
+    setActiveTab(tab);
+    setLocation(tab === 'library' ? '/bible?tab=library' : '/bible');
+  }
 
   const libraryCount = notes.length + prayers.length + favourites.length + bookmarks.length + highlights.length;
 
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
-      <main className="px-5 pt-12 max-w-[520px] mx-auto space-y-6">
+      <main className="relative px-4 pt-4 max-w-[520px] mx-auto space-y-3">
 
         {/* Header */}
-        <header className="space-y-1">
-          <h1 className="text-[30px] font-sans font-medium tracking-tight">My Bible</h1>
-          {activeTab === 'home' && (
-            <p className="text-[13px] text-muted-foreground">
-              {currentTranslation?.name} · {currentTranslation?.copyright}
-            </p>
-          )}
+        <header>
+          <div className="mb-1 flex justify-end">
+            <MemberHeaderActions compact />
+          </div>
+          <motion.h1
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6 }}
+            className="min-w-0 text-[28px] font-sans font-medium tracking-tight"
+          >
+            My Bible
+          </motion.h1>
         </header>
 
+        {/* Ask Emmaus */}
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.08 }}
+        >
+          <UnifiedEmmausInput launchOnly />
+        </motion.div>
+
         {/* Tab switcher */}
-        <div className="flex gap-1 p-1 bg-muted/60 rounded-xl">
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.13 }}
+          className="flex gap-1 p-1 bg-muted/60 rounded-xl"
+        >
           <button
-            onClick={() => setActiveTab('home')}
+            type="button"
+            onClick={() => openTab('home')}
             className={[
-              'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-medium transition-colors',
+              'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[13px] font-medium transition-colors',
               activeTab === 'home'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',
@@ -51,9 +82,10 @@ export default function Bible() {
             Home
           </button>
           <button
-            onClick={() => setActiveTab('library')}
+            type="button"
+            onClick={() => openTab('library')}
             className={[
-              'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-medium transition-colors',
+              'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[13px] font-medium transition-colors',
               activeTab === 'library'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',
@@ -72,238 +104,91 @@ export default function Bible() {
               </span>
             )}
           </button>
-        </div>
+        </motion.div>
 
         {/* ── Home Tab ─────────────────────────────────────────────────────── */}
         {activeTab === 'home' && (
-          <div className="space-y-9 pb-4">
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.18 }}
+            className="space-y-2 pb-0"
+          >
 
             {/* Continue / Begin Reading */}
             {lastRead ? (
-              <section className="space-y-3">
-                <SectionLabel>Continue Reading</SectionLabel>
-                <Card
-                  className="bg-card border-border cursor-pointer active:scale-[0.98] transition-transform"
+              <SectionWrapper color="amber" label="Continue Reading" className="px-3 py-2 space-y-1.5">
+                <div
+                  className="bg-card rounded-xl border border-border/50 px-3 py-2 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
                   onClick={() => setLocation(`/bible/read/${lastRead.bookId}/${lastRead.chapter}`)}
                 >
-                  <CardContent className="p-5 flex items-center gap-4">
-                    <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center shrink-0">
-                      <BookOpen size={18} />
-                    </div>
+                  <div className="flex items-center gap-2 min-w-0">
                     <div className="flex-1 min-w-0">
-                      <div className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-0.5">
-                        {lastRead.bookName} {lastRead.chapter}
-                      </div>
-                      <div className="text-[16px] font-medium text-foreground truncate">
+                      <p className="text-[14px] font-semibold text-foreground leading-snug truncate">
                         {lastRead.chapterHeading}
-                      </div>
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                        {lastRead.bookName} {lastRead.chapter}
+                      </p>
                     </div>
-                    <Button size="sm" className="shrink-0 rounded-xl h-9 px-4">Continue</Button>
-                  </CardContent>
-                </Card>
-              </section>
+                    <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" />
+                  </div>
+                </div>
+              </SectionWrapper>
             ) : (
-              <section className="space-y-3">
-                <SectionLabel>Begin Reading</SectionLabel>
-                <Card
-                  className="bg-card border-border cursor-pointer active:scale-[0.98] transition-transform"
+              <SectionWrapper color="amber" label="Begin Reading" className="px-3 py-2 space-y-1.5">
+                <div
+                  className="bg-card rounded-xl border border-border/50 px-3 py-2 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
                   onClick={() => setLocation('/bible/read/luke/1')}
                 >
-                  <CardContent className="p-5 flex items-center gap-4">
-                    <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center shrink-0">
-                      <BookOpen size={18} />
-                    </div>
+                  <div className="flex items-center gap-2 min-w-0">
                     <div className="flex-1 min-w-0">
-                      <div className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-0.5">
-                        Walk Through Luke · Luke 1
-                      </div>
-                      <div className="text-[16px] font-medium text-foreground">
+                      <p className="text-[14px] font-semibold text-foreground leading-snug">
                         The Birth of John the Baptist Foretold
-                      </div>
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                        Walk Through Luke · Luke 1
+                      </p>
                     </div>
-                    <Button size="sm" className="shrink-0 rounded-xl h-9 px-4">Read</Button>
-                  </CardContent>
-                </Card>
-              </section>
+                    <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" />
+                  </div>
+                </div>
+              </SectionWrapper>
             )}
 
             {/* Browse Books */}
-            <section className="space-y-3">
-              <SectionLabel>Browse Books</SectionLabel>
+            <SectionWrapper color="emerald" label="Browse Books" className="px-3 py-2 space-y-1.5">
               <div
-                className="p-4 rounded-xl border border-border bg-card flex items-center justify-between cursor-pointer active:scale-[0.98] transition-transform"
+                className="bg-card rounded-xl border border-border/50 px-3 py-2 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
                 onClick={() => setLocation('/bible/books')}
               >
-                <div className="flex items-center gap-3">
-                  <BookMarked size={17} className="text-primary" />
-                  <div>
-                    <div className="text-[15px] font-medium text-foreground">Old Testament · New Testament</div>
-                    <div className="text-[12px] text-muted-foreground">66 books</div>
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-semibold text-foreground leading-snug">Old Testament · New Testament</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">66 books</p>
                   </div>
+                  <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" />
                 </div>
-                <ChevronRight size={17} className="text-muted-foreground" />
               </div>
-            </section>
+            </SectionWrapper>
 
-            {/* Bookmarks */}
-            <section className="space-y-3">
-              <SectionLabel>Bookmarks</SectionLabel>
-              {bookmarks.length === 0 && favourites.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-10 border border-dashed border-border rounded-2xl text-center space-y-3">
-                  <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
-                    <Bookmark size={18} />
-                  </div>
-                  <p className="text-[14px] text-muted-foreground leading-relaxed">
-                    Tap the bookmark icon while reading to save chapters here.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {bookmarks.slice(0, 3).map(bkm => (
-                    <div
-                      key={bkm.id}
-                      className="p-4 rounded-xl border border-border bg-card space-y-1 cursor-pointer active:scale-[0.98] transition-transform"
-                      onClick={() => setLocation(`/bible/read/${bkm.bookId}/${bkm.chapter}`)}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Bookmark size={12} className="text-primary fill-primary" />
-                        <div className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-                          {bkm.bookName} {bkm.chapter}
-                        </div>
-                      </div>
-                      <p className="text-[14px] font-medium text-foreground">{bkm.chapterHeading}</p>
-                    </div>
-                  ))}
-                  {favourites.slice(0, 2).map(fav => (
-                    <div
-                      key={fav.id}
-                      className="p-4 rounded-xl border border-border bg-card space-y-1.5 cursor-pointer active:scale-[0.98] transition-transform"
-                      onClick={() => setLocation(`/bible/read/${fav.bookId}/${fav.chapter}`)}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Heart size={12} className="text-primary fill-primary" />
-                        <div className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-                          {fav.bookName} {fav.chapter}:{fav.verse}
-                        </div>
-                      </div>
-                      <p className="text-[14px] font-sans leading-relaxed text-foreground italic line-clamp-2">
-                        "{fav.verseText}"
-                      </p>
-                    </div>
-                  ))}
-                  {(bookmarks.length + favourites.length) > 5 && (
-                    <button
-                      onClick={() => setActiveTab('library')}
-                      className="text-[13px] text-primary font-medium py-1 w-full text-center hover:underline"
-                    >
-                      View all saved passages
-                    </button>
-                  )}
-                </div>
-              )}
-            </section>
-
-            {/* Tools section */}
-            <section className="space-y-2">
-              <SectionLabel>Tools</SectionLabel>
-
-              {/* Search */}
-              <div
-                className="p-4 rounded-xl border border-border bg-card flex items-center gap-3 cursor-pointer hover:bg-muted/40 active:bg-muted/60 transition-colors"
-                onClick={() => setLocation('/bible/search')}
-              >
-                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary shrink-0">
-                  <Search size={16} />
-                </div>
-                <div className="flex-1">
-                  <div className="text-[14px] font-medium text-foreground">Search</div>
-                  <div className="text-[12px] text-muted-foreground">Search by word, phrase, or reference</div>
-                </div>
-                <ChevronRight size={16} className="text-muted-foreground" />
-              </div>
-
-              {/* Reading History */}
-              <div
-                className="p-4 rounded-xl border border-border bg-card flex items-center gap-3 cursor-pointer hover:bg-muted/40 active:bg-muted/60 transition-colors"
-                onClick={() => setLocation('/bible/history')}
-              >
-                <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center text-muted-foreground shrink-0">
-                  <History size={16} />
-                </div>
-                <div className="flex-1">
-                  <div className="text-[14px] font-medium text-foreground">Reading History</div>
-                  <div className="text-[12px] text-muted-foreground">Recently opened chapters</div>
-                </div>
-                <ChevronRight size={16} className="text-muted-foreground" />
-              </div>
-
-              {/* Translation selector */}
-              <div className="rounded-xl border border-border bg-card overflow-hidden">
-                <button
-                  className="w-full p-4 flex items-center gap-3 hover:bg-muted/40 active:bg-muted/60 transition-colors"
-                  onClick={() => setShowTranslations(v => !v)}
-                >
-                  <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center text-muted-foreground shrink-0">
-                    <span className="text-[10px] font-bold">{currentTranslation?.abbreviation}</span>
-                  </div>
-                  <div className="flex-1 text-left">
-                    <div className="text-[14px] font-medium text-foreground">Translation</div>
-                    <div className="text-[12px] text-muted-foreground">{currentTranslation?.name}</div>
-                  </div>
-                  <ChevronDown
-                    size={16}
-                    className={['text-muted-foreground transition-transform', showTranslations ? 'rotate-180' : ''].join(' ')}
-                  />
-                </button>
-
-                {showTranslations && (
-                  <div className="border-t border-border divide-y divide-border/60">
-                    {translations.map(t => (
-                      <button
-                        key={t.id}
-                        onClick={() => { setTranslation(t.id); setShowTranslations(false); }}
-                        className={[
-                          'w-full p-4 flex items-center gap-3 text-left transition-colors',
-                          t.id === translationId ? 'bg-primary/5' : 'hover:bg-muted/40',
-                        ].join(' ')}
-                      >
-                        <div className={['w-8 h-8 rounded-full flex items-center justify-center shrink-0', t.id === translationId ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'].join(' ')}>
-                          <span className="text-[10px] font-bold">{t.abbreviation}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className={['text-[14px] font-medium', t.id === translationId ? 'text-primary' : 'text-foreground'].join(' ')}>
-                            {t.name}
-                          </div>
-                          <div className="text-[11px] text-muted-foreground">{t.copyright}</div>
-                        </div>
-                        {t.id === translationId && (
-                          <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">Active</span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </section>
-
-          </div>
+          </motion.div>
         )}
 
         {/* ── My Library Tab ────────────────────────────────────────────────── */}
         {activeTab === 'library' && (
-          <MyLibrary />
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.18 }}
+            className="pb-0"
+          >
+            <MyLibrary />
+          </motion.div>
         )}
 
       </main>
       <BottomNav />
     </div>
-  );
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-      {children}
-    </h2>
   );
 }

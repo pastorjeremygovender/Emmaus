@@ -1,0 +1,324 @@
+URGENT PHASE 4 REGRESSION REPAIR — CORE VOICE LOOP BROKEN
+
+STOP ALL NEW FEATURE WORK.
+
+The latest physical-device test shows a serious regression.
+
+CURRENT BEHAVIOUR:
+
+- Emmaus Voice opens.
+- UI shows Listening…
+- User speaks.
+- UI changes to Thinking…
+- No useful response/action occurs.
+- UI returns to Listening…
+- Pressing the red Stop button does nothing.
+- Voice is effectively unusable.
+
+This worked before the most recent content-reader / phantom-transcript repair.
+
+The LAST CHANGESET introduced a regression.
+
+DO NOT add features.
+DO NOT redesign the Voice UI.
+DO NOT touch content routing unless required by the root cause.
+DO NOT begin Phase 5.
+
+FIRST PRIORITY:
+RESTORE THE PREVIOUSLY WORKING CORE VOICE LOOP.
+
+==================================================
+1. COMPARE AGAINST LAST WORKING CHECKPOINT
+==================================================
+
+Use the checkpoint created immediately BEFORE the most recent repair.
+
+Diff the last working Voice implementation against the current implementation.
+
+Specifically inspect changes involving:
+
+- recorder lifecycle
+- MediaRecorder.onstop
+- processAudioBlobRef
+- cancelledRef
+- listening state
+- thinking state
+- speaking state
+- VAD
+- post-TTS mic guard
+- minimum speech validation
+- audio blob rejection
+- session end
+- stop button handler
+- VoiceContentReader
+- auto-restart listening
+- cleanup handlers
+
+Identify exactly which recent changes caused:
+
+A. spoken input no longer producing an executed command/response
+B. Stop button no longer ending the Voice session
+
+Do NOT guess.
+
+==================================================
+2. RESTORE CORE PIPELINE FIRST
+==================================================
+
+The minimum working pipeline must be:
+
+LISTENING
+→ user speaks
+→ recording completes
+→ audio blob accepted
+→ transcription request
+→ transcript returned
+→ intent/Ask Emmaus dispatch
+→ response/action
+→ TTS if applicable
+→ LISTENING
+
+Verify every transition.
+
+Add temporary logs:
+
+[VOICE CORE TRACE]
+
+stateBefore=
+event=
+recorderState=
+audioBlobBytes=
+audioDuration=
+audioAccepted=
+transcriptionStarted=
+transcript=
+dispatchStarted=
+dispatchResult=
+ttsStarted=
+nextState=
+
+Run one simple conversational test:
+
+“Hello Emmaus.”
+
+PASS:
+- transcript appears
+- Emmaus responds
+- audio response plays
+- session returns to Listening
+
+Do NOT test devotional reading until this works.
+
+==================================================
+3. CHECK RECENT SPEECH VALIDATION
+==================================================
+
+The previous repair introduced protection against phantom/silent transcripts.
+
+Audit that logic carefully.
+
+It may now be rejecting REAL user speech.
+
+Check:
+
+- minimum audio duration threshold
+- minimum VAD speech duration
+- blob byte-size threshold
+- silence detection
+- post-TTS guard
+- recorder start timing
+- recorder stop timing
+
+Do not make thresholds so aggressive that ordinary mobile speech gets discarded.
+
+Log explicit rejection reasons:
+
+[VOICE AUDIO REJECTED]
+reason=
+duration=
+bytes=
+vadSpeechMs=
+
+If real speech is being rejected, fix the thresholds/logic.
+
+==================================================
+4. RESTORE STOP BUTTON
+==================================================
+
+The visible red Stop button must ALWAYS work.
+
+On tap:
+
+- stop current microphone recording
+- stop TTS playback
+- cancel pending timers
+- cancel pending reading sections
+- stop VAD/interruption monitors
+- stop MediaRecorder safely
+- stop all microphone tracks
+- mark session inactive
+- return to Voice idle/ended state
+
+The Stop button must not depend on:
+- current transcript state
+- whether TTS is active
+- whether reading is active
+- whether thinking is active
+
+It is an unconditional user escape control.
+
+Trace:
+
+[VOICE STOP TRACE]
+tapReceived=
+currentState=
+recorderStopped=
+tracksStopped=
+ttsStopped=
+timersCleared=
+sessionEnded=
+
+PASS only when physical-device tap actually ends the session.
+
+==================================================
+5. CANCELLEDREF SEMANTICS
+==================================================
+
+Audit cancelledRef carefully.
+
+Earlier Phase 4 changed its meaning to:
+
+“session ended”
+
+NOT:
+
+“component unmounted”
+“section finished”
+“temporary playback ended”
+“audio validation rejected”
+
+Ensure recent changes did not set cancelledRef=true during normal operation.
+
+If cancelledRef becomes true after the first recording or section, it could explain why later callbacks silently do nothing.
+
+==================================================
+6. MEDIARECORDER.ONSTOP
+==================================================
+
+Verify recorder.onstop still reliably processes the latest audio blob.
+
+Make sure recent refactoring did not cause:
+
+- stale closure
+- callback replaced with no-op
+- processAudioBlobRef not updated
+- blob discarded after recorder stop
+- early return due to cancelledRef
+- early return due to post-TTS guard
+
+This path previously worked.
+
+Restore it before touching anything else.
+
+==================================================
+7. DO NOT KEEP BROKEN “FIXES”
+==================================================
+
+If the most recent phantom-transcript/content-reader changes caused this regression:
+
+ROLL BACK only the broken parts.
+
+It is better to restore the previous working Voice loop first than keep new protections that make Voice unusable.
+
+We can reintroduce phantom-transcript protection more safely afterward.
+
+Priority order:
+
+1. User speech works
+2. Stop button works
+3. Normal conversation works
+4. Bible reading works
+5. Emmaus content reading works
+6. Barge-in works
+7. Phantom transcript protection
+
+Do not sacrifice #1–3 to improve #6–7.
+
+==================================================
+8. MINIMUM DEVICE TEST GATE
+==================================================
+
+Before doing ANY other repair, verify:
+
+TEST A
+Open Emmaus Voice.
+Say:
+“Hello Emmaus.”
+
+PASS:
+Emmaus responds normally.
+
+TEST B
+Say:
+“What does grace mean?”
+
+PASS:
+Ask Emmaus responds.
+
+TEST C
+Press the red Stop button while Listening.
+
+PASS:
+Voice session ends immediately.
+
+TEST D
+Start Voice again.
+Press Stop while Thinking.
+
+PASS:
+session ends immediately.
+
+TEST E
+Start Voice again.
+Have Emmaus speak.
+Press Stop while Speaking.
+
+PASS:
+audio and session end immediately.
+
+Only after A–E pass should you proceed to retest Bible/content reading.
+
+==================================================
+9. REGRESSION TEST AFTER CORE RECOVERY
+==================================================
+
+Once the core loop is restored, verify:
+
+“Read Psalm 23”
+
+PASS:
+Bible still reads.
+
+Then STOP.
+
+Do NOT yet attempt further Daily Rhythm/devotional repair in the same pass unless the core regression root cause directly resolves it.
+
+==================================================
+10. REPORT
+==================================================
+
+Give me:
+
+1. Exact root cause of user speech no longer executing.
+2. Exact root cause of Stop button failure.
+3. Which recent change introduced each regression.
+4. What was rolled back or corrected.
+5. Results of Tests A–E.
+6. Result of “Read Psalm 23”.
+7. Any remaining known issue.
+
+Create a checkpoint before modifying current code.
+
+Restore core Voice functionality first.
+
+Then STOP for physical-device verification.

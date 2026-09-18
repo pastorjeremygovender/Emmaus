@@ -7,13 +7,18 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, Check, PlayCircle, Eye, EyeOff } from 'lucide-react';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
-import { resolveReturn } from '@/lib/return-context';
+import { goBackOrFallback, resolveReturn } from '@/lib/return-context';
 import { motion } from 'framer-motion';
-import { isCompletedToday } from '@/lib/daily-lock';
-import { DailyRhythmReading, SectionLabel, resolveDisplayName } from '@/components/DailyRhythmReading';
+import { DailyRhythmReading, resolveDisplayName } from '@/components/DailyRhythmReading';
+import { getStepLabel } from '@/lib/step-label';
 import { EmbeddedScripture } from '@/components/EmbeddedScripture';
+import { ShareButton } from '@/components/ShareButton';
+import { ShareImageCard } from '@/components/ShareImageCard';
 import { BottomNav } from '@/components/BottomNav';
-
+import { dismissBadge } from '@/lib/badge-api';
+import { recordView } from '@/lib/history-api';
+import { journeyDisplayOriginForSource } from '@/lib/journeys-api';
+import ApprovedIllustration from '@/components/ApprovedIllustration';
 
 function formatTimestamp(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -47,44 +52,126 @@ export default function JourneyDay() {
   const isDayCompleted = journeyProgress?.completedDays?.includes(day) ?? false;
   const isDailyRhythmReadOnly = isDailyRhythmJourney && isDayCompleted;
 
+  // Record history view (fire-and-forget)
+  useEffect(() => {
+    if (journey && step && journeyId) {
+      recordView({
+        contentType: journey.journeyType === 'bible-study' ? 'bible-study' : 'journey',
+        contentId: journeyId,
+        contentTitle: journey.title,
+        contentRoute: `/journey/${journeyId}/day/${day}`,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [journeyId, day]);
+
   // All published steps for this journey — used to resolve the next lesson in the completion card.
   const allSteps = getStepsForJourney(journeyId || '');
 
+  // Real step count from live data — avoids showing "of 0" when durationDays is stale/unset.
+  const publishedStepCount = allSteps.filter(s => s.status === 'Published' && !s.isCompletionStep).length;
+  // For admins previewing walks whose steps are still Draft, durationDays = 0 and
+  // publishedStepCount = 0. Fall back to the total non-completion step count so the
+  // header and isFinalStep detection work correctly during content-creation.
+  const allNonCompletionStepCount = allSteps.filter(s => !s.isCompletionStep).length;
+  const effectiveStepTotal = (journey?.durationDays ?? 0) > 0
+    ? (journey?.durationDays ?? 0)
+    : publishedStepCount > 0
+      ? publishedStepCount
+      : allNonCompletionStepCount;
+
+  // ── Walk completion integrity ─────────────────────────────────────────────
+  // Required step days: every non-completion step this user can see.
+  // Members see Published-only; admins see all (already filtered by context).
+  const requiredStepDays = allSteps.filter(s => !s.isCompletionStep).map(s => s.day);
+  const completedDaysSet = new Set(journeyProgress?.completedDays ?? []);
+  // A Walk is complete ONLY when every required step has been individually completed.
+  // Using day >= total (highest reached) is explicitly prohibited by the integrity rule.
+  const allRequiredStepsComplete =
+    requiredStepDays.length > 0 && requiredStepDays.every(d => completedDaysSet.has(d));
+
   // Read return context from URL — set by the navigation caller
-  const source   = new URLSearchParams(window.location.search).get('source');
-  const sourceId = new URLSearchParams(window.location.search).get('sourceId');
+  const routeParams = new URLSearchParams(window.location.search);
+  const source   = routeParams.get('source');
+  const sourceId = routeParams.get('sourceId');
+  // `journeyDetail` is the immediate parent of this page, so preserve the
+  // original Walks/Journeys surface explicitly when the overview handed us
+  // here. This prevents collection-based Bible Studies from becoming Walks
+  // when a member opens a step directly from the overview.
+  const displayOrigin = journeyDisplayOriginForSource(
+    source,
+    journey?.journeyType,
+    routeParams.get('displayOrigin'),
+  );
+  const displayOriginSuffix = `&displayOrigin=${encodeURIComponent(displayOrigin)}`;
 
   // URL for the dedicated Walk Complete page — used when the final step is done.
   const walkCompleteUrl = journeyId
-    ? `/journey/${journeyId}/complete?source=${encodeURIComponent(source ?? 'nextStepsJourneys')}${sourceId ? `&sourceId=${encodeURIComponent(sourceId)}` : ''}`
+    ? `/journey/${journeyId}/complete?source=${encodeURIComponent(source ?? 'nextStepsJourneys')}${sourceId ? `&sourceId=${encodeURIComponent(sourceId)}` : ''}${displayOriginSuffix}`
     : '/journeys?tab=journeys';
 
   const [reflection, setReflection] = useState('');
   const [isCompleting, setIsCompleting] = useState(false);
+  const [isSavingCompletion, setIsSavingCompletion] = useState(false);
+  const [completionError, setCompletionError] = useState('');
   const [showSharePrompt, setShowSharePrompt] = useState(false);
   const [sharedRoomId, setSharedRoomId] = useState<string | null>(null);
   const [sharingDone, setSharingDone] = useState(false);
 
   useEffect(() => {
-    if (journeyId) startJourney(journeyId);
+    if (journeyId) {
+      startJourney(journeyId, displayOrigin);
+      // Clear UPDATED badge — member has opened the content (fire-and-forget).
+      void dismissBadge('journey', journeyId);
+       // Restore a hidden Walk to My Emmaus — idempotent if not hidden.
+      // Covers the primary Next Steps → Continue path (direct to /journey/:id/day/:n)
+      // which bypasses JourneyDetail. Both routes now issue the unhide on open.
+      const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+      fetch(
+        `${base}/api/engagements/journey/${encodeURIComponent(journeyId)}/unhide`,
+        { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } },
+      ).catch(() => { /* non-fatal */ });
+    }
     window.scrollTo(0, 0);
-  }, [journeyId]);
+  }, [journeyId, displayOrigin]);
+
+  // ── Completion-step derivations (hoisted so the navigation effect below can use them) ──
+  // If a Walk has a published completion step (is_completion_step=true) the last
+  // content day should route into it rather than jumping straight to the complete
+  // page.  The completion step itself is the true "final step" that triggers the
+  // complete-page navigation.
+  // These are declared before any useEffect that references them to avoid TDZ errors.
+  const publishedCompletionStep = !isDailyRhythmJourney
+    ? allSteps.find(s => s.isCompletionStep && s.status === 'Published')
+    : undefined;
+  const isOnCompletionStep = step?.isCompletionStep === true;
+  // Use optional chaining on journey — it may be null during the loading phase.
+  const isLastContentDay = !isDailyRhythmJourney && effectiveStepTotal > 0 && day >= effectiveStepTotal;
+  // isFinalStep: true when this IS the completion step, OR when it's the last
+  // content day, no published completion step exists, AND every required step
+  // has been individually completed (integrity rule — see spec).
+  const isFinalStep = isOnCompletionStep || (isLastContentDay && !publishedCompletionStep && allRequiredStepsComplete);
 
   // After the final step is completed (and any sharing prompt resolved),
   // navigate to the dedicated Walk Complete page instead of showing an inline card.
+  //
+  // ⚠️  Must gate on isFinalStep, NOT on `day >= journey.durationDays`.
+  //     The last content day (day == durationDays) is NOT the final step when a
+  //     published Walk Complete step exists — routing there would bypass it.
+  //     isFinalStep is true only when:
+  //       • we are on the completion step itself, OR
+  //       • it's the last content day and no published completion step exists.
   useEffect(() => {
     if (
       isCompleting &&
       !isDailyRhythmJourney &&
-      journey?.durationDays != null &&
-      journey.durationDays > 0 &&
-      day >= journey.durationDays &&
+      isFinalStep &&
       (!showSharePrompt || sharingDone)
     ) {
       setLocation(walkCompleteUrl);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCompleting, showSharePrompt, sharingDone]);
+  }, [isCompleting, showSharePrompt, sharingDone, isFinalStep]);
 
   // Route guard — redirect non-Daily-Rhythm journeys when the requested step
   // is unavailable (unpublished, missing, or out of range). Uses replace so Back
@@ -134,8 +221,8 @@ export default function JourneyDay() {
               Today's 10 Minutes with Jesus will be ready soon. Check back later.
             </p>
             <div className="pt-4">
-              <Button variant="outline" className="rounded-xl px-8" onClick={() => setLocation('/walk')}>
-                Back to Today's Steps
+              <Button variant="outline" className="rounded-xl px-8" onClick={() => goBackOrFallback('/walk', setLocation)}>
+                Back to My Emmaus
               </Button>
             </div>
           </div>
@@ -148,6 +235,10 @@ export default function JourneyDay() {
 
   const isCompanion = journey.journeyType === 'companion';
   const hasSermon = isCompanion && (step as any).sermonTimestampSeconds != null;
+  // Illustration placement is keyed to the stable step identifier used by
+  // sharing and the content API. Keep it at component scope so every render
+  // path that displays an illustration uses the same lesson key.
+  const stepId = `day-${day}`;
 
   // Find rooms where user is doing this journey (to offer sharing)
   const myRooms = user ? getMyRooms(user.id) : [];
@@ -160,33 +251,43 @@ export default function JourneyDay() {
 
   const reflectionKey = `${journeyId}-${day}`;
 
-  // Daily Rhythm journeys never reach a "final step" — they continue indefinitely.
-  const isFinalStep = !isDailyRhythmJourney && journey.durationDays > 0 && day >= journey.durationDays;
+  const handleComplete = async () => {
+    if (isSavingCompletion) return;
+    setCompletionError('');
+    setIsSavingCompletion(true);
+    try {
+      // Do not show the completion result or leave the page until the server
+      // has committed both progress and the optional reflection.
+      await completeStep(journey.id, day, isDailyRhythmJourney ? '' : reflection);
 
-  const handleComplete = () => {
-    // Daily Rhythm: complete and navigate directly to Walk (no intermediate screen)
-    if (isDailyRhythmJourney) {
-      completeStep(journey.id, day, '');
-      setLocation('/walk');
-      return;
-    }
-    completeStep(journey.id, day, reflection);
-    if (reflection.trim() && activeRoomsForJourney.length > 0) {
-      // Show reflection-sharing prompt first; the useEffect above navigates to
-      // Walk Complete (final step) or shows the lesson card (non-final) after.
-      setShowSharePrompt(true);
-      setIsCompleting(true);
-    } else if (isFinalStep) {
-      // Final step, no reflection to share — go straight to Walk Complete.
-      setLocation(walkCompleteUrl);
-    } else {
-      setIsCompleting(true);
+      // Daily Rhythm: complete and navigate directly to Walk (no intermediate
+      // screen), but only after the durable completion response arrives.
+      if (isDailyRhythmJourney) {
+        setLocation('/walk');
+        return;
+      }
+
+      if (reflection.trim() && activeRoomsForJourney.length > 0) {
+        // Show reflection-sharing prompt first; the useEffect above navigates to
+        // Walk Complete (final step) or shows the lesson card after.
+        setShowSharePrompt(true);
+        setIsCompleting(true);
+      } else if (isFinalStep) {
+        // Final step, no reflection to share — go straight to Walk Complete.
+        setLocation(walkCompleteUrl);
+      } else {
+        setIsCompleting(true);
+      }
+    } catch (error) {
+      console.error('[Emmaus] completion could not be saved:', error);
+      setCompletionError('Your progress could not be saved. Please try again.');
+    } finally {
+      setIsSavingCompletion(false);
     }
   };
 
   const handleShareReflection = (roomId: string) => {
     if (!user || !journeyId) return;
-    const stepId = `day-${day}`;
     shareReflection(user.id, reflectionKey, roomId, journeyId, stepId);
     setSharedRoomId(roomId);
     setSharingDone(true);
@@ -257,30 +358,61 @@ export default function JourneyDay() {
     );
   }
 
+  // ── Shared completion-path variables ─────────────────────────────────────────
+  // Hoisted above isCompleting so the same values are used in both the
+  // just-completed full-screen card and the isDayCompleted replay footer.
+  const { path: returnPath, label: resolvedLabel } = resolveReturn(source, sourceId, '/journeys?tab=journeys');
+  const backLabel = `Back to ${resolvedLabel}`;
+  // When on the last content day, prefer routing into the published completion
+  // step.  For all other days, find the next published non-completion step.
+  const nextRegularStep = allSteps.find(
+    s => s.day > day && !s.isCompletionStep && s.status === 'Published',
+  );
+  // Only route into the Walk Complete step when ALL required steps are done.
+  // If the member finished the last numbered step but skipped earlier ones,
+  // treat it as a mid-walk completion — no Walk Complete routing yet.
+  const nextStep = isLastContentDay && publishedCompletionStep && allRequiredStepsComplete
+    ? publishedCompletionStep
+    : nextRegularStep;
+  const nextStepUrl = !isFinalStep && nextStep && journeyId
+    ? `/journey/${journeyId}/day/${nextStep.day}${source ? `?source=${encodeURIComponent(source)}` : '?source=nextStepsJourneys'}${sourceId ? `&sourceId=${encodeURIComponent(sourceId)}` : ''}${displayOriginSuffix}`
+    : undefined;
+
   // ── Completion card — standard Emmaus pattern (spec-locked) ──────────────────
   if (isCompleting) {
     // Final step: the useEffect above is navigating to the Walk Complete page.
-    // Return null to avoid flashing the "Lesson complete" card in the meantime.
+    // Return null to avoid flashing the completion card in the meantime.
     if (isFinalStep) return null;
 
-    const returnPath = resolveReturn(source, sourceId, '/journeys?tab=journeys').path;
-
-    // "Continue to Next Lesson" — resolve the next published step after this one.
-    // (isFinalStep is handled by the useEffect above; this block is never reached for it.)
-    const nextStep = allSteps.find(s => s.day > day);
-    const nextStepUrl = nextStep && journeyId
-      ? `/journey/${journeyId}/day/${nextStep.day}${source ? `?source=${encodeURIComponent(source)}` : '?source=nextStepsJourneys'}${sourceId ? `&sourceId=${encodeURIComponent(sourceId)}` : ''}`
-      : undefined;
+    // Member just finished the last numbered step but earlier steps remain.
+    // Walk Complete must not open yet — show a gentle nudge and return them
+    // to the Walk so they can finish the remaining steps (integrity rule).
+    if (isLastContentDay && !allRequiredStepsComplete) {
+      const remainingCount = requiredStepDays.filter(d => !completedDaysSet.has(d)).length;
+      return (
+        <EmmausCompletionCard
+          fullScreen
+          heading={`${getStepLabel({ day, displayLabel: (step as any)?.displayLabel ?? null }, journey)} complete.`}
+          subMessage={`You've completed this Step. There ${remainingCount === 1 ? 'is still 1 part' : `are still ${remainingCount} parts`} of this Walk waiting for you.`}
+          returnLabel={backLabel}
+           onReturn={() => goBackOrFallback(returnPath, setLocation)}
+          onPreviousDays={day > 1 && journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=${source ?? 'walk'}${sourceId ? `&sourceId=${sourceId}` : ''}${displayOriginSuffix}`) : undefined}
+          previousDaysLabel="View Previous Steps →"
+        />
+      );
+    }
 
     return (
       <EmmausCompletionCard
         fullScreen
-        heading="Lesson complete."
+        heading={isOnCompletionStep ? 'Walk complete.' : `${getStepLabel({ day, displayLabel: (step as any)?.displayLabel ?? null }, journey)} complete.`}
         subMessage="Continue when you're ready."
         onContinue={nextStepUrl ? () => setLocation(nextStepUrl) : undefined}
-        continueLabel={nextStepUrl ? 'Continue to Next Lesson' : undefined}
-        returnLabel="Back to Next Steps"
-        onReturn={() => setLocation(returnPath)}
+        continueLabel={nextStepUrl ? (nextStep?.isCompletionStep ? 'Walk Complete →' : 'Continue to Next Day') : undefined}
+        returnLabel={backLabel}
+         onReturn={() => goBackOrFallback(returnPath, setLocation)}
+        onPreviousDays={day > 1 && journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=${source ?? 'walk'}${sourceId ? `&sourceId=${sourceId}` : ''}${displayOriginSuffix}`) : undefined}
+        previousDaysLabel="View Previous Steps →"
       />
     );
   }
@@ -292,7 +424,7 @@ export default function JourneyDay() {
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
           {/* Back button — returns to the source context (Next Steps, Walk overview, etc.) */}
           <button
-            onClick={() => setLocation(isDailyRhythmJourney ? '/walk' : resolveReturn(source, sourceId, '/journeys?tab=journeys').path)}
+             onClick={() => goBackOrFallback(isDailyRhythmJourney ? '/walk' : resolveReturn(source, sourceId, '/journeys?tab=journeys').path, setLocation)}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Back"
           >
@@ -303,13 +435,26 @@ export default function JourneyDay() {
               {isDailyRhythmJourney ? '10 Minutes with Jesus' : journey.title}
             </div>
             <div className="text-[12px] text-muted-foreground">
-              {isDailyRhythmJourney ? `Day ${day}` : `Day ${day} of ${journey.durationDays}`}
+              {isDailyRhythmJourney
+              ? getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)
+              : isOnCompletionStep
+                ? 'Walk Complete'
+                : getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)}
             </div>
           </div>
           {/* spacer to balance the back arrow */}
           <div className="min-w-[44px]" />
         </div>
       </header>
+
+      {completionError && (
+        <div
+          role="alert"
+          className="mx-4 mt-4 max-w-[640px] md:mx-auto rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+        >
+          {completionError}
+        </div>
+      )}
 
       {isDailyRhythmJourney ? (
 
@@ -324,25 +469,37 @@ export default function JourneyDay() {
           prayerPrompt={step.prayerPrompt}
           actionStep={step.actionStep}
           closingText={(step as any).closingText}
+          displayLabel={getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)}
           returnPath={`/journey/${journeyId}/day/${day}`}
+          sharePayload={{
+            title: journey.title ?? '10 Minutes with Jesus',
+            dayTitle: step.title,
+            scripture: step.scripture ?? undefined,
+            greeting: step.mentorIntro ?? undefined,
+            reflection: step.devotional ?? undefined,
+            prayer: step.prayerPrompt ?? undefined,
+            nextStep: step.actionStep ?? undefined,
+            closing: (step as any).closingText ?? undefined,
+          }}
           actionButton={
             isDailyRhythmReadOnly ? (
               <Button
                 size="lg"
                 variant="outline"
                 className="w-full h-14 text-[17px] rounded-2xl"
-                onClick={() => setLocation('/walk')}
+                onClick={() => goBackOrFallback('/walk', setLocation)}
               >
-                Back to Today's Steps
+                Back to My Emmaus
               </Button>
             ) : (
               <Button
                 size="lg"
                 className="w-full h-14 text-[17px] rounded-2xl"
                 onClick={handleComplete}
+                disabled={isSavingCompletion}
                 data-testid="button-complete-today"
               >
-                Continue
+                {isSavingCompletion ? 'Saving…' : 'Continue'}
               </Button>
             )
           }
@@ -351,34 +508,49 @@ export default function JourneyDay() {
       ) : (
 
         /* ── Regular journey ─────────────────────────────────────────────── */
-        <main className="px-5 pt-10 max-w-[640px] mx-auto">
+        <main className="px-4 pt-8 max-w-[640px] mx-auto">
 
           {/* Day label + title */}
-          <section className="mb-12">
+          <section className={step.shareImageUrl ? "mb-4" : "mb-7"}>
             <span className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-              Day {day}
+              {isOnCompletionStep ? 'Walk Complete' : getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)}
             </span>
             <h1 className="mt-2 text-[32px] font-serif font-semibold leading-tight">
               {step.title}
             </h1>
           </section>
 
-          {/* Mentor introduction */}
-          {step.mentorIntro ? (
-            <section className="mb-12">
-              <p className="text-[18px] text-foreground leading-[1.8]">
-                {step.mentorIntro}
-              </p>
+          {/* Share image — shown directly under the title */}
+          {step.shareImageUrl && (
+            <div className="mb-7">
+              <ShareImageCard shareImageUrl={step.shareImageUrl} />
+            </div>
+          )}
+
+          {/* Mentor introduction — hidden on Walk Complete steps (content lives in devotional) */}
+          {step.mentorIntro && !isOnCompletionStep ? (
+            <section className="mb-3.5">
+              <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-4">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                  <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">Welcome</h2>
+                </div>
+                <p className="text-[18px] text-foreground leading-[1.8]">
+                  {step.mentorIntro}
+                </p>
+              </div>
             </section>
           ) : null}
+          <ApprovedIllustration contentType={journey.journeyType === 'bible-study' ? 'bible-study' : 'journey'} contentId={journeyId} stepId={stepId} placement="below-welcome" />
 
-          {/* Scripture — uses the shared EmbeddedScripture pipeline (same as Daily Rhythm,
-              Devotionals, Sermon Companions) so the reference is parsed, the passage
-              fetched from the Bible API, and loading/error states are surfaced. */}
+          {/* Scripture */}
           {step.scripture && (
-            <section className="mb-12">
-              <SectionLabel>Scripture</SectionLabel>
-              <div className="mt-3">
+            <section className="mb-3.5">
+              <div className="rounded-2xl border border-sky-200/60 bg-sky-50/60 px-4 py-4">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
+                  <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-sky-700">Scripture</h2>
+                </div>
                 <EmbeddedScripture
                   scripture={step.scripture}
                   returnPath={`/journey/${journeyId}/day/${day}`}
@@ -386,87 +558,153 @@ export default function JourneyDay() {
               </div>
             </section>
           )}
+          <ApprovedIllustration contentType={journey.journeyType === 'bible-study' ? 'bible-study' : 'journey'} contentId={journeyId} stepId={stepId} placement="below-scripture" />
 
-          {/* Devotional reflection */}
-          <section className="mb-12">
-            <SectionLabel>Reflection</SectionLabel>
-            <p className="mt-3 text-[18px] leading-[1.8] text-foreground">
-              {step.devotional}
-            </p>
+          {/* Devotional reflection — labelled "Congratulations" on Walk Complete steps */}
+          <section className="mb-3.5">
+            <div className={`rounded-2xl px-4 py-4 ${isOnCompletionStep ? 'border border-teal-200/60 bg-teal-50/60' : 'border border-violet-200/60 bg-violet-50/60'}`}>
+              <div className="flex items-center gap-1.5 mb-2.5">
+                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isOnCompletionStep ? 'bg-teal-500' : 'bg-violet-500'}`} />
+                <h2 className={`text-[10px] font-bold uppercase tracking-[0.14em] ${isOnCompletionStep ? 'text-teal-700' : 'text-violet-700'}`}>
+                  {isOnCompletionStep ? 'Congratulations' : 'Consider This'}
+                </h2>
+              </div>
+              <p className="text-[18px] leading-[1.8] text-foreground">
+                <ApprovedIllustration contentType={journey.journeyType === 'bible-study' ? 'bible-study' : 'journey'} contentId={journeyId} stepId={stepId} placement="within-reflection" />
+                {step.devotional}
+              </p>
+            </div>
           </section>
+          <ApprovedIllustration contentType={journey.journeyType === 'bible-study' ? 'bible-study' : 'journey'} contentId={journeyId} stepId={stepId} placement="after-reflection" />
+          <ApprovedIllustration contentType={journey.journeyType === 'bible-study' ? 'bible-study' : 'journey'} contentId={journeyId} stepId={stepId} placement="before-consider-this" />
 
           {/* Sermon moment */}
           {hasSermon && (
-            <section className="mb-12">
-              <SectionLabel>Sermon Moment</SectionLabel>
-              <p className="mt-3 text-[17px] text-foreground leading-[1.8]">
-                This moment in Sunday's sermon connects directly with today's reflection.
-              </p>
-              <a
-                href={(step as any).sermonLink}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-flex items-center gap-2 text-primary font-medium text-[15px] hover:underline"
-                aria-label={`Watch sermon from ${formatTimestamp((step as any).sermonTimestampSeconds)}`}
-              >
-                <PlayCircle size={18} className="shrink-0" />
-                Watch from {formatTimestamp((step as any).sermonTimestampSeconds)}
-              </a>
+            <section className="mb-3.5">
+              <div className="rounded-2xl border border-sky-200/60 bg-sky-50/60 px-4 py-4">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
+                  <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-sky-700">Sermon Moment</h2>
+                </div>
+                <p className="text-[17px] text-foreground leading-[1.8]">
+                  This moment in Sunday's sermon connects directly with today's reflection.
+                </p>
+                <a
+                  href={(step as any).sermonLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex items-center gap-2 text-primary font-medium text-[15px] hover:underline"
+                  aria-label={`Watch sermon from ${formatTimestamp((step as any).sermonTimestampSeconds)}`}
+                >
+                  <PlayCircle size={18} className="shrink-0" />
+                  Watch from {formatTimestamp((step as any).sermonTimestampSeconds)}
+                </a>
+              </div>
             </section>
           )}
 
-          {/* Reflection question + optional response */}
-          <section className="mb-12">
-            <SectionLabel>Consider</SectionLabel>
-            <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
-              {step.reflectionQuestion}
-            </p>
-            <Textarea
-              placeholder="What stood out to you today?"
-              className="mt-4 min-h-[120px] text-[17px] resize-none rounded-xl"
-              value={reflection}
-              onChange={(e) => setReflection(e.target.value)}
-              data-testid="input-reflection"
-              aria-label="Your reflection"
-            />
+          {/* Reflection question + optional response — hidden on Walk Complete steps */}
+          {!isOnCompletionStep && (
+            <section className="mb-3.5">
+              <div className="rounded-2xl border border-violet-200/60 bg-violet-50/60 px-4 py-4">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
+                  <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">Consider</h2>
+                </div>
+                <p className="text-[18px] text-foreground leading-[1.8]">
+                  {step.reflectionQuestion}
+                </p>
+                <Textarea
+                  placeholder="What stood out to you today?"
+                  className="mt-4 min-h-[120px] text-[17px] resize-none rounded-xl"
+                  value={reflection}
+                  onChange={(e) => setReflection(e.target.value)}
+                  data-testid="input-reflection"
+                  aria-label="Your reflection"
+                />
+              </div>
+            </section>
+          )}
+
+          {/* Prayer — labelled "Closing Prayer" on Walk Complete steps */}
+          <section className="mb-3.5">
+            <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/60 px-4 py-4">
+              <div className="flex items-center gap-1.5 mb-2.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">
+                  {isOnCompletionStep ? 'Closing Prayer' : 'Prayer'}
+                </h2>
+              </div>
+              <p className="text-[18px] text-foreground leading-[1.8]">
+                {step.prayerPrompt}
+              </p>
+            </div>
           </section>
 
-          {/* Prayer */}
-          <section className="mb-12">
-            <SectionLabel>Prayer</SectionLabel>
-            <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
-              {step.prayerPrompt}
-            </p>
-          </section>
+          {/* Action step — hidden on Walk Complete steps */}
+          {!isOnCompletionStep && (
+            <section className="mb-3.5">
+              <div className="rounded-2xl border border-orange-200/60 bg-orange-50/60 px-4 py-4">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
+                  <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-orange-700">Your Next Step</h2>
+                </div>
+                <p className="text-[18px] text-foreground leading-[1.8]">
+                  {step.actionStep}
+                </p>
+              </div>
+            </section>
+          )}
 
-          {/* Action step */}
-          <section className="mb-12">
-            <SectionLabel>Your Next Step</SectionLabel>
-            <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
-              {step.actionStep}
-            </p>
-          </section>
+          {/* Share (text) */}
+          <ShareButton payload={{
+            title: journey?.title ?? 'Emmaus',
+            dayTitle: step.title,
+            scripture: step.scripture ?? undefined,
+            greeting: step.mentorIntro ?? undefined,
+            reflection: step.devotional ?? undefined,
+            prayer: step.prayerPrompt ?? undefined,
+            nextStep: step.actionStep ?? undefined,
+            closing: (step as any).closingText ?? undefined,
+          }} />
 
-          {/* Primary action — "Finished" for a fresh read; back button for replay */}
+          {/* Primary action — "Finished" for a fresh read; completion card for replay */}
           <div className="pt-2 pb-8">
             {isDayCompleted ? (
-              /* Already completed — review mode. Prevent re-completion. */
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-full h-14 text-[17px] rounded-2xl"
-                onClick={() => setLocation(resolveReturn(source, sourceId, '/journeys?tab=journeys').path)}
-              >
-                Back to Next Steps
-              </Button>
+              /* Already completed — review mode. Show the standard completion card
+                 with Continue to Next Day (if a next published step exists) or
+                 View Walk Summary (if this was the final step). */
+              <EmmausCompletionCard
+                heading={isOnCompletionStep ? 'Walk complete.' : `${getStepLabel({ day, displayLabel: (step as any)?.displayLabel ?? null }, journey)} complete.`}
+                subMessage="Continue when you're ready."
+                onContinue={
+                  nextStepUrl
+                    ? () => setLocation(nextStepUrl)
+                    : isFinalStep
+                    ? () => setLocation(walkCompleteUrl)
+                    : undefined
+                }
+                continueLabel={
+                  nextStepUrl
+                    ? (nextStep?.isCompletionStep ? 'Walk Complete →' : 'Continue to Next Day')
+                    : isFinalStep
+                    ? 'View Walk Summary'
+                    : undefined
+                }
+                returnLabel={backLabel}
+                onReturn={() => goBackOrFallback(returnPath, setLocation)}
+                  onPreviousDays={day > 1 && journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=${source ?? 'walk'}${sourceId ? `&sourceId=${sourceId}` : ''}${displayOriginSuffix}`) : undefined}
+                previousDaysLabel="View Previous Steps →"
+              />
             ) : (
               <Button
                 size="lg"
                 className="w-full h-14 text-[17px] rounded-2xl"
                 onClick={handleComplete}
+                disabled={isSavingCompletion}
                 data-testid="button-complete-today"
               >
-                Finished
+                {isSavingCompletion ? 'Saving…' : 'Finished'}
               </Button>
             )}
           </div>

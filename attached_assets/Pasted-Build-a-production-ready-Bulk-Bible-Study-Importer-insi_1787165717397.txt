@@ -1,0 +1,782 @@
+Build a production-ready Bulk Bible Study Importer inside the existing Emmaus Admin → Bible Study system.
+
+IMPORTANT
+
+Do not redesign or replace the existing Bible Study user experience.
+
+Do not remove or rename existing Bible Study fields.
+
+Do not break any currently published Bible Study content.
+
+Inspect the existing database schema, APIs, routes, admin components and Bible Study rendering before making changes.
+
+Reuse the existing architecture wherever possible.
+
+Create a restore/checkpoint before beginning any database migration or major structural change.
+
+The goal is to allow an admin to generate structured Bible Study content externally, paste the entire structured block into Emmaus once, preview it, and have Emmaus automatically populate all the correct existing Bible Study fields.
+
+The importer must support:
+
+* one chapter
+* multiple chapters
+* an entire Bible book
+* multiple passage groups within each chapter
+
+The admin should not have to manually paste content into individual fields.
+
+# EXISTING USER-FACING STUDY FIELDS
+
+The existing Study screen currently contains:
+
+Chapter Overview
+
+Explanation
+
+Passage Context
+
+Key Truth
+
+Reflection
+
+Practical Application
+
+Related Scriptures
+
+Historical Background
+
+Original Language
+
+How This Points to Jesus
+
+Preached Here
+
+Preserve these fields and their current visual presentation.
+
+Preached Here is NOT populated by this importer. It is connected to ICC sermon content and must always be preserved when Study content is imported, replaced or updated.
+
+# ADMIN LOCATION
+
+Inside:
+
+Admin → Bible Study
+
+add a clearly visible action:
+
+Bulk Import
+
+This should open a dedicated Bulk Bible Study Import screen/modal.
+
+Do not clutter the main Bible Study Overview page.
+
+# BULK IMPORT SCREEN
+
+Include:
+
+Heading:
+Bulk Bible Study Import
+
+Short description:
+
+"Paste structured Bible Study content below. Emmaus will detect books, chapters, passages and Study fields automatically."
+
+Large multiline paste area.
+
+Buttons:
+
+Parse & Preview
+
+Clear
+
+Do not save anything when content is first pasted.
+
+The admin must first use Parse & Preview.
+
+# IMPORT FORMAT
+
+The importer must support this schema exactly:
+
+BOOK: Genesis
+
+CHAPTER: 1
+
+TITLE: In the Beginning
+
+CHAPTER_OVERVIEW:
+Content here.
+
+PASSAGE:
+Genesis 1:1-2
+
+EXPLANATION:
+Content here.
+
+PASSAGE_CONTEXT:
+Content here.
+
+KEY_TRUTH:
+Content here.
+
+REFLECTION:
+Content here.
+
+PRACTICAL_APPLICATION:
+Content here.
+
+RELATED_SCRIPTURES:
+John 1:1-3
+Colossians 1:15-17
+Hebrews 11:3
+
+HISTORICAL_BACKGROUND:
+Content here.
+
+ORIGINAL_LANGUAGE:
+Content here.
+
+POINTS_TO_JESUS:
+Content here.
+
+PASSAGE:
+Genesis 1:3-5
+
+EXPLANATION:
+Content here.
+
+KEY_TRUTH:
+Content here.
+
+REFLECTION:
+Content here.
+
+CHAPTER: 2
+
+TITLE: Life With God
+
+CHAPTER_OVERVIEW:
+Content here.
+
+PASSAGE:
+Genesis 2:1-3
+
+EXPLANATION:
+Content here.
+
+Continue in the same way.
+
+# PARSING RULES
+
+BOOK:
+
+Sets the current Bible book.
+
+Required before chapters are imported.
+
+CHAPTER:
+
+Starts a new chapter.
+
+Everything following belongs to that chapter until the next CHAPTER or BOOK marker.
+
+TITLE:
+
+Optional chapter Study title.
+
+CHAPTER_OVERVIEW:
+
+Chapter-level field.
+
+Only one Chapter Overview per chapter.
+
+PASSAGE:
+
+Starts a new passage Study record.
+
+All Study fields following PASSAGE belong to that passage until another PASSAGE, CHAPTER or BOOK marker appears.
+
+Map fields as follows:
+
+EXPLANATION → Explanation
+
+PASSAGE_CONTEXT → Passage Context
+
+KEY_TRUTH → Key Truth
+
+REFLECTION → Reflection
+
+PRACTICAL_APPLICATION → Practical Application
+
+RELATED_SCRIPTURES → Related Scriptures
+
+HISTORICAL_BACKGROUND → Historical Background
+
+ORIGINAL_LANGUAGE → Original Language
+
+POINTS_TO_JESUS → How This Points to Jesus
+
+Field names should be case-insensitive when parsing.
+
+Whitespace around labels should be ignored.
+
+Blank lines must not affect parsing.
+
+Do not require a separator such as "---".
+
+If separators are included, ignore them safely.
+
+# OPTIONAL FIELDS
+
+Not every Study passage needs every field.
+
+This is intentional.
+
+For example, this must be considered valid:
+
+PASSAGE:
+Genesis 5:1-5
+
+EXPLANATION:
+Content
+
+KEY_TRUTH:
+Content
+
+REFLECTION:
+Content
+
+RELATED_SCRIPTURES:
+Romans 5:12-14
+
+Do NOT:
+
+generate missing fields automatically
+
+insert placeholder content
+
+create visible empty Study accordions on the user side
+
+If a field has no content, treat it as absent.
+
+On the user Study screen, only show optional sections when content exists.
+
+Chapter Overview remains available at chapter level where one has been imported.
+
+# PASSAGE GROUPS
+
+The importer must support passage ranges.
+
+Examples:
+
+Genesis 1:1-2
+
+Genesis 1:3-5
+
+Genesis 1:26-28
+
+Genesis 11:1-9
+
+Do not require every individual verse to have its own Study record.
+
+A passage range is one Study record.
+
+If a user taps any verse inside that range, the existing Study experience should surface the Study record associated with that range.
+
+Example:
+
+Study record:
+Genesis 1:26-28
+
+User taps:
+Genesis 1:27
+
+Emmaus should show the Genesis 1:26-28 Study content.
+
+Preserve any existing individual passage behaviour that is already functioning, but add proper range matching where needed.
+
+# MULTIPLE CHAPTER IMPORT
+
+The same paste may contain:
+
+Genesis 1
+
+Genesis 2
+
+Genesis 3
+
+etc.
+
+The parser must correctly separate each chapter and its passage records.
+
+The importer should be capable of processing an entire book in one paste if technically practical.
+
+Do not impose an artificially low chapter limit.
+
+If there are practical request-size limits, implement chunked/server-side processing safely rather than forcing the admin to paste each chapter separately.
+
+# MULTIPLE BOOK SUPPORT
+
+The parser should also technically support:
+
+BOOK: Genesis
+...
+
+BOOK: Exodus
+...
+
+in the same structured import.
+
+This is not the primary workflow, but the architecture should allow it.
+
+# PARSE & PREVIEW
+
+After Parse & Preview, do not save immediately.
+
+Show a clean summary.
+
+Example:
+
+Genesis
+
+50 chapters detected
+
+50 Chapter Overviews
+
+327 Passage Studies
+
+327 Explanations
+
+302 Passage Context entries
+
+327 Key Truths
+
+291 Reflections
+
+284 Practical Applications
+
+190 Related Scripture sets
+
+73 Historical Background notes
+
+41 Original Language notes
+
+126 Jesus connections
+
+Then show chapters individually in a collapsible list.
+
+Example:
+
+Genesis 1 — In the Beginning
+9 passage groups
+Ready
+
+Genesis 2 — Life With God
+7 passage groups
+Ready
+
+Genesis 3 — When Everything Changed
+8 passage groups
+1 warning
+
+Each chapter must have a checkbox.
+
+Default all valid chapters to selected.
+
+The admin can deselect chapters before importing.
+
+# VALIDATION
+
+Before import, validate:
+
+Bible book exists.
+
+Chapter number is valid for that Bible book.
+
+Passage belongs to the correct book.
+
+Passage belongs to the correct chapter.
+
+Verse numbers are valid where the existing Bible data allows validation.
+
+Passage start verse is not greater than end verse.
+
+Duplicate passage ranges inside the same pasted chapter are detected.
+
+Unknown field labels are reported.
+
+Required structural fields are present.
+
+Do not reject an import merely because optional Study fields are missing.
+
+# ERRORS AND WARNINGS
+
+Errors must be specific.
+
+Examples:
+
+Genesis 3:29 is not a valid verse.
+
+PASSAGE "Genesis 4:8-2" has an invalid range.
+
+Chapter 51 does not exist in Genesis.
+
+PASSAGE_CONTEXT was found before a PASSAGE marker in Genesis 6.
+
+Unknown field "APPLICATION_NOTE" found in Genesis 8:1-5.
+
+Differentiate:
+
+ERROR — cannot import this item.
+
+WARNING — can import, but admin should review.
+
+Do not silently discard malformed content.
+
+# DUPLICATE / EXISTING CONTENT PROTECTION
+
+This is essential.
+
+Before importing, detect whether a chapter or passage already has Study content.
+
+For each affected chapter show:
+
+Existing Study content detected.
+
+Provide choices:
+
+Skip Existing
+
+Replace Study Content
+
+Merge
+
+Definitions:
+
+SKIP EXISTING
+
+Leave all currently existing Study content untouched.
+
+Only import records that do not already exist.
+
+REPLACE STUDY CONTENT
+
+Replace imported Bible Study fields for the selected chapter/passages.
+
+Do NOT delete or alter:
+
+Preached Here
+
+sermon links
+
+Bible text
+
+user notes
+
+user highlights
+
+saved verses
+
+cross-reference infrastructure that was not created by this importer
+
+any unrelated Bible metadata
+
+MERGE
+
+Add content only into currently empty matching Study fields.
+
+Do not overwrite existing populated Study fields.
+
+Default option when existing content is detected:
+
+Skip Existing
+
+Never overwrite published Study content silently.
+
+# IMPORT OPTIONS
+
+After preview provide:
+
+Import as Draft
+
+Import & Publish
+
+If the existing system has draft/review/published statuses, use those existing states.
+
+Do not create a competing publishing system.
+
+# IMPORT RESULT
+
+After successful import display:
+
+Import Complete
+
+Genesis
+
+10 chapters imported
+
+74 passage Studies created
+
+3 existing passages skipped
+
+1 chapter merged
+
+0 errors
+
+Provide:
+
+View in Bible Study Admin
+
+View First Imported Chapter
+
+Import Another Batch
+
+# TRANSACTION SAFETY
+
+Imports must be reliable.
+
+For each chapter, process changes transactionally where supported.
+
+A failed passage should not leave half-written data for that passage.
+
+A catastrophic failure should not corrupt previously published Bible Study material.
+
+Record imported content using existing audit logging where available.
+
+If the existing Audit Log supports admin changes, write meaningful entries such as:
+
+"Bulk Bible Study Import — Genesis 1-10 — 74 passages — Published"
+
+# IMPORT HISTORY
+
+Add a simple Import History section accessible from the Bulk Import page.
+
+Show:
+
+Date/time
+
+Admin
+
+Book
+
+Chapters
+
+Number of passages
+
+Draft or Published
+
+Import result
+
+This is for traceability only.
+
+Do not build an unnecessarily complex workflow.
+
+# USER-SIDE BEHAVIOUR
+
+Do not redesign the Study panel.
+
+Keep the existing accordion sections and styling shown in the current Emmaus Bible Study interface.
+
+When a Study is opened for a verse:
+
+Show the relevant passage-level content.
+
+Chapter Overview should remain available for the entire chapter.
+
+Example:
+
+User is reading Genesis 1:27.
+
+Study header may identify the selected verse as it currently does.
+
+Chapter Overview:
+Genesis 1 overview.
+
+Explanation:
+Study content belonging to Genesis 1:26-28.
+
+Passage Context:
+Genesis 1:26-28 context.
+
+Key Truth:
+etc.
+
+Do not show blank sections.
+
+Preached Here continues to work independently.
+
+# RELATED SCRIPTURES
+
+RELATED_SCRIPTURES may contain one reference per line.
+
+Example:
+
+RELATED_SCRIPTURES:
+John 1:1-3
+Colossians 1:15-17
+Hebrews 11:3
+
+Parse these into the existing cross-reference / Related Scriptures system if compatible.
+
+If the existing system stores these differently, adapt the importer to that existing model rather than creating unnecessary duplicate infrastructure.
+
+References should remain clickable on the user side if that is how Related Scriptures currently works.
+
+# BOOK INTRODUCTIONS
+
+Do not change the existing Book Intros feature in this task.
+
+The Bulk Import format may later be extended to support book introductions, but this task is specifically for chapter and passage Study content.
+
+Do not create duplicate Book Intro architecture.
+
+# GENERATION TAB
+
+Do not remove or break the existing Generation tab.
+
+The new Bulk Import feature must work alongside existing generation tools.
+
+It must be possible for an admin to use:
+
+external AI generated content
+
+ChatGPT generated content
+
+future Emmaus generated content
+
+or manually prepared content
+
+as long as it follows the structured import format.
+
+# DATABASE
+
+Inspect the current Bible Study schema first.
+
+If chapter-level overview storage already exists, reuse it.
+
+If passage-level Study fields already exist, reuse them.
+
+Only add database fields/tables if they are genuinely required.
+
+Do not create a second parallel Bible Study database.
+
+Use migrations that are safe against existing published content.
+
+# RESPONSIVE ADMIN UI
+
+The importer should work properly on:
+
+desktop
+
+tablet
+
+mobile
+
+The large paste workflow will primarily be used on desktop, but it must not break on smaller screens.
+
+# TESTING
+
+Before declaring the task complete, test at minimum:
+
+Single chapter import.
+
+Multiple chapter import.
+
+Passage range import.
+
+Optional omitted fields.
+
+Related Scriptures.
+
+Invalid chapter.
+
+Invalid verse.
+
+Duplicate passage.
+
+Existing published content → Skip.
+
+Existing published content → Replace.
+
+Existing published content → Merge.
+
+Import as Draft.
+
+Import & Publish.
+
+User taps a verse inside a passage range and receives the correct Study content.
+
+Preached Here survives Replace.
+
+Existing Luke/Acts/etc Study content remains unchanged.
+
+No previously published Bible Study content is lost.
+
+# TEST DATA
+
+Use a very small Genesis sample for testing only.
+
+Do NOT populate the full book of Genesis during development.
+
+Example test:
+
+BOOK: Genesis
+
+CHAPTER: 1
+
+TITLE: In the Beginning
+
+CHAPTER_OVERVIEW:
+Genesis opens with God as Creator of the heavens and the earth.
+
+PASSAGE:
+Genesis 1:1-2
+
+EXPLANATION:
+The Bible begins with God already present. Everything else has a beginning; God does not.
+
+KEY_TRUTH:
+God is the Creator of all things.
+
+REFLECTION:
+Before Scripture tells us about ourselves, it first directs our attention to God.
+
+RELATED_SCRIPTURES:
+John 1:1-3
+Hebrews 11:3
+
+POINTS_TO_JESUS:
+John's Gospel deliberately echoes the opening of Genesis and presents Jesus as the eternal Word through whom all things were made.
+
+PASSAGE:
+Genesis 1:3-5
+
+EXPLANATION:
+God speaks light into the darkness and separates light from darkness.
+
+KEY_TRUTH:
+God brings order and light by His Word.
+
+Do not leave test content published unless it was already intended to exist.
+
+# FINAL REQUIREMENT
+
+The finished admin workflow should be:
+
+1. Admin opens Bible Study.
+2. Admin clicks Bulk Import.
+3. Admin copies an AI-generated structured Bible Study batch.
+4. Admin pastes the entire batch once.
+5. Admin clicks Parse & Preview.
+6. Emmaus identifies books, chapters, passage ranges and all Study fields.
+7. Emmaus validates the content.
+8. Admin chooses chapters and duplicate behaviour.
+9. Admin selects Import as Draft or Import & Publish.
+10. Emmaus automatically populates all correct Bible Study fields.
+11. User Study pages immediately use the imported content after publication.
+
+The objective is speed and simplicity.
+
+An admin should be able to populate multiple complete Bible chapters without opening individual chapter records or individual Study fields.
+
+Do not stop after building only the visual paste screen.
+
+Complete the parser, validation, database writing, preview, duplicate protection, passage-range mapping and user-side integration so the workflow works end-to-end.

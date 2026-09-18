@@ -24,6 +24,7 @@ description: Full spec implementation — parallel search, nextSteps, chapter ba
 - LLM told to weave sermon insight naturally into prose (reference by insight, not by link)
 - nextSteps format documented with exact types and examples
 - Explicit: do NOT generate type "listen" — injected automatically
+- Verified sermon context must require at least one natural written sermon reference; the link/listen card is supplementary, not a substitute.
 
 ### Preached Here chapter badge (ChapterReader.tsx)
 - `useEffect` fetches `/api/youtube-archive/preached-here?bookId=&chapter=` on chapter change

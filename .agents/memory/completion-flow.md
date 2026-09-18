@@ -24,7 +24,7 @@ Single canonical completion component at `src/components/EmmausCompletionCard.ts
 - `onPreviousDays?: () => void` — when provided, renders "See Previous Days →" teal text link beneath primary button. Only pass when `day > 1` and in live completion mode (not replay).
 - DO NOT redesign, add secondary buttons (other than See Previous Days), use gamification language, or create a page-level layout.
 - Replaces: `JourneyCompletionPanel.tsx` (deleted) and `ReadingCompletionFooter.tsx` (deleted).
-- Button wording: 10 Minutes → "Back to Today's Steps"; all others → "Back to Next Steps".
+- Button wording: 10 Minutes → "Back to My Emmaus"; all others → "Back to Next Steps".
 - Mockup preview at `artifacts/mockup-sandbox/src/components/mockups/EmmausCompletionCardPreview.tsx`.
 
 ## Entry-route resolver

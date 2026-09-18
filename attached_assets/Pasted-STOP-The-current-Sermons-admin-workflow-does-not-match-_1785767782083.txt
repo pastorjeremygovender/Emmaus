@@ -1,0 +1,298 @@
+STOP. The current Sermons admin workflow does not match the approved design.
+
+What has been built is still essentially the old manual Companion editor with:
+
+- an audio upload field
+- a separate “Transcribe with Whisper” button
+- manual fields for summary, topics, keywords and transcript
+- the old “Edit Companion” identity
+
+That is NOT the workflow we agreed to.
+
+The agreed workflow is:
+
+1. Open Admin → Sermons.
+2. Click New Sermon.
+3. Upload audio.
+4. Optionally paste a YouTube URL.
+5. Click ONE button: Process Sermon.
+6. Emmaus automatically creates everything.
+7. Admin reviews the generated content.
+8. Admin clicks Publish.
+
+The administrator should not have to manually build the sermon record field by field.
+
+==================================================
+REQUIRED WORKFLOW
+==================================================
+
+NEW SERMON
+
+The initial New Sermon form should contain only:
+
+- Sermon title, optional
+- Speaker, default to Pastor Jeremy Govender
+- Date
+- Main Scripture, optional
+- Series, optional
+- Upload Sermon Audio
+- YouTube URL, optional
+- Notes, optional
+
+Primary button:
+
+PROCESS SERMON
+
+Secondary buttons:
+
+SAVE DRAFT
+CANCEL
+
+Do not open the old manual editor immediately after creating the record.
+
+==================================================
+PROCESS SERMON BUTTON
+==================================================
+
+Replace the separate “Transcribe with Whisper” workflow with one primary action:
+
+PROCESS SERMON
+
+When Process Sermon is clicked, the backend must run the complete sermon pipeline.
+
+Stage 1:
+- Validate audio upload or available transcript source.
+- Store audio in persistent object storage.
+- Create or update the canonical Sermon record.
+
+Stage 2:
+- Transcribe the uploaded audio.
+- Preserve timestamps.
+- Clean punctuation and paragraph structure.
+- Save the full transcript.
+
+Stage 3:
+- Generate or confirm:
+  - Sermon title
+  - Main theme
+  - Speaker
+  - Date
+  - Main Scripture
+  - Additional Scripture references
+  - Summary
+  - Topics
+  - Keywords
+  - Timestamped sermon sections
+
+Stage 4:
+- Generate the complete existing 5-Day Sermon Companion.
+- Every day must come from the actual sermon.
+- Include Scripture, reflection, prayer and next step.
+- Include sermon timestamps where relevant.
+- Preserve the existing approved Companion format.
+
+Stage 5:
+- Generate Bible Links from every verified Scripture reference.
+- Prepare Related Sermons / Preached Here links.
+
+Stage 6:
+- Prepare the published sermon for Ask Emmaus retrieval.
+- Create searchable sermon sections with metadata.
+- Prepare an Ask Emmaus preview.
+- Do not index or expose the sermon to members until Publish is clicked.
+
+Stage 7:
+- Automatically prepare the user-facing Sermon Home.
+
+The processing pipeline must not stop after transcription.
+
+==================================================
+PROCESSING EXPERIENCE
+==================================================
+
+After Process Sermon is clicked, show a proper progress screen:
+
+Uploading audio
+Transcribing sermon
+Identifying Scripture
+Preparing summary and themes
+Generating 5-Day Companion
+Creating Bible links
+Preparing Ask Emmaus
+Preparing Sermon Home
+Ready for review
+
+Prevent duplicate clicks.
+
+If one stage fails:
+- preserve completed work
+- show which stage failed
+- allow Retry Failed Stage
+- do not require restarting the entire process
+
+==================================================
+ONE REVIEW PAGE
+==================================================
+
+After processing, open one review page.
+
+Change all labels:
+
+“Edit Companion” → “Review Sermon”
+“Companion” → “5-Day Companion”
+
+Use collapsible sections:
+
+1. Sermon Details
+2. Audio & Video
+3. Summary and Main Theme
+4. Transcript and Timestamped Sections
+5. 5-Day Companion
+6. Bible Links
+7. Ask Emmaus Preview
+8. Sermon Home Preview
+
+Each section must display the generated content.
+
+Each section may have:
+- Edit
+- Save
+- Regenerate
+
+Do not force the admin to create summary, topics, keywords or transcript manually.
+
+Those fields should already be populated after processing.
+
+==================================================
+SERMON HOME PREVIEW
+==================================================
+
+The review page must show exactly what members will see:
+
+- Title
+- Speaker
+- Date
+- Main Scripture
+- Summary
+- Listen, if audio exists
+- Watch, if YouTube URL exists
+- Read, if transcript exists
+- 5-Day Companion
+- Related Bible Passages
+- Ask Emmaus About This Sermon
+
+This preview must use the same component and data as the published Sermon Home.
+
+==================================================
+PUBLISH
+==================================================
+
+Publish must be the final action only after processing and review.
+
+When Publish is clicked, one action must:
+
+- publish the canonical sermon
+- make Sermon Home available to members
+- publish the 5-Day Companion
+- connect Related Bible Passages / Preached Here
+- index the sermon for Ask Emmaus
+- make the current published sermon appear as This Week’s Sermon
+- preserve any existing member progress correctly
+
+Do not require separate publishing of the Companion, transcript, Bible links or Ask Emmaus index.
+
+==================================================
+REMOVE MANUAL/TECHNICAL ADMIN CLUTTER
+==================================================
+
+The admin should not manually choose:
+
+- Transcript status
+- Search index status
+- Processing status
+- Internal database status
+
+These are system-managed states.
+
+Hide them from the primary editor.
+
+They may appear in a compact technical status panel only when useful:
+
+Audio uploaded
+Transcript complete
+Companion generated
+Bible links ready
+Ask Emmaus ready
+Published
+
+Do not make the admin set these values manually.
+
+==================================================
+CURRENT SCREEN FIXES
+==================================================
+
+The current screen is incorrect.
+
+Fix all of the following:
+
+- “Edit Companion” must become “Review Sermon”.
+- Remove the manual Transcript Status dropdown from normal admin use.
+- Replace “Transcribe with Whisper” with “Process Sermon”.
+- Process Sermon must run the full pipeline, not transcription only.
+- Summary, topics, keywords and transcript must auto-populate.
+- Add the missing 5-Day Companion review section.
+- Add the missing Bible Links section.
+- Add the missing Ask Emmaus Preview section.
+- Add the missing Sermon Home Preview section.
+- Show processing progress.
+- Do not allow Publish before processing is complete, except for migrated legacy sermons that already contain valid Companion content.
+
+==================================================
+LEGACY SERMONS
+==================================================
+
+Do not break existing Sermon Companions.
+
+For migrated legacy records:
+
+- mark them clearly as Legacy Sermon
+- preserve the existing Companion
+- allow audio and transcript to be added later
+- allow Process Missing Content
+- do not overwrite existing approved Companion content unless the admin explicitly regenerates it
+
+==================================================
+TEST THE COMPLETE PUBLISHED FLOW
+==================================================
+
+Use a real test sermon and verify in production:
+
+1. Open Admin → Sermons.
+2. Click New Sermon.
+3. Upload audio.
+4. Optionally add YouTube URL.
+5. Click Process Sermon.
+6. Confirm every processing stage runs.
+7. Confirm transcript is generated.
+8. Confirm summary and main theme are generated.
+9. Confirm Scriptures are detected.
+10. Confirm 5-Day Companion is generated.
+11. Confirm Bible Links are generated.
+12. Confirm Ask Emmaus Preview is generated.
+13. Confirm Sermon Home Preview is generated.
+14. Edit one generated section.
+15. Publish once.
+16. Confirm the member Sermon Home appears.
+17. Confirm Listen, Watch, Read and Companion work.
+18. Confirm Related Bible Passages work.
+19. Confirm Ask Emmaus retrieves the published sermon.
+20. Confirm unpublished drafts are not retrieved.
+
+Do not report completion based only on the presence of an audio upload field or transcription button.
+
+The feature is complete only when the approved workflow works:
+
+ONE UPLOAD
+ONE PROCESS
+ONE REVIEW
+ONE PUBLISH

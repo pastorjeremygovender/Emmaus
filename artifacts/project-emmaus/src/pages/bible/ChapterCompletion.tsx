@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
-import { Check, ArrowRight, PenLine, ChevronLeft, BookOpen } from 'lucide-react';
+import { Check, PenLine, ChevronLeft, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -9,6 +9,8 @@ import { getBibleBook, getNextBook } from '@/lib/bible-data';
 import { useBible } from '@/contexts/BibleContext';
 import { useChapter } from '@/hooks/useChapter';
 import { getChapterStudyPrompts } from '@/data/chapter-study-prompts';
+import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
+import { goBackOrFallback } from '@/lib/return-context';
 
 export default function ChapterCompletion() {
   const { bookId, chapter: chapterStr } = useParams<{ bookId: string; chapter: string }>();
@@ -83,7 +85,10 @@ export default function ChapterCompletion() {
       {/* Back button */}
       <div className="px-5 pt-6 max-w-[520px] mx-auto">
         <button
-          onClick={() => setLocation(`/bible/read/${resolvedBookId}/${chapterNum}${journeyId ? `?journey=${journeyId}` : ''}`)}
+          onClick={() => goBackOrFallback(
+            `/bible/read/${resolvedBookId}/${chapterNum}${journeyId ? `?journey=${journeyId}` : ''}`,
+            setLocation,
+          )}
           className="flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors"
         >
           <ChevronLeft size={16} />
@@ -148,52 +153,49 @@ export default function ChapterCompletion() {
           )}
         </motion.div>
 
-        {/* Navigation */}
+        {/* Navigation — standardised EmmausCompletionCard */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.4, delay: 0.2 }}
-          className="flex flex-col gap-2.5"
+          className="space-y-3"
         >
           {/* Revelation 22 — completed the whole Bible */}
           {isLastBookAndChapter && (
-            <div className="p-5 bg-primary/8 border border-primary/20 rounded-xl text-center space-y-2">
+            <div className="p-5 bg-primary/8 border border-primary/20 rounded-xl text-center space-y-2 mb-2">
               <div className="text-[28px]">🎉</div>
               <p className="text-[17px] font-serif font-semibold text-foreground">You've completed the Bible</p>
               <p className="text-[14px] text-muted-foreground">From Genesis to Revelation — well done.</p>
             </div>
           )}
 
-          {/* Next chapter */}
-          {nextChapterNum && (
-            <Button className="h-12 rounded-xl text-[16px]" onClick={handleNextChapter}>
-              Continue to {book?.name ?? 'Luke'} {nextChapterNum}
-              <ArrowRight size={17} className="ml-2" />
-            </Button>
-          )}
-
-          {/* Last chapter of this book → next book */}
-          {isLastChapterOfBook && nextBook && (
-            <Button className="h-12 rounded-xl text-[16px]" onClick={handleNextBook}>
-              Continue to {nextBook.name} 1
-              <ArrowRight size={17} className="ml-2" />
-            </Button>
-          )}
-
-          {/* Journey completion path */}
-          {journeyId && isLastChapterOfBook && !nextBook && (
-            <Button variant="outline" className="h-11 rounded-xl" onClick={() => setLocation(`/bible/journey/${journeyId}`)}>
-              Back to Journey
-            </Button>
-          )}
-
-          <Button
-            variant="ghost"
-            className="h-11 text-muted-foreground"
-            onClick={handleFinishForToday}
-          >
-            Finish for today
-          </Button>
+          <EmmausCompletionCard
+            heading="Chapter complete."
+            subMessage={isLastBookAndChapter ? undefined : "Continue when you're ready."}
+            onContinue={
+              nextChapterNum
+                ? handleNextChapter
+                : isLastChapterOfBook && nextBook
+                ? handleNextBook
+                : journeyId && isLastChapterOfBook
+                ? () => setLocation(`/bible/journey/${journeyId}`)
+                : undefined
+            }
+            continueLabel={
+              nextChapterNum
+                ? `Continue to ${book?.name ?? 'Next'} ${nextChapterNum}`
+                : isLastChapterOfBook && nextBook
+                ? `Continue to ${nextBook.name} 1`
+                : journeyId && isLastChapterOfBook
+                ? 'Back to Bible Journey'
+                : undefined
+            }
+            returnLabel="Back to Discover"
+            onReturn={() => goBackOrFallback(
+              journeyId ? `/bible/journey/${journeyId}` : '/journeys',
+              setLocation,
+            )}
+          />
         </motion.div>
 
       </main>

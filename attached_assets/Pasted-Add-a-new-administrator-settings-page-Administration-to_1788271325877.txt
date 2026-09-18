@@ -1,0 +1,261 @@
+Add a new administrator settings page:
+
+Administration tools → Settings → Pastoral Briefing Rules
+
+PURPOSE
+
+Allow authorised Church Administrators to control when someone appears in the Today pastoral briefing.
+
+These settings only determine when an observable signal is shown to the administrator. They must never automatically contact, discipline, label or alter a person.
+
+NAVIGATION
+
+Under the collapsed Administration tools section:
+
+* Settings
+
+  * Pastoral Briefing Rules
+
+Do not make this a primary navigation item.
+
+PAGE DESIGN
+
+Use the existing calm Emmaus Admin design.
+
+Header:
+
+Pastoral Briefing Rules
+
+Description:
+
+Choose when attendance and discipleship patterns should appear in your pastoral briefing. These signals are prompts for prayerful attention, not automatic conclusions about a person.
+
+SETTINGS
+
+1. Attendance
+
+Enable missed-service alerts: On/Off
+
+Missed expected services before alert:
+
+* Whole number
+* Recommended default: 3
+* Valid range: 1–12
+
+Only count meeting types for which the person has an active attendance expectation.
+
+Do not count:
+
+* Cancelled sessions
+* Invalid/test sessions
+* Services before the expectation began
+* People who are not expected to attend that meeting type
+
+2. Emmaus activity
+
+Enable inactivity alerts: On/Off
+
+Days without meaningful Emmaus activity:
+
+* Whole number
+* Recommended default: 14
+* Valid range: 1–90
+
+Use the project’s existing authoritative last-activity signal.
+
+Do not infer activity from test fixtures, administrative previews or background system processes.
+
+Clearly document which actions count as meaningful activity.
+
+3. Stalled Walks and Journeys
+
+Enable stalled-progress alerts: On/Off
+
+Days without progress in an active Walk or Journey:
+
+* Whole number
+* Recommended default: 7
+* Valid range: 1–90
+
+Only include genuinely active user-selected Walks and Journeys.
+
+Exclude:
+
+* Daily Rhythm
+* Daily Devotionals
+* Sermon Companions
+* Completed content
+* Archived content
+* Content not actually started by that person
+
+4. New-user grace period
+
+Days before a newly registered person can appear in inactivity or stalled-progress signals:
+
+* Whole number
+* Recommended default: 7
+* Valid range: 0–30
+
+Attendance signals must still follow the person’s actual attendance expectation start date.
+
+5. Exclusions
+
+Provide clear On/Off controls for excluding:
+
+* Test accounts — excluded by default
+* Inactive accounts — excluded by default
+* Visitors — excluded by default
+* Unlinked profiles — excluded by default
+* Church Administrators — excluded by default
+* People without a genuine active Emmaus identity — excluded by default
+
+Never expose prayer requests or confidential pastoral notes through briefing-rule calculations.
+
+ACTIONS
+
+* Save changes
+* Cancel
+* Restore recommended defaults
+
+Show a confirmation after saving.
+
+Do not save automatically while the administrator is typing.
+
+PREVIEW
+
+Add a read-only preview:
+
+“People who would appear under these rules”
+
+Show:
+
+* Total number of people currently flagged
+* Count by signal type
+* Person name
+* Concise factual reason, such as:
+
+  * Missed 3 expected Sunday services
+  * No meaningful Emmaus activity for 14 days
+  * No progress in an active Walk for 7 days
+
+Do not show confidential notes in the preview.
+
+Changing an unsaved setting may update the preview locally, but it must not change the live Today briefing until Save is selected.
+
+TODAY INTEGRATION
+
+The Today pastoral briefing must use the saved church-wide rules instead of scattered hardcoded thresholds.
+
+* Apply all enabled thresholds and exclusions.
+* Preserve the calm “nothing currently needs your attention” state when nobody qualifies.
+* Avoid duplicate people: combine multiple signals under one person where practical.
+* Show factual observations rather than conclusions.
+* Do not automatically send notifications or messages.
+* Do not create pastoral-care records merely because someone is flagged.
+
+AUTHORIZATION
+
+Only an authorised Church Administrator may:
+
+* View these settings
+* Change them
+* Restore defaults
+* Access the preview API
+
+Enforce this server-side, not only in the interface.
+
+Ordinary users and Group Leaders must receive a permission-denied response.
+
+PERSISTENCE
+
+First inspect the existing church/settings configuration model.
+
+* Prefer the existing church-scoped settings store.
+* Add the smallest backward-compatible persistence change only if required.
+* Do not directly edit production data.
+* If thresholds are currently hardcoded, initialize the stored defaults to match current behaviour where known, so deployment does not unexpectedly change who is flagged.
+* Scope settings to the current church, `icc`, so future churches can have their own rules.
+* Use server-authoritative dates and the existing church timezone handling.
+
+AUDIT
+
+Record every settings change in the existing admin/pastoral audit system:
+
+* Acting administrator
+* Church
+* Previous values
+* New values
+* Timestamp
+* Restore-default action when used
+
+VALIDATION
+
+Server-side validation must reject:
+
+* Values outside permitted ranges
+* Fractions
+* Missing required values
+* Unknown rule names
+* Changes from unauthorised users
+* Changes for another church
+
+TESTS
+
+Add focused tests proving:
+
+1. Default rules load correctly.
+2. Only Church Administrators can view or modify rules.
+3. Rules are scoped by church.
+4. Missed-service thresholds use expected valid services only.
+5. Inactivity uses genuine meaningful activity.
+6. Stalled Walk/Journey rules exclude Daily Rhythm, devotionals and sermon companions.
+7. New-user grace period is respected.
+8. Every exclusion works.
+9. Multiple signals for one person do not create misleading duplicates.
+10. Unsaved preview changes do not alter the live briefing.
+11. Saving immediately updates the Today briefing.
+12. Restore defaults works.
+13. Invalid values are rejected server-side.
+14. Every change creates an audit entry.
+15. No automatic messages, notifications or pastoral records are created.
+16. Existing Today, People, Attendance and permission tests remain green.
+
+PROTECTIONS
+
+Do not modify:
+
+* Daily Rhythm lifecycle or reminders
+* Resource classification
+* Group Leadership meeting permissions
+* Bible
+* User-facing Today’s Steps
+* Group membership
+* Church Register recovery
+* Person records
+* Attendance records
+* Walk/Journey progress
+* Prayer Requests
+* Secrets or environment variables
+* Unrelated admin pages
+
+Do not perform broad refactoring, dependency upgrades or unrelated test/type cleanup.
+
+Run focused settings/briefing tests, admin permission tests, attendance integrity tests, member-flow tests, frontend/API production builds, smoke tests and `git diff --check`.
+
+Preview the settings page and Today briefing at desktop and mobile widths.
+
+Create one local commit only after all required checks pass.
+
+Do not publish automatically.
+
+Report:
+
+* Existing settings model found
+* Persistence method used
+* Defaults applied
+* Definition of meaningful Emmaus activity
+* Exact files changed
+* Tests/builds
+* Confirmation that no member/progress/attendance data changed
+* New commit ID
+* READY FOR MANUAL PUBLISH or NOT READY

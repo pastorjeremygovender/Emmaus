@@ -107,6 +107,32 @@ export interface EmmausError {
   error: string;
 }
 
+export interface UploadUrlRequest {
+  /**
+     * Original file name.
+     * @minLength 1
+     */
+  name: string;
+  /**
+     * File size in bytes.
+     * @minimum 1
+     */
+  size: number;
+  /**
+     * MIME type of the file (e.g. audio/mpeg).
+     * @minLength 1
+     */
+  contentType: string;
+}
+
+export interface UploadUrlResponse {
+  /** Presigned GCS URL for PUT upload (a GCS signed URL). */
+  uploadURL: string;
+  /** Normalized object path (e.g. /objects/uploads/uuid). Store this in your database. */
+  objectPath: string;
+  metadata?: UploadUrlRequest;
+}
+
 export interface HealthStatus {
   status: string;
 }

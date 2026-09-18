@@ -65,6 +65,27 @@ export interface SafetyCheckResult {
 
 // ─── Main Check ───────────────────────────────────────────────────────────────
 
+/**
+ * Keyword-only crisis check — no store required.
+ * Use when a ConversationStore is not available (e.g., Room shared Ask Emmaus).
+ * Flag logging is skipped; detection logic is identical to checkSafety.
+ */
+export function checkSafetyKeywordsOnly(message: string): SafetyCheckResult {
+  const lc = message.toLowerCase();
+  for (const signal of CRISIS_SIGNALS) {
+    const matched = signal.keywords.filter(kw => lc.includes(kw));
+    if (matched.length > 0) {
+      return {
+        isSafe: false,
+        triggeredCategory: signal.category,
+        triggeredKeywords: matched,
+        safetyResponse: buildCrisisResponse(signal.category),
+      };
+    }
+  }
+  return { isSafe: true };
+}
+
 export function checkSafety(
   message: string,
   store: ConversationStore,

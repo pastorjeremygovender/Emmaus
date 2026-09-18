@@ -1,0 +1,98 @@
+STOP. Do not create or test a new sermon yet.
+
+The published user-side card now displays correctly as:
+
+THIS WEEK’S SERMON
+
+Jesus at the Center
+
+5 of 5 completed
+
+5 Days
+
+However, the card is not tappable.
+
+This means the user cannot open Sermon Home and cannot test the new sermon experience.
+
+Fix this specific issue now.
+
+REQUIREMENTS
+
+1. Make the ENTIRE “This Week’s Sermon” card one large tap target.
+
+2. Attach the navigation handler to the outer card container, not only to an inner label, icon or button.
+
+3. Tapping anywhere on the card must navigate to:
+
+   /sermon/{canonical-sermon-id}
+
+4. Use the canonical Sermon record ID.
+
+5. Do not route using the old sermon_companion ID.
+
+6. Confirm the existing “Jesus at the Center” companion is linked to a valid canonical Sermon record.
+
+7. If the canonical Sermon record is missing, create or repair the migration link without losing:
+   - existing 5-Day Companion content
+   - user completion progress
+   - day history
+   - published status
+
+8. Ensure mobile touch events work correctly:
+   - onClick/onTap fires on the full card
+   - no invisible overlay blocks the card
+   - Ask Emmaus does not intercept the card tap
+   - no CSS pointer-events setting disables the card
+   - no nested element stops propagation incorrectly
+
+9. Add appropriate interactive behaviour:
+   - cursor pointer on desktop
+   - keyboard activation with Enter/Space
+   - accessible role/link semantics
+   - visible pressed/focus feedback
+
+10. Do not add a separate “Open” or “Continue” button. The whole card must remain clickable.
+
+SERMON HOME
+
+When the existing card is tapped, Sermon Home must load and show at minimum:
+
+- Back button
+- Jesus at the Center
+- Companion status
+- Review 5-Day Companion
+
+Optional audio, video and transcript sections must not cause a crash if they are empty.
+
+If the sermon cannot load, show:
+
+“We couldn’t open this sermon.”
+
+- Try Again
+- Back
+
+Never show a blank screen.
+
+TEST THE PUBLISHED APP
+
+After fixing:
+
+1. Publish the latest build.
+2. Open the actual published mobile URL.
+3. Go to Next Steps → Sermon Companions.
+4. Tap the top, middle and bottom areas of the “Jesus at the Center” card.
+5. Confirm every area opens Sermon Home.
+6. Confirm Back returns to Next Steps.
+7. Confirm the existing 5-Day Companion opens.
+8. Confirm existing completion progress remains 5 of 5.
+
+Do not report this as fixed based only on preview or code inspection.
+
+Report back with:
+
+1. Root cause of the card not being tappable.
+2. Files changed.
+3. Canonical sermon ID used.
+4. Whether an old companion-ID mismatch was found.
+5. Published mobile test result.
+6. Confirmation that the full card is now tappable.

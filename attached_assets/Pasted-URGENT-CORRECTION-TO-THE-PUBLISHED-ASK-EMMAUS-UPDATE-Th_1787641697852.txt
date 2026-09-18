@@ -1,0 +1,555 @@
+URGENT CORRECTION TO THE PUBLISHED ASK EMMAUS UPDATE
+
+The recently published Ask Emmaus update has caused important regressions.
+
+Do not begin the Ask Emmaus Voice rebuild yet.
+
+Correct and verify the current text-based Ask Emmaus experience first, because Voice must eventually inherit a reliable, personable, Scripture-first and church-specific Ask Emmaus system.
+
+Create a checkpoint before making changes.
+
+Do not roll back the security improvements, canonical Bible normalization, Daily Rhythm filtering, tenant isolation or server-side citation validation already implemented.
+
+Correct the regressions below.
+
+==================================================
+1. RESTORE A PERSONABLE, RELATIONAL RESPONSE
+==================================================
+
+Ask Emmaus no longer acknowledges the user and simply begins delivering an answer. This feels impersonal and inconsistent with the purpose of Emmaus.
+
+Restore relational acknowledgement.
+
+Ask Emmaus should respond as a thoughtful discipleship companion within the user’s Local Church—not as a generic search engine or Bible-reference generator.
+
+Use the authenticated user’s preferred display name when it is available.
+
+For my administrator account, use:
+
+“Pastor Jeremy”
+
+Do not use:
+
+- Pastor Govender
+- Jeremy Govender
+- the pastor
+- the user
+- a generic account label
+
+However, do not mechanically begin every response with “Pastor Jeremy” or repeat the name throughout the answer.
+
+Use natural judgement.
+
+Examples:
+
+For a personal or pastoral question:
+
+“Pastor Jeremy, that is a difficult and deeply personal question.”
+
+For a question expressing pain:
+
+“I’m sorry you’re carrying this, Pastor Jeremy.”
+
+For a straightforward Bible question:
+
+“That’s an important question.”
+
+For a follow-up question within an active conversation:
+
+“Let’s look at that more closely.”
+
+For a simple factual request:
+
+Answer naturally without forcing an emotional acknowledgement.
+
+The acknowledgement must relate to what the user actually asked.
+
+Avoid repetitive stock openings such as:
+
+- “That’s a great question.”
+- “Thank you for asking.”
+- “The Bible has much to say about this.”
+- “I’m glad you asked.”
+
+Do not falsely claim to understand feelings the user did not express.
+
+Maintain conversational continuity. A follow-up answer should not sound as though a completely new conversation has begun.
+
+==================================================
+2. SCRIPTURE REFERENCES MUST BE CLICKABLE
+==================================================
+
+The updated answers now mention Scripture within paragraphs, but the references are not clickable.
+
+This is a regression.
+
+Scripture must remain naturally integrated into the written answer, but every validated Scripture reference must also be rendered as a working link.
+
+Example answer text:
+
+“Jesus describes eternal life as knowing the Father and knowing Him (John 17:3).”
+
+In the rendered interface, “John 17:3” must be clickable.
+
+Clicking it must:
+
+- open My Bible
+- open John
+- open chapter 17
+- scroll to verse 3
+- highlight verse 3
+- work in the browser
+- work in the installed PWA
+- survive page refresh
+- preserve the destination through authentication
+
+For a range such as John 3:16–18:
+
+- open John 3
+- scroll to verse 16
+- highlight verses 16 through 18
+
+For a chapter such as Psalm 23:
+
+- open Psalm 23 at the beginning of the chapter
+
+Do not require Scripture references to be removed from the paragraph and placed only in a separate list.
+
+The preferred experience is:
+
+1. Natural clickable references within the answer.
+2. A small “Scripture” section below the answer when several passages are central to the response.
+
+Do not turn every answer into a cluttered list of Bible links.
+
+==================================================
+3. DO NOT LET THE MODEL GENERATE RAW LINKS
+==================================================
+
+Preserve the safety rule that the language model must not invent URLs.
+
+The model should return structured Scripture references alongside the answer.
+
+Trusted application code must:
+
+1. Validate the Bible book.
+2. Validate the chapter.
+3. Validate the verse or range.
+4. Generate the canonical My Bible route.
+5. Associate the validated structured reference with the matching visible reference in the prose.
+6. Render it as a clickable component.
+7. Omit link behaviour if validation fails.
+
+Implement safe inline Scripture citation rendering.
+
+Possible structured result:
+
+{
+  "answer": "Jesus describes eternal life as knowing the Father and knowing Him (John 17:3).",
+  "scriptureReferences": [
+    {
+      "displayText": "John 17:3",
+      "book": "John",
+      "chapter": 17,
+      "verseStart": 3,
+      "verseEnd": 3
+    }
+  ]
+}
+
+The frontend must safely match and render the validated display reference as a clickable citation.
+
+Do not allow arbitrary model-generated HTML.
+
+Do not allow uncontrolled model-generated Markdown links.
+
+If exact inline matching cannot be performed safely, render a validated clickable Scripture chip immediately after the relevant paragraph rather than silently leaving the citation unlinked.
+
+==================================================
+4. RESTORE THE LOCAL CHURCH DISTINCTIVENESS
+==================================================
+
+Ask Emmaus is not intended to be a generic Christian chatbot.
+
+It is a Scripture-first, church-specific discipleship tool.
+
+For the current ICC tenant, it must meaningfully draw upon relevant published content from Isipingo Community Church, including:
+
+- Pastor Jeremy’s sermons
+- sermon transcripts
+- Sermon Companions
+- Daily Devotionals
+- Bible Studies
+- Walks
+- Walk Steps
+- Journeys
+- eligible Daily Rhythm content
+- other published ICC discipleship resources
+
+The priority must remain:
+
+1. Scripture
+2. Clear explanation and pastoral reflection
+3. Relevant Local Church teaching and discipleship resources
+4. Prayer or a gentle Next Step where appropriate
+
+Scripture is authoritative.
+
+Local church content helps explain, reinforce and apply Scripture within the life and teaching of the user’s church.
+
+Do not treat local resources as equal to Scripture.
+
+Do not reduce church-specific retrieval to occasional recommendation cards at the end. When a relevant ICC resource exists, its insight should inform the substance of the answer.
+
+==================================================
+5. RETRIEVE LOCAL CHURCH CONTENT FOR EVERY QUESTION
+==================================================
+
+For every substantive Ask Emmaus question:
+
+STAGE 1
+
+Retrieve relevant Scripture.
+
+STAGE 2
+
+Search eligible published content belonging to the current tenant/church.
+
+This second retrieval stage must run consistently—not only when particular keywords such as “sermon” or “Pastor Jeremy” appear in the question.
+
+Search across all supported ICC resource types.
+
+If highly relevant church content is found:
+
+- incorporate its insight naturally
+- identify the source honestly
+- provide a working link to the source where applicable
+- optionally recommend the resource for further engagement
+
+If no relevant church resource exists:
+
+- give a Scripture-first answer
+- do not manufacture a church reference
+- do not falsely claim Pastor Jeremy preached or wrote about it
+
+The absence of a local source must not prevent Ask Emmaus from answering from Scripture.
+
+==================================================
+6. USE PASTOR JEREMY’S TEACHING ACCURATELY
+==================================================
+
+When a retrieved sermon or church resource directly supports the answer, use natural wording such as:
+
+- “Pastor Jeremy spoke about this when he explained…”
+- “In a recent ICC sermon, Pastor Jeremy emphasized…”
+- “This connects with Pastor Jeremy’s message, [Sermon Title]…”
+- “ICC’s Walk on prayer explores this further…”
+
+Do not repeatedly use the identical phrase:
+
+“Pastor Jeremy preached about this…”
+
+Avoid making every response sound formulaic.
+
+Only attribute an idea to Pastor Jeremy when the indexed source proves:
+
+- the correct sermon/resource
+- the actual relevant content
+- the correct tenant
+- publication/access eligibility
+
+Do not invent quotations.
+
+Use direct quotations sparingly and only when the source text is available and verified.
+
+Otherwise paraphrase accurately.
+
+Where the authenticated user is Pastor Jeremy, avoid awkward phrasing such as:
+
+“Pastor Jeremy, Pastor Jeremy preached about this…”
+
+Use:
+
+“You spoke about this in [Sermon Title]…”
+
+For normal ICC users, use:
+
+“Pastor Jeremy spoke about this in [Sermon Title]…”
+
+Create a user-aware attribution formatter so this distinction is handled consistently.
+
+==================================================
+7. CHURCH-SPECIFIC RESOURCE LINKS MUST WORK
+==================================================
+
+When Ask Emmaus references a sermon, devotional, Walk, Journey, Bible Study, Sermon Companion or eligible Daily Rhythm, provide a validated clickable resource card or link.
+
+The model must return:
+
+- resource type
+- canonical resource ID
+- short relevance reason
+
+Application code must:
+
+- validate the resource
+- validate publication status
+- validate tenant
+- validate user access
+- apply Daily Rhythm eligibility
+- resolve the canonical route
+- render the link safely
+
+Do not let the model invent a route.
+
+The link must open the exact resource or Step—not a generic page.
+
+==================================================
+8. DO NOT OVERDO RECOMMENDATIONS
+==================================================
+
+Increasing Local Church input must not make answers feel like advertising.
+
+Usually:
+
+- incorporate the most relevant church insight naturally
+- recommend only the strongest matching resource
+- provide additional resources only when genuinely valuable
+
+Do not append unrelated sermons or Walks merely because they share a broad Christian word such as “faith,” “Jesus” or “prayer.”
+
+Relevance thresholds should be high enough to prevent weak matches.
+
+If several sources discuss the same subject, rank them using:
+
+- direct relevance
+- Scripture alignment
+- source specificity
+- publication/access eligibility
+- user progress
+- usefulness as a Next Step
+
+==================================================
+9. DAILY RHYTHM REMAINS USER-SCOPED
+==================================================
+
+Preserve the Daily Rhythm security and progression rules.
+
+Ask Emmaus may use or recommend:
+
+- today’s unlocked Daily Rhythm
+- the user’s previously completed Daily Rhythms
+
+It must not retrieve, reveal, cite or recommend:
+
+- future Daily Rhythm content
+- locked content
+- another user’s progress
+- unpublished content
+
+Continue enforcing this before model context assembly.
+
+Do not weaken this rule while expanding Local Church retrieval.
+
+==================================================
+10. CHECK WHETHER THE REAL PROBLEM IS INCOMPLETE INDEXING
+==================================================
+
+Audit why only one of three recent test answers referred to Pastor Jeremy or an ICC resource.
+
+Determine whether the cause is:
+
+- local resources were not retrieved
+- only sermons were indexed
+- other resource types were absent from the index
+- relevance thresholds were too high
+- tenant metadata was missing
+- publication metadata was incorrect
+- retrieved resources were removed before prompt construction
+- the model ignored retrieved church context
+- response parsing discarded resource citations
+- canonical resource IDs were absent
+- the published deployment used a stale index
+- the production index has not been reconciled
+- a legacy Ask Emmaus endpoint is still active
+
+Report the actual root cause.
+
+Do not merely change the prompt to mention Pastor Jeremy more frequently.
+
+The system must retrieve real, relevant Local Church content and provide it to Ask Emmaus.
+
+==================================================
+11. RESPONSE COMPOSITION
+==================================================
+
+Ask Emmaus responses should normally feel like a unified pastoral answer—not separate disconnected database sections.
+
+A suitable answer may naturally include:
+
+- a brief acknowledgement
+- Scripture-grounded explanation
+- relevant insight from ICC teaching
+- a gentle application
+- one useful linked resource
+
+Do not enforce all sections when they are unnecessary.
+
+Do not use rigid headings in every short answer.
+
+For longer answers, light headings are acceptable:
+
+- What Scripture shows us
+- How this meets us
+- From ICC
+- A Next Step
+
+Do not use technical headings such as:
+
+- Retrieved Context
+- Knowledge Base Result
+- Source Chunk
+- Database Match
+- RAG Result
+
+==================================================
+12. TEST THESE REPRESENTATIVE QUESTIONS
+==================================================
+
+Test using the published or production-equivalent ICC index:
+
+1. “What does the Bible say about forgiveness?”
+2. “How can I trust God when life does not make sense?”
+3. “What does it mean to follow Jesus?”
+4. “How can I pray when I don’t know what to say?”
+5. “What does John 3:16 mean?”
+6. “How do I overcome temptation?”
+7. “Why is the Local Church important?”
+8. “What does it mean to be created in God’s Image?”
+9. “How can I grow in faith?”
+10. “What did Pastor Jeremy teach about this?”
+
+For every response, record:
+
+- Scriptures retrieved
+- whether the references rendered as clickable
+- final canonical Scripture routes
+- local church resources retrieved
+- tenant IDs
+- resource relevance scores
+- resources supplied to the model
+- resources used in the final answer
+- final canonical resource links
+- whether the user was acknowledged naturally
+- whether the answer accurately distinguished Scripture from church teaching
+
+Do not require every question to mention Pastor Jeremy.
+
+Require every substantive question to search eligible Local Church content.
+
+If no relevant ICC source is found, state that in the test report rather than inserting an irrelevant source.
+
+==================================================
+13. TEST TWO USER IDENTITIES
+==================================================
+
+Test the same relevant church-resource answer as:
+
+A. Pastor Jeremy’s authenticated admin account
+
+Expected attribution:
+
+“You spoke about this in…”
+
+B. A normal ICC user
+
+Expected attribution:
+
+“Pastor Jeremy spoke about this in…”
+
+Ensure user acknowledgement uses the correct preferred display name.
+
+Do not expose administrator status or private information in the answer.
+
+==================================================
+14. VERIFY INLINE SCRIPTURE LINKS END TO END
+==================================================
+
+Browser-test at least:
+
+- John 3:16
+- John 17:3
+- Psalm 23
+- 1 Corinthians 13
+- 2 Corinthians 5:17
+- 1 Thessalonians 5:16–18
+- 1 John 1:9
+
+For each:
+
+1. Generate an Ask Emmaus answer containing the reference naturally.
+2. Confirm the reference is visibly clickable.
+3. Click it.
+4. Confirm the correct book opens.
+5. Confirm the correct chapter opens.
+6. Confirm the correct verse/range scrolls into view.
+7. Confirm highlighting.
+8. Confirm browser back returns to the Ask Emmaus conversation without losing it.
+9. Confirm operation after page refresh.
+10. Confirm operation in the installed PWA where testable.
+
+Do not count an API test or valid URL alone as completion.
+
+==================================================
+15. VERIFY RESOURCE LINKS END TO END
+==================================================
+
+Browser-test references to:
+
+- a sermon
+- Sermon Companion
+- Daily Devotional
+- Walk
+- specific Walk Step
+- Journey
+- Bible Study
+- eligible Daily Rhythm
+
+Confirm each opens the exact referenced resource.
+
+Test that inaccessible and future Daily Rhythm resources do not render.
+
+==================================================
+16. COMPLETION CONDITIONS
+==================================================
+
+Do not mark this correction complete until:
+
+- Ask Emmaus acknowledges users naturally where appropriate.
+- Pastor Jeremy’s account is addressed as Pastor Jeremy.
+- Normal users receive appropriate relational responses.
+- Scripture references within answers are clickable.
+- Scripture links open the exact correct passage.
+- Every substantive query searches eligible Local Church content.
+- Relevant ICC teaching informs answers when available.
+- Pastor Jeremy is only cited when a real source supports it.
+- Pastor Jeremy’s own account receives first-person-aware attribution.
+- Relevant ICC resources receive validated working links.
+- Daily Rhythm remains user-scoped.
+- No model-invented routes or URLs are rendered.
+- Browser-level tests pass.
+- The production-equivalent index contains all intended published resource types.
+
+Create a new checkpoint after tests pass.
+
+Do not republish automatically.
+
+Provide:
+
+1. Root cause of the missing personal acknowledgement.
+2. Root cause of non-clickable Scripture references.
+3. Root cause of inconsistent ICC/Pastor Jeremy retrieval.
+4. Files changed.
+5. Index/resource types currently available.
+6. Exact tests and results.
+7. Manual tests I must perform before republishing.

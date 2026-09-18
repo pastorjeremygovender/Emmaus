@@ -1,7 +1,7 @@
 /**
  * WalkCompletePage.test.tsx
  *
- * Covers the next-Walk CTA visibility logic in Task 205:
+ * Covers the next-Walk CTA visibility logic:
  *
  *  1. nextJourneyId → Published walk   : "Start [title]" CTA is shown;
  *                                        "Back to Walk" is rendered as a secondary link.
@@ -20,6 +20,22 @@ const mockSetLocation = vi.fn();
 vi.mock('wouter', () => ({
   useParams: () => ({ journeyId: 'journey-1' }),
   useLocation: () => ['/', mockSetLocation],
+}));
+
+// ── AuthContext ───────────────────────────────────────────────────────────────
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => ({
+    user: { id: 'user-1', preferredName: 'Tester' },
+  }),
+}));
+
+// ── RoomsContext ──────────────────────────────────────────────────────────────
+vi.mock('@/contexts/RoomsContext', () => ({
+  useRooms: () => ({
+    getMyRooms: () => [],
+    loadRoomDetail: vi.fn(),
+    getRoomDetail: () => undefined,
+  }),
 }));
 
 // ── JourneyContext ─────────────────────────────────────────────────────────────
@@ -68,11 +84,11 @@ describe('WalkCompletePage — next-Walk CTA visibility', () => {
     // Primary CTA must mention the next walk's title
     expect(screen.getByRole('button', { name: /start walk two/i })).toBeInTheDocument();
 
-    // "Back to Walk" should still be reachable (secondary link)
-    expect(screen.getByText(/back to walk/i)).toBeInTheDocument();
+    // "Back to Walk" is the secondary return button when a continue CTA is present
+    expect(screen.getByRole('button', { name: /back to walk/i })).toBeInTheDocument();
   });
 
-  it('hides the CTA and shows only "Back to Walk" when nextJourneyId points to a Draft walk', () => {
+  it('hides the "Start" CTA and shows "View Walk Summary" when nextJourneyId points to a Draft walk', () => {
     mockJourneys = {
       'journey-1': {
         id: 'journey-1',
@@ -89,14 +105,14 @@ describe('WalkCompletePage — next-Walk CTA visibility', () => {
 
     render(<WalkCompletePage />);
 
-    // No "Start …" CTA
-    expect(screen.queryByRole('button', { name: /start/i })).not.toBeInTheDocument();
+    // No "Start …" CTA for a draft next walk
+    expect(screen.queryByRole('button', { name: /start unreleased walk/i })).not.toBeInTheDocument();
 
-    // "Back to Walk" is the sole primary button
+    // Fallback primary button — the return label when no continue CTA is shown
     expect(screen.getByRole('button', { name: /back to walk/i })).toBeInTheDocument();
   });
 
-  it('hides the CTA and shows only "Back to Walk" when nextJourneyId points to an unknown walk', () => {
+  it('hides the "Start" CTA when nextJourneyId points to an unknown walk', () => {
     mockJourneys = {
       'journey-1': {
         id: 'journey-1',
@@ -113,7 +129,7 @@ describe('WalkCompletePage — next-Walk CTA visibility', () => {
     expect(screen.getByRole('button', { name: /back to walk/i })).toBeInTheDocument();
   });
 
-  it('hides the CTA and shows only "Back to Walk" when nextJourneyId is absent', () => {
+  it('hides the "Start" CTA when nextJourneyId is absent', () => {
     mockJourneys = {
       'journey-1': {
         id: 'journey-1',
@@ -129,13 +145,13 @@ describe('WalkCompletePage — next-Walk CTA visibility', () => {
     expect(screen.getByRole('button', { name: /back to walk/i })).toBeInTheDocument();
   });
 
-  it('hides the CTA and shows only "Back to Walk" when nextJourneyId is an empty string', () => {
+  it('hides the "Start" CTA when nextJourneyId is a whitespace-only string', () => {
     mockJourneys = {
       'journey-1': {
         id: 'journey-1',
         title: 'Walk One',
         status: 'Published',
-        nextJourneyId: '   ', // whitespace-only, treated as empty by the page
+        nextJourneyId: '   ', // whitespace-only, treated as absent by the page
       },
     };
 

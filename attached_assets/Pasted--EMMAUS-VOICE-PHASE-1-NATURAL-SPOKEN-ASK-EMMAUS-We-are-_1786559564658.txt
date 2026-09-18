@@ -1,0 +1,482 @@
+# EMMAUS VOICE — PHASE 1
+
+# NATURAL SPOKEN ASK EMMAUS
+
+We are now beginning the proper Emmaus Voice build.
+
+This must NOT be treated as a text-to-speech gimmick.
+
+Emmaus Voice must become a spoken interface to the SAME Emmaus intelligence already used by Ask Emmaus.
+
+Do NOT create a separate AI personality.
+Do NOT create a separate knowledge base.
+Do NOT create a separate theological response engine.
+
+Voice and text must use the same Emmaus brain.
+
+==================================================
+PHASE 1 GOAL
+============
+
+Build a production-ready first version of Emmaus Voice with this flow:
+
+User taps microphone
+
+↓
+
+User speaks naturally
+
+↓
+
+Speech is transcribed
+
+↓
+
+Existing Ask Emmaus processes the transcript
+
+↓
+
+Emmaus response is shown as text
+
+↓
+
+Emmaus speaks the response aloud using natural voice
+
+↓
+
+User can immediately speak again
+
+This is the first milestone.
+
+Do NOT attempt always-listening / wake-word functionality yet.
+
+==================================================
+CORE ARCHITECTURE
+=================
+
+Emmaus Voice must reuse:
+
+* existing Ask Emmaus API
+* existing Emmaus system prompt / Constitution
+* existing Scripture retrieval
+* existing sermons knowledge
+* existing devotional knowledge
+* existing Walk / Journey / Bible Study knowledge
+* existing safety rules
+* existing conversation context
+* existing search/recommendation logic
+
+Voice is an INPUT + OUTPUT layer around Ask Emmaus.
+
+Architecture:
+
+Speech Input
+→ transcription
+→ Ask Emmaus
+→ response text
+→ speech output
+
+==================================================
+VOICE ENTRY POINT
+=================
+
+Add a clear voice entry point to the existing Ask Emmaus interface.
+
+Preferred:
+
+microphone icon inside the existing Ask Emmaus input.
+
+Do NOT add another floating Voice button if the existing Ask Emmaus interface can handle it cleanly.
+
+When tapped:
+
+open Emmaus Voice mode.
+
+==================================================
+VOICE MODE SCREEN
+=================
+
+Create a simple dedicated Voice mode.
+
+Example:
+
+Emmaus
+
+Listening...
+
+[ animated audio visualizer ]
+
+Tap to stop
+
+After transcription:
+
+User:
+"I'm anxious about tomorrow."
+
+Emmaus:
+spoken response begins automatically.
+
+Display the transcript and response on screen as well.
+
+Keep the screen visually calm and uncluttered.
+
+==================================================
+VOICE STATES
+============
+
+Support clear states:
+
+READY
+"Tap to speak"
+
+LISTENING
+"Listening..."
+
+THINKING
+"Emmaus is thinking..."
+
+SPEAKING
+"Emmaus is speaking..."
+
+ERROR
+simple human-readable error
+
+Do NOT expose:
+
+API names
+model names
+speech provider names
+technical error codes
+
+==================================================
+INTERRUPTION
+============
+
+While Emmaus is speaking, user should be able to tap the microphone.
+
+Emmaus speech should stop immediately.
+
+Then listen to the user.
+
+This is essential for natural conversation.
+
+Do not force the user to wait for Emmaus to finish speaking.
+
+==================================================
+FOLLOW-UP CONVERSATION
+======================
+
+Maintain conversation context.
+
+Example:
+
+User:
+"Read Psalm 23."
+
+Emmaus reads it.
+
+User:
+"What does verse 4 mean?"
+
+Emmaus should understand that "verse 4" refers to Psalm 23.
+
+Do not treat each voice turn as a new conversation.
+
+==================================================
+SPEECH INPUT
+============
+
+Use a reliable speech-to-text provider compatible with the current architecture.
+
+Requirements:
+
+* good mobile accuracy
+* English support
+* South African accents handled reasonably
+* punctuation where possible
+* editable transcript before sending if transcription confidence is poor
+
+If current OpenAI speech/transcription services are already available through the existing OpenAI integration, prefer reusing that infrastructure.
+
+Do not add unnecessary providers.
+
+==================================================
+SPEECH OUTPUT
+=============
+
+Use a natural neural voice.
+
+Voice requirements:
+
+* warm
+* calm
+* mature
+* reassuring
+* conversational
+* not robotic
+* not overly dramatic
+* not announcer-like
+* not synthetic assistant style
+
+Avoid exaggerated emotion.
+
+The spoken delivery should feel like a thoughtful human companion.
+
+==================================================
+VOICE SELECTION
+===============
+
+Build the voice provider behind an abstraction layer.
+
+Do NOT tightly couple Emmaus Voice to one provider.
+
+Create something equivalent to:
+
+VoiceService
+
+with methods conceptually like:
+
+transcribeAudio()
+speakText()
+stopSpeaking()
+
+This allows us to change voice providers later without rebuilding Emmaus.
+
+==================================================
+AUDIO PLAYBACK
+==============
+
+Speech playback must:
+
+* begin quickly
+* allow pause
+* allow stop
+* allow interruption
+* not continue playing after navigating away
+* work on mobile browser
+* work on desktop browser
+
+==================================================
+READ ALOUD
+==========
+
+Phase 1 must also support a generic:
+
+Hear Emmaus
+
+action for existing Emmaus content.
+
+Add support first for:
+
+* Ask Emmaus answers
+* Bible passages
+* Daily Rhythm
+* Daily Devotionals
+* Walk Steps
+* Sermon Companions
+
+Do NOT create separate audio recordings.
+
+Read the existing approved text dynamically.
+
+==================================================
+SCRIPTURE READING
+=================
+
+When user says:
+
+"Read Psalm 23"
+
+Emmaus should:
+
+1. retrieve Psalm 23 using the existing Bible system
+2. read the actual Scripture text aloud
+3. show the passage visually
+4. stop if interrupted
+5. remember the passage for follow-up questions
+
+==================================================
+VOICE COMMANDS
+==============
+
+Support simple conversational commands naturally.
+
+Examples:
+
+"Stop"
+
+"Pause"
+
+"Continue"
+
+"Read that again"
+
+"Go back"
+
+"Next"
+
+"Read the Scripture"
+
+"Explain that"
+
+"Pray with me"
+
+"Open today's devotional"
+
+"Continue my walk"
+
+Do NOT require rigid exact phrases.
+
+==================================================
+PRAYER
+======
+
+If user asks:
+
+"Pray with me"
+
+Emmaus should generate a short prayer consistent with existing Emmaus theological parameters.
+
+Speak it naturally.
+
+Do not become theatrical.
+
+==================================================
+PRIVACY
+=======
+
+Do not permanently store raw microphone recordings by default.
+
+Audio should be used for transcription and discarded unless there is a clear existing requirement to retain it.
+
+Conversation text may continue to follow existing Ask Emmaus history rules.
+
+==================================================
+MOBILE
+======
+
+Prioritize mobile.
+
+Test:
+
+* microphone permissions
+* interrupted playback
+* screen lock behaviour where possible
+* switching between speaker and Bluetooth audio
+* headphones
+* car Bluetooth
+
+Do not assume desktop only.
+
+==================================================
+DO NOT BUILD YET
+================
+
+Do NOT build in this phase:
+
+* wake word "Emmaus"
+* always-listening microphone
+* background continuous listening
+* LiveKit voice agent
+* Group Voice participant
+* synchronized multi-user voice
+* wearable integrations
+* smart glasses integration
+
+Those are later phases.
+
+==================================================
+PHASE 1 SUCCESS TEST
+====================
+
+Test this full conversation:
+
+User taps mic:
+
+"Emmaus, I'm feeling anxious about tomorrow."
+
+Emmaus:
+
+responds using the existing Ask Emmaus pastoral/theological parameters
+
+and speaks the answer naturally.
+
+User interrupts:
+
+"Can you read Philippians 4?"
+
+Emmaus stops previous speech.
+
+Retrieves Philippians 4.
+
+Reads it aloud.
+
+User then asks:
+
+"What does verse 6 mean?"
+
+Emmaus understands context.
+
+User says:
+
+"Pray with me about that."
+
+Emmaus gives and speaks an appropriate prayer.
+
+This entire conversation should happen without leaving Voice mode.
+
+==================================================
+ADMIN / CONFIGURATION
+=====================
+
+Add basic Admin Voice settings:
+
+Emmaus Voice
+
+* Voice enabled ON/OFF
+* selected voice
+* speech speed
+* provider status
+* test voice
+
+Do not expose API secrets.
+
+==================================================
+OBSERVABILITY
+=============
+
+Log non-sensitive operational events such as:
+
+* transcription success/failure
+* TTS success/failure
+* response latency
+* playback errors
+
+Do not log raw microphone audio.
+
+==================================================
+FINAL QA
+========
+
+Before marking complete:
+
+Test on:
+
+* desktop Chrome
+* Android Chrome
+* iPhone Safari if available
+
+Verify:
+
+* microphone works
+* transcription works
+* Ask Emmaus response works
+* speech sounds natural
+* interruption works
+* follow-up context works
+* Bible reading works
+* prayer works
+* audio stops on navigation
+* no API secrets appear client-side
+
+Do not mark Phase 1 complete until the full spoken conversation loop works end-to-end.

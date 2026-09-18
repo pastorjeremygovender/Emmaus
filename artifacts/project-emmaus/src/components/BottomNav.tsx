@@ -1,89 +1,52 @@
-import { Link, useLocation } from 'wouter';
-import { Footprints, BookOpen, Compass, User } from 'lucide-react';
-import { getReturnDestination } from '@/lib/emmaus-pending';
+import { useLocation } from 'wouter';
+import { Footprints, BookOpen } from 'lucide-react';
 
-// Navigation order (locked):
-// 1. Today's Steps  /walk
-// 2. Next Steps     /journeys
-// 3. My Bible       /bible
-// 4. My Journey     /personal
+const ITEMS = [
+  { path: '/walk', label: 'My Emmaus', icon: Footprints },
+  { path: '/bible', label: 'My Bible', icon: BookOpen },
+] as const;
 
 export function BottomNav() {
-  const [location] = useLocation();
-
-  const navItems = [
-    { path: '/walk',      label: "Today's Steps", icon: Footprints },
-    { path: '/journeys',  label: 'Next Steps',    icon: Compass },
-    { path: '/bible',     label: 'My Bible',      icon: BookOpen },
-    { path: '/personal',  label: 'My Journey',    icon: User },
-  ];
-
-  function isActive(path: string): boolean {
-    // While Ask Emmaus is open, highlight the section the user came from
-    // rather than falsely highlighting Personal.
-    if (location.startsWith('/personal/ask-emmaus')) {
-      const dest = getReturnDestination();
-      if (dest) {
-        const sectionPath: Record<string, string> = {
-          walk: '/walk',
-          bible: '/bible',
-          journeys: '/journeys',
-          personal: '/personal',
-        };
-        return path === sectionPath[dest.sourceSection];
-      }
-      // No stored destination — suppress highlighting entirely on Ask Emmaus screens.
-      return false;
-    }
-
-    if (path === '/walk')     return (
-      location === '/walk' ||
-      location.startsWith('/daily-rhythm/')
-    );
-    if (path === '/bible')    return location === '/bible' || location.startsWith('/bible/');
-    if (path === '/journeys') return location === '/journeys' || location.startsWith('/journey/');
-    if (path === '/personal') {
-      return (
-        location === '/personal' ||
-        (location.startsWith('/personal/') && !location.startsWith('/personal/ask-emmaus'))
-      );
-    }
-    return false;
-  }
+  const [location, setLocation] = useLocation();
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border safe-area-bottom">
-      <nav className="flex justify-around items-center h-16" aria-label="Main navigation">
-        {navItems.map(({ path, label, icon: Icon }) => {
-          const active = isActive(path);
+    <nav
+      className="pointer-events-none fixed bottom-0 left-0 right-0 z-50 flex justify-center bg-gradient-to-t from-background via-background/95 to-transparent px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-5"
+      aria-label="Primary"
+    >
+      <div className="pointer-events-auto grid w-[min(21rem,calc(100vw-2rem))] grid-cols-2 rounded-full border border-border/80 bg-muted/70 p-1 shadow-[0_3px_12px_rgba(37,44,42,0.08)] backdrop-blur-md">
+        {ITEMS.map(({ path, label, icon: Icon }) => {
+          const active = path === '/walk'
+            ? location === '/walk' || location.startsWith('/daily-rhythm')
+            : location === '/bible' || location.startsWith('/bible/');
           return (
-            <Link
+            <a
               key={path}
-              href={path}
+              href={`${base}${path}`}
+              onClick={event => {
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                event.preventDefault();
+                setLocation(path);
+              }}
               data-testid={`nav-${path.slice(1)}`}
-              className="flex-1 flex flex-col items-center justify-center h-full gap-1 min-h-[44px] relative px-1"
+              className={[
+                'flex min-h-[44px] items-center justify-center gap-1.5 rounded-full px-3 text-[13px] font-semibold',
+                'transition-[background-color,color,box-shadow,transform] duration-200',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                active
+                  ? 'bg-background text-foreground shadow-[0_1px_4px_rgba(37,44,42,0.12)]'
+                  : 'text-muted-foreground hover:text-foreground',
+              ].join(' ')}
+              aria-label={label}
               aria-current={active ? 'page' : undefined}
             >
-              {active && (
-                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-primary" />
-              )}
-              <Icon
-                size={21}
-                className={`transition-colors shrink-0 ${active ? 'text-primary' : 'text-muted-foreground'}`}
-                strokeWidth={active ? 2.5 : 1.8}
-                aria-hidden="true"
-              />
-              <span
-                className={`text-[10px] font-medium tracking-tight transition-colors text-center leading-tight ${
-                  active ? 'text-primary' : 'text-muted-foreground'
-                }`}
-              >
-                {label}
-              </span>
-            </Link>
+              <Icon size={17} strokeWidth={2.1} aria-hidden="true" />
+              <span>{label}</span>
+            </a>
           );
         })}
-      </nav>
-    </div>
+      </div>
+    </nav>
   );
 }

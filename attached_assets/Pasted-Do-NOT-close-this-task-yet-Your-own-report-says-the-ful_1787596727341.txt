@@ -1,0 +1,105 @@
+Do NOT close this task yet.
+
+Your own report says:
+
+“the full 25-case controlled-time matrix for the new database transaction still deserves dedicated API fixtures rather than being represented by broad build checks.”
+
+That means the requirement I gave you has NOT yet been completed.
+
+My previous instruction explicitly stated:
+
+“Do not mark this task complete until all 25 tests pass.”
+
+This is particularly important because the Daily Rhythm bug was discovered today during the first real-world test with brand-new users, despite previous assurances that the feature was working.
+
+Therefore broad build checks and existing client-routing tests are NOT sufficient evidence.
+
+Please reopen/continue task #642 and complete the missing work.
+
+Create the dedicated API/database test fixtures necessary to properly test the new Daily Rhythm transaction and controlled calendar-date behaviour.
+
+Then execute ALL 25 tests from my previous prompt.
+
+This must include actual verification of:
+
+- brand-new user behaviour
+- first opening of Emmaus each calendar day → Daily Rhythm
+- subsequent openings that day → Today's Steps
+- Day 1 completion does NOT unlock Day 2 that day
+- Back to Today's Steps does NOT advance progress
+- refresh does not advance progress
+- logout/login does not advance progress
+- PWA restart does not advance progress
+- browser navigation does not advance progress
+- incomplete Steps remain current on subsequent days
+- completed Steps advance only on a later calendar date
+- Africa/Johannesburg date boundary
+- multiple tabs
+- multiple devices
+- simultaneous requests/concurrency
+- duplicate completion requests
+- direct URL access to future Steps
+- direct API access to future Steps
+- manipulated client/device date
+- Previous Days being strictly review-only
+- complete isolation between users
+- brand-new users never inheriting admin/test-user state
+
+Do not substitute build success, TypeScript compilation, client routing tests, or code inspection for these tests.
+
+Where a test requires controlled time, create the necessary test fixture so that the server/database believes it is the next calendar day without changing the production logic.
+
+Where a test requires concurrency, actually issue concurrent requests and verify the persisted database result.
+
+Where a test requires a second device/session, simulate independent authenticated sessions for the same user.
+
+Where a test requires different users, use separate fresh test users.
+
+IMPORTANT:
+
+Do not weaken or remove production protections merely to make testing easier.
+
+After testing, give me a table containing:
+
+TEST 1–25
+PASS / FAIL
+WHAT WAS TESTED
+EXPECTED RESULT
+ACTUAL RESULT
+
+If ANY test fails:
+
+1. Do not close the task.
+2. Diagnose the cause.
+3. Fix it.
+4. Rerun the failed test.
+5. Rerun any related regression tests.
+6. Continue until all 25 tests pass.
+
+Also confirm separately that these permanent Emmaus invariants are enforced SERVER-SIDE:
+
+1. Maximum ONE new 10 Minutes with Jesus Step can unlock per calendar day.
+
+2. Completing today's Step NEVER immediately advances to tomorrow's Step.
+
+3. Navigation NEVER changes Daily Rhythm progression.
+
+4. A future locked Step cannot be accessed by manipulating the client, URL, or API.
+
+5. An incomplete Step remains current even when another calendar day begins.
+
+6. First opening of Emmaus each new calendar day opens Daily Rhythm.
+
+7. Subsequent openings during that same calendar day open Today's Steps.
+
+8. Daily progression and first-daily-opening state are user-specific and work across devices.
+
+9. Africa/Johannesburg is currently the authoritative calendar-day boundary unless a user-specific timezone is explicitly stored.
+
+10. Concurrent or duplicate requests cannot advance a user more than one Step.
+
+Only after ALL 25 tests genuinely pass should you mark task #642 complete.
+
+Do not respond that the implementation “should work.”
+
+I need evidence that it DOES work.

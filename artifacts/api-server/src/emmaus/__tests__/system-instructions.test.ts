@@ -106,6 +106,44 @@ describe("buildSystemPrompt — userName personalisation", () => {
       "Context block must appear when a name is provided"
     );
   });
+
+  it("requires verified sermon context to be referenced in the written response", () => {
+    const prompt = buildSystemPrompt(
+      `${CONTEXT_BLOCK}\n\nVerified ICC sermon matching this conversation:\n  Title: "When the Pressure Builds"\n  Speaker: Pastor Jeremy`,
+    );
+
+    assert.match(prompt, /MUST include at least one\s+natural sentence/i);
+    assert.match(prompt, /not merely leave the sermon for the link\/card/i);
+    assert.match(prompt, /When the Pressure Builds/);
+  });
+
+  it("equips Emmaus to use the published resource library excluding locked Daily Rhythm", () => {
+    const prompt = buildSystemPrompt(CONTEXT_BLOCK);
+
+    for (const resource of [
+      "Walks",
+      "Journeys",
+      "Bible Studies",
+      "Devotionals",
+      "Sermon Companions",
+    ]) {
+      assert.match(prompt, new RegExp(resource), `Expected ${resource} guidance`);
+    }
+    assert.match(prompt, /approved excerpts/i);
+    assert.match(prompt, /exact title and route|title,\s+route, and supplied content/i);
+    assert.match(prompt, /Scripture remains the centre/i);
+    assert.match(prompt, /Daily Rhythm is locked and unavailable/i);
+  });
+  it("requires concise direct answers and selective resource recommendations", () => {
+    const prompt = buildSystemPrompt(CONTEXT_BLOCK);
+
+    assert.match(prompt, /Lead with the direct answer in the first sentence/i);
+    assert.match(prompt, /Usually 35–80 words/i);
+    assert.match(prompt, /at most TWO resource recommendations/i);
+    assert.match(prompt, /Prefer one excellent match/i);
+    assert.match(prompt, /Do not force an action/i);
+    assert.match(prompt, /at most ONE concise follow-up/i);
+  });
 });
 
 // ─── conversation-service wiring note ────────────────────────────────────────

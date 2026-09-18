@@ -11,6 +11,7 @@
  */
 
 import { logger } from "./logger.js";
+import { getCanonicalPublicOrigin } from "./public-origin.js";
 
 const API_BASE = "https://www.googleapis.com/youtube/v3";
 
@@ -330,7 +331,10 @@ export interface OAuthConfig {
 export function getOAuthConfig(): OAuthConfig | null {
   const clientId = process.env.YOUTUBE_CLIENT_ID;
   const clientSecret = process.env.YOUTUBE_CLIENT_SECRET;
-  const redirectUri = process.env.YOUTUBE_REDIRECT_URI;
+  const configuredRedirectUri = process.env.YOUTUBE_REDIRECT_URI?.trim();
+  const redirectUri = process.env.NODE_ENV === "production"
+    ? `${getCanonicalPublicOrigin()}/api/youtube-archive/oauth/callback`
+    : configuredRedirectUri;
   if (!clientId || !clientSecret || !redirectUri) return null;
   return { clientId, clientSecret, redirectUri };
 }

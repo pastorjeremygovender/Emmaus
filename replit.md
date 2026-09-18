@@ -11,6 +11,22 @@ A church discipleship platform that turns Sunday sermons into a week of daily co
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `API_BIBLE_KEY`, `YOUTUBE_API_KEY`, `SESSION_SECRET`
 
+## Checkpoints
+
+### Emmaus Foundation v1 – LiveKit Connected
+**Date:** 2026-08-08  
+**Status:** Official restore baseline — all core systems verified, LiveKit credentials configured and connectivity confirmed.  
+**Detail:** `.agents/memory/foundation-v1-checkpoint.md`
+
+All systems verified operational at this point:
+- Admin Content Studio · Daily Rhythm · Daily Devotionals · Walk · Journeys · Sermon Companion · Ask Emmaus · Discover · My Journey · Rooms architecture · LiveKit integration
+- API server build clean · Frontend build clean · 0 frontend TypeScript errors · All DB migrations idempotent and confirmed · Production deployment stable
+- 3 pre-existing API TypeScript errors (canonical-sermon-store, analytics, workflows) — not regressions, do not touch unless explicitly targeted
+
+**Planned future streams from this baseline:** Emmaus Rooms video · Emmaus Voice · Media Studio · Church Platform · Native Mobile App
+
+---
+
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9

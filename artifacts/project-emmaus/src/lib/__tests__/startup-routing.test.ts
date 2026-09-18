@@ -2,7 +2,7 @@
  * startup-routing.test.ts
  *
  * Confirms the startup redirect logic that ensures a member always lands on
- * Today's Steps (/walk) after closing and reopening the app from any Bible or
+ * My Emmaus (/walk) after closing and reopening the app from any Bible or
  * Journeys sub-page.
  *
  * Spec:
@@ -12,12 +12,13 @@
  *     that should NOT trigger the startup redirect.
  *   - resolveEntryRoute() must always return '/walk' regardless of arguments,
  *     ensuring the Welcome screen never sends an authenticated member anywhere
- *     other than Today's Steps on a normal launch.
+ *     other than My Emmaus on a normal launch.
  */
 
 import { describe, it, expect } from 'vitest';
-import { isTabPath } from '@/lib/tab-paths';
+import { isColdMemberLaunchPath, isTabPath } from '@/lib/tab-paths';
 import { resolveEntryRoute } from '@/lib/entry-route';
+import { isStartupRoutingComplete, markStartupRoutingComplete, resetStartupRouting } from '@/lib/startup-routing';
 
 // ── isTabPath ────────────────────────────────────────────────────────────────
 
@@ -129,6 +130,26 @@ describe('isTabPath — paths that must NOT trigger the redirect', () => {
   });
 });
 
+describe('isColdMemberLaunchPath — cold launch protection', () => {
+  it('routes a direct /walk launch through Welcome', () => {
+    expect(isColdMemberLaunchPath('/walk')).toBe(true);
+  });
+
+  it('routes member tab deep links through Welcome', () => {
+    expect(isColdMemberLaunchPath('/bible/read/john/1')).toBe(true);
+    expect(isColdMemberLaunchPath('/journeys/explore')).toBe(true);
+    expect(isColdMemberLaunchPath('/personal/ask-emmaus')).toBe(true);
+  });
+
+  it('does not intercept content, auth, admin, or room deep links', () => {
+    expect(isColdMemberLaunchPath('/')).toBe(false);
+    expect(isColdMemberLaunchPath('/auth')).toBe(false);
+    expect(isColdMemberLaunchPath('/admin')).toBe(false);
+    expect(isColdMemberLaunchPath('/daily-rhythm/day/1')).toBe(false);
+    expect(isColdMemberLaunchPath('/rooms/room-1')).toBe(false);
+  });
+});
+
 // ── resolveEntryRoute ────────────────────────────────────────────────────────
 
 describe('resolveEntryRoute — always returns /walk', () => {
@@ -146,3 +167,13 @@ describe('resolveEntryRoute — always returns /walk', () => {
     expect(resolveEntryRoute()).toBe('/walk');
   });
 });
+
+describe('startup routing lifecycle guard', () => {
+  it('can reset when a new member signs in within the same app context', () => {
+    markStartupRoutingComplete();
+    expect(isStartupRoutingComplete()).toBe(true);
+    resetStartupRouting();
+    expect(isStartupRoutingComplete()).toBe(false);
+  });
+});
+
