@@ -75,13 +75,13 @@ describe('MemberHeaderActions', () => {
     expect(screen.getByTestId('toggle-notifications')).toBeDisabled();
   });
 
-  it('shows the rc6 build identity in About Emmaus', async () => {
+  it('shows the current build identity in About Emmaus', async () => {
     const user = userEvent.setup();
     render(<MemberHeaderActions compact />);
 
     await user.click(screen.getByTestId('about-emmaus-trigger'));
 
-    expect(screen.getByText('Android test build · 1.2.0-rc6 · version code 8')).toBeInTheDocument();
+    expect(screen.getByText('Emmaus 1.2.0')).toBeInTheDocument();
   });
 
   it('shows the live text-size preview in Settings', async () => {
@@ -95,4 +95,5 @@ describe('MemberHeaderActions', () => {
       'Jesus walks with you through every season.',
     );
   });
+
 });

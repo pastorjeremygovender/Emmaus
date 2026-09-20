@@ -12,11 +12,12 @@ export default function BookDetail() {
   useEffect(() => { window.scrollTo(0, 0); }, []);
   const { bookId } = useParams<{ bookId: string }>();
   const [, setLocation] = useLocation();
-  const { isChapterComplete, translationId, getRememberedChapter } = useBible();
+  const { isChapterComplete, translationId, getRememberedChapter, getJourneyProgress } = useBible();
 
   const resolvedBookId = bookId || 'luke';
   const book = getBibleBook(resolvedBookId);
   const journey = BIBLE_JOURNEYS.find(j => j.bookId === resolvedBookId && j.available);
+  const journeyProg = journey ? getJourneyProgress(journey.id) : null;
 
   if (!book) {
     return (

@@ -83,6 +83,16 @@ describe('Emmaus service-worker cache policy', () => {
     expect(source).toContain("if (!isSafeStaticRequest(event.request)) return;");
   });
 
+  it('keeps activate non-navigating and uses a fresh restore cache', () => {
+    const source = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8');
+
+    expect(source).toContain("const STATIC_CACHE = 'emmaus-static-v2-restore'");
+    expect(source).toContain('self.skipWaiting()');
+    expect(source).toContain('.then(() => self.clients.claim())');
+    expect(source).not.toContain('client.navigate(');
+    expect(source).not.toContain('RELEASE_ID');
+  });
+
   it('allows generated hashed Vite assets', () => {
     expect(
       policy.isSafeStaticRequest(

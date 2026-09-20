@@ -10,7 +10,7 @@
  * This keeps user, admin, Bible, Ask Emmaus, and progress data network-owned.
  */
 
-const STATIC_CACHE = 'emmaus-static-v1';
+const STATIC_CACHE = 'emmaus-static-v2-restore';
 const EMMAUS_CACHE_PREFIX = 'emmaus-static-';
 const HASHED_VITE_ASSET =
   /(^|\/)assets\/[^/]+-[A-Za-z0-9_-]{8,}\.(css|js|mjs|woff2?|ttf|otf|png|jpe?g|gif|svg|webp|avif)$/i;

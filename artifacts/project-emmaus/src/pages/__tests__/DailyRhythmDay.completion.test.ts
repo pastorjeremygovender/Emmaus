@@ -24,7 +24,14 @@ describe('DailyRhythmDay completion contract', () => {
     expect(source).toContain("const isDailyRhythmJourney = journey?.journeyType === 'daily-rhythm';");
     expect(source).toContain('getDailyRhythmState()');
     expect(source).toContain('dailyProgressLoading');
-    expect(source).toContain('if (isDailyRhythmJourney && dailyProgressLoading)');
+    expect(source).toContain('if (isDailyRhythmJourney && (dailyProgressLoading || stepsLoading))');
+  });
+
+  it('keeps widget routing safe while the step catalogue is loading', () => {
+    expect(source).toContain('const currentDay =');
+    expect(source).toContain('const stepsLoading = Boolean(isDailyRhythmJourney && journeysLoading);');
+    expect(source).toContain('if (isDailyRhythmJourney && (dailyProgressLoading || stepsLoading))');
+    expect(source).toContain('stepsLoading ||');
   });
 
   it('does not keep a future-day guard or infer replay from the assigned day', () => {

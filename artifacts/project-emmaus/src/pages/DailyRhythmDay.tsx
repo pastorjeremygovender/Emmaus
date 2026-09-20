@@ -44,7 +44,14 @@ export default function DailyRhythmDay() {
   const { dayNumber } = useParams<{ dayNumber: string }>();
   const [, setLocation] = useLocation();
   const { user } = useAuth();
-  const { journeys, progress, getStepsForJourney, completeStep, dailyRhythmState } = useJourney();
+  const {
+    journeys,
+    progress,
+    getStepsForJourney,
+    completeStep,
+    dailyRhythmState,
+    loading: journeysLoading,
+  } = useJourney();
 
   // Resolve the daily-rhythm journey dynamically so any slug works in production.
   // Falls back to the known seed ID so existing deep-links don't break.
@@ -70,6 +77,12 @@ export default function DailyRhythmDay() {
   const isDailyRhythmJourney = journey?.journeyType === 'daily-rhythm';
   const prog = dailyProgress ?? dailyRhythmState?.progress ?? progress[journeyId];
   const steps = getStepsForJourney(journeyId);
+  const currentDay =
+    dailyRhythmState?.todayAvailableDay ??
+    dailyRhythmState?.assignedDay ??
+    prog?.currentDay ??
+    day;
+  const stepsLoading = Boolean(isDailyRhythmJourney && journeysLoading);
 
   // Startup can advance Daily Rhythm immediately before this page mounts,
   // while JourneyContext may still hold the progress snapshot fetched a
@@ -155,6 +168,7 @@ export default function DailyRhythmDay() {
       source !== 'widget' ||
       !user ||
       dailyProgressLoading ||
+      stepsLoading ||
       !step ||
       (widgetStepUnavailable && !widgetFallback)
     ) {
@@ -167,6 +181,7 @@ export default function DailyRhythmDay() {
     source,
     user,
     dailyProgressLoading,
+    stepsLoading,
     step?.day,
     widgetStepUnavailable,
     widgetFallback,
@@ -181,7 +196,7 @@ export default function DailyRhythmDay() {
     );
   }
 
-  if (isDailyRhythmJourney && dailyProgressLoading) {
+  if (isDailyRhythmJourney && (dailyProgressLoading || stepsLoading)) {
     return (
       <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <p className="text-muted-foreground text-sm">Loading…</p>
