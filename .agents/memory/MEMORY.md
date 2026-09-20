@@ -94,5 +94,6 @@
 - [API artifact health path](api-artifact-health-path.md) — Replit promotion probes the API artifact preview path as well as the explicit health endpoint.
 - [Native Android build environment](android-phase1-build.md) — Capacitor 8 Android builds need standard OpenJDK 21 plus Android SDK 36; GraalVM is incompatible with the JDK image transform.
 - [Native WebView bootstrap](native-webview-bootstrap.md) — never block React mounting on an Android plugin bridge call; deep-link handoff may finish after the app renders.
+- [Capacitor service-worker cleanup](capacitor-service-worker-cleanup.md) — native WebViews must purge legacy Emmaus service workers and caches before browser registration is allowed.
 - [Release branch commit path](release-branch-commit.md) — source commits for the release branch use the connected GitHub API, not local Git remotes or resets.
 - [GitHub commit resolution](github-commit-resolution.md) — when a requested commit is absent locally, use the connected repository’s commit endpoint as the source of truth.
