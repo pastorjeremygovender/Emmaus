@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { getApiUrl } from '@/lib/api';
 import { SermonAudioPlayer } from '@/components/SermonAudioPlayer';
@@ -20,8 +20,6 @@ import { useTranslations, type TranslationMeta } from '@/hooks/useTranslations';
 import { BottomNav } from '@/components/BottomNav';
 import { FavouriteButton } from '@/components/FavouriteButton';
 import { setPendingMessage, setReturnDestination, sourceSectionFromPath } from '@/lib/emmaus-pending';
-import { getBibleSectionHeading } from '@/data/bible-section-headings.generated';
-import { canonicalEmmausUrl } from '@/lib/canonical-app';
 
 const HIGHLIGHT_CLASSES: Record<HighlightColor, string> = {
   amber: 'bg-amber-100/80 dark:bg-amber-900/30',
@@ -331,8 +329,9 @@ export default function ChapterReader() {
     setLocation(`/bible/read/${newBookId}/${newChapter}${qs}`);
   }
 
-  // Share the verse with a canonical deep link that opens the exact verse in
-  // the Android app when App Links are available, or on the Emmaus website.
+  // Share verse via Web Share API (with clipboard fallback).
+  // deepLink: null suppresses the "Continue your journey" block — verse shares
+  // stand alone and don't need a deep link to a specific verse.
   async function handleShare(verseNum: number, text: string) {
     const ref = `${book!.name} ${chapterNum}:${verseNum}`;
     const { shareContent } = await import('@/lib/share');
@@ -340,9 +339,7 @@ export default function ChapterReader() {
       await shareContent({
         title: ref,
         reflection: `"${text}"`,
-        deepLink: canonicalEmmausUrl(
-          `/bible/read/${encodeURIComponent(book!.id)}/${chapterNum}?startVerse=${verseNum}`,
-        ),
+        deepLink: null,
       });
     } catch { /* cancelled or clipboard unavailable */ }
   }
@@ -585,20 +582,10 @@ export default function ChapterReader() {
                   v.verse <= (endVerseParam ? Number(endVerseParam) : Number(startVerseParam));
                 const fav = isFavourite(book.id, chapterNum, v.verse);
                 const note = getNote(book.id, chapterNum, v.verse);
-                const sectionHeading = getBibleSectionHeading(book.id, chapterNum, v.verse);
                 return (
-                <Fragment key={v.verse}>
-                  {sectionHeading && (
-                    <div
-                      role="heading"
-                      aria-level={2}
-                      className="mt-7 mb-2.5 text-[16px] font-semibold leading-snug text-foreground"
-                    >
-                      {sectionHeading}
-                    </div>
-                  )}
                   <span
                     id={`verse-${v.verse}`}
+                    key={v.verse}
                     onClick={() => setVerseSheet({ verse: v.verse, text: v.text })}
                     className={[
                       'inline cursor-pointer leading-[1.85] transition-colors rounded-sm',
@@ -616,9 +603,8 @@ export default function ChapterReader() {
                     )}
                     {' '}
                   </span>
-                </Fragment>
-              );
-            })}
+                );
+              })}
             </div>
           </div>
         )}

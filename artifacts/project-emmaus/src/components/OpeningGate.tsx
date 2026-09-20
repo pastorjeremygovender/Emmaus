@@ -15,7 +15,6 @@ function isAdminPath(pathname: string): boolean {
 function isPublicPath(pathname: string): boolean {
   return pathname === '/privacy-policy' ||
     pathname === '/delete-account' ||
-    pathname === '/app' ||
     pathname === '/auth' ||
     pathname === '/auth/callback' ||
     pathname === '/onboarding' ||

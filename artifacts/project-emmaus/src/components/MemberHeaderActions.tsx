@@ -3,7 +3,7 @@ import { useAppearance, type AppearanceFontSize } from '@/contexts/AppearanceCon
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
-import { Download, Info, Moon, Settings, Sun, User } from 'lucide-react';
+import { Info, Moon, Settings, Sun, User } from 'lucide-react';
 import { ShareEmmausButton } from '@/components/ShareEmmausButton';
 import { DailyRemindersSettings } from '@/components/DailyRemindersSettings';
 import { WelcomeAssistSettings } from '@/components/WelcomeAssistSettings';
@@ -93,17 +93,6 @@ export function MemberHeaderActions({ compact = false }: { compact?: boolean }) 
           </div>
           <DailyRemindersSettings />
           <WelcomeAssistSettings />
-          <Link
-            href="/app"
-            className="flex items-center gap-2.5 rounded-xl border border-border/50 bg-card px-3.5 py-3 transition-colors hover:bg-muted/60"
-            data-testid="get-emmaus-app"
-          >
-            <Download size={17} className="text-primary" aria-hidden="true" />
-            <div>
-              <p className="text-[14px] font-semibold">Get the Emmaus app</p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">Install Emmaus or continue on the web</p>
-            </div>
-          </Link>
           <div className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-card px-3.5 py-2.5">
             <div className="flex items-center gap-2.5">
               {theme === 'dark'

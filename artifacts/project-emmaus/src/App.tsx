@@ -19,7 +19,6 @@ import { installAppHistoryTracking } from '@/lib/return-context';
 import Welcome from '@/pages/Welcome';
 import PrivacyPolicy from '@/pages/PrivacyPolicy';
 import AccountDeletion from '@/pages/AccountDeletion';
-import AppDownload from '@/pages/AppDownload';
 import Onboarding from '@/pages/Onboarding';
 import Auth from '@/pages/Auth';
 import AuthCallback from '@/pages/AuthCallback';
@@ -124,7 +123,6 @@ function Router() {
       <Route path="/" component={Welcome} />
       <Route path="/privacy-policy" component={PrivacyPolicy} />
       <Route path="/delete-account" component={AccountDeletion} />
-      <Route path="/app" component={AppDownload} />
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/auth" component={Auth} />
       <Route path="/auth/callback" component={AuthCallback} />

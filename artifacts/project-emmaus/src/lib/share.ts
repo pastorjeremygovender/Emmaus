@@ -1,5 +1,4 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { canonicalCurrentEmmausUrl } from '@/lib/canonical-app';
 
 /**
  * share.ts — shared content-sharing utility for Emmaus pilot.
@@ -32,7 +31,7 @@ export interface SharePayload {
   closing?: string;
   /**
    * The deep link shown below "Continue your journey in Emmaus:".
-   *   undefined (default) → use the current path on emmaus.co.za
+   *   undefined (default) → use window.location.href
    *   null                → suppress the "Continue your journey" block entirely
    *                         (used for verse-level Bible shares)
    */
@@ -69,14 +68,16 @@ export function buildShareText(payload: SharePayload): string {
 
   // Resolve the deep link:
   //   explicit string → use as-is
-  //   undefined       → current page on the canonical public domain
+  //   undefined       → current page URL
   //   null            → omit block entirely
   const resolvedLink: string | null =
     deepLink === null
       ? null
       : deepLink
         ? deepLink
-        : canonicalCurrentEmmausUrl();
+        : typeof window !== 'undefined'
+          ? window.location.href
+          : null;
 
   function nonEmpty(s: string | undefined | null): string | null {
     return s?.trim() ? s.trim() : null;

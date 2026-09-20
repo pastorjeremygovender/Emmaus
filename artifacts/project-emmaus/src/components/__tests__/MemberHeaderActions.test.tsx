@@ -75,13 +75,13 @@ describe('MemberHeaderActions', () => {
     expect(screen.getByTestId('toggle-notifications')).toBeDisabled();
   });
 
-  it('shows the current build identity in About Emmaus', async () => {
+  it('shows the rc6 build identity in About Emmaus', async () => {
     const user = userEvent.setup();
     render(<MemberHeaderActions compact />);
 
     await user.click(screen.getByTestId('about-emmaus-trigger'));
 
-    expect(screen.getByText('Emmaus 1.2.0')).toBeInTheDocument();
+    expect(screen.getByText('Android test build · 1.2.0-rc6 · version code 8')).toBeInTheDocument();
   });
 
   it('shows the live text-size preview in Settings', async () => {
@@ -94,15 +94,5 @@ describe('MemberHeaderActions', () => {
     expect(screen.getByTestId('text-size-preview')).toHaveTextContent(
       'Jesus walks with you through every season.',
     );
-  });
-
-  it('links Settings to the permanent Emmaus app page', async () => {
-    const user = userEvent.setup();
-    render(<MemberHeaderActions compact />);
-
-    await user.click(screen.getByTestId('settings-trigger'));
-
-    expect(screen.getByTestId('get-emmaus-app')).toHaveAttribute('href', '/app');
-    expect(screen.getByText('Install Emmaus or continue on the web')).toBeInTheDocument();
   });
 });

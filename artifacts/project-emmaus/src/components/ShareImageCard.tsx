@@ -9,7 +9,6 @@
 import React, { useState } from 'react';
 import { Download, Share2, X, Check } from 'lucide-react';
 import { getApiUrl } from '@/lib/api';
-import { EMMAUS_APP_URL } from '@/lib/canonical-app';
 
 interface ShareImageCardProps {
   /** Object-storage path, e.g. "/objects/uploads/<uuid>". Falsy → renders nothing. */
@@ -77,11 +76,7 @@ export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
         typeof navigator.canShare === 'function' &&
         navigator.canShare({ files: [file] })
       ) {
-        await navigator.share({
-          files: [file],
-          title: 'Emmaus',
-          text: `Shared from Emmaus\n\nOpen or install Emmaus: ${EMMAUS_APP_URL}`,
-        });
+        await navigator.share({ files: [file] });
         return;
       }
       await handleSave(blob, false);

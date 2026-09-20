@@ -87,12 +87,6 @@ function save(key: string, value: unknown, subject: string) {
   }
 }
 
-function normaliseJourneyProgress(value: unknown): Record<string, BibleJourneyProgress> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, BibleJourneyProgress>
-    : {};
-}
-
 function genId(prefix = 'b') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -277,9 +271,7 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
       setTranslationIdState(selectedTranslation);
       const history = owned.history ?? [];
       const completed = owned.completed ?? [];
-      // Legacy cloud records can contain an explicit null value. Normalize it
-      // before any book overview reads the progress map (Luke exposed this).
-      const journeyProg = normaliseJourneyProgress(owned.journeyProgress);
+      const journeyProg = owned.journeyProgress ?? {};
       const hlights = owned.highlights ?? [];
       const favs = owned.favourites ?? [];
       const bkms = owned.bookmarks ?? [];
@@ -413,10 +405,7 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
     });
   }, [persist]);
 
-  const getJourneyProgress = useCallback(
-    (journeyId: string) => normaliseJourneyProgress(journeyProgress)[journeyId] ?? null,
-    [journeyProgress],
-  );
+  const getJourneyProgress = useCallback((journeyId: string) => journeyProgress[journeyId] ?? null, [journeyProgress]);
 
   // ─── Highlights ─────────────────────────────────────────────────────────────
 

@@ -1,6 +1,4 @@
-import { EMMAUS_PRODUCTION_ORIGIN } from '@/lib/canonical-app';
-
-export { EMMAUS_PRODUCTION_ORIGIN } from '@/lib/canonical-app';
+export const EMMAUS_PRODUCTION_ORIGIN = 'https://emmaus.co.za';
 export const GROUP_INVITE_PATH_PREFIX = '/groups/join/';
 
 const INVITE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{8,160}$/;

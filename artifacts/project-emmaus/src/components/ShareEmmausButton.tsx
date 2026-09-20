@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Share2 } from 'lucide-react';
 import { shareContent } from '@/lib/share';
-import { EMMAUS_APP_URL } from '@/lib/canonical-app';
 
 /**
  * App-level invitation share for the main member screens.
@@ -13,10 +12,11 @@ export function ShareEmmausButton({ compact = false }: { compact?: boolean }) {
 
   async function handleShare() {
     try {
+      const appUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
       const result = await shareContent({
         title: 'Emmaus',
-        reflection: 'Walk with Jesus each day in Emmaus. Open Emmaus on the web or install the app.',
-        deepLink: EMMAUS_APP_URL,
+        reflection: 'Walk with Jesus each day in Emmaus.',
+        deepLink: appUrl,
       });
       if (result === 'clipboard') {
         setStatus('copied');
