@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { Fragment, useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { getApiUrl } from '@/lib/api';
 import { SermonAudioPlayer } from '@/components/SermonAudioPlayer';
@@ -6,7 +6,7 @@ import { BottomNav } from '@/components/BottomNav';
 import {
   ArrowLeft, Heart, FileText, Bookmark, X, Check,
   ChevronLeft, ChevronRight, Loader2, ExternalLink, RefreshCw, ChevronDown,
-  BookOpen, Share2, Highlighter, MessageSquare, Sparkles, ArrowLeftRight,
+  BookOpen, Share2, Highlighter, MessageSquare, Sparkles, ArrowLeftRight, Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -17,6 +17,7 @@ import { getVerseSermonLinks } from '@/data/sermon-verse-links';
 import { BibleReferencePicker } from '@/components/BibleReferencePicker';
 import { VerseStudyPanel, type StudyVerse } from '@/components/VerseStudyPanel';
 import { useTranslations, type TranslationMeta } from '@/hooks/useTranslations';
+import { getBibleSectionHeading } from '@/data/bible-section-headings.generated';
 
 const HIGHLIGHT_CLASSES: Record<HighlightColor, string> = {
   amber: 'bg-amber-100/80 dark:bg-amber-900/30',
@@ -542,26 +543,37 @@ export default function ChapterReader() {
               const hl = getHighlight(book.id, chapterNum, v.verse);
               const fav = isFavourite(book.id, chapterNum, v.verse);
               const note = getNote(book.id, chapterNum, v.verse);
+              const sectionHeading = getBibleSectionHeading(book.id, chapterNum, v.verse);
               return (
-                <span
-                  id={`verse-${v.verse}`}
-                  key={v.verse}
-                  onClick={() => setVerseSheet({ verse: v.verse, text: v.text })}
-                  className={[
-                    'inline cursor-pointer leading-[1.85] transition-colors rounded-sm',
-                    hl ? HIGHLIGHT_CLASSES[hl.color] : 'hover:bg-muted/50',
-                  ].join(' ')}
-                >
-                  <sup className="text-[10px] font-semibold text-primary/70 mr-0.5 select-none">{v.verse}</sup>
-                  <span className="font-sans text-[19px] text-foreground">{v.text}</span>
-                  {(fav || note) && (
-                    <span className="inline-flex items-center gap-0.5 mx-1 align-middle">
-                      {fav && <Heart size={10} className="text-primary fill-primary" />}
-                      {note && <FileText size={10} className="text-muted-foreground" />}
-                    </span>
+                <Fragment key={v.verse}>
+                  {sectionHeading && (
+                    <div
+                      role="heading"
+                      aria-level={2}
+                      className="mt-7 mb-2.5 text-[16px] font-semibold leading-snug text-foreground"
+                    >
+                      {sectionHeading}
+                    </div>
                   )}
-                  {' '}
-                </span>
+                  <span
+                    id={`verse-${v.verse}`}
+                    onClick={() => setVerseSheet({ verse: v.verse, text: v.text })}
+                    className={[
+                      'inline cursor-pointer leading-[1.85] transition-colors rounded-sm',
+                      hl ? HIGHLIGHT_CLASSES[hl.color] : 'hover:bg-muted/50',
+                    ].join(' ')}
+                  >
+                    <sup className="text-[10px] font-semibold text-primary/70 mr-0.5 select-none">{v.verse}</sup>
+                    <span className="font-sans text-[19px] text-foreground">{v.text}</span>
+                    {(fav || note) && (
+                      <span className="inline-flex items-center gap-0.5 mx-1 align-middle">
+                        {fav && <Heart size={10} className="text-primary fill-primary" />}
+                        {note && <FileText size={10} className="text-muted-foreground" />}
+                      </span>
+                    )}
+                    {' '}
+                  </span>
+                </Fragment>
               );
             })}
           </div>
