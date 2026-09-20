@@ -56,6 +56,12 @@ function save(key: string, value: unknown) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+function normaliseJourneyProgress(value: unknown): Record<string, BibleJourneyProgress> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, BibleJourneyProgress>
+    : {};
+}
+
 function genId(prefix = 'b') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -204,7 +210,10 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
           // Cloud record exists — use it as the authoritative source
           history    = cloud.history ?? [];
           completed  = cloud.completed;
-          journeyProg = cloud.journeyProgress;
+          // Older records may contain an explicit null here. Luke is currently
+          // the only book overview that reads Bible Journey progress while it
+          // renders, so that legacy value previously crashed only Luke's page.
+          journeyProg = normaliseJourneyProgress(cloud.journeyProgress);
           hlights    = cloud.highlights;
           favs       = cloud.favourites;
           bkms       = cloud.bookmarks;
@@ -219,7 +228,7 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
           // the PATCH also fails silently and localStorage remains the source of truth.
           history    = loadFromLocalStorage();
           completed  = load(LS.completed, []);
-          journeyProg = load(LS.journeyProgress, {});
+          journeyProg = normaliseJourneyProgress(load(LS.journeyProgress, {}));
           hlights    = load(LS.highlights, []);
           favs       = load(LS.favourites, []);
           bkms       = load(LS.bookmarks, []);
@@ -245,7 +254,7 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
         // Unauthenticated — localStorage only
         history    = loadFromLocalStorage();
         completed  = load(LS.completed, []);
-        journeyProg = load(LS.journeyProgress, {});
+        journeyProg = normaliseJourneyProgress(load(LS.journeyProgress, {}));
         hlights    = load(LS.highlights, []);
         favs       = load(LS.favourites, []);
         bkms       = load(LS.bookmarks, []);
@@ -322,7 +331,10 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
     });
   }, [persist]);
 
-  const getJourneyProgress = useCallback((journeyId: string) => journeyProgress[journeyId] ?? null, [journeyProgress]);
+  const getJourneyProgress = useCallback(
+    (journeyId: string) => normaliseJourneyProgress(journeyProgress)[journeyId] ?? null,
+    [journeyProgress],
+  );
 
   // ─── Highlights ─────────────────────────────────────────────────────────────
 
