@@ -1,0 +1,197 @@
+BIBLE READER UX CLEANUP — MOBILE PILOT
+
+The current Bible reader has four UX problems:
+
+1. The chapter overview card at the top duplicates content already available inside the verse Study panel.
+2. The main bottom navigation is missing while reading a chapter.
+3. The translation copyright notice takes up too much space on the My Bible home screen.
+4. The floating Ask Emmaus button blocks the final lines of Scripture.
+
+Do not redesign the Bible.
+Do not change Bible text, translation switching, chapter navigation, Study, Preached Here, Notes, Save, or verse selection.
+
+==================================================
+1. REMOVE THE CHAPTER OVERVIEW CARD
+==================================================
+
+Remove the large chapter overview card from the top of the chapter reader.
+
+Do not delete the overview content from the database.
+
+The overview should remain available inside the existing Study section when a member taps a verse.
+
+Replace the removed card with one compact permanent helper line beneath the chapter title:
+
+“Tap any verse to open Bible Study options.”
+
+Requirements:
+
+- one line where possible;
+- small, calm secondary text;
+- no card;
+- no border;
+- no large vertical spacing;
+- remain visible at the top of every Bible chapter;
+- do not repeat while scrolling.
+
+==================================================
+2. RESTORE MAIN APP NAVIGATION
+==================================================
+
+The standard bottom navigation must remain available while reading the Bible chapter:
+
+- Today’s Steps
+- Next Steps
+- My Bible
+- My Journey
+
+My Bible must remain highlighted.
+
+The chapter navigation:
+
+- previous chapter
+- current chapter
+- next chapter
+
+must remain directly above the main app navigation.
+
+Do not replace one navigation system with the other.
+
+Required bottom order:
+
+Scripture content
+→ chapter navigation
+→ standard app navigation
+
+Add enough bottom padding so Scripture and chapter controls are never hidden behind either navigation bar.
+
+==================================================
+3. COLLAPSE TRANSLATION INFORMATION
+==================================================
+
+On the My Bible home screen, replace the full expanded copyright/licensing block with a compact summary.
+
+Default collapsed state should show approximately two lines:
+
+“Good News Translation (GNT)  
+© 1992 American Bible Society”
+
+Add a small downward chevron or “Translation details” control.
+
+When tapped, expand to show the full required licensing text.
+
+When tapped again, collapse it.
+
+Requirements:
+
+- collapsed by default;
+- full legal text remains accessible;
+- no legal wording may be deleted;
+- remember the collapsed state during normal navigation;
+- do not allow the expanded notice to push essential Bible controls off-screen unnecessarily.
+
+Apply the same reusable disclosure pattern to other translations where licensing text exists.
+
+==================================================
+4. FIX ASK EMMAUS OVERLAP
+==================================================
+
+The floating Ask Emmaus button currently blocks the last line of Scripture and can overlap controls.
+
+Fix this across the entire Bible experience.
+
+Preferred behaviour:
+
+- keep the existing button design;
+- place it above the chapter navigation and main app navigation;
+- reserve sufficient content padding beneath Scripture;
+- never cover a verse, the last line, previous/next chapter controls, translation controls, or bottom navigation.
+
+Do not merely reduce opacity.
+
+Do not hide Scripture behind the button.
+
+If required, make the button gently move upward when approaching fixed bottom controls, but do not create distracting animation.
+
+==================================================
+5. RESPONSIVE BEHAVIOUR
+==================================================
+
+Verify on:
+
+- normal Android phone;
+- smaller phone;
+- tablet;
+- portrait orientation;
+- landscape orientation where supported.
+
+Only responsive spacing may differ.
+
+The component structure and functionality must remain the same.
+
+==================================================
+ACCEPTANCE TESTS — PUBLISHED MOBILE APP
+==================================================
+
+1. Open My Bible.
+   → Translation notice is collapsed to a compact two-line summary.
+
+2. Expand translation details.
+   → Full legal text appears.
+
+3. Collapse it.
+   → The page returns to the compact state.
+
+4. Open Luke 2.
+   → Large overview card is gone.
+
+5. Beneath the chapter title, confirm the line:
+   “Tap any verse to open Bible Study options.”
+
+6. Tap a verse.
+   → Existing Study options still open correctly.
+
+7. Scroll to the final verse.
+   → No Scripture text is blocked by Ask Emmaus.
+
+8. Confirm chapter navigation remains visible.
+
+9. Confirm the standard four-item app navigation is visible beneath it.
+
+10. Confirm My Bible remains highlighted.
+
+==================================================
+REGRESSION TESTS
+==================================================
+
+Confirm no changes to:
+
+- Bible translation content;
+- chapter text;
+- previous/next chapter behaviour;
+- verse selection;
+- Study;
+- Preached Here;
+- Ask Emmaus verse context;
+- Notes;
+- Save;
+- reading history;
+- Continue Reading card.
+
+==================================================
+DELIVERY
+==================================================
+
+Implement the smallest coherent correction.
+
+Report:
+
+1. files changed;
+2. chapter overview removal;
+3. helper-line implementation;
+4. bottom navigation restoration;
+5. translation disclosure implementation;
+6. Ask Emmaus overlap fix;
+7. published phone and tablet verification.
+
+Republish only after all acceptance tests pass.

@@ -20,6 +20,8 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
+import { ContentBadge } from './ContentBadge';
+import type { Badge } from '@/lib/badge-api';
 
 // ─── Design tokens (change here to propagate everywhere) ──────────────────────
 
@@ -28,12 +30,18 @@ const T = {
   title:       'text-[17px] font-semibold text-foreground leading-snug line-clamp-2',
   description: 'text-[13px] text-muted-foreground leading-relaxed',
   metadata:    'text-[12px] text-muted-foreground font-medium',
-  button:      'w-full h-11 rounded-xl text-[15px] font-medium',
+  button:      'w-full min-h-[44px] h-auto py-2.5 rounded-xl text-[15px] font-medium whitespace-normal leading-snug',
 } as const;
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 export interface EmmausContentCardProps {
+  /**
+   * When true, applies the continuous `btn-daily-pulse` animation to the
+   * primary action button. Use for the Daily Rhythm card when today's time
+   * is still actionable — keeps the pulse universal and effortless to add.
+   */
+  pulsePrimary?: boolean;
   /** Uppercase category label — "DAILY RHYTHM", "JOURNEY", "SERMON COMPANION" etc. */
   label: string;
   /** Main content title — max 2 lines, never an AI-generated subtitle. */
@@ -77,11 +85,22 @@ export interface EmmausContentCardProps {
   /** Optional text link shown below the primary button. */
   secondaryAction?: { label: string; onPress: () => void };
   /**
+   * When provided, the entire card becomes a pressable surface that fires this
+   * callback. Interactive children (buttons) stop propagation so they work
+   * independently. Use for cards where the whole surface should navigate.
+   */
+  onCardPress?: () => void;
+  /**
    * 'featured' — subtle primary tint (bg-primary/5 border-primary/20).
    * Use for the highest-priority card on the home screen.
    * Default: plain bg-card border-border.
    */
   variant?: 'default' | 'featured';
+  /**
+   * Smart Content Indicator badge — 'NEW' | 'UPDATED' | null.
+   * Rendered as a small absolute-positioned chip at top-right of the card.
+   */
+  badge?: Badge;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -102,10 +121,14 @@ export function EmmausContentCard({
   onGate,
   secondaryAction,
   variant = 'default',
+  badge,
+  onCardPress,
+  pulsePrimary = false,
 }: EmmausContentCardProps) {
-  const cardClass = variant === 'featured'
-    ? 'rounded-2xl border p-5 bg-primary/5 border-primary/20'
-    : 'rounded-2xl border p-5 bg-card border-border';
+  const cardClass = (variant === 'featured'
+    ? 'relative rounded-2xl border p-5 bg-primary/5 border-primary/20'
+    : 'relative rounded-2xl border p-5 bg-card border-border')
+    + (onCardPress ? ' cursor-pointer active:opacity-80 transition-opacity' : '');
 
   // ── Spacing: Label→12px→Title→8px→Desc→12px→Meta→20px→Button ────────────────
   // Each element carries its own bottom margin so omitting an element doesn't
@@ -134,7 +157,10 @@ export function EmmausContentCard({
   const metaMb = hasProgress ? 'mb-3' : hasButton ? 'mb-5' : 'mb-0';
 
   return (
-    <div className={cardClass}>
+    <div className={cardClass} onClick={onCardPress} role={onCardPress ? 'button' : undefined} tabIndex={onCardPress ? 0 : undefined} onKeyDown={onCardPress ? (e) => { if (e.key === 'Enter' || e.key === ' ') onCardPress(); } : undefined}>
+
+      {/* ── Smart Content Indicator badge ──────────────────────────────────── */}
+      <ContentBadge badge={badge ?? null} />
 
       {/* ── 1. Label row ───────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-2 mb-3">
@@ -169,13 +195,14 @@ export function EmmausContentCard({
 
       {/* ── 5. Primary button (omitted when neither primaryActionLabel nor gatedMessage) */}
       {gatedMessage ? (
-        <Button className={T.button} onClick={onGate}>
+        // Gated button always pulses — it is always the "10 Minutes with Jesus" CTA.
+        <Button className={`${T.button} btn-daily-pulse`} onClick={onGate}>
           {gatedMessage}
         </Button>
       ) : primaryActionLabel ? (
         <Button
-          className={T.button}
-          onClick={onAction}
+          className={`${T.button}${pulsePrimary ? ' btn-daily-pulse' : ''}`}
+          onClick={(e) => { e.stopPropagation(); onAction?.(); }}
           disabled={disabled || loading}
         >
           {loading

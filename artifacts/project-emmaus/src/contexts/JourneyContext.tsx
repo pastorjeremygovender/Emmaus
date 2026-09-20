@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import * as api from '@/lib/journeys-api';
+import { accountStorageKey } from '@/lib/account-storage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +38,8 @@ export type Journey = {
   scriptureReference?: string;  // e.g. "John 3:16-17"
   nextJourneyId?: string;       // slug of recommended next journey after completion
   requiresDailyGate?: boolean;  // default true — set false to bypass daily gate for pastoral journeys
+  /** Set when admin publishes with "Notify members" ON — drives NEW/UPDATED badges */
+  notifyPublishedAt?: string;
   // AI Builder metadata
   aiGenerated?: boolean;
   sourcesSummary?: {
@@ -46,6 +49,11 @@ export type Journey = {
   };
   introductionContent?: string; // journey-level intro text (stored in metadata JSONB)
   completionMessage?: string;   // short closing message after journey completion (stored in metadata JSONB)
+  /**
+   * Display label prefix for steps. null / undefined = auto-derive from journeyType:
+   * 'daily-rhythm' → "Day", everything else → "Step".
+   */
+  stepLabelPrefix?: string | null;
 };
 
 export type Step = {
@@ -96,6 +104,11 @@ export type Step = {
   // Walk Completion entry — not a numbered lesson.
   // Excluded from lesson lists, progress counts, and durationDays.
   isCompletionStep?: boolean;
+  /** Optional per-step display label (e.g. "1 January"). Overrides prefix+number when set. */
+  displayLabel?: string | null;
+
+  /** Share image — object-storage path shown as a "Take this with you" card at the bottom of the step. */
+  shareImageUrl?: string | null;
 };
 
 export type Progress = {
@@ -106,19 +119,32 @@ export type Progress = {
   lastCompletedAt: string | null;
   /** Engagement lifecycle status — active | paused | completed | dropped */
   status?: string;
+  /** Set when member opens the content — clears UPDATED badge */
+  lastOpenedAt?: string | null;
+  /** Non-destructive hide: card removed from My Emmaus, all progress preserved. */
+  hiddenFromToday?: boolean;
+  /** The member-facing surface that originally started this progress. */
+  displayOrigin?: api.JourneyDisplayOrigin | null;
 };
+
+export type DailyRhythmState = api.DailyRhythmState;
 
 type JourneyContextType = {
   journeys: Journey[];
   steps: Step[];
   progress: Record<string, Progress>;
+  dailyRhythmState: DailyRhythmState | null;
   reflections: Record<string, string>;
   loading: boolean;
   getJourney: (id: string) => Journey | undefined;
   getStep: (journeyId: string, day: number) => Step | undefined;
   getStepsForJourney: (journeyId: string) => Step[];
-  completeStep: (journeyId: string, day: number, reflectionText: string) => void;
-  startJourney: (journeyId: string) => Promise<void>;
+  completeStep: (
+    journeyId: string,
+    day: number,
+    reflectionText: string,
+  ) => Promise<api.CompleteStepResponse>;
+  startJourney: (journeyId: string, displayOrigin?: api.JourneyDisplayOrigin) => Promise<void>;
   // Admin mutations — return promises so callers can await and handle errors
   updateJourney: (journey: Journey) => Promise<Journey>;
   addJourney: (journey: Journey) => Promise<Journey>;
@@ -142,84 +168,179 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   const [journeys, setJourneys] = useState<Journey[]>([]);
   const [steps, setSteps] = useState<Step[]>([]);
   const [progress, setProgress] = useState<Record<string, Progress>>({});
+  const [dailyRhythmState, setDailyRhythmState] = useState<DailyRhythmState | null>(null);
   const [reflections, setReflections] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const activeSubjectRef = useRef<string | null>(null);
 
   // ─── Initial load ──────────────────────────────────────────────────────────
 
   useEffect(() => {
     let cancelled = false;
+    const subject = user?.id ?? null;
+    activeSubjectRef.current = subject;
+
+    // Never render one account's in-memory state while another account loads.
+    setJourneys([]);
+    setSteps([]);
+    setProgress({});
+    setDailyRhythmState(null);
+    setReflections({});
+
+    if (!subject) {
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
 
     async function init() {
       setLoading(true);
+      const bootstrapStartedAt = performance.now();
+      const timings: Record<string, number> = {};
+      const mark = (name: string, startedAt: number) => {
+        timings[name] = Math.round(performance.now() - startedAt);
+      };
       try {
         // Admins and super-admins get all journeys (any status); users get published only
+        const catalogueStartedAt = performance.now();
         const jList = (user?.role === 'admin' || user?.role === 'superAdmin')
           ? await api.listJourneys()
           : await api.listPublishedJourneys();
+        mark('catalogue', catalogueStartedAt);
 
         if (cancelled) return;
         setJourneys(jList);
 
-        // Fetch steps for all journeys
-        const allSteps: Step[] = [];
-        for (const j of jList) {
+        const isAdmin = user?.role === 'admin' || user?.role === 'superAdmin';
+        const dailyJourney = jList.find(j =>
+          j.journeyType === 'daily-rhythm' || j.journeyType === 'core',
+        );
+        const loadSteps = async (journey: Journey): Promise<Step[]> => {
           try {
-            const jSteps = await api.listSteps(j.id);
-            allSteps.push(...jSteps);
+            return await api.listSteps(journey.id);
           } catch {
-            // ignore per-journey step errors
+            return [];
+          }
+        };
+
+        const progressStartedAt = performance.now();
+        const progressPromise = api.getAllProgress().catch(() => null);
+        const rhythmPromise = api.getDailyRhythmState().catch(stateError => {
+          console.warn('[Daily Rhythm] canonical state unavailable; using progress snapshot', stateError);
+          return null;
+        });
+        const dailyStepsPromise = dailyJourney ? loadSteps(dailyJourney) : Promise.resolve([]);
+        const [prog, rhythm, dailySteps] = await Promise.all([
+          progressPromise,
+          rhythmPromise,
+          dailyStepsPromise,
+        ]);
+        mark('progress-and-daily-step', progressStartedAt);
+
+        if (cancelled || activeSubjectRef.current !== subject) return;
+        const visibleDailySteps = isAdmin
+          ? dailySteps
+          : dailySteps.filter(s => s.status === 'Published');
+        setSteps(visibleDailySteps);
+        if (prog) setProgress(prog);
+        if (rhythm) {
+          setProgress(previous => ({ ...(prog ?? previous), [rhythm.journeyId]: rhythm.progress ?? previous[rhythm.journeyId] }));
+          setDailyRhythmState(rhythm);
+        }
+
+        // A brand-new account gets a server-backed starting set across all
+        // My Emmaus content systems. Refresh this map after seeding so the
+        // Daily Rhythm and Journey cards are available without a page reload.
+        if (user?.role === 'user') {
+          try {
+            const defaults = await api.initializeMemberHomeDefaults();
+            if (defaults.seeded) {
+              const seededProgress = await api.getAllProgress();
+              if (!cancelled && activeSubjectRef.current === subject) {
+                setProgress(seededProgress);
+              }
+            }
+          } catch (error) {
+            // Initial content is supplementary; a transient initializer failure
+            // must not prevent the member from opening the app.
+            console.warn('[MemberHome] default initialization unavailable', error);
           }
         }
-        if (cancelled) return;
-        // Admins and super-admins see all steps (Draft + Published).
-        // Members see only Published steps. Step status is now kept in sync with the parent
-        // journey by the server (createStep inherits parent status), so this simple filter
-        // is the canonical gate — no client-side parent-status override needed.
-        const isAdmin = user?.role === 'admin' || user?.role === 'superAdmin';
-        setSteps(isAdmin ? allSteps : allSteps.filter(s => s.status === 'Published'));
 
-        // Fetch progress for logged-in users
-        if (user?.id) {
-          // One-time migration from localStorage
-          const localProg = localStorage.getItem('emmaus_progress');
-          if (localProg) {
-            try {
-              await api.importLocalProgress(user.id, JSON.parse(localProg));
-              localStorage.removeItem('emmaus_progress');
-            } catch {
-              // keep in localStorage so it can be retried
-            }
-          }
+        // The opening only needs the canonical journey and its current step.
+        // Remaining journey steps load in parallel after the first useful screen
+        // can render, instead of blocking every member on the full catalogue.
+        const remainingJourneys = dailyJourney
+          ? jList.filter(j => j.id !== dailyJourney.id)
+          : jList;
+        if (remainingJourneys.length > 0) {
+          const loadRemaining = async () => {
+            const remaining = await Promise.all(remainingJourneys.map(loadSteps));
+            if (cancelled || activeSubjectRef.current !== subject) return;
+            const visibleRemaining = (isAdmin ? remaining.flat() : remaining.flat().filter(s => s.status === 'Published'));
+            setSteps(previous => [...previous, ...visibleRemaining]);
+            console.debug('[JourneyBootstrap]', {
+              phase: 'secondary-content-ready',
+              durationMs: Math.round(performance.now() - bootstrapStartedAt),
+              journeyCount: remainingJourneys.length,
+            });
+          };
+          void loadRemaining();
+        }
 
-          try {
-            const prog = await api.getAllProgress(user.id);
-            if (!cancelled) setProgress(prog);
-          } catch {
-            // ignore progress fetch errors
-          }
-
-          // Load reflections from localStorage (local cache)
-          const localRef = localStorage.getItem('emmaus_reflections');
-          if (localRef && !cancelled) {
+        if (subject) {
+          const localRef = localStorage.getItem(accountStorageKey('emmaus_reflections', subject));
+          if (localRef && !cancelled && activeSubjectRef.current === subject) {
             try {
               setReflections(JSON.parse(localRef));
             } catch {
-              // ignore
+              // ignore malformed local cache
             }
           }
         }
+        console.debug('[JourneyBootstrap]', {
+          phase: 'primary-content-ready',
+          durationMs: Math.round(performance.now() - bootstrapStartedAt),
+          timings,
+          journeyCount: jList.length,
+          primaryStepCount: visibleDailySteps.length,
+        });
       } catch (err) {
         console.error('Failed to load journeys:', err);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && activeSubjectRef.current === subject) setLoading(false);
       }
     }
 
     init();
     return () => { cancelled = true; };
   }, [user?.id, user?.role]);
+
+  // OpeningGate re-resolves the calendar on cold launch, notification tap, and
+  // PWA resume. Refresh this shared snapshot so Walk and navigators do not keep
+  // rendering the pre-resume day from the initial bootstrap.
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    const refresh = () => {
+      void api.getDailyRhythmState().then(state => {
+        if (cancelled || !state || activeSubjectRef.current !== user.id) return;
+        setDailyRhythmState(state);
+        if (state.progress) {
+          setProgress(previous => ({ ...previous, [state.journeyId]: state.progress! }));
+        }
+      }).catch(() => {
+        // OpeningGate remains the user-facing error boundary for startup.
+      });
+    };
+    window.addEventListener('emmaus:daily-rhythm-resolved', refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('emmaus:daily-rhythm-resolved', refresh);
+    };
+  }, [user?.id]);
 
   // ─── Getters ───────────────────────────────────────────────────────────────
 
@@ -243,21 +364,51 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   // ─── User operations (fire-and-forget, optimistic) ─────────────────────────
 
   const startJourney = useCallback(
-    async (journeyId: string): Promise<void> => {
+    async (
+      journeyId: string,
+      displayOrigin?: api.JourneyDisplayOrigin,
+    ): Promise<void> => {
       if (!user?.id) throw new Error('Not signed in');
-      if (progress[journeyId]) return; // already started — no-op, not an error
+      const subject = user.id;
+      const existing = progress[journeyId];
+      // Starting an already-active journey is a no-op. Starting a paused or
+      // completed journey is explicit re-engagement and must reach the server
+      // so it becomes eligible for My Emmaus again.
+      // An active row with an origin is already classified. Do not rewrite it
+      // just because the member later opened the same Walk elsewhere.
+      if (existing && existing.status === 'active' && existing.displayOrigin) return;
+      if (existing) {
+        setProgress(p => ({
+          ...p,
+          [journeyId]: { ...existing, status: 'active', hiddenFromToday: false },
+        }));
+        try {
+          const prog = await api.startJourney(journeyId, displayOrigin);
+          if (activeSubjectRef.current !== subject) return;
+          setProgress(p => ({ ...p, [journeyId]: prog }));
+        } catch (err) {
+          if (activeSubjectRef.current === subject) {
+            setProgress(p => ({ ...p, [journeyId]: existing }));
+          }
+          throw err;
+        }
+        return;
+      }
       const optimistic: Progress = {
         journeyId,
         currentDay: 1,
         completedDays: [],
         startedAt: new Date().toISOString(),
         lastCompletedAt: null,
+        displayOrigin: displayOrigin ?? null,
       };
       setProgress(p => ({ ...p, [journeyId]: optimistic }));
       try {
-        const prog = await api.startJourney(journeyId, user.id);
+        const prog = await api.startJourney(journeyId, displayOrigin);
+        if (activeSubjectRef.current !== subject) return;
         setProgress(p => ({ ...p, [journeyId]: prog }));
       } catch (err) {
+        if (activeSubjectRef.current !== subject) return;
         // Roll back the optimistic update so the user can retry cleanly.
         setProgress(p => {
           const next = { ...p };
@@ -271,41 +422,90 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   );
 
   const completeStep = useCallback(
-    (journeyId: string, day: number, reflectionText: string) => {
-      if (!user?.id) return;
+    async (
+      journeyId: string,
+      day: number,
+      reflectionText: string,
+    ): Promise<api.CompleteStepResponse> => {
+      if (!user?.id) throw new Error('Not signed in');
+      const subject = user.id;
+      const previousProgress = progress[journeyId];
 
-      // Optimistic update
-      setProgress(p => {
-        const existing = p[journeyId];
-        if (!existing) return p;
-        const completedDays = [...new Set([...existing.completedDays, day])];
-        return {
-          ...p,
-          [journeyId]: {
-            ...existing,
-            completedDays,
-            currentDay: Math.max(existing.currentDay, day + 1),
-            lastCompletedAt: new Date().toISOString(),
-          },
-        };
-      });
+      const isDailyRhythm = journeys.find(j => j.id === journeyId)?.journeyType === 'daily-rhythm'
+        || journeys.find(j => j.id === journeyId)?.journeyType === 'core';
+
+      // Daily Rhythm never invents progression locally. Its completion state is
+      // applied only from the authoritative server response below.
+      if (!isDailyRhythm) {
+        setProgress(p => {
+          const existing = p[journeyId];
+          if (!existing) return p;
+          const completedDays = [...new Set([...existing.completedDays, day])];
+          let nextIncompleteDay = 1;
+          const completedSet = new Set(completedDays);
+          while (completedSet.has(nextIncompleteDay)) nextIncompleteDay += 1;
+          return {
+            ...p,
+            [journeyId]: {
+              ...existing,
+              completedDays,
+              currentDay: nextIncompleteDay,
+              lastCompletedAt: new Date().toISOString(),
+            },
+          };
+        });
+      }
 
       // Save reflection locally
       if (reflectionText.trim()) {
         const key = `${journeyId}-${day}`;
         setReflections(r => {
           const updated = { ...r, [key]: reflectionText };
-          localStorage.setItem('emmaus_reflections', JSON.stringify(updated));
+          localStorage.setItem(
+            accountStorageKey('emmaus_reflections', subject),
+            JSON.stringify(updated),
+          );
           return updated;
         });
       }
 
-      // Sync to API
-      api.completeStep(journeyId, user.id, day, reflectionText)
-        .then(prog => setProgress(p => ({ ...p, [journeyId]: prog })))
-        .catch(() => { /* ignore */ });
+      try {
+        const completion = await api.completeStep(journeyId, day, reflectionText);
+        if (activeSubjectRef.current !== subject) return completion;
+        const prog = completion.progress;
+        if (!prog || prog.journeyId !== journeyId) {
+          throw new Error('The server returned an invalid completion');
+        }
+        setProgress(p => ({ ...p, [journeyId]: prog }));
+        if (isDailyRhythm) {
+          if (activeSubjectRef.current === subject) {
+            setDailyRhythmState(completion.dailyRhythmState ?? null);
+            if (completion.dailyRhythmState?.progress) {
+              setProgress(p => ({
+                ...p,
+                [completion.dailyRhythmState!.journeyId]: completion.dailyRhythmState!.progress!,
+              }));
+            }
+          }
+        }
+        return completion;
+      } catch (err) {
+        console.error('[Emmaus] completeStep server sync failed:', err);
+        if (activeSubjectRef.current === subject) {
+          // The progress update above is optimistic for regular walks. Do not
+          // let a failed progress/reflection write make the UI look complete;
+          // restore the pre-submit snapshot so the member can retry.
+          setProgress(p => {
+            const next = { ...p };
+            if (previousProgress) next[journeyId] = previousProgress;
+            else delete next[journeyId];
+            return next;
+          });
+        }
+        throw err;
+      }
     },
-    [user?.id]
+    [user?.id, journeys, progress]
   );
 
   // ─── Admin mutations — await API, then update local state ──────────────────
@@ -366,7 +566,8 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
       setSteps(ss => [...ss.filter(s => !(s.journeyId === created.journeyId && s.day === created.day)), created]);
       // Refresh journey to get updated durationDays
       try {
-        const jList = user?.role === 'admin' ? await api.listJourneys() : await api.listPublishedJourneys();
+        const isAdmin = user?.role === 'admin' || user?.role === 'superAdmin';
+        const jList = isAdmin ? await api.listJourneys() : await api.listPublishedJourneys();
         setJourneys(jList);
       } catch { /* ignore */ }
       return created;
@@ -392,7 +593,8 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
       await api.deleteStep(journeyId, day, user?.id);
       setSteps(ss => ss.filter(s => !(s.journeyId === journeyId && s.day === day)));
       try {
-        const jList = user?.role === 'admin' ? await api.listJourneys() : await api.listPublishedJourneys();
+        const isAdmin = user?.role === 'admin' || user?.role === 'superAdmin';
+        const jList = isAdmin ? await api.listJourneys() : await api.listPublishedJourneys();
         setJourneys(jList);
       } catch { /* ignore */ }
     },
@@ -405,7 +607,9 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   const resetProgress = useCallback(
     async (journeyId: string): Promise<void> => {
       if (!user?.id) return;
-      const prog = await api.resetProgress(journeyId, user.id);
+      const subject = user.id;
+      const prog = await api.resetProgress(journeyId);
+      if (activeSubjectRef.current !== subject) return;
       setProgress(p => ({ ...p, [journeyId]: prog }));
     },
     [user?.id]
@@ -414,7 +618,9 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   const markStepIncomplete = useCallback(
     async (journeyId: string, day: number): Promise<void> => {
       if (!user?.id) return;
-      const prog = await api.markStepIncomplete(journeyId, user.id, day);
+      const subject = user.id;
+      const prog = await api.markStepIncomplete(journeyId, day);
+      if (activeSubjectRef.current !== subject) return;
       setProgress(p => ({ ...p, [journeyId]: prog }));
     },
     [user?.id]
@@ -423,38 +629,49 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   // ─── Refresh helpers ───────────────────────────────────────────────────────
 
   const refreshJourneys = useCallback(async () => {
+    const subject = user?.id ?? null;
+    if (!subject) return;
     try {
-      const jList = user?.role === 'admin'
+      const isAdmin = user?.role === 'admin' || user?.role === 'superAdmin';
+      const jList = isAdmin
         ? await api.listJourneys()
         : await api.listPublishedJourneys();
+      if (activeSubjectRef.current !== subject) return;
       setJourneys(jList);
     } catch {
       // ignore
     }
-  }, [user?.role]);
+  }, [user?.id, user?.role]);
 
   const refreshSteps = useCallback(async (journeyId: string) => {
+    const subject = user?.id ?? null;
+    if (!subject) return;
     try {
       const jSteps = await api.listSteps(journeyId);
       const isAdmin = user?.role === 'admin' || user?.role === 'superAdmin';
       const visible = isAdmin ? jSteps : jSteps.filter(s => s.status === 'Published');
+      if (activeSubjectRef.current !== subject) return;
       setSteps(s => [...s.filter(x => x.journeyId !== journeyId), ...visible]);
     } catch {
       // ignore
     }
-  }, [user?.role]);
+  }, [user?.id, user?.role]);
+
+  const ownsVisibleState = Boolean(user?.id && activeSubjectRef.current === user.id);
+  const visibleLoading = user?.id ? loading || !ownsVisibleState : false;
 
   return (
     <JourneyContext.Provider
       value={{
-        journeys,
-        steps,
-        progress,
-        reflections,
-        loading,
-        getJourney,
-        getStep,
-        getStepsForJourney,
+        journeys: ownsVisibleState ? journeys : [],
+        steps: ownsVisibleState ? steps : [],
+        progress: ownsVisibleState ? progress : {},
+        dailyRhythmState: ownsVisibleState ? dailyRhythmState : null,
+        reflections: ownsVisibleState ? reflections : {},
+        loading: visibleLoading,
+        getJourney: ownsVisibleState ? getJourney : () => undefined,
+        getStep: ownsVisibleState ? getStep : () => undefined,
+        getStepsForJourney: ownsVisibleState ? getStepsForJourney : () => [],
         completeStep,
         startJourney,
         updateJourney,

@@ -1,0 +1,853 @@
+REBUILD ASK EMMAUS VOICE AS A RELIABLE VOICE INTERFACE AND READ TO ME PLAYER
+
+This is a production-critical rebuild of Ask Emmaus Voice.
+
+The current always-listening conversational implementation is unreliable and must not remain the normal user experience.
+
+Current problems include:
+
+- ambient noise being interpreted as speech
+- Emmaus responding when nobody addressed it
+- interruptions not being detected quickly enough
+- the first words after an interruption being missed
+- poor understanding of natural requests
+- Emmaus hearing or transcribing its own speech
+- unreliable resource navigation
+- inconsistent Bible and devotional reading
+- unacceptable behaviour when the screen is off
+
+The goal is not a cosmetic adjustment.
+
+Ask Emmaus Voice must become a dependable voice interface for the whole Emmaus platform, allowing users to:
+
+- ask questions
+- hear Ask Emmaus answers
+- open resources
+- immediately read resources aloud
+- pause, resume and stop reading
+- continue from a saved position
+- use background audio playback when the screen is off
+
+Before changing anything:
+
+1. Create a restore point/checkpoint.
+2. Audit the current Ask Emmaus Voice implementation.
+3. Identify all existing speech-to-text, ElevenLabs, text-to-speech, audio-player, interruption, voice-command and microphone code.
+4. Preserve working ElevenLabs natural voice output.
+5. Preserve the current text-based Ask Emmaus interface.
+6. Preserve the rebuilt Ask Emmaus knowledge, citation and authorization systems.
+7. Do not build a second Ask Emmaus knowledge system.
+8. Do not delete working voice code until all callers have been migrated and tests pass.
+9. Do not republish automatically.
+
+==================================================
+1. PRODUCT DECISION: REMOVE ALWAYS LISTENING
+==================================================
+
+Disable always-listening mode for normal users.
+
+Disable ambient-noise-based automatic interruption as the default.
+
+The microphone must not remain continuously active after a normal voice request.
+
+Normal Voice interaction must use:
+
+- one tap to start listening
+- automatic end-of-speech detection
+- immediate processing
+- spoken and visible response
+- microphone off after the user’s turn
+
+The user must not have to hold the microphone button while speaking.
+
+The interface must clearly display:
+
+- Listening
+- Understanding
+- Opening
+- Reading
+- Paused
+- Unable to understand
+- Microphone unavailable
+
+Do not leave users in an endless listening or loading state.
+
+Remove or hide any current Voice control that suggests normal Voice is always listening.
+
+If an experimental hands-free mode already exists, keep it unavailable to normal users. Do not delete it unless necessary, but clearly isolate it behind an admin/developer feature flag.
+
+==================================================
+2. CORE VOICE EXPERIENCE
+==================================================
+
+The normal flow must be:
+
+1. User taps the Ask Emmaus microphone.
+2. The microphone begins recording immediately.
+3. Emmaus shows “Listening.”
+4. The user speaks naturally.
+5. Reliable end-of-speech detection ends recording.
+6. Emmaus shows “Understanding.”
+7. Speech is transcribed.
+8. The transcript remains available for inspection/editing where appropriate.
+9. The request is converted into a validated intent.
+10. Emmaus either:
+   - answers the question;
+   - opens the requested resource;
+   - opens and immediately reads the requested resource; or
+   - asks one short clarification when genuinely necessary.
+11. The microphone turns off.
+
+Do not require an extra Send button after a successful voice transcription.
+
+If speech confidence is too low:
+
+- do not execute a potentially incorrect action
+- retain the transcript
+- ask the user to confirm or try again
+
+==================================================
+3. ONE MICROPHONE FOR QUESTIONS AND ACTIONS
+==================================================
+
+The Ask Emmaus microphone must support both questions and commands.
+
+Examples:
+
+QUESTION
+
+- “What does John 3:16 mean?”
+- “What does the Bible say about forgiveness?”
+- “Why does God allow suffering?”
+- “What did Pastor Jeremy preach about faith?”
+
+READING
+
+- “Please read John 3:16.”
+- “Read John chapter 3.”
+- “Read Psalm 23.”
+- “Read today’s Daily Rhythm.”
+- “Continue my Daily Rhythm.”
+- “Read today’s devotional.”
+- “Read my current Walk.”
+- “Continue reading where I stopped.”
+- “Read this week’s Sermon Companion.”
+
+NAVIGATION
+
+- “Open John chapter 3.”
+- “Take me to today’s Daily Rhythm.”
+- “Open my current Walk.”
+- “Show me this week’s Sermon Companion.”
+
+COMBINED REQUESTS
+
+- “Read John 3:16 and explain it.”
+- “Read Psalm 23 and then pray with me.”
+- “Read today’s Daily Rhythm and continue from where I stopped.”
+- “Open my current Walk and read today’s Step.”
+
+CONTROL
+
+- “Pause.”
+- “Continue.”
+- “Resume.”
+- “Repeat that.”
+- “Go back.”
+- “Read the next verse.”
+- “Read the next section.”
+- “Stop reading.”
+- “Close the player.”
+
+Different natural phrases with the same meaning must resolve to the same validated intent.
+
+==================================================
+4. VALIDATED VOICE INTENT CONTRACT
+==================================================
+
+Speech transcription must not directly control application routes, database queries or audio URLs.
+
+Create one server-side validated Voice intent contract similar to:
+
+{
+  "intent": "ASK_QUESTION | OPEN_RESOURCE | READ_RESOURCE | READ_AND_EXPLAIN | CONTROL_PLAYBACK",
+  "resourceType": "bible | daily_rhythm | devotional | sermon | sermon_companion | walk | walk_step | journey | bible_study",
+  "resourceId": "canonical resource ID or null",
+  "book": "canonical Bible book or null",
+  "chapter": 3,
+  "verseStart": 16,
+  "verseEnd": 16,
+  "action": "play | pause | resume | repeat | previous | next | stop | null",
+  "autoplay": true,
+  "confidence": 0.96,
+  "requiresConfirmation": false
+}
+
+Requirements:
+
+- Validate the complete intent server-side.
+- Normalize Bible book names and numbered books.
+- Validate chapter and verse ranges.
+- Validate canonical resource IDs.
+- Validate publication status.
+- Validate tenant access.
+- Validate current user access.
+- Apply Daily Rhythm user eligibility.
+- Never allow the model to invent application routes.
+- Never allow the model to invent audio URLs.
+- Never allow unvalidated intent output to execute directly.
+- Log rejected intents without unnecessarily logging private speech content.
+
+If the request is clear and safe, act immediately.
+
+If the request is ambiguous, ask one brief clarification.
+
+Example:
+
+User: “Read Day 3.”
+
+If several eligible resources contain a Day 3, ask:
+
+“Would you like Day 3 of Daily Rhythm or Day 3 of your current Walk?”
+
+Do not ask for confirmation for an unambiguous request such as:
+
+“Please read John 3:16.”
+
+==================================================
+5. BUILD A PROVIDER-NEUTRAL READ TO ME PLAYER
+==================================================
+
+Create or rebuild one shared Read to Me player.
+
+The player must not be an ElevenLabs-only player.
+
+It must accept a neutral, validated playback request such as:
+
+{
+  "resourceType": "bible",
+  "resourceId": null,
+  "book": "John",
+  "chapter": 3,
+  "verseStart": 16,
+  "verseEnd": 16,
+  "startSectionId": null,
+  "autoplay": true,
+  "preferredAudioMode": "user_preference"
+}
+
+The player must then use an audio-source resolver to choose the available source.
+
+Current source order:
+
+1. Authorised recorded or uploaded audio when mapped to the requested resource
+2. ElevenLabs natural text-to-speech
+3. Existing safe TTS fallback, if configured
+4. Clear error state if no source is available
+
+Future-ready source order:
+
+1. User’s saved audio preference
+2. Authorised dramatized Bible audio, when available
+3. Other authorised recorded resource audio
+4. ElevenLabs natural narration
+5. Safe emergency fallback
+
+Do not implement a dramatized Bible now unless assets and metadata already exist.
+
+Build the source interface so dramatized audio can be added later without rebuilding Voice or the player.
+
+Use an interface similar to:
+
+{
+  "sourceType": "dramatized_audio | recorded_audio | elevenlabs_tts | fallback_tts",
+  "audioAssetId": "canonical asset ID or null",
+  "audioUrl": "server-resolved authorised URL or null",
+  "startTimeMs": 48210,
+  "endTimeMs": 59780,
+  "textSegments": [],
+  "fallbackSourceType": "elevenlabs_tts"
+}
+
+Only trusted server/application code may resolve the final audio source and URL.
+
+==================================================
+6. IMMEDIATE AUTOPLAY FROM ASK EMMAUS VOICE
+==================================================
+
+This behaviour is non-negotiable:
+
+User taps microphone and says:
+
+“Please read John 3:16.”
+
+Emmaus must:
+
+1. Transcribe the request.
+2. Recognize READ_RESOURCE.
+3. Validate John 3:16.
+4. Retrieve the correct Bible text from Emmaus.
+5. Open the Read to Me player automatically.
+6. Begin reading immediately.
+7. Display the passage being read.
+8. Require no additional tap, confirmation or selection.
+
+Do not insert an unnecessary spoken announcement before reading.
+
+Begin naturally with:
+
+“John chapter 3, verse 16…”
+
+The same immediate autoplay behaviour must work for clear, eligible requests involving:
+
+- a whole Bible chapter
+- a Bible verse range
+- today’s Daily Rhythm
+- a previously completed Daily Rhythm
+- a Daily Devotional
+- the user’s active Walk
+- a specific eligible Walk Step
+- a Sermon Companion
+- a Bible Study
+
+If access is denied or content is locked, do not expose the content. Provide a brief, clear explanation.
+
+==================================================
+7. READ AND EXPLAIN
+==================================================
+
+Support combined requests.
+
+Example:
+
+“Read John 3:16 and explain it.”
+
+Required behaviour:
+
+1. Validate and retrieve John 3:16.
+2. Open the player.
+3. Read the actual Bible text.
+4. When reading completes, pass the validated reference to Ask Emmaus.
+5. Ask Emmaus provides a Scripture-first explanation.
+6. Read the explanation aloud.
+7. Display the explanation on screen.
+8. Keep Scripture visually distinct from Emmaus’s explanation.
+
+The Bible text must come from the canonical Bible source, not be regenerated from model memory.
+
+The explanation must use the rebuilt Ask Emmaus knowledge system.
+
+Do not present sermons, devotionals or Emmaus commentary as Scripture.
+
+==================================================
+8. RESOURCE READING RULES
+==================================================
+
+BIBLE
+
+- Retrieve the canonical Bible text.
+- Support verse, verse range and full chapter.
+- Show the current verse while reading.
+- Allow next/previous verse or section.
+- Preserve the correct Bible translation.
+- Do not silently switch translations.
+
+DAILY RHYTHM
+
+- Allow only today’s unlocked Daily Rhythm and previously completed Daily Rhythms.
+- Apply the same server-side eligibility service used by Ask Emmaus and Search.
+- Never retrieve or read future locked content.
+- Save position within the eligible Daily Rhythm.
+
+DEVOTIONALS
+
+- Read only published content accessible to the user.
+- Preserve section order.
+- Do not read raw field labels, markup or administrative metadata.
+
+WALKS AND JOURNEYS
+
+- Resolve the correct active Walk and Step.
+- If “my current Walk” is ambiguous, ask which Walk.
+- Never treat completion material as the next Step unless progression rules allow it.
+- Respect Walk gating and completion requirements.
+
+SERMON COMPANIONS
+
+- Resolve the current published Sermon Companion and correct Step.
+- Do not accidentally open the generic Sermons or Next Steps page.
+
+SERMONS
+
+- Prefer existing authorised sermon audio when the user requests the sermon itself.
+- Use TTS for transcript reading only when appropriate.
+- Keep sermon playback and transcript narration distinguishable.
+
+==================================================
+9. PLAYER CONTROLS
+==================================================
+
+The Read to Me player must include:
+
+- play
+- pause
+- resume
+- stop
+- repeat current section
+- previous section
+- next section
+- playback progress
+- current resource title
+- current chapter/verse/section
+- close/minimize
+- visible audio-source state where useful
+- clear error and retry state
+
+Large, accessible controls are required.
+
+Voice commands and on-screen controls must operate the same playback state.
+
+Examples:
+
+- Saying “pause” must update the player to Paused.
+- Tapping Pause must update Voice context so “continue” resumes the same position.
+- Saying “stop reading” must stop and flush audio immediately.
+- Saying “repeat that” must replay the last coherent verse, paragraph or section—not an arbitrary audio fragment.
+
+==================================================
+10. DEPENDABLE INTERRUPTION
+==================================================
+
+Normal interruption must not depend on ambient noise.
+
+While Emmaus is speaking or reading:
+
+- tapping the microphone must immediately stop or pause playback
+- flush any queued TTS audio
+- preserve the current reading position
+- allow a brief echo-clear interval
+- begin recording promptly
+- avoid losing the user’s first words
+
+A large Stop/Pause control must remain visible.
+
+Also support media controls and Bluetooth play/pause commands where the current platform permits.
+
+Do not enable continuous acoustic barge-in for normal users.
+
+Do not allow Emmaus’s own audio output to be transcribed as user speech.
+
+Apply:
+
+- echo cancellation
+- noise suppression
+- automatic gain control where supported
+- clear playback/recording state separation
+- prohibition on simultaneous speaker output and ordinary transcription unless deliberately supported and tested
+
+==================================================
+11. SPEECH DETECTION AND TRANSCRIPTION
+==================================================
+
+Use conservative end-of-speech detection.
+
+Requirements:
+
+- do not stop after an ordinary short pause within a sentence
+- do not wait excessively after the user has finished
+- do not treat low-level ambient noise as continued speech
+- preserve the beginning and end of the utterance
+- retain a small pre-speech buffer if supported
+- reject empty or noise-only transcripts
+- provide retry when transcription fails
+
+Use confidence and intent confidence separately:
+
+- transcription confidence: what words were heard
+- intent confidence: what action those words mean
+
+Do not execute navigation or reading actions when confidence is below a safe threshold.
+
+Do not require exact command phrases. Natural language interpretation is required.
+
+==================================================
+12. SCREEN-OFF AND BACKGROUND PLAYBACK
+==================================================
+
+Implement reliable background audio playback for the Read to Me player using the best capabilities available in the current PWA.
+
+When technically supported:
+
+- audio must continue when the screen turns off
+- audio must continue when the PWA is backgrounded
+- lock-screen/media controls must show the resource
+- lock-screen/media controls must support play and pause
+- audio focus must be handled correctly
+- incoming calls or other audio interruptions must pause safely
+- returning to Emmaus must restore the correct player state
+- reading position must remain synchronized
+
+Use Media Session API or the appropriate existing platform integration where supported.
+
+Do not falsely claim that continuous background microphone conversation is supported by the PWA.
+
+Screen-off support in this phase is for audio playback.
+
+If a browser or operating system does not support a capability, degrade gracefully and report the limitation honestly.
+
+==================================================
+13. SAVE AND RESUME POSITION
+==================================================
+
+Save reading progress using structured positions—not only elapsed audio time.
+
+For Bible:
+
+- translation
+- book
+- chapter
+- verse
+- optional text offset or segment ID
+
+For other resources:
+
+- resource type
+- canonical resource ID
+- Step/day/chapter
+- section ID
+- paragraph/segment ID
+- provider-specific audio time where relevant
+
+This ensures progress survives switching between:
+
+- ElevenLabs TTS
+- uploaded audio
+- future dramatized audio
+
+“Continue reading where I stopped” must resolve to the user’s most recent unfinished Read to Me session.
+
+If there are multiple plausible sessions, show or ask a brief clarification.
+
+==================================================
+14. FUTURE DRAMATIZED BIBLE COMPATIBILITY
+==================================================
+
+Prepare the schema/interface for future dramatized Bible audio.
+
+Support future metadata:
+
+- Bible translation
+- book
+- chapter
+- verse
+- audio asset ID
+- start timestamp
+- end timestamp
+- production/version
+- narrator/cast metadata
+- licence and usage status
+- territorial or tenant availability
+- publication status
+- fallback provider
+
+The future behaviour must be:
+
+User: “Please read John 3:16.”
+
+The audio resolver checks:
+
+1. Is authorised dramatized audio available for this translation and verse?
+2. Does the user prefer dramatized audio?
+3. Are valid timestamps available?
+4. Is the asset accessible?
+
+If yes:
+
+- play the mapped dramatized verse automatically.
+
+If no:
+
+- immediately fall back to ElevenLabs TTS without breaking the request.
+
+Do not hard-code future dramatized Bible paths.
+
+==================================================
+15. ASK EMMAUS INTEGRATION
+==================================================
+
+Voice must use the same Ask Emmaus system as text.
+
+It must share:
+
+- conversation context
+- Scripture-first rules
+- resource retrieval
+- canonical resource IDs
+- user permissions
+- tenant isolation
+- Daily Rhythm eligibility
+- recommendations
+- citation validation
+- canonical Scripture links
+- canonical resource links
+
+Do not maintain a separate Voice knowledge base.
+
+The text and spoken versions of an Ask Emmaus answer must have the same substantive content.
+
+Voice may make minor speech-friendly formatting changes, such as not reading raw URLs, markdown markers or technical UI labels.
+
+When an answer includes recommended resources:
+
+- show the validated resource cards on screen
+- mention only the most relevant recommendation aloud
+- do not read long lists of links
+
+==================================================
+16. FAILURE HANDLING
+==================================================
+
+If microphone permission is denied:
+
+- explain how to enable it
+- preserve text-based Ask Emmaus
+- do not repeatedly prompt for permission
+
+If transcription fails:
+
+- stop the listening state
+- retain any usable transcript
+- provide Retry
+- allow typed input
+
+If a resource cannot be found:
+
+- do not invent it
+- explain briefly
+- offer relevant accessible alternatives if validated
+
+If TTS fails:
+
+- keep the resource visible
+- provide Retry
+- allow reading on screen
+- use the configured fallback only when safe
+
+If background playback is interrupted:
+
+- preserve position
+- show Paused
+- allow reliable resume
+
+If Voice fails completely:
+
+- Ask Emmaus text must remain functional
+
+==================================================
+17. PRIVACY AND USER TRUST
+==================================================
+
+The normal microphone must only activate after an explicit user tap.
+
+Always show when the microphone is active.
+
+Stop microphone capture immediately after the turn completes or is cancelled.
+
+Do not store raw audio unless the existing privacy policy and explicit product requirement permit it.
+
+Do not unnecessarily log:
+
+- raw audio
+- full private transcripts
+- sensitive pastoral questions
+
+Log technical metadata needed for diagnosis, including:
+
+- request ID
+- transcription success/failure
+- intent type
+- confidence bands
+- execution success/failure
+- resource type
+- audio provider
+- playback failure
+- latency stages
+
+==================================================
+18. FEATURE FLAGS AND SAFE ROLLOUT
+==================================================
+
+Add feature flags for:
+
+- new Ask Emmaus Voice
+- Read to Me player
+- autoplay from Voice
+- background playback
+- future hands-free Voice Session
+- future dramatized Bible source
+
+Keep future hands-free Voice Session disabled for normal users.
+
+Allow administrators/testers to test the new Voice implementation before public release.
+
+Do not expose incomplete experimental behaviour to all users.
+
+==================================================
+19. REQUIRED AUTOMATED TESTS
+==================================================
+
+Add tests for natural-language intent equivalents:
+
+- “Read John 3:16.”
+- “Please read John chapter 3 verse 16.”
+- “Take me to John 3:16 and read it.”
+- “Can you read John 3:16 for me?”
+- “Open John 3:16.”
+- “What does John 3:16 mean?”
+- “Read John 3:16 and explain it.”
+- “Read Psalm 23.”
+- “Read today’s Daily Rhythm.”
+- “Continue my Daily Rhythm.”
+- “Read my current Walk.”
+- “Continue reading where I stopped.”
+- “Pause.”
+- “Resume.”
+- “Repeat that.”
+- “Stop reading.”
+
+Test Scripture normalization:
+
+- John 3:16
+- John chapter three verse sixteen
+- Psalm 23
+- First Corinthians 13
+- 1 Corinthians 13
+- Second Corinthians 5:17
+- First Thessalonians 5:16–18
+- First John 1:9
+
+Test rejection:
+
+- invalid Bible book
+- invalid chapter
+- invalid verse
+- nonexistent resource ID
+- unpublished resource
+- another tenant’s resource
+- future Daily Rhythm
+- ambiguous Day request
+- noise-only transcript
+- low-confidence destructive/navigation action
+- model-generated raw URL
+- model-generated audio URL
+
+Test playback:
+
+- immediate autoplay
+- pause
+- resume
+- repeat
+- next
+- previous
+- stop
+- queued TTS flush
+- position saving
+- position restoration
+- provider fallback
+- TTS failure
+- background interruption
+
+==================================================
+20. BROWSER AND DEVICE VERIFICATION
+==================================================
+
+Verify the complete user journey, not only functions in isolation:
+
+TEST A
+
+Tap Ask Emmaus microphone
+→ say “Please read John 3:16”
+→ transcript succeeds
+→ intent validates
+→ correct Bible text is retrieved
+→ player opens
+→ reading starts automatically
+→ correct verse appears
+
+TEST B
+
+Tap microphone
+→ say “Read John 3:16 and explain it”
+→ verse is read
+→ Ask Emmaus explains it
+→ Scripture and explanation remain distinct
+
+TEST C
+
+Start reading Psalm 23
+→ turn screen off
+→ audio continues where supported
+→ pause from lock screen
+→ resume
+→ return to Emmaus
+→ correct position remains
+
+TEST D
+
+Start a reading
+→ tap microphone while audio is playing
+→ audio stops immediately
+→ first spoken words are captured
+→ new request is processed
+
+TEST E
+
+Ask for today’s Daily Rhythm
+→ eligible content reads
+
+TEST F
+
+Ask for a future Daily Rhythm
+→ content is not retrieved, revealed or read
+
+Test at minimum in:
+
+- desktop Chrome
+- Android Chrome/PWA
+- installed Emmaus PWA
+- available mobile viewport tests
+
+Clearly identify any iPhone/iOS testing that cannot be automated in the current environment and must be tested manually.
+
+==================================================
+21. COMPLETION REPORT
+==================================================
+
+When complete, report:
+
+1. Root causes of the existing Voice unreliability.
+2. Existing Voice code retained, changed, disabled or removed.
+3. Files changed.
+4. Database/schema changes.
+5. Speech-to-text provider currently used.
+6. Text-to-speech providers currently used.
+7. How natural requests become validated intents.
+8. How immediate autoplay works.
+9. How the player chooses an audio provider.
+10. How Bible and resource access are validated.
+11. How Daily Rhythm eligibility is enforced.
+12. How reading position is stored.
+13. How background playback works.
+14. How future dramatized audio will plug in.
+15. Automated test commands and exact results.
+16. Browser/device tests and exact results.
+17. Remaining platform limitations.
+18. Manual testing instructions.
+
+Do not claim that continuous screen-off conversation is complete.
+
+Do not mark this production-ready merely because the build passes.
+
+Do not republish.
+
+Create a new checkpoint after all automated tests pass and wait for my review.

@@ -1,0 +1,160 @@
+Close the two remaining Ask Emmaus release gates. Do not publish yet, do not modify Voice and do not defer this work.
+
+GATE 1: LIVE SEMANTIC QUALITY EVALUATION
+
+Run every golden prompt and its important paraphrases through the actual production-equivalent LLM, retrieval, authentication/context, normalization and rendering pipeline.
+
+Do not test only routing and contracts.
+
+Capture and evaluate the actual generated responses for:
+
+* devotional;
+* Where can I find devotionals?;
+* Read today’s devotional;
+* What is faith?;
+* Prodigal;
+* I’m afraid;
+* I feel alone;
+* What does Scripture say about forgiveness?;
+* Have we preached about the prodigal son?;
+* Show me a Bible Study about faith;
+* Continue my Walk;
+* Continue my Journey;
+* Read Psalm 23;
+* Read John 3:16–18;
+* What can Emmaus help me with?
+
+Include natural paraphrases.
+
+For every generated response, verify:
+
+* correct intent;
+* accurate Scripture-first content;
+* all Bible references normalized and linked;
+* correct capitalization;
+* exact Bible routes;
+* verified Emmaus resources only;
+* legitimate resources are not removed;
+* unresolved resources are handled safely;
+* no duplicate resource cards;
+* no irrelevant recommendations;
+* no invented Walks, Journeys, devotionals, studies or sermons;
+* natural acknowledgment;
+* appropriate use of the member’s name;
+* “Pastor Jeremy” in conversational prose;
+* concise answer length;
+* useful next step;
+* working `displayAnswer`;
+* concise natural `speakableAnswer`.
+
+Save the evaluation results as test artifacts or structured logs so failures can be reproduced.
+
+Do not make the tests pass by matching exact expected prose. Evaluate the required properties and canonical records.
+
+GATE 2: REMOVE THE 6.8–14.8 SECOND BLANK WAIT
+
+The current strategy buffers the complete typed response until final normalization. This has fixed citation consistency but created unacceptable perceived latency.
+
+Replace whole-answer buffering with safe incremental normalization.
+
+Preferred approach:
+
+1. Receive streamed model output server-side.
+2. Buffer only until a complete safe textual unit—normally a sentence or paragraph—is available.
+3. Normalize and validate Scripture and resource references in that unit.
+4. Emit the validated unit immediately.
+5. Continue for subsequent units.
+6. Run the complete final answer through the full normalizer before persistence.
+7. Ensure the final persisted `displayAnswer` is identical in meaning and canonical references to what was rendered.
+8. Never emit a partial Markdown link, partial citation token, incomplete Bible reference or unvalidated resource action.
+
+The streaming parser must safely handle:
+
+* a Bible reference split across model chunks;
+* numbered Bible books;
+* verse ranges;
+* punctuation after a reference;
+* Markdown split across chunks;
+* resource titles split across chunks;
+* a sentence containing both Scripture and a sermon;
+* malformed or unsupported references;
+* the stream ending without final punctuation;
+* model or retrieval failure midway through the response.
+
+If sentence-level normalization cannot be implemented safely within the existing stream format, implement a structured citation-token stream in which the model may only refer to pre-resolved Scripture and resources using server-issued identifiers. Validate each token before emitting it.
+
+Do not revert to unvalidated raw streaming.
+
+LATENCY TARGETS
+
+For ordinary general or pastoral questions:
+
+* show a genuine first validated sentence as quickly as practical;
+* target first visible answer content within 2.5 seconds under normal conditions;
+* do not use a fake loading sentence that is unrelated to the answer;
+* stream subsequent validated content progressively.
+
+For deterministic canonical actions:
+
+* preserve the existing near-immediate response.
+
+Measure and report:
+
+* time to first model token;
+* time to first validated visible sentence;
+* retrieval duration;
+* model duration;
+* normalization overhead;
+* total response duration;
+* p50 and p95 across the golden suite.
+
+Run independent eligible retrieval operations in parallel and skip irrelevant retrievers based on intent.
+
+AUTHENTICATED BROWSER VERIFICATION
+
+Create a safe authenticated staging/development verification path using an existing test member or non-production fixture. Do not weaken production authentication and do not create a production backdoor.
+
+At desktop and mobile widths:
+
+* render the live golden responses;
+* inspect progressive streaming;
+* confirm that links do not change or break after stream completion;
+* click every Scripture link;
+* click representative sermon, devotional, Bible Study, Walk and Journey actions;
+* verify exact routes and user eligibility;
+* inspect browser and server logs.
+
+If this environment still cannot perform authenticated browser verification, provide an exact manual checklist and classify the release as awaiting manual authenticated verification. Do not claim it passed.
+
+REGRESSION REQUIREMENTS
+
+Re-run:
+
+* complete API integration suite;
+* citation and normalization suite;
+* database-backed multi-user tests;
+* golden semantic suite;
+* streaming regression suite;
+* frontend build;
+* API build and typecheck;
+* data integrity and reconciliation checks.
+
+Do not modify Voice, Live Audio, recording, transcription, ElevenLabs or TTS.
+
+FINAL RELEASE REPORT
+
+Provide:
+
+1. Actual live-model golden evaluation results.
+2. Failures found and corrections made.
+3. Before-and-after latency measurements.
+4. First-visible-content p50 and p95.
+5. Authenticated browser flows verified.
+6. Exact test totals.
+7. Remaining limitations.
+8. One explicit decision:
+
+   * ready for limited typed Ask Emmaus user testing; or
+   * not ready, with the precise remaining blocker.
+
+Do not recommend Voice after this task. The next milestone is limited real-user testing of typed Ask Emmaus.

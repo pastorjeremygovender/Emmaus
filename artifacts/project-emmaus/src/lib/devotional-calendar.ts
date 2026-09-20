@@ -42,12 +42,27 @@ export function calcAvailableDaySelfPaced(
   completedDays: number[],
   maxPublishedDay: number,
   devMode: boolean,
+  publishedDayNumbers?: number[],
 ): number {
-  const cap = Math.max(maxPublishedDay, 1);
-  if (devMode) return cap;
-  if (completedDays.length === 0) return 1;
-  const highest = Math.max(...completedDays);
-  return Math.min(highest + 1, cap);
+  // In dev mode all entries are immediately unlocked.
+  if (devMode) return Math.max(maxPublishedDay, 1);
+
+  // Build the ordered list of days to check against.
+  // Prefer the actual published day-number list when provided (handles non-sequential
+  // dayNumbers like 3,4,5…16 in a 14-entry series).  Fall back to the simple
+  // 1…maxPublishedDay range for call-sites that don't pass the list.
+  const orderedDays =
+    publishedDayNumbers && publishedDayNumbers.length > 0
+      ? [...publishedDayNumbers].sort((a, b) => a - b)
+      : Array.from({ length: Math.max(maxPublishedDay, 1) }, (_, i) => i + 1);
+
+  const completedSet = new Set(completedDays);
+
+  // First day in the published list that the member hasn't completed yet.
+  const next = orderedDays.find(d => !completedSet.has(d));
+
+  // If every published day is completed, return the last one (all-done state).
+  return next ?? Math.max(maxPublishedDay, 1);
 }
 
 // ─── Action-label resolver ────────────────────────────────────────────────────

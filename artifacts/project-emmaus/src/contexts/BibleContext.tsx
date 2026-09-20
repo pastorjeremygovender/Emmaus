@@ -1,6 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
-import { loadBibleData, patchBibleData } from '../lib/bible-api';
+import { loadBibleDataWithStatus, patchBibleData } from '../lib/bible-api';
+import { accountStorageKey } from '../lib/account-storage';
+import {
+  getRememberedBibleChapter,
+  loadBibleReadingPositions,
+  rememberBibleChapter,
+  saveBibleReadingPositions,
+  type BibleReadingPositions,
+} from '../lib/bible-reading-position';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -30,7 +38,7 @@ export type BibleJourneyProgress = {
 export type ChapterReflection = { id: string; bookId: string; chapter: number; text: string; createdAt: string };
 export type PersonalPrayer = { id: string; bookId: string; chapter: number; text: string; savedAt: string };
 
-// ─── localStorage keys (unauthenticated fallback) ─────────────────────────────
+// ─── Account-scoped local cache keys ──────────────────────────────────────────
 
 const LS = {
   history:           'emmaus_bible_history_v2',    // array, newest-first
@@ -46,14 +54,37 @@ const LS = {
 } as const;
 
 const HISTORY_MAX = 20;
+export const DEFAULT_BIBLE_TRANSLATION = 'niv';
+const VALID_TRANSLATION_IDS = new Set(['bsb', 'asv', 'kjv', 'niv', 'gnt', 'msg']);
 
-function load<T>(key: string, fallback: T): T {
-  try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fallback; }
+function normalizeTranslation(value: unknown): string | null {
+  return typeof value === 'string' && VALID_TRANSLATION_IDS.has(value) ? value : null;
+}
+
+function load<T>(key: string, fallback: T, subject: string): T {
+  try {
+    const s = localStorage.getItem(accountStorageKey(key, subject));
+    return s ? JSON.parse(s) : fallback;
+  }
   catch { return fallback; }
 }
 
-function save(key: string, value: unknown) {
-  localStorage.setItem(key, JSON.stringify(value));
+function loadStoredTranslation(subject: string): string | undefined {
+  try {
+    const raw = localStorage.getItem(accountStorageKey(LS.translation, subject));
+    if (raw === null) return undefined;
+    return normalizeTranslation(JSON.parse(raw)) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function save(key: string, value: unknown, subject: string) {
+  try {
+    localStorage.setItem(accountStorageKey(key, subject), JSON.stringify(value));
+  } catch {
+    // Storage can be unavailable in privacy-restricted browser contexts.
+  }
 }
 
 function normaliseJourneyProgress(value: unknown): Record<string, BibleJourneyProgress> {
@@ -81,6 +112,8 @@ type BibleContextType = {
   readingHistory: ReadingHistoryEntry[];
   lastRead: ReadingHistoryEntry | null;   // convenience: most recent
   markChapterOpened: (entry: Omit<ReadingHistoryEntry, 'openedAt'>) => void;
+  getRememberedChapter: (bookId: string, translationId?: string) => number | null;
+  rememberChapter: (bookId: string, chapter: number, translationId?: string) => void;
 
   // Completed chapters
   completedChapters: Set<string>;
@@ -148,8 +181,9 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const userIdRef = useRef<string | null>(null);
 
-  const [translationId, setTranslationIdState] = useState<string>('bsb');
+   const [translationId, setTranslationIdState] = useState<string>(DEFAULT_BIBLE_TRANSLATION);
   const [readingHistory, setReadingHistory] = useState<ReadingHistoryEntry[]>([]);
+  const [readingPositions, setReadingPositions] = useState<BibleReadingPositions>({});
   const [completedChapters, setCompletedChapters] = useState<Set<string>>(new Set());
   const [journeyProgress, setJourneyProgress] = useState<Record<string, BibleJourneyProgress>>({});
   const [highlights, setHighlights] = useState<VerseHighlight[]>([]);
@@ -158,109 +192,125 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
   const [notes, setNotes] = useState<VerseNote[]>([]);
   const [reflections, setReflections] = useState<ChapterReflection[]>([]);
   const [prayers, setPrayers] = useState<PersonalPrayer[]>([]);
+  const [loadedSubject, setLoadedSubject] = useState<string | null>(null);
 
   // ─── Storage helpers ────────────────────────────────────────────────────────
 
   /**
-   * Persist a partial update — always writes to localStorage,
-   * and also fires a cloud PATCH when the user is authenticated.
+   * Persist a partial update only for the currently verified account.
+   * PostgreSQL remains authoritative; localStorage is an owned offline cache.
    */
   const persist = useCallback((patch: Parameters<typeof patchBibleData>[1]) => {
     const uid = userIdRef.current;
-    if (uid) {
-      // Fire-and-forget cloud write; localStorage remains the immediate fallback
-      patchBibleData(uid, patch);
-    }
-    // Always mirror to localStorage so unauthenticated sessions and cloud
-    // fallback work seamlessly
-    if ('history' in patch)         save(LS.history,         patch.history);
-    if ('completed' in patch)       save(LS.completed,       patch.completed);
-    if ('journeyProgress' in patch) save(LS.journeyProgress, patch.journeyProgress);
-    if ('highlights' in patch)      save(LS.highlights,      patch.highlights);
-    if ('favourites' in patch)      save(LS.favourites,      patch.favourites);
-    if ('bookmarks' in patch)       save(LS.bookmarks,       patch.bookmarks);
-    if ('notes' in patch)           save(LS.notes,           patch.notes);
-    if ('reflections' in patch)     save(LS.reflections,     patch.reflections);
-    if ('prayers' in patch)         save(LS.prayers,         patch.prayers);
+    if (!uid) return;
+    void patchBibleData(uid, patch).catch(error => {
+      console.error('[BibleContext] Cloud sync failed:', error);
+    });
+    if ('history' in patch)         save(LS.history,         patch.history, uid);
+    if ('completed' in patch)       save(LS.completed,       patch.completed, uid);
+    if ('journeyProgress' in patch) save(LS.journeyProgress, patch.journeyProgress, uid);
+    if ('highlights' in patch)      save(LS.highlights,      patch.highlights, uid);
+    if ('favourites' in patch)      save(LS.favourites,      patch.favourites, uid);
+    if ('bookmarks' in patch)       save(LS.bookmarks,       patch.bookmarks, uid);
+    if ('notes' in patch)           save(LS.notes,           patch.notes, uid);
+    if ('reflections' in patch)     save(LS.reflections,     patch.reflections, uid);
+    if ('prayers' in patch)         save(LS.prayers,         patch.prayers, uid);
   }, []);
 
   // ─── Load data ──────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    userIdRef.current = user?.id ?? null;
+    const subject = user?.id ?? null;
+    userIdRef.current = subject;
+    let cancelled = false;
 
-    // Translation preference is always local — not synced to cloud
-    setTranslationIdState(load(LS.translation, 'bsb'));
+    // Blank all personal state before the next account's request starts.
+    setLoadedSubject(null);
+    setTranslationIdState(DEFAULT_BIBLE_TRANSLATION);
+    setReadingHistory([]);
+    setReadingPositions({});
+    setCompletedChapters(new Set());
+    setJourneyProgress({});
+    setHighlights([]);
+    setFavourites([]);
+    setBookmarks([]);
+    setNotes([]);
+    setReflections([]);
+    setPrayers([]);
+
+    if (!subject) {
+      return () => {
+        cancelled = true;
+      };
+    }
+    const accountSubject = subject;
+
+    // Translation is an account-owned cache until the cloud record resolves.
+    // A present BSB value is intentional; only an absent value gets NIV.
+    const cachedTranslation = loadStoredTranslation(accountSubject);
+    setTranslationIdState(cachedTranslation ?? DEFAULT_BIBLE_TRANSLATION);
+    setReadingPositions(loadBibleReadingPositions(accountSubject));
 
     async function loadData() {
-      let history: ReadingHistoryEntry[] = [];
-      let completed: string[] = [];
-      let journeyProg: Record<string, BibleJourneyProgress> = {};
-      let hlights: VerseHighlight[] = [];
-      let favs: VerseFavourite[] = [];
-      let bkms: ChapterBookmark[] = [];
-      let nts: VerseNote[] = [];
-      let refls: ChapterReflection[] = [];
-      let prays: PersonalPrayer[] = [];
+      const cached = {
+        history: load<ReadingHistoryEntry[]>(LS.history, [], accountSubject),
+        completed: load<string[]>(LS.completed, [], accountSubject),
+        journeyProgress: load<Record<string, BibleJourneyProgress>>(LS.journeyProgress, {}, accountSubject),
+        highlights: load<VerseHighlight[]>(LS.highlights, [], accountSubject),
+        favourites: load<VerseFavourite[]>(LS.favourites, [], accountSubject),
+        bookmarks: load<ChapterBookmark[]>(LS.bookmarks, [], accountSubject),
+        notes: load<VerseNote[]>(LS.notes, [], accountSubject),
+        reflections: load<ChapterReflection[]>(LS.reflections, [], accountSubject),
+        prayers: load<PersonalPrayer[]>(LS.prayers, [], accountSubject),
+      };
+      const cloudResult = await loadBibleDataWithStatus(accountSubject).catch(error => {
+        console.error('[BibleContext] Cloud load failed:', error);
+        return { data: null, status: 'unavailable' as const };
+      });
+      const cloud = cloudResult.data;
+      if (cancelled || userIdRef.current !== accountSubject) return;
 
-      if (user) {
-        // Try cloud first
-        const cloud = await loadBibleData(user.id);
-        if (cloud) {
-          // Cloud record exists — use it as the authoritative source
-          history    = cloud.history ?? [];
-          completed  = cloud.completed;
-          // Older records may contain an explicit null here. Luke is currently
-          // the only book overview that reads Bible Journey progress while it
-          // renders, so that legacy value previously crashed only Luke's page.
-          journeyProg = normaliseJourneyProgress(cloud.journeyProgress);
-          hlights    = cloud.highlights;
-          favs       = cloud.favourites;
-          bkms       = cloud.bookmarks;
-          nts        = cloud.notes;
-          refls      = cloud.reflections;
-          prays      = cloud.prayers;
-        } else {
-          // No cloud record yet (404) or cloud unavailable (5xx / network error).
-          // Fall back to localStorage in both cases — if the user has local data,
-          // fire-and-forget a migration PATCH to seed the cloud row so future
-          // loads use the cloud record. This is safe: if the DB is genuinely down
-          // the PATCH also fails silently and localStorage remains the source of truth.
-          history    = loadFromLocalStorage();
-          completed  = load(LS.completed, []);
-          journeyProg = normaliseJourneyProgress(load(LS.journeyProgress, {}));
-          hlights    = load(LS.highlights, []);
-          favs       = load(LS.favourites, []);
-          bkms       = load(LS.bookmarks, []);
-          nts        = load(LS.notes, []);
-          refls      = load(LS.reflections, []);
-          prays      = load(LS.prayers, []);
+      const owned = cloud ?? cached;
+      const cloudTranslation = normalizeTranslation(cloud?.translationId);
+      const selectedTranslation =
+        cloudTranslation ?? cachedTranslation ?? DEFAULT_BIBLE_TRANSLATION;
+      setTranslationIdState(selectedTranslation);
+      const history = owned.history ?? [];
+      const completed = owned.completed ?? [];
+      // Legacy cloud records can contain an explicit null value. Normalize it
+      // before any book overview reads the progress map (Luke exposed this).
+      const journeyProg = normaliseJourneyProgress(owned.journeyProgress);
+      const hlights = owned.highlights ?? [];
+      const favs = owned.favourites ?? [];
+      const bkms = owned.bookmarks ?? [];
+      const nts = owned.notes ?? [];
+      const refls = owned.reflections ?? [];
+      const prays = owned.prayers ?? [];
 
-          // Migrate any existing local data to cloud (fire-and-forget)
-          const hasLocalData =
-            history.length > 0 || completed.length > 0 ||
-            hlights.length > 0 || favs.length > 0 || bkms.length > 0 ||
-            nts.length > 0 || refls.length > 0 || prays.length > 0 ||
-            Object.keys(journeyProg).length > 0;
-          if (hasLocalData) {
-            patchBibleData(user.id, {
-              history, completed, journeyProgress: journeyProg,
-              highlights: hlights, favourites: favs, bookmarks: bkms,
-              notes: nts, reflections: refls, prayers: prays,
-            });
-          }
+      if (cloud) {
+        save(LS.history, history, accountSubject);
+        save(LS.completed, completed, accountSubject);
+        save(LS.journeyProgress, journeyProg, accountSubject);
+        save(LS.highlights, hlights, accountSubject);
+        save(LS.favourites, favs, accountSubject);
+        save(LS.bookmarks, bkms, accountSubject);
+        save(LS.notes, nts, accountSubject);
+        save(LS.reflections, refls, accountSubject);
+        save(LS.prayers, prays, accountSubject);
+        save(LS.translation, selectedTranslation, accountSubject);
+        // Legacy cloud records may have no preference field. Preserve an
+        // account-scoped explicit choice, otherwise persist the new NIV default.
+        if (!cloudTranslation) {
+          void patchBibleData(accountSubject, { translationId: selectedTranslation });
         }
-      } else {
-        // Unauthenticated — localStorage only
-        history    = loadFromLocalStorage();
-        completed  = load(LS.completed, []);
-        journeyProg = normaliseJourneyProgress(load(LS.journeyProgress, {}));
-        hlights    = load(LS.highlights, []);
-        favs       = load(LS.favourites, []);
-        bkms       = load(LS.bookmarks, []);
-        nts        = load(LS.notes, []);
-        refls      = load(LS.reflections, []);
-        prays      = load(LS.prayers, []);
+      } else if (cloudResult.status === 'missing') {
+        // First authenticated load: migrate owned offline data atomically.
+        // This is deliberately skipped when the GET was unavailable.
+        save(LS.translation, selectedTranslation, accountSubject);
+        void patchBibleData(accountSubject, {
+          ...cached,
+          translationId: selectedTranslation,
+        });
       }
 
       setReadingHistory(history);
@@ -272,16 +322,26 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
       setNotes(nts);
       setReflections(refls);
       setPrayers(prays);
+      setLoadedSubject(accountSubject);
     }
 
-    loadData();
-  }, [user]);
+    void loadData();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   // ─── Reading history ────────────────────────────────────────────────────────
 
   const setTranslation = useCallback((id: string) => {
-    setTranslationIdState(id);
-    save(LS.translation, id);
+    const next = normalizeTranslation(id);
+    if (!next) return;
+    setTranslationIdState(next);
+    const subject = userIdRef.current;
+    if (subject) {
+      save(LS.translation, next, subject);
+      void patchBibleData(subject, { translationId: next });
+    }
   }, []);
 
   const markChapterOpened = useCallback((entry: Omit<ReadingHistoryEntry, 'openedAt'>) => {
@@ -293,6 +353,28 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
   }, [persist]);
+
+  const getRememberedChapter = useCallback((
+    bookId: string,
+    requestedTranslationId = translationId,
+  ) => getRememberedBibleChapter(readingPositions, requestedTranslationId, bookId), [
+    readingPositions,
+    translationId,
+  ]);
+
+  const rememberChapter = useCallback((
+    bookId: string,
+    chapter: number,
+    requestedTranslationId = translationId,
+  ) => {
+    const subject = userIdRef.current;
+    if (!subject) return;
+    setReadingPositions(prev => {
+      const next = rememberBibleChapter(prev, requestedTranslationId, bookId, chapter);
+      if (next !== prev) saveBibleReadingPositions(subject, next);
+      return next;
+    });
+  }, [translationId]);
 
   // ─── Completed chapters ─────────────────────────────────────────────────────
 
@@ -455,41 +537,45 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
     setReflections(prev => { const next = prev.filter(r => r.id !== reflectionId); persist({ reflections: next }); return next; });
   }, [persist]);
 
-  const lastRead = readingHistory.length > 0 ? readingHistory[0] : null;
+  const ownsVisibleState = Boolean(user?.id && loadedSubject === user.id);
+  const visibleHistory = ownsVisibleState ? readingHistory : [];
+  const visibleCompleted = ownsVisibleState ? completedChapters : new Set<string>();
+  const visibleJourneyProgress = ownsVisibleState ? journeyProgress : {};
+  const visibleHighlights = ownsVisibleState ? highlights : [];
+  const visibleFavourites = ownsVisibleState ? favourites : [];
+  const visibleBookmarks = ownsVisibleState ? bookmarks : [];
+  const visibleNotes = ownsVisibleState ? notes : [];
+  const visibleReflections = ownsVisibleState ? reflections : [];
+  const visiblePrayers = ownsVisibleState ? prayers : [];
+  const lastRead = visibleHistory.length > 0 ? visibleHistory[0] : null;
 
   return (
     <BibleContext.Provider value={{
-      translationId, setTranslation,
-      readingHistory, lastRead, markChapterOpened,
-      completedChapters, markChapterComplete, isChapterComplete,
-      journeyProgress, startBibleJourney, markJourneyChapterComplete, getJourneyProgress,
-      highlights, addHighlight, removeHighlight, getHighlight,
-      favourites, addFavourite, removeFavourite, isFavourite,
-      bookmarks, addBookmark, removeBookmark, isBookmarked,
-      notes, saveNote, deleteNote, getNote, getChapterNotes,
-      reflections, saveReflection, getReflection,
-      prayers, savePrayer, updatePrayer, getPrayer, deletePrayer,
+       translationId: ownsVisibleState ? translationId : DEFAULT_BIBLE_TRANSLATION, setTranslation,
+       readingHistory: visibleHistory, lastRead, markChapterOpened,
+       getRememberedChapter: ownsVisibleState ? getRememberedChapter : () => null,
+       rememberChapter,
+      completedChapters: visibleCompleted, markChapterComplete,
+      isChapterComplete: ownsVisibleState ? isChapterComplete : () => false,
+      journeyProgress: visibleJourneyProgress, startBibleJourney, markJourneyChapterComplete,
+      getJourneyProgress: ownsVisibleState ? getJourneyProgress : () => null,
+      highlights: visibleHighlights, addHighlight, removeHighlight,
+      getHighlight: ownsVisibleState ? getHighlight : () => undefined,
+      favourites: visibleFavourites, addFavourite, removeFavourite,
+      isFavourite: ownsVisibleState ? isFavourite : () => false,
+      bookmarks: visibleBookmarks, addBookmark, removeBookmark,
+      isBookmarked: ownsVisibleState ? isBookmarked : () => false,
+      notes: visibleNotes, saveNote, deleteNote,
+      getNote: ownsVisibleState ? getNote : () => undefined,
+      getChapterNotes: ownsVisibleState ? getChapterNotes : () => [],
+      reflections: visibleReflections, saveReflection,
+      getReflection: ownsVisibleState ? getReflection : () => undefined,
+      prayers: visiblePrayers, savePrayer, updatePrayer,
+      getPrayer: ownsVisibleState ? getPrayer : () => undefined,
+      deletePrayer,
       deleteReflection,
     }}>
       {children}
     </BibleContext.Provider>
   );
-}
-
-// ─── localStorage history loader (handles v2 array + v1 migration) ────────────
-
-function loadFromLocalStorage(): ReadingHistoryEntry[] {
-  const rawV2 = localStorage.getItem('emmaus_bible_history_v2');
-  if (rawV2) {
-    try { return JSON.parse(rawV2) as ReadingHistoryEntry[]; } catch { /* ignore */ }
-  }
-  // Migrate v1 single-entry key
-  const rawV1 = localStorage.getItem('emmaus_bible_history');
-  if (rawV1) {
-    try {
-      const old = JSON.parse(rawV1) as ReadingHistoryEntry | null;
-      if (old && old.bookId) return [old];
-    } catch { /* ignore */ }
-  }
-  return [];
 }

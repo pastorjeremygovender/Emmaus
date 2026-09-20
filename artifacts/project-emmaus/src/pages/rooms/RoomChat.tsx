@@ -1,13 +1,31 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
-import { apiGetMessages, apiGetStreamToken, apiSendMessage } from '@/lib/rooms-api';
+import {
+  apiGetMessages, apiGetStreamToken, apiSendMessage, apiDeleteMessage, apiGetRoomById,
+  apiGetActiveGroupDiscussion, apiCloseSharedTool,
+} from '@/lib/rooms-api';
 import { getApiUrl } from '@/lib/api';
-import { ArrowLeft, Send } from 'lucide-react';
-import type { RoomMessage } from '@/lib/rooms-types';
+import { apiStartPresentation } from '@/lib/rooms-api-media';
+import { ArrowLeft, Send, Paperclip, X, Mic, Trash2, Loader2 } from 'lucide-react';
+import type { RoomMessage, MediaAttachment, PresentationState } from '@/lib/rooms-types';
+import { isRoomLeaderRole } from '@/lib/rooms-types';
+import { MediaMessageBubble } from '@/components/MediaMessageBubble';
+import { AttachmentPicker } from '@/components/AttachmentPicker';
+import { VoiceNoteRecorder, supportsMediaRecorder } from '@/components/VoiceNoteRecorder';
+import { goBackOrFallback } from '@/lib/return-context';
+import { mergeRoomMessages, reconcileSentRoomMessage } from '@/lib/room-message-merge';
 
 const MAX_RECONNECT_ATTEMPTS = 6;
 const BASE_BACKOFF_MS = 1_000;
+
+interface RoomChatProps {
+  /** Embedded Discussion keeps the parent Room and its LiveKit connection mounted. */
+  embedded?: boolean;
+  onClose?: () => void;
+  activePresentationMessageId?: string | null;
+  onPresentationStarted?: (presentation: PresentationState) => void;
+}
 
 function formatTime(iso: string): string {
   try {
@@ -50,24 +68,7 @@ function groupByDate(messages: RoomMessage[]): { date: string; items: RoomMessag
   return groups;
 }
 
-/**
- * Merge two newest-first message lists, deduplicating by id.
- * Real server messages take priority over optimistic placeholders.
- */
-function mergeMessages(a: RoomMessage[], b: RoomMessage[]): RoomMessage[] {
-  const seen = new Map<string, RoomMessage>();
-  for (const msg of [...a, ...b]) {
-    const existing = seen.get(msg.id);
-    if (!existing || existing.id.startsWith('opt-')) {
-      seen.set(msg.id, msg);
-    }
-  }
-  return Array.from(seen.values()).sort(
-    (x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime()
-  );
-}
-
-export default function RoomChat() {
+export default function RoomChat({ embedded = false, onClose, activePresentationMessageId = null, onPresentationStarted }: RoomChatProps = {}) {
   const { roomId } = useParams<{ roomId: string }>();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -75,44 +76,113 @@ export default function RoomChat() {
   const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const [loadError, setLoadError] = useState('');
   const [roomName, setRoomName] = useState('');
 
-  const bottomRef = useRef<HTMLDivElement>(null);
+  // Attachment state
+  const [pendingAttachment, setPendingAttachment] = useState<MediaAttachment | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
 
-  // Load room name from history state
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const voiceFallbackRef = useRef<HTMLInputElement>(null);
+
+  // Presentation permission is seeded from history state for fast paint, then
+  // replaced by the authoritative room response below.
+  const [isLeader, setIsLeader] = useState(false);
+  const [allowMemberPresent, setAllowMemberPresent] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [discussionId, setDiscussionId] = useState<string | null>(() => {
+    const queryValue = new URLSearchParams(window.location.search).get('discussionId');
+    return queryValue || null;
+  });
+  const [presentingMessageId, setPresentingMessageId] = useState<string | null>(null);
+  const [closingDiscussion, setClosingDiscussion] = useState(false);
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
+
+  const bottomRef = useRef<HTMLDivElement>(null);
+  // Clear the previous conversation before a new room/discussion history can
+  // arrive. The loading effect below separately rejects late old responses.
   useEffect(() => {
-    const state = history.state as { roomName?: string } | null;
+    setMessages([]);
+    setBody('');
+    setLoadError('');
+    setPendingAttachment(null);
+    setShowPicker(false);
+    setSending(false);
+    sendingRef.current = false;
+  }, [roomId, discussionId]);
+
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+  const closeDiscussionView = useCallback(() => {
+    if (onCloseRef.current) {
+      onCloseRef.current();
+      return;
+    }
+    setLocation(`/rooms/${String(roomId)}`);
+  }, [roomId, setLocation]);
+
+  // Load room name and context from history state
+  useEffect(() => {
+    const state = history.state as {
+      roomName?: string;
+      isLeader?: boolean;
+      allowMemberPresent?: boolean;
+      sessionId?: string | null;
+      discussionId?: string | null;
+    } | null;
     if (state?.roomName) setRoomName(state.roomName);
+    if (state?.isLeader !== undefined) setIsLeader(Boolean(state.isLeader));
+    if (state?.allowMemberPresent !== undefined) setAllowMemberPresent(Boolean(state.allowMemberPresent));
+    if (state?.sessionId !== undefined) setSessionId(state.sessionId ?? null);
+    if (state?.discussionId) setDiscussionId(state.discussionId);
   }, []);
+
+  // Direct/reloaded navigation may not have history.state, and a stale history
+  // entry must not grant presentation rights or an old session ID. Reconcile
+  // all room context from the server before relying on it.
+  useEffect(() => {
+    if (!user || !roomId) return;
+    let cancelled = false;
+    apiGetRoomById(user.id, String(roomId))
+      .then(async detail => {
+        if (cancelled || !detail) return;
+        setRoomName(detail.room.name);
+        setIsLeader(detail.isLeader || isRoomLeaderRole(detail.currentUserRole));
+        setAllowMemberPresent(detail.room.allowMemberPresent ?? false);
+        setSessionId(detail.activeSession?.id ?? null);
+        // A discussion route is only valid while Discussion is the
+        // server-authoritative shared tool. This also handles late subscribers
+        // after a leader has already closed it.
+        if (
+          !detail.activeSession ||
+          detail.activeSession.metadata?.activeTool !== 'discussion'
+        ) {
+          closeDiscussionView();
+          return;
+        }
+        if (!discussionId && detail.activeSession?.id) {
+          const discussion = await apiGetActiveGroupDiscussion(user.id, String(roomId));
+          if (!cancelled && discussion) setDiscussionId(discussion.id);
+        }
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setLoadError(err instanceof Error ? err.message : 'Could not load Group Discussion.');
+        }
+      });
+    return () => { cancelled = true; };
+  }, [roomId, user?.id, discussionId, closeDiscussionView]);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   }, []);
 
   // SSE connection with manual reconnect
-  //
-  // Authentication: EventSource cannot send custom request headers (e.g. X-User-Id),
-  // so we use a two-step handshake:
-  //   1. POST .../stream/token  — authenticated via requireAuth (cookie or header);
-  //      returns a 30 s one-time UUID.
-  //   2. GET  .../stream?token=<uuid>  — server re-validates membership after consuming
-  //      the token, then opens the SSE stream.
-  //
-  // Race-free load sequence (per connection):
-  //   Each connect() call owns its own `connectionHistoryLoaded` flag and
-  //   `connectionBuffer` array so reconnections never share stale state.
-  //   A. Open EventSource.  Buffer any SSE events (connectionBuffer).
-  //   B. On onopen, fetch history — stream is already open, so no gap exists.
-  //   C. Merge history + connectionBuffer, deduplicate by id.  Set loaded = true.
-  //   D. Subsequent SSE events for this connection flow directly into state and
-  //      are merged with current state (never replace it wholesale).
-  //
-  // Reconnect (onerror or history-fetch failure):
-  //   Close the stale EventSource (prevents its built-in retry using the
-  //   consumed token), schedule a new connect() with capped exponential backoff.
-  //   History is re-fetched on every reconnect to fill any gap.
-  //   Token-fetch failures use the same backoff path.
   useEffect(() => {
     if (!user || !roomId) return;
 
@@ -129,124 +199,68 @@ export default function RoomChat() {
     }
 
     function closeCurrentEs() {
-      currentEs?.close();
-      currentEs = null;
+      if (currentEs) {
+        currentEs.onerror = null;
+        currentEs.onmessage = null;
+        currentEs.close();
+        currentEs = null;
+      }
     }
 
     async function connect() {
       if (cancelled) return;
-
-      // ── Step 1: get a fresh one-time stream token ──────────────────────
-      // Failure uses the same capped backoff so transient errors self-heal.
-      let token: string;
-      try {
-        token = await apiGetStreamToken(user!.id, String(roomId));
-      } catch (err) {
-        if (!cancelled) {
-          if (attempt === 1) {
-            // First attempt failed — show an error to the user
-            setLoadError(err instanceof Error ? err.message : 'Failed to connect to chat.');
-          }
-          scheduleReconnect();
-        }
-        return;
-      }
-      if (cancelled) return;
-
-      // ── Step 2: open EventSource — do NOT rely on its built-in retry ──
-      // Per-connection state: each connect() call has its own buffer and
-      // loaded flag so reconnections start completely clean.
       let connectionHistoryLoaded = false;
       const connectionBuffer: RoomMessage[] = [];
 
-      const url = getApiUrl(
-        `/api/rooms/${String(roomId)}/messages/stream?token=${encodeURIComponent(token)}`
-      );
-      const es = new EventSource(url);
+      let token: string;
+      try {
+        token = await apiGetStreamToken(user!.id, String(roomId), discussionId ?? undefined);
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : 'Could not open Group Discussion.');
+        scheduleReconnect();
+        return;
+      }
+
+      if (cancelled) return;
+      const es = new EventSource(getApiUrl(`/api/rooms/${String(roomId)}/messages/stream?token=${encodeURIComponent(token)}`));
       currentEs = es;
 
-      es.onmessage = (event: MessageEvent) => {
-        if (cancelled || es !== currentEs) return;
+      es.onmessage = (e) => {
         try {
-          const msg = JSON.parse(event.data as string) as RoomMessage;
-
+          const msg = JSON.parse(e.data) as RoomMessage;
           if (!connectionHistoryLoaded) {
-            // ── Phase A: buffer until this connection's history is merged ──
-            if (!connectionBuffer.some(m => m.id === msg.id)) {
-              connectionBuffer.unshift(msg);
+            connectionBuffer.push(msg);
+          } else {
+            if (msg.deleted) {
+              setMessages(prev => prev.filter(existing => existing.id !== msg.id));
+            } else {
+              setMessages(prev => mergeRoomMessages(prev, [msg]));
             }
-            return;
+            scrollToBottom();
           }
-
-          // ── Phase D: history loaded — merge directly into current state ──
-          setMessages(prev => {
-            // Replace a matching optimistic placeholder (same userId + body)
-            const optIdx = prev.findIndex(
-              m => m.id.startsWith('opt-') && m.userId === msg.userId && m.body === msg.body
-            );
-            if (optIdx !== -1) {
-              const next = [...prev];
-              next[optIdx] = msg;
-              return next;
-            }
-            if (prev.some(m => m.id === msg.id)) return prev;
-            return [msg, ...prev];
-          });
-          scrollToBottom();
         } catch {
-          // Malformed SSE event — ignore
+          // ignore malformed event
         }
       };
 
-      // ── Step 3: fetch history now that the stream is open (Phase B) ───
-      es.onopen = async () => {
-        if (cancelled || es !== currentEs) return;
-        attempt = 0; // successful connection — reset backoff counter
-
-        try {
-          const msgs = await apiGetMessages(user!.id, String(roomId));
-          if (cancelled || es !== currentEs) return;
-
-          // ── Phase C: merge history + buffer, deduplicate ──────────────
-          // Use mergeMessages against current state too so pre-existing
-          // optimistic messages are preserved rather than wiped.
-          setMessages(prev => mergeMessages(mergeMessages(msgs, connectionBuffer), prev));
-          connectionBuffer.length = 0;
-          connectionHistoryLoaded = true;
-          setLoadError('');
-          scrollToBottom();
-        } catch (err) {
-          if (cancelled || es !== currentEs) return;
-          // History fetch failed — close this connection and retry.
-          // The buffer is local to this connection so a new connect()
-          // starts with a fresh empty buffer and loaded = false.
-          closeCurrentEs();
-          if (attempt === 0) {
-            setLoadError(err instanceof Error ? err.message : 'Failed to load messages.');
-          }
-          scheduleReconnect();
-        }
-      };
-
-      // Manual reconnect on error — close stale ES immediately so EventSource
-      // cannot fire its own retry (which would reuse the consumed token).
       es.onerror = () => {
-        if (cancelled || es !== currentEs) return;
         closeCurrentEs();
-
-        // Re-fetch history to fill any gap that occurred while disconnected.
-        // Merge with current state so live messages sent during the gap are
-        // not lost if they already arrived in state via a previous SSE event.
-        if (connectionHistoryLoaded) {
-          apiGetMessages(user!.id, String(roomId))
-            .then(msgs => {
-              if (!cancelled) setMessages(prev => mergeMessages(msgs, prev));
-            })
-            .catch(() => { /* best-effort gap fill */ });
-        }
-
         scheduleReconnect();
       };
+
+      try {
+        const history = await apiGetMessages(user!.id, String(roomId), undefined, discussionId ?? undefined);
+        if (cancelled) { closeCurrentEs(); return; }
+        connectionHistoryLoaded = true;
+        const merged = mergeRoomMessages(history, connectionBuffer);
+        setMessages(merged);
+        scrollToBottom();
+        attempt = 0;
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : 'Could not load Group Discussion history.');
+        closeCurrentEs();
+        scheduleReconnect();
+      }
     }
 
     connect();
@@ -254,51 +268,213 @@ export default function RoomChat() {
     return () => {
       cancelled = true;
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-      closeCurrentEs();
+      if (currentEs) {
+        currentEs.onerror = null;
+        currentEs.onmessage = null;
+        currentEs.close();
+      }
     };
-  }, [user, roomId, scrollToBottom]);
+  }, [user, roomId, discussionId, scrollToBottom]);
 
   const handleSend = async () => {
-    if (!body.trim() || !user || !roomId || sending) return;
+    if ((!body.trim() && !pendingAttachment) || !user || !roomId || sendingRef.current) return;
+    sendingRef.current = true;
     const text = body.trim();
+    const attachment = pendingAttachment;
+    const clientMessageId = crypto.randomUUID();
     setBody('');
+    setPendingAttachment(null);
     setSending(true);
 
-    // Optimistic message — SSE will replace it with the canonical version
+    // Optimistic message
     const optimistic: RoomMessage = {
-      id: `opt-${Date.now()}`,
+      id: `opt-${clientMessageId}`,
+      clientMessageId,
       roomId: String(roomId),
       userId: user.id,
       senderName: user.preferredName || 'You',
       body: text,
       createdAt: new Date().toISOString(),
+      attachment,
+      discussionId,
     };
     setMessages(prev => [optimistic, ...prev]);
     scrollToBottom();
 
     try {
-      await apiSendMessage(user.id, String(roomId), text);
-      // SSE delivers the canonical message and replaces the optimistic entry
-    } catch {
-      // Remove optimistic message on failure and restore the draft
+      const serverMessage = await apiSendMessage(
+        user.id,
+        String(roomId),
+        text,
+        attachment ?? undefined,
+        discussionId ?? undefined,
+        clientMessageId,
+      );
+      setMessages(prev =>
+        reconcileSentRoomMessage(prev, optimistic.id, serverMessage),
+      );
+    } catch (err) {
       setMessages(prev => prev.filter(m => m.id !== optimistic.id));
       setBody(text);
+      if (attachment) setPendingAttachment(attachment);
+      setLoadError(err instanceof Error ? err.message : 'Could not send your message.');
     } finally {
+      sendingRef.current = false;
       setSending(false);
+    }
+  };
+
+  /**
+   * Send a message with an attachment immediately, without going through state.
+   * Used by the voice recorder so the note is sent as soon as upload completes,
+   * matching the spec's "stop → upload → send" flow.
+   */
+  const sendAttachmentDirectly = async (attachment: MediaAttachment) => {
+    if (!user || !roomId || sendingRef.current) return;
+    sendingRef.current = true;
+    setSending(true);
+    const clientMessageId = crypto.randomUUID();
+
+    const optimistic: RoomMessage = {
+      id: `opt-${clientMessageId}`,
+      clientMessageId,
+      roomId: String(roomId),
+      userId: user.id,
+      senderName: user.preferredName || 'You',
+      body: '',
+      createdAt: new Date().toISOString(),
+      attachment,
+      discussionId,
+    };
+    setMessages(prev => [optimistic, ...prev]);
+    scrollToBottom();
+
+    try {
+      const serverMessage = await apiSendMessage(
+        user.id,
+        String(roomId),
+        '',
+        attachment,
+        discussionId ?? undefined,
+        clientMessageId,
+      );
+      setMessages(prev =>
+        reconcileSentRoomMessage(prev, optimistic.id, serverMessage),
+      );
+    } catch (err) {
+      setMessages(prev => prev.filter(m => m.id !== optimistic.id));
+      setLoadError(err instanceof Error ? err.message : 'Could not send your attachment.');
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
+  };
+
+  /** Handle mic button tap — start in-app recording or fall back to file picker. */
+  const handleMicClick = () => {
+    if (supportsMediaRecorder()) {
+      setIsRecording(true);
+    } else {
+      // Fallback: open a file picker limited to audio files
+      voiceFallbackRef.current?.click();
+    }
+  };
+
+  /** Fallback: user picked an audio file from disk — upload it as a voice attachment. */
+  const handleVoiceFallbackChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user || !roomId) return;
+    e.target.value = '';
+    // Reuse the AttachmentPicker's upload path via the existing apiRequestRoomUploadUrl
+    // We import from rooms-api-media inside a dynamic fashion here to keep the
+    // import light — we just call the helpers directly.
+    const { apiRequestRoomUploadUrl, uploadFileToStorage } = await import('@/lib/rooms-api-media');
+    try {
+      const { uploadUrl, objectPath, attachmentType } = await apiRequestRoomUploadUrl(
+        user.id, String(roomId), file.name, file.type, file.size,
+      );
+      await uploadFileToStorage(uploadUrl, file);
+      const attachment: MediaAttachment = {
+        type: (attachmentType as MediaAttachment['type']) || 'voice',
+        filename: file.name,
+        objectPath,
+        mimeType: file.type,
+        size: file.size,
+      };
+      setPendingAttachment(attachment);
+    } catch (err) {
+      console.error('Voice fallback upload failed', err);
+    }
+  };
+
+  const handlePresent = async (msg: RoomMessage) => {
+    if (!user || !roomId || !msg.attachment) return;
+    if (!sessionId) {
+      setLoadError('This meeting has ended. Reopen the current meeting before presenting media.');
+      return;
+    }
+    setPresentingMessageId(msg.id);
+    try {
+      const presentation = await apiStartPresentation(user.id, String(roomId), {
+        messageId: msg.id,
+        filename: msg.attachment.filename,
+        mediaType: msg.attachment.type,
+        objectPath: msg.attachment.objectPath,
+        sessionId,
+        pageCount: msg.attachment.pageCount ?? null,
+      });
+      onPresentationStarted?.(presentation);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not start presentation.');
+    } finally {
+      setPresentingMessageId(null);
+    }
+  };
+
+  const handleCloseDiscussion = async () => {
+    if (!user || !roomId || closingDiscussion) return;
+    if (!sessionId) {
+      setLoadError('This discussion belongs to a meeting that has ended.');
+      return;
+    }
+    setClosingDiscussion(true);
+    try {
+      await apiCloseSharedTool(user.id, String(roomId), sessionId, 'discussion');
+      closeDiscussionView();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Could not close Group Discussion.');
+    } finally {
+      setClosingDiscussion(false);
+    }
+  };
+
+  const handleDeleteMessage = async (message: RoomMessage) => {
+    if (!user || !roomId || deletingMessageId) return;
+    if (!window.confirm('Delete this post? It will be removed for everyone in this Group.')) return;
+    setDeletingMessageId(message.id);
+    try {
+      await apiDeleteMessage(user.id, String(roomId), message.id);
+      setMessages(prev => prev.filter(item => item.id !== message.id));
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Could not delete this post.');
+    } finally {
+      setDeletingMessageId(null);
     }
   };
 
   if (!user) return null;
 
-  const groups = groupByDate(messages);
+  // Keep the final render boundary canonical as protection against stale
+  // overlapping SSE callbacks in retained mobile/PWA sessions.
+  const groups = groupByDate(mergeRoomMessages(messages, []));
 
   return (
-    <div className="min-h-[100dvh] bg-background flex flex-col">
+    <div className={`${embedded ? 'fixed inset-0 z-[60] pb-[calc(7.25rem+env(safe-area-inset-bottom))]' : 'min-h-[100dvh]'} bg-background flex flex-col`}>
       {/* Header */}
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50 shrink-0">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto gap-3">
           <button
-            onClick={() => setLocation(`/rooms/${roomId}`)}
+            onClick={() => embedded ? closeDiscussionView() : goBackOrFallback(`/rooms/${roomId}`, setLocation)}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Back"
           >
@@ -306,10 +482,19 @@ export default function RoomChat() {
           </button>
           <div className="flex-1 min-w-0">
             <div className="font-sans font-semibold text-[17px] truncate">
-              {roomName || 'Room Chat'}
+              {roomName || 'Group Discussion'}
             </div>
-            <div className="text-[12px] text-muted-foreground">Group chat</div>
+            <div className="text-[12px] text-muted-foreground">Group Discussion</div>
           </div>
+          {isLeader && sessionId && discussionId && (
+            <button
+              onClick={() => void handleCloseDiscussion()}
+              disabled={closingDiscussion}
+              className="shrink-0 px-3 py-2 rounded-xl border border-border text-[12px] font-semibold text-foreground hover:bg-muted/50 disabled:opacity-60"
+            >
+              {closingDiscussion ? 'Closing…' : 'Close Discussion'}
+            </button>
+          )}
         </div>
       </header>
 
@@ -339,6 +524,9 @@ export default function RoomChat() {
 
               {group.items.map(msg => {
                 const isMe = msg.userId === user.id;
+                // A member can present their own content if allowMemberPresent is on
+                const canPresent = isLeader || (allowMemberPresent && isMe);
+
                 return (
                   <div
                     key={msg.id}
@@ -359,21 +547,69 @@ export default function RoomChat() {
                         </span>
                       )}
 
-                      {/* Bubble */}
-                      <div
-                        className={`px-4 py-2.5 rounded-2xl text-[15px] leading-relaxed break-words ${
-                          isMe
-                            ? 'bg-primary text-primary-foreground rounded-br-md'
-                            : 'bg-muted text-foreground rounded-bl-md'
-                        }`}
-                      >
-                        {msg.body}
-                      </div>
+                      {/* Media attachment */}
+                      {msg.attachment ? (
+                        <div className={`max-w-[240px] ${isMe ? 'self-end' : 'self-start'}`}>
+                          <MediaMessageBubble
+                            attachment={msg.attachment}
+                            isMe={isMe}
+                            canPresent={canPresent && !msg.id.startsWith('opt-')}
+                            onPresent={
+                              canPresent && !msg.id.startsWith('opt-')
+                                ? () => handlePresent(msg)
+                                : undefined
+                            }
+                            isPresenting={activePresentationMessageId === msg.id}
+                          />
+                          {presentingMessageId === msg.id && (
+                            <p className="text-[11px] text-primary mt-1">Starting presentation…</p>
+                          )}
+                          {/* Text body below attachment */}
+                          {msg.body && (
+                            <div
+                              className={`mt-1.5 px-3 py-2 rounded-2xl text-[14px] leading-relaxed break-words ${
+                                isMe
+                                  ? 'bg-primary text-primary-foreground rounded-br-md'
+                                  : 'bg-muted text-foreground rounded-bl-md'
+                              }`}
+                            >
+                              {msg.body}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        /* Text-only bubble */
+                        <div
+                          className={`px-4 py-2.5 rounded-2xl text-[15px] leading-relaxed break-words ${
+                            isMe
+                              ? 'bg-primary text-primary-foreground rounded-br-md'
+                              : 'bg-muted text-foreground rounded-bl-md'
+                          }`}
+                        >
+                          {msg.body}
+                        </div>
+                      )}
 
-                      {/* Time */}
-                      <span className="text-[11px] text-muted-foreground px-1">
-                        {formatTime(msg.createdAt)}
-                      </span>
+                      {/* Time and post actions */}
+                      <div className="flex items-center gap-2 px-1">
+                        <span className="text-[11px] text-muted-foreground">
+                          {formatTime(msg.createdAt)}
+                        </span>
+                        {(isLeader || isMe) && !msg.id.startsWith('opt-') && (
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteMessage(msg)}
+                            disabled={deletingMessageId !== null}
+                            aria-label={`Delete post from ${msg.senderName}`}
+                            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-destructive disabled:opacity-50"
+                          >
+                            {deletingMessageId === msg.id
+                              ? <Loader2 size={12} className="animate-spin" />
+                              : <Trash2 size={12} />}
+                            Delete
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -385,33 +621,115 @@ export default function RoomChat() {
         <div ref={bottomRef} className="h-1" />
       </main>
 
-      {/* Input bar */}
-      <div className="shrink-0 border-t border-border/50 bg-background px-4 py-3 max-w-[480px] mx-auto w-full">
-        <div className="flex items-end gap-2">
-          <textarea
-            value={body}
-            onChange={e => setBody(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            placeholder="Message…"
-            rows={1}
-            className="flex-1 resize-none bg-muted rounded-2xl px-4 py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 max-h-[120px] overflow-y-auto"
-            style={{ lineHeight: '1.5' }}
+      {/* Pending attachment preview */}
+      {pendingAttachment && (
+        <div className="shrink-0 border-t border-border/30 bg-muted/30 px-4 py-2 max-w-[480px] mx-auto w-full">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 text-[13px] text-foreground truncate">
+              📎 {pendingAttachment.filename}
+            </div>
+            <button
+              onClick={() => setPendingAttachment(null)}
+              className="text-muted-foreground hover:text-foreground p-1"
+              aria-label="Remove attachment"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <input
+            type="text"
+            value={pendingAttachment.caption ?? ''}
+            onChange={e => setPendingAttachment(prev => prev ? { ...prev, caption: e.target.value } : prev)}
+            placeholder="Add a caption (optional)…"
+            className="w-full mt-1.5 bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground outline-none"
           />
-          <button
-            onClick={handleSend}
-            disabled={!body.trim() || sending}
-            className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 disabled:opacity-40 transition-opacity"
-            aria-label="Send"
-          >
-            <Send size={18} />
-          </button>
         </div>
+      )}
+
+      {/* Hidden fallback audio file input (for browsers without MediaRecorder) */}
+      <input
+        ref={voiceFallbackRef}
+        type="file"
+        accept="audio/mpeg,audio/mp4,audio/webm,audio/ogg,audio/wav,audio/aac,audio/x-m4a"
+        className="hidden"
+        onChange={handleVoiceFallbackChange}
+      />
+
+      {/* Input bar */}
+      <div className="shrink-0 border-t border-border/50 bg-background px-4 py-3 pb-safe-or-4 max-w-[480px] mx-auto w-full">
+        {isRecording ? (
+          /* ── Voice recording mode ── */
+          <VoiceNoteRecorder
+            userId={user.id}
+            roomId={String(roomId)}
+            onAttachment={attachment => {
+              setIsRecording(false);
+              sendAttachmentDirectly(attachment);
+            }}
+            onCancel={() => setIsRecording(false)}
+          />
+        ) : (
+          /* ── Normal compose mode ── */
+          <div className="flex items-end gap-2">
+            {/* Attachment button */}
+            <button
+              onClick={() => setShowPicker(true)}
+              className="w-10 h-10 rounded-full border border-border bg-muted text-muted-foreground flex items-center justify-center shrink-0 hover:text-foreground transition-colors"
+              aria-label="Add attachment"
+            >
+              <Paperclip size={18} />
+            </button>
+
+            <textarea
+              value={body}
+              onChange={e => setBody(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder="Message…"
+              rows={1}
+              className="flex-1 resize-none bg-muted rounded-2xl px-4 py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 max-h-[120px] overflow-y-auto"
+              style={{ lineHeight: '1.5' }}
+            />
+
+            {/* Mic button — shown instead of Send when no text/attachment is pending */}
+            {!body.trim() && !pendingAttachment ? (
+              <button
+                onClick={handleMicClick}
+                className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 hover:opacity-90 transition-opacity"
+                aria-label="Record voice note"
+              >
+                <Mic size={18} />
+              </button>
+            ) : (
+              <button
+                onClick={handleSend}
+                disabled={sending}
+                className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 disabled:opacity-40 transition-opacity"
+                aria-label="Send"
+              >
+                <Send size={18} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Attachment picker */}
+      {showPicker && (
+        <AttachmentPicker
+          userId={user.id}
+          roomId={String(roomId)}
+          onAttachment={attachment => {
+            setPendingAttachment(attachment);
+            setShowPicker(false);
+          }}
+          onClose={() => setShowPicker(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1,0 +1,267 @@
+# EMMAUS GROUPS — ACTIVE MEETING CLEANUP + LIVE VIDEO
+
+The current active-meeting UI is still confusing.
+
+Fix the meeting experience now.
+
+Do NOT add more duplicate controls.
+
+==================================================
+1. ONE ACTIVE MEETING HEADER
+==================================================
+
+When a meeting is active, the top of the Group must show ONE clear meeting banner:
+
+Meeting in Progress
+Started 17:14
+
+Inside that same banner, show two leader actions:
+
+[ Meeting Tools ]
+
+[ End Meeting ]
+
+Do not hide End Meeting elsewhere.
+
+The leader must always be able to stop the meeting directly from the main Group page.
+
+==================================================
+2. REMOVE DUPLICATE MEETING TOOLS ENTRY POINTS
+==================================================
+
+There are currently THREE ways to access Meeting Tools.
+
+This is wrong.
+
+Keep ONLY ONE:
+
+The Meeting Tools button inside the active meeting banner.
+
+REMOVE:
+
+- the separate Meeting Tools card lower down the page
+- the large green Meeting Tools button
+- Meeting Tools from the three-dot overflow menu
+
+There must be exactly ONE Meeting Tools entry point.
+
+==================================================
+3. THREE-DOT MENU
+==================================================
+
+The three-dot menu should contain Group management ONLY:
+
+- Rename Group
+- Invite Members
+- Group Settings
+- Delete Group
+
+Do not put meeting controls inside this menu.
+
+==================================================
+4. END MEETING
+==================================================
+
+Add a clearly visible:
+
+End Meeting
+
+button in the active meeting banner.
+
+When tapped:
+
+- show confirmation:
+  "End this meeting?"
+- buttons:
+  Cancel
+  End Meeting
+
+After confirmation:
+
+- stop meeting state
+- save attendance
+- preserve notes
+- preserve prayer requests
+- preserve discussion
+- preserve study progress
+- return to Preparation view
+
+Do NOT require the user to open Meeting Tools or Complete Session just to end the meeting.
+
+==================================================
+5. COMPLETE SESSION VS END MEETING
+==================================================
+
+These are currently confusing.
+
+Simplify:
+
+Use ONE concept:
+
+End Meeting
+
+When End Meeting is tapped, Emmaus may internally perform the same completion logic currently used by Complete Session.
+
+Remove unnecessary duplicate wording:
+
+- Complete Session
+- Complete Meeting
+- End Meeting
+
+User-facing terminology should be:
+
+End Meeting
+
+After ending, show the existing completion summary:
+
+Meeting Complete
+
+Studied together
+Discussed together
+Prayed together
+Attendance
+
+Then:
+
+Done
+
+==================================================
+6. MEETING TOOLS SCREEN
+==================================================
+
+Keep the current full-screen Meeting Tools layout.
+
+It is much better than the old cut-off sheet.
+
+Header:
+
+← Meeting Tools
+
+or
+
+Meeting Tools   X
+
+The user must always be able to return to the active Group meeting.
+
+==================================================
+7. ADD LIVE VIDEO TO MEETING TOOLS
+==================================================
+
+The Live Video option is still missing.
+
+Add a new section near the top of Meeting Tools:
+
+LIVE VIDEO
+
+[ Start Live Video ]
+
+Only show this if:
+
+- current user is Authorized Group Leader / Pastor / Super Admin
+- meeting is active
+- Group is permitted to use video
+
+If video is active, replace with:
+
+[ End Live Video ]
+
+Do not show both.
+
+==================================================
+8. LIVE VIDEO MEMBER EXPERIENCE
+==================================================
+
+When leader starts Live Video:
+
+Members should see on the main Group page:
+
+Live Video is active
+
+[ Join Live Video ]
+
+Joining Live Video must NOT leave the Group.
+
+The Group remains the central page.
+
+==================================================
+9. USE EXISTING LIVEKIT IMPLEMENTATION
+==================================================
+
+Do not rebuild LiveKit.
+
+Use the existing:
+
+LIVEKIT_URL
+LIVEKIT_API_KEY
+LIVEKIT_API_SECRET
+
+and existing secure token-generation architecture.
+
+Do not expose API credentials client-side.
+
+==================================================
+10. MEETING TOOLS ORDER
+==================================================
+
+Use this order:
+
+LIVE VIDEO
+- Start Live Video / End Live Video
+
+CONTENT
+- Open Today's Study
+- Previous Step
+- Next Step
+- Present Bible
+
+DISCUSSION
+- Open Discussion
+- Prayer Time
+- Launch Poll
+- Ask Emmaus Together
+
+Do NOT put End Meeting inside Meeting Tools anymore.
+
+End Meeting belongs on the main Group meeting header.
+
+==================================================
+11. MAIN MEETING PAGE ORDER
+==================================================
+
+When meeting is active:
+
+Meeting in Progress
+[ Meeting Tools ] [ End Meeting ]
+
+Today's Study
+
+Members Present
+
+Group Discussion
+
+Prayer Requests
+
+Group Notes
+
+Ask Emmaus floating button
+
+No duplicate controls.
+
+==================================================
+12. FINAL QA
+==================================================
+
+Verify:
+
+✓ Exactly ONE Meeting Tools button exists
+✓ Exactly ONE End Meeting button exists
+✓ Meeting Tools removed from three-dot menu
+✓ No large duplicate Meeting Tools button remains
+✓ Live Video appears inside Meeting Tools for authorized leader
+✓ Start Live Video successfully calls existing LiveKit flow
+✓ End Meeting always returns to Preparation view
+✓ Meeting summary appears after ending
+✓ No user can become trapped in active meeting state
+✓ Back/Close works from Meeting Tools
+
+Do not mark complete until these exact behaviors are verified in the published app.

@@ -11,16 +11,58 @@
  *   "Back to Walk"      → /journeys/:journeyId       (always available as secondary)
  */
 
+import { useState } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useJourney } from '@/contexts/JourneyContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRooms } from '@/contexts/RoomsContext';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
+import { RoomPickerSheet } from '@/components/RoomPickerSheet';
+import { goBackOrFallback } from '@/lib/return-context';
+import { apiLinkJourney } from '@/lib/rooms-api';
+import { journeyDisplayOriginForSource } from '@/lib/journeys-api';
+import { Users } from 'lucide-react';
 
 export default function WalkCompletePage() {
   const { journeyId } = useParams<{ journeyId: string }>();
   const [, setLocation] = useLocation();
   const { getJourney, loading } = useJourney();
+  const { user } = useAuth();
+  const { getMyRooms, loadRoomDetail, getRoomDetail } = useRooms();
+  const [showRoomPicker, setShowRoomPicker] = useState(false);
 
   const journey = getJourney(journeyId ?? '');
+  const routeParams = new URLSearchParams(window.location.search);
+  const source = routeParams.get('source');
+  const displayOrigin = journeyDisplayOriginForSource(
+    source,
+    journey?.journeyType,
+    routeParams.get('displayOrigin'),
+  );
+
+  // WJ-1: honour the source/sourceId query params so members land back where
+  // they came from (Walk, Bible, Sermon) rather than always on the journey overview.
+  // The journey detail is only a deep-link fallback. A normal completion
+  // screen must unwind to the route that opened it.
+  const returnPath     = journeyId ? `/journeys/${journeyId}` : '/journeys?tab=walks';
+  const walkReturnLabel = 'Back to Walk';
+
+  // Rooms — show "Add to Room" CTA when user has rooms and walk isn't already linked
+  const myRooms = user ? getMyRooms() : [];
+  const alreadyLinked = (() => {
+    if (!journeyId || myRooms.length === 0) return false;
+    for (const room of myRooms) {
+      const detail = getRoomDetail(room.id);
+      if (detail?.linkedJourneys.some(lj => lj.journeyId === journeyId)) return true;
+    }
+    return false;
+  })();
+
+  async function handleLinkToRoom(roomId: string) {
+    if (!journeyId || !user) throw new Error('Not available');
+    await apiLinkJourney(user.id, roomId, journeyId);
+    await loadRoomDetail(roomId);
+  }
 
   // Resolve recommended next Walk — must be a known, published Walk
   const nextJourneyId = journey?.nextJourneyId?.trim() || undefined;
@@ -37,21 +79,48 @@ export default function WalkCompletePage() {
   }
 
   return (
-    <EmmausCompletionCard
-      fullScreen
-      heading="Journey complete."
-      subMessage={
-        journey?.completionMessage?.trim() ||
-        'May the Lord continue His work in your life.'
-      }
-      returnLabel="Back to Walk"
-      onReturn={() => setLocation(journeyId ? `/journeys/${journeyId}` : '/journeys?tab=journeys')}
-      {...(showNextWalk && nextJourney
-        ? {
-            continueLabel: `Start ${nextJourney.title}`,
-            onContinue: () => setLocation(`/journeys/${nextJourneyId}`),
-          }
-        : {})}
-    />
+    <>
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-background px-6">
+        <div className="w-full max-w-[360px] space-y-4">
+          <EmmausCompletionCard
+            heading="Walk complete."
+            subMessage={
+              journey?.completionMessage?.trim() ||
+              "You've completed this Walk."
+            }
+            returnLabel={walkReturnLabel}
+            onReturn={() => goBackOrFallback(returnPath, setLocation)}
+            {...(showNextWalk && nextJourney
+              ? {
+                  continueLabel: `Start ${nextJourney.title}`,
+                  onContinue: () => setLocation(`/journeys/${nextJourneyId}`),
+                }
+              : {})}
+            onPreviousDays={journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=${displayOrigin === 'journey' ? 'nextStepsJourneys' : 'nextStepsWalks'}&displayOrigin=${encodeURIComponent(displayOrigin)}`) : undefined}
+            previousDaysLabel="View Previous Steps →"
+          />
+
+          {/* Add to Room — shown when the member has Rooms and this Walk isn't already linked */}
+          {myRooms.length > 0 && !alreadyLinked && (
+            <button
+              onClick={() => setShowRoomPicker(true)}
+              className="w-full flex items-center justify-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors py-1"
+            >
+              <Users size={13} />
+              Continue this Walk with others in a Group
+            </button>
+          )}
+        </div>
+      </div>
+
+      {showRoomPicker && (
+        <RoomPickerSheet
+          rooms={myRooms}
+          onSelect={handleLinkToRoom}
+          onClose={() => setShowRoomPicker(false)}
+          title="Add Walk to a Room"
+        />
+      )}
+    </>
   );
 }

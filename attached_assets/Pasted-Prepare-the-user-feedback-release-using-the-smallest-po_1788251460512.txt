@@ -1,0 +1,105 @@
+Prepare the user-feedback release using the smallest possible targeted changes. The live app is currently working well and must not be destabilized.
+
+Do not publish or deploy automatically.
+Do not modify the pastoral-admin branch or Church Register recovery.
+Do not fetch, pull, push, merge, rebase or reset.
+Do not change production data, database schemas, secrets or environment variables.
+Do not perform broad refactors, dependency upgrades, formatting sweeps or unrelated type-error cleanup.
+
+Before changing anything:
+
+- Confirm the current branch is development/next-phase.
+- Confirm the working tree is clean.
+- Record the current commit ID.
+- Create a local safety branch at the exact current commit named:
+  safety/pre-user-feedback-publish-2026-09-01
+- Do not switch to the safety branch.
+- Report the safety commit ID before editing.
+
+Fix only these verified release blockers:
+
+1. Daily Rhythm calendar behaviour
+
+- Preserve the current server-authoritative opening-state implementation.
+- On app startup or reload, it may call getDailyRhythmStartup to determine the correct calendar day.
+- A same-day reload must not incorrectly advance, reopen or trap the user in Daily Rhythm.
+- A genuine new calendar day must make the correct next day available and open it according to the approved Daily Rhythm behaviour.
+- Merely opening a day must not count as completing it.
+- Daily reminders must not be suppressed merely because a previous day was opened.
+- Update the stale OpeningGate test so it verifies the required user behaviour rather than incorrectly forbidding the server-authoritative startup call.
+- Add regression coverage for same-day reload and genuine next-day startup.
+
+2. Previous Days
+
+- Previous Days must show every Daily Rhythm day that became available from the user’s account start date through today.
+- Include days the user opened but did not mark Finished.
+- Include elapsed days the user did not open.
+- Never expose future days.
+- Completion must not control whether an elapsed day appears.
+- Preserve existing content progression and completion records.
+- Add focused regression tests.
+
+3. Group-name example
+
+- Remove “The Govender Family” and any other real-person family name from defaults, placeholders, examples and tests.
+- Replace it with a neutral example such as “Family Group” only where an example is necessary.
+- Do not change existing saved group names.
+
+4. Emmaus image-generation prompt
+
+- When Emmaus Generate is selected, the user prompt field must be completely blank.
+- Do not insert starter wording, a hidden default or previously generated text.
+- Preserve all generation settings and existing image-generation behaviour.
+- Add a focused regression test for a blank initial prompt.
+
+5. Group-chat stale-message flash
+
+- When opening or switching groups/chats, clear or isolate the previously rendered conversation before loading the new conversation.
+- Never briefly display messages from the previous group.
+- Preserve realtime updates, optimistic messages and meeting chat.
+- Prevent an older request from overwriting a newer chat after rapid switching.
+- Add a regression test that rapidly switches between two chats and verifies that neither stale messages nor stale responses appear.
+
+6. Test reliability
+
+- Fix the admin-account-source test so it does not depend on a hardcoded shared-development-database count such as 44.
+- Make the test isolated or calculate its expected result from its own fixture data.
+- Do not delete or alter database records to satisfy the test.
+
+7. Typecheck discipline
+
+- Fix type errors only in files changed by this user-feedback release or directly required for those files to compile.
+- Do not sweep through unrelated Content Studio, YouTube, Journey, Ask Emmaus, sermon or devotional files merely to make a global number green.
+- Compare remaining type errors with the pre-change baseline and prove no new type errors were introduced.
+
+After the targeted fixes, run:
+
+- git diff --check
+- API integrity tests
+- Correctly configured auth, Groups, meeting and Room tests
+- Focused Daily Rhythm and OpeningGate tests
+- Focused Previous Days tests
+- Focused image-prompt test
+- Focused rapid-chat-switching test
+- Focused group-name-placeholder test
+- Isolated admin-account-source test
+- API production build
+- Emmaus web production build
+- Recursive production builds
+- API production smoke test
+- Web production smoke test
+
+Then provide:
+
+- Safety branch and safety commit ID
+- Exact files changed
+- Short reason for every changed file
+- Test results before and after
+- Confirmation that no unrelated feature code changed
+- Confirmation that no schema, data, secret or environment change is required
+- Confirmation that ALLOW_TEST_AUTH_HARNESS is not enabled for production
+- A release checklist for manual verification in Preview
+
+Do not publish.
+Do not commit until all targeted tests and production builds pass.
+If any requested correction requires a broad architectural change, stop and report it instead of attempting it.

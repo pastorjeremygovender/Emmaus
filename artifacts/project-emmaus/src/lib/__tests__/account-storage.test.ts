@@ -1,0 +1,78 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  accountStorageKey,
+  clearSessionAccountState,
+  retireUnownedPersonalStorage,
+  roomSessionAckKey,
+} from '@/lib/account-storage';
+import { isOnboarded, markOnboarded } from '@/lib/onboarding';
+
+const SUBJECT_A = 'subject-a';
+const SUBJECT_B = 'subject-b';
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-08-20T09:00:00'));
+  localStorage.clear();
+  sessionStorage.clear();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe('verified-account browser storage isolation', () => {
+  it('creates different owned keys for different verified subjects', () => {
+    const first = accountStorageKey('emmaus_bible_notes', SUBJECT_A);
+    const second = accountStorageKey('emmaus_bible_notes', SUBJECT_B);
+
+    expect(first).not.toBe(second);
+    expect(first).toContain(SUBJECT_A);
+    expect(second).toContain(SUBJECT_B);
+    expect(roomSessionAckKey(SUBJECT_A, 'session-1')).not.toBe(
+      roomSessionAckKey(SUBJECT_B, 'session-1'),
+    );
+  });
+
+  it('never treats another account as onboarded', () => {
+    markOnboarded(SUBJECT_A);
+
+    expect(isOnboarded(SUBJECT_A)).toBe(true);
+    expect(isOnboarded(SUBJECT_B)).toBe(false);
+  });
+
+  it('does not treat browser storage as the Daily Rhythm opening authority', () => {
+    localStorage.setItem(accountStorageKey('emmaus_last_opened_v3', SUBJECT_A), '2026-08-20');
+    expect(localStorage.getItem(accountStorageKey('emmaus_last_opened_v3', SUBJECT_A)))
+      .toBe('2026-08-20');
+  });
+
+  it('retires unowned legacy personal state without deleting owned caches', () => {
+    localStorage.setItem('emmaus_progress', '{"daily":{"currentDay":9}}');
+    localStorage.setItem('emmaus_bible_notes', '[{"text":"private"}]');
+    localStorage.setItem('emmaus_audio_pos_/sermon.mp3', '120');
+    const owned = accountStorageKey('emmaus_bible_notes', SUBJECT_A);
+    localStorage.setItem(owned, '[{"text":"owned"}]');
+
+    retireUnownedPersonalStorage();
+
+    expect(localStorage.getItem('emmaus_progress')).toBeNull();
+    expect(localStorage.getItem('emmaus_bible_notes')).toBeNull();
+    expect(localStorage.getItem('emmaus_audio_pos_/sermon.mp3')).toBeNull();
+    expect(localStorage.getItem(owned)).toBe('[{"text":"owned"}]');
+  });
+
+  it('clears account-transient session state on sign-out or subject replacement', () => {
+    sessionStorage.setItem('emmaus_return_destination', '/personal');
+    sessionStorage.setItem('emmaus_splash_shown', 'true');
+    sessionStorage.setItem('pendingInviteToken', 'invite');
+    sessionStorage.setItem('unrelated', 'keep');
+
+    clearSessionAccountState();
+
+    expect(sessionStorage.getItem('emmaus_return_destination')).toBeNull();
+    expect(sessionStorage.getItem('emmaus_splash_shown')).toBeNull();
+    expect(sessionStorage.getItem('pendingInviteToken')).toBeNull();
+    expect(sessionStorage.getItem('unrelated')).toBe('keep');
+  });
+});

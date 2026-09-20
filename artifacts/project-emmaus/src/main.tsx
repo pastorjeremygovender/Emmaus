@@ -1,7 +1,44 @@
 import { createRoot } from 'react-dom/client';
 
 import App from './App';
+import { installAuthRequestGuard } from './lib/auth-request-guard';
+import { installNativeDailyRhythmDeepLink } from './lib/native-daily-rhythm-deep-link';
+import { registerServiceWorker } from './lib/register-service-worker';
 
 import './index.css';
 
-createRoot(document.getElementById('root')!).render(<App />);
+try {
+  const raw = localStorage.getItem('emmaus_last_appearance_preferences');
+  if (raw) {
+    const saved = JSON.parse(raw) as { theme?: string; fontSize?: string };
+    const root = document.documentElement;
+    root.classList.toggle('dark', saved.theme === 'dark');
+    root.dataset.fontSize =
+      saved.fontSize === 'large' || saved.fontSize === 'extra-large'
+        ? saved.fontSize
+        : 'standard';
+    root.style.colorScheme = saved.theme === 'dark' ? 'dark' : 'light';
+  }
+} catch {
+  // Rendering can continue with the CSS defaults when storage is unavailable.
+}
+
+installAuthRequestGuard();
+
+function bootstrap() {
+  // Native plugin startup must never prevent the WebView from mounting. Some
+  // Android shells can leave a bridge call pending while the app is opening;
+  // the deep-link listener can still apply its route after the app renders.
+  createRoot(document.getElementById('root')!).render(<App />);
+  registerServiceWorker();
+
+  void Promise.race([
+    installNativeDailyRhythmDeepLink(),
+    new Promise<null>(resolve => window.setTimeout(() => resolve(null), 1200)),
+  ]).catch(() => {
+    // Deep-link delivery is optional. The app is already mounted and remains
+    // usable when an older/native bridge cannot answer.
+  });
+}
+
+bootstrap();

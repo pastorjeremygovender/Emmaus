@@ -1,0 +1,116 @@
+Fix the incorrect resource allocation in the admin person-profile Discipleship section.
+
+This is a narrowly scoped admin display/query-classification fix.
+
+Preserve the completed admin design and the current Daily Rhythm lifecycle fix. Do not modify user-facing progress, content, groups or production data.
+
+CURRENT INCORRECT DISPLAY
+
+On Wesley’s pastoral profile:
+
+* “10 Minutes with Jesus” appears under Walks in Progress.
+* “Psalms Daily Devotional” appears under Daily Rhythm.
+* “Ready to Serve” appears under Groups.
+
+These classifications are incorrect.
+
+AUTHORITATIVE CLASSIFICATION
+
+* `10 Minutes with Jesus` is the single Daily Rhythm programme.
+* `Psalms Daily Devotional` is a Daily Devotional.
+* `Ready to Serve` is a Walk when the user has genuine progress in that Walk.
+* A Group may appear only when the person has an actual membership record in a user-created or authorised Group.
+* A resource title must never create, imply or infer Group membership.
+* Do not classify records from their display titles.
+* Do not use title matching, partial-name matching or fallback naming heuristics.
+
+Classify every item from its authoritative source record and stable identifier/type:
+
+* Daily Rhythm from Daily Rhythm progress/source records.
+* Daily Devotionals from Daily Devotional progress/source records.
+* Sermon Companions from their own progress/source records.
+* Walks from standalone Walk progress/source records.
+* Journeys from Journey membership/progress and their parent collection identity.
+* Groups exclusively from actual Group membership records joined to actual Group records.
+
+If a Walk and a genuine Group happen to share the same name, they may appear separately in their correct sections only when both authoritative records genuinely exist.
+
+Do not change, delete, create, relink or migrate any progress or membership data. Correct the read model, query mapping or presentation allocation only.
+
+PERSON-PROFILE SECTIONS
+
+Render separate sections when relevant:
+
+* Daily Rhythm
+* Daily Devotionals
+* Sermon Companions
+* Walks in Progress
+* Journeys in Progress
+* Groups
+
+Hide an empty section rather than populating it with a resource from another category.
+
+INVESTIGATION
+
+Before editing, report internally and verify:
+
+* The actual source record and stable identifier for each displayed Wesley item.
+* Why 10 Minutes with Jesus was mapped as a Walk.
+* Why Psalms Daily Devotional was mapped as Daily Rhythm.
+* Why Ready to Serve was included as a Group.
+* Whether Wesley has a genuine Group membership whose actual Group name is Ready to Serve.
+
+If a genuine Ready to Serve Group membership exists, retain it under Groups and separately show the Walk under Walks. If no genuine membership exists, remove it from Groups without deleting any data.
+
+TESTS
+
+Add focused regression tests proving:
+
+1. 10 Minutes with Jesus renders only under Daily Rhythm.
+2. Psalms Daily Devotional renders only under Daily Devotionals.
+3. Ready to Serve Walk progress renders under Walks.
+4. A Walk title alone never produces a Group entry.
+5. Groups render only from genuine membership records.
+6. Identically named Walk and Group records remain separate when both genuinely exist.
+7. Empty categories remain empty or hidden.
+8. Existing person-profile, admin navigation and permission tests still pass.
+9. User-facing Today’s Steps allocation remains unchanged.
+
+PROTECTIONS
+
+Do not modify:
+
+* Daily Rhythm opening, lifecycle, reminders or Previous Days
+* User-facing resource allocation
+* Group membership data
+* Walk or Journey progress data
+* Content records
+* Church Register records
+* API contracts unless a read-only response mapping is demonstrably the root cause
+* Database schemas
+* Production data
+* Authentication
+* Bible
+* Admin navigation or visual structure
+
+Do not perform broad refactoring, dependency changes or unrelated test/type cleanup.
+
+Run focused classification tests, admin tests, member-flow tests, group-authority tests, Daily Rhythm regressions, frontend/API builds, smoke tests and `git diff --check`.
+
+Manually preview Wesley’s Discipleship section and confirm the exact final allocation.
+
+Create one local commit only after the checks pass.
+
+Do not publish automatically.
+
+Report:
+
+* Root cause
+* Authoritative source/type of each of the three records
+* Whether a genuine Ready to Serve Group membership exists
+* Exact corrected section allocation
+* Files changed
+* Tests/builds
+* Confirmation that no progress, membership or production data changed
+* New commit ID
+* READY FOR MANUAL PUBLISH or NOT READY

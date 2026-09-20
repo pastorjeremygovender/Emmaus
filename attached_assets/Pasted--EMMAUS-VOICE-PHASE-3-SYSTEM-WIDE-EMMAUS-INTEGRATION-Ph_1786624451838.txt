@@ -1,0 +1,674 @@
+# EMMAUS VOICE — PHASE 3
+
+# SYSTEM-WIDE EMMAUS INTEGRATION
+
+Phase 1 and Phase 2 are working.
+
+Do NOT rebuild:
+
+* transcription
+* TTS
+* VoiceMode
+* conversation loop
+* interruption
+* auto-restart listening
+* Hear Emmaus
+* Ask Emmaus
+* existing voice settings
+
+Preserve everything that currently works.
+
+This phase connects the working Emmaus Voice engine to the wider Emmaus app.
+
+==================================================
+CORE GOAL
+=========
+
+Emmaus Voice must become a spoken interface to the WHOLE Emmaus experience.
+
+A user should be able to say things such as:
+
+"What's on my Today's Steps?"
+
+"Read today's Daily Rhythm."
+
+"Continue 10 Minutes with Jesus."
+
+"Open my Psalms devotional."
+
+"Read Psalm 23."
+
+"Continue reading Luke."
+
+"What's my next Walk?"
+
+"Open The Road to Emmaus."
+
+"Read today's Sermon Companion."
+
+"What did Pastor Jeremy say about forgiveness?"
+
+"Take me to My Bible."
+
+"Go back."
+
+"Next."
+
+"Read that again."
+
+"Explain that."
+
+"Pray with me about this."
+
+The user should not need to know where something is located in the app.
+
+Emmaus should understand the intent and either:
+
+* answer,
+* retrieve content,
+* read content,
+* or navigate to the correct place.
+
+==================================================
+
+1. ONE EMMAUS INTELLIGENCE
+   ==================================================
+
+Voice must continue using the EXISTING Ask Emmaus intelligence.
+
+Do not create:
+
+* a second AI
+* a separate Voice knowledge base
+* a duplicate search system
+* separate theological rules
+
+Architecture:
+
+Voice input
+→ intent/context resolution
+→ existing Emmaus services/content
+→ existing Ask Emmaus reasoning when required
+→ response/action
+→ spoken output
+
+==================================================
+2. CREATE A VOICE ACTION LAYER
+==============================
+
+Add a clean action/orchestration layer between VoiceMode and the existing Emmaus application.
+
+Conceptually something like:
+
+EmmausVoiceActions
+
+It should expose safe high-level actions such as:
+
+getTodaysSteps()
+openTodaysSteps()
+
+getCurrentDailyRhythm()
+readCurrentDailyRhythm()
+
+getCurrentDailyDevotional()
+readCurrentDailyDevotional()
+
+getCurrentWalk()
+continueWalk()
+
+getCurrentJourney()
+continueJourney()
+
+getCurrentSermonCompanion()
+readSermonCompanion()
+
+getBiblePassage(reference)
+openBiblePassage(reference)
+readBiblePassage(reference)
+
+openMyBible()
+openDiscover()
+openMyJourney()
+
+goBack()
+
+The actual names may differ.
+
+Use existing app services/routes/state.
+
+Do NOT duplicate content storage or progression logic.
+
+==================================================
+3. INTENT RESOLUTION
+====================
+
+Do NOT require exact commands.
+
+The user may say:
+
+"What's happening today?"
+"What do I need to do today?"
+"What are my steps?"
+"What's on Today's Steps?"
+
+These should resolve to the same general intent.
+
+Likewise:
+
+"Read my devotional."
+"Let's do today's devotional."
+"Open the Psalm for today."
+
+Emmaus should use context to determine the most likely content.
+
+If genuinely ambiguous, ask a short clarification question.
+
+Example:
+
+"You have Daily Rhythm and Psalms Daily Devotional. Which would you like?"
+
+Do not guess when ambiguity materially matters.
+
+==================================================
+4. TODAY'S STEPS
+================
+
+Voice must understand the user's actual Today’s Steps.
+
+If user asks:
+
+"What's on my Today's Steps?"
+
+Retrieve the user's current items from the same source used by the Today’s Steps UI.
+
+Emmaus can respond naturally, for example:
+
+"You have 10 Minutes with Jesus, your Psalms Daily Devotional, and this week's Sermon Companion."
+
+Then ask:
+
+"Would you like me to read one?"
+
+Do NOT invent items.
+
+Do NOT hardcode the Today’s Steps list.
+
+==================================================
+5. DAILY RHYTHM / 10 MINUTES WITH JESUS
+=======================================
+
+Support natural voice commands such as:
+
+"Continue 10 Minutes with Jesus."
+
+"Read today's 10 Minutes with Jesus."
+
+"Let's do today's Daily Rhythm."
+
+Emmaus should retrieve the user's CURRENT step.
+
+Do not restart at Day 1.
+
+Read the actual approved content.
+
+Maintain the normal structure and ordering.
+
+Allow commands during reading:
+
+"Pause"
+"Continue"
+"Read that again"
+"Skip that section"
+"What's the Scripture?"
+"Explain that"
+"Pray with me about that"
+
+==================================================
+6. DAILY DEVOTIONALS
+====================
+
+Support Daily Devotional voice access.
+
+Examples:
+
+"Read today's Psalms devotional."
+
+"Continue my Psalms devotional."
+
+"Read yesterday's devotional."
+
+Retrieve the actual requested/current entry.
+
+Do NOT create a new devotional dynamically when approved content exists.
+
+Use the content already stored in Emmaus.
+
+==================================================
+7. WALKS AND JOURNEYS
+=====================
+
+Voice must understand active Walk/Journey progress.
+
+Examples:
+
+"Continue my Walk."
+
+"What's my next Walk?"
+
+"Open The Road to Emmaus."
+
+"Continue Coming to Jesus."
+
+Use the user's real progress.
+
+Do not reset or skip progression.
+
+If multiple active Walks make the request ambiguous:
+
+"You have The Road to Emmaus and Who Is God? Which would you like to continue?"
+
+==================================================
+8. SERMON COMPANION
+===================
+
+Support:
+
+"Read today's Sermon Companion."
+
+"Continue the sermon devotional."
+
+"What did Pastor Jeremy say about forgiveness?"
+
+Use the existing Sermon Companion and sermon knowledge/indexing.
+
+When answering a sermon-specific question:
+
+* use the existing Ask Emmaus sermon retrieval
+* cite/reference the relevant sermon naturally where existing behaviour supports it
+* do not fabricate sermon claims
+
+==================================================
+9. BIBLE VOICE EXPERIENCE
+=========================
+
+Bible voice access is core.
+
+Support commands such as:
+
+"Read Psalm 23."
+
+"Read John chapter 3."
+
+"Read Romans 8 from verse 28."
+
+"Continue reading."
+
+"Next chapter."
+
+"Previous chapter."
+
+"Read verse 4 again."
+
+"What does that verse mean?"
+
+"Show me that passage."
+
+Use the existing Bible module/API.
+
+When reading Scripture:
+
+* retrieve the actual selected translation/text
+* display the passage visually
+* read it aloud
+* maintain current Bible context
+
+Example:
+
+User:
+"Read Psalm 23."
+
+Later:
+
+"What does verse 4 mean?"
+
+Emmaus must know the context is Psalm 23:4.
+
+==================================================
+10. CONTINUE READING STATE
+==========================
+
+Where the app already knows the user's Bible reading position, Voice should reuse it.
+
+Example:
+
+"Continue reading Luke."
+
+If there is an existing current chapter/reading state, continue there.
+
+Do not invent a position if the app does not have one.
+
+If needed:
+
+"The last place I can identify is Luke 4. Would you like me to continue there?"
+
+==================================================
+11. NAVIGATION BY VOICE
+=======================
+
+Support safe navigation commands:
+
+"Open Today's Steps."
+"Open My Bible."
+"Open Discover."
+"Open My Journey."
+"Go back."
+"Open this Walk."
+"Show me the Scripture."
+
+Use the existing router/navigation architecture.
+
+IMPORTANT:
+
+Do not recreate the circular navigation bugs previously fixed.
+
+"go back" must unwind actual navigation history where possible.
+
+==================================================
+12. SPOKEN CONTENT VS NAVIGATION
+================================
+
+The user should not always need the screen.
+
+Example:
+
+"Read today's devotional."
+
+Emmaus should simply read it.
+
+It may also navigate/show the corresponding content screen, but spoken access is primary.
+
+For driving/walking use, do not require the user to interact visually after initiating Voice Mode.
+
+==================================================
+13. CONTENT READING ENGINE
+==========================
+
+Create/reuse a reusable content-to-speech reader for structured Emmaus content.
+
+It should be able to read sections sequentially rather than concatenating everything into one giant TTS request.
+
+Examples:
+
+Greeting
+→ Reflection
+→ Scripture
+→ Prayer
+→ Closing
+
+This enables:
+
+* pause
+* continue
+* repeat section
+* skip section
+* interruption
+
+Do NOT generate one enormous audio file for a long devotional.
+
+==================================================
+14. READING COMMANDS
+====================
+
+While reading Emmaus content, support:
+
+"Pause"
+"Continue"
+"Stop"
+"Read that again"
+"Repeat that"
+"Next section"
+"Go back"
+"Explain that"
+"What's that Scripture?"
+"Open the Bible there"
+"Pray with me about this"
+
+Natural language variants should work.
+
+==================================================
+15. CONTEXT SWITCHING
+=====================
+
+Emmaus Voice must understand when the user switches tasks.
+
+Example:
+
+User is discussing Romans 8.
+
+User says:
+
+"What's on my Today's Steps?"
+
+Switch context appropriately.
+
+Then:
+
+"Read the Psalm devotional."
+
+Switch into devotional context.
+
+Then:
+
+"What does that verse mean?"
+
+Interpret "that verse" from the current devotional/Bible context where reasonable.
+
+Maintain clear structured Voice session context.
+
+==================================================
+16. ASK EMMAUS + APP ACTIONS
+============================
+
+Some voice requests are questions.
+
+Some are commands.
+
+Some contain both.
+
+Example:
+
+"Read Romans 8:28 and explain it."
+
+This should:
+
+1. retrieve Romans 8:28
+2. read/show it
+3. pass the passage/context to Ask Emmaus
+4. explain it
+5. speak the explanation
+
+Do not force the user into separate modes.
+
+==================================================
+17. CONFIRM DESTRUCTIVE ACTIONS
+===============================
+
+Voice may navigate/read freely.
+
+Do NOT use Voice to perform destructive or sensitive app actions without confirmation.
+
+For example:
+
+* delete content
+* remove Group
+* delete prayer request
+* sign out
+* administrative changes
+
+If voice support for these exists later, require explicit confirmation.
+
+Phase 3 should focus primarily on reading, navigation, retrieval and conversation.
+
+==================================================
+18. DISPLAY CONTEXT IN VOICE MODE
+=================================
+
+Voice Mode should subtly show what Emmaus is currently working with.
+
+Examples:
+
+Reading:
+Psalm 23
+
+or
+
+10 Minutes with Jesus
+Day 12
+
+or
+
+Sermon Companion
+Revive — Step 3
+
+Keep it compact.
+
+Do not turn Voice Mode into another full app screen.
+
+==================================================
+19. RETURN TO VOICE MODE AFTER NAVIGATION
+=========================================
+
+If Voice causes the app to show a Bible passage or devotional, preserve the active Voice conversation.
+
+Do not kill the session merely because the visual route changes.
+
+Where browser constraints allow, Voice should continue speaking.
+
+The user should be able to say:
+
+"Go back to Voice."
+
+or tap the Voice indicator to return.
+
+==================================================
+20. GLOBAL VOICE SESSION
+========================
+
+Design Phase 3 so that Voice session state is not tightly coupled to a single Ask Emmaus component mount.
+
+A Voice conversation should be able to survive normal in-app navigation.
+
+Do not make the microphone/audio lifecycle leak or duplicate across screens.
+
+Maintain ONE active Voice session.
+
+==================================================
+21. PRIVACY
+===========
+
+Preserve existing Phase 1/2 privacy behaviour.
+
+Do not store raw microphone audio by default.
+
+Use existing Ask Emmaus conversation/history rules for text transcripts.
+
+Do not create new unnecessary sensitive logs.
+
+==================================================
+22. MOBILE-FIRST TESTING
+========================
+
+Test this as a hands-free experience.
+
+Exact test flow:
+
+1. Open Emmaus on phone.
+2. Enter Voice Mode.
+3. Say:
+   "What's on my Today's Steps?"
+4. Confirm Emmaus retrieves the real current list and speaks it.
+5. Say:
+   "Read today's 10 Minutes with Jesus."
+6. Confirm current content opens/loads and Emmaus reads it aloud.
+7. Say:
+   "Pause."
+8. Confirm reading pauses.
+9. Say:
+   "Continue."
+10. Confirm it resumes from the correct place.
+11. Say:
+    "What does that Scripture mean?"
+12. Confirm Ask Emmaus answers using the current content context.
+13. Say:
+    "Read Psalm 23."
+14. Confirm Bible content switches correctly.
+15. Say:
+    "Explain verse 4."
+16. Confirm Emmaus understands Psalm 23:4.
+17. Say:
+    "What's my Psalms devotional today?"
+18. Confirm current devotional is retrieved.
+19. Say:
+    "Go back."
+20. Confirm navigation unwinds correctly.
+21. End Voice Mode.
+22. Confirm all audio/microphone resources shut down.
+
+==================================================
+23. DO NOT BUILD YET
+====================
+
+Do NOT implement in Phase 3:
+
+* wake word
+* always-listening outside Voice Mode
+* lock-screen assistant
+* Android/iOS native background service
+* smart glasses
+* wearables
+* Group Voice participant
+* LiveKit voice agent
+* synchronized group audio
+* car-specific native integration
+
+Those come later.
+
+==================================================
+24. DO NOT BREAK CURRENT APP
+============================
+
+Do not alter existing content progression rules merely to make Voice work.
+
+Reuse the same services and state the visual UI uses.
+
+Text/touch interaction must continue to work normally.
+
+Voice is another interface, not a replacement implementation.
+
+==================================================
+25. CHECKPOINT + QA
+===================
+
+Create a checkpoint before making Phase 3 changes.
+
+Before marking complete, provide:
+
+* architecture added for Voice Actions
+* intents implemented
+* app services reused
+* Today’s Steps integration
+* Daily Rhythm integration
+* Daily Devotional integration
+* Walk/Journey integration
+* Sermon Companion integration
+* Bible integration
+* navigation integration
+* context model used
+* exact mobile tests performed
+* any unsupported commands/limitations
+
+Do not mark Phase 3 complete based on mocks or hardcoded examples.
+
+Every voice action must operate on REAL current Emmaus content/user state.
+
+Then stop for approval.

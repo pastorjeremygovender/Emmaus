@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Emmaus</string>
+    <string name="title_activity_main">Emmaus</string>
+    <string name="package_name">za.co.emmaus.app</string>
+    <string name="custom_url_scheme">za.co.emmaus.app</string>
+    <string name="widget_name">Emmaus — Daily Rhythm</string>
+    <string name="widget_description">Today’s 10 Minutes with Jesus and Scripture</string>
+    <string name="widget_open_today">Open today’s Daily Rhythm</string>
+</resources>

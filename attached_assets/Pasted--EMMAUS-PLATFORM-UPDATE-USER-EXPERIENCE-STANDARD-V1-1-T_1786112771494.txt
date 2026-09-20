@@ -1,0 +1,507 @@
+# EMMAUS PLATFORM UPDATE
+# USER EXPERIENCE STANDARD V1.1
+
+This update refines the Emmaus user experience.
+
+Do NOT redesign Emmaus from scratch.
+
+Do NOT replace working functionality.
+
+Do NOT change database structures unless absolutely necessary.
+
+The objective is to simplify the experience while preserving all existing progress, content and functionality.
+
+====================================================
+CORE PRINCIPLE
+====================================================
+
+Emmaus exists to help people walk with Jesus Christ.
+
+Jesus is always the centre.
+
+Emmaus is the companion.
+
+The user should never feel like they are operating software.
+
+They should feel like someone is walking with them.
+
+Every screen should answer ONE simple question.
+
+====================================================
+BOTTOM NAVIGATION
+====================================================
+
+Bottom navigation becomes:
+
+• Today's Steps
+• My Bible
+• Discover
+• My Journey
+
+Rename:
+
+Next Steps
+
+to
+
+Discover
+
+throughout the app.
+
+====================================================
+TODAY'S STEPS
+====================================================
+
+Today's Steps answers:
+
+"What should I do today?"
+
+Display cards in this order.
+
+----------------------------------------------------
+
+1.
+
+10 Minutes with Jesus
+
+Always first.
+
+----------------------------------------------------
+
+2.
+
+This Week's Sermon Companion
+
+Permanent card.
+
+Never remove it.
+
+If no sermon exists display:
+
+"This week's Sermon Companion will appear here."
+
+When published display:
+
+Title
+
+Description
+
+Start
+
+Continue
+
+Review
+
+Progress
+
+----------------------------------------------------
+
+3.
+
+Active Walks
+
+Display every active walk.
+
+Examples:
+
+Prayer
+
+Made Free
+
+Walking with God
+
+Continue from last position.
+
+Completed walks disappear from Today's Steps.
+
+----------------------------------------------------
+
+4.
+
+Discover More
+
+Simple button.
+
+Opens Discover.
+
+====================================================
+DISCOVER
+====================================================
+
+Rename Next Steps to Discover.
+
+Purpose:
+
+"What can I explore?"
+
+Display sections.
+
+Featured
+
+Walks
+
+Journeys
+
+Daily Devotionals
+
+Bible Studies
+
+Recent Sermons
+
+Search
+
+Keep clean.
+
+No complicated navigation.
+
+====================================================
+MY BIBLE
+====================================================
+
+No major redesign.
+
+Preserve current functionality.
+
+====================================================
+MY JOURNEY
+====================================================
+
+Purpose:
+
+"My personal Emmaus."
+
+Sections:
+
+Continue
+
+Completed
+
+⭐ Favourites
+
+History
+
+====================================================
+FAVOURITES
+====================================================
+
+Add universal favourites.
+
+Every supported content item has a ⭐.
+
+Supported:
+
+Bible verses
+
+Bible chapters
+
+Walks
+
+Journeys
+
+Bible Studies
+
+Daily Devotionals
+
+Sermon Companions
+
+Ask Emmaus conversations
+
+Rooms
+
+Tap once.
+
+Saved.
+
+Tap again.
+
+Removed.
+
+No folders.
+
+No tags.
+
+No collections.
+
+====================================================
+HISTORY
+====================================================
+
+Recently viewed.
+
+Newest first.
+
+====================================================
+GLOBAL SEARCH
+====================================================
+
+One search.
+
+Searching:
+
+Prayer
+
+returns
+
+Walks
+
+Bible
+
+Studies
+
+Sermons
+
+Devotionals
+
+Ask Emmaus conversations
+
+Do not separate searches.
+
+====================================================
+ASK EMMAUS
+====================================================
+
+Ask Emmaus is no longer treated as another feature.
+
+It becomes the companion available everywhere.
+
+Replace the floating button.
+
+Create a permanent Emmaus Companion bar that never blocks content.
+
+Display near the top of every primary screen.
+
+Example:
+
+----------------------------------------
+
+💬 Ask Emmaus
+
+What would you like help with today?
+
+🎤
+
+----------------------------------------
+
+Must never cover:
+
+Bible text
+
+Buttons
+
+Navigation
+
+Verses
+
+Content
+
+====================================================
+ASK EMMAUS RESPONSIBILITIES
+====================================================
+
+Emmaus should guide users into existing Emmaus content whenever appropriate.
+
+Examples.
+
+"I want to learn to pray."
+
+Recommend:
+
+Prayer Walk
+
+Bible passages
+
+Bible Study
+
+Relevant Sermon
+
+Conversation
+
+"I'm anxious."
+
+Recommend:
+
+Today's Daily Rhythm
+
+Relevant Scripture
+
+Relevant Walk
+
+Relevant Sermon
+
+Prayer
+
+"Tell me about Romans."
+
+Offer:
+
+Read Romans
+
+Study Romans
+
+Relevant sermons
+
+Conversation
+
+====================================================
+VOICE
+====================================================
+
+Voice is part of Ask Emmaus.
+
+Not a separate mode.
+
+Future ElevenLabs implementation should use the same companion.
+
+====================================================
+MEMORY
+====================================================
+
+Emmaus remembers the user's journey.
+
+Not only conversations.
+
+Examples.
+
+"You completed Day 4 yesterday."
+
+"You recently highlighted this verse."
+
+"This week's Sermon Companion is now available."
+
+Suggestions must always be gentle.
+
+Never intrusive.
+
+Never pop-ups.
+
+====================================================
+SERMONS
+====================================================
+
+Content Studio becomes the ONLY source of truth.
+
+Only published sermons appear in the member app.
+
+Deleted sermons disappear from member discovery.
+
+No seeded demo sermons.
+
+No duplicate sermon sources.
+
+Only one sermon can be marked:
+
+This Week's Sermon.
+
+Today's Steps always displays that sermon.
+
+====================================================
+SERMON COMPANIONS
+====================================================
+
+Five-day companions must always generate:
+
+Day 1
+
+Day 2
+
+Day 3
+
+Day 4
+
+Day 5
+
+Never four.
+
+Generator should never refer to:
+
+"The pastor"
+
+Instead use:
+
+Pastor Jeremy
+
+or
+
+We reflected on...
+
+or
+
+We spoke about...
+
+Future churches should automatically use the configured speaker name.
+
+====================================================
+CONTENT STUDIO
+====================================================
+
+Remove Media Studio completely.
+
+Separate:
+
+Walks
+
+Journeys
+
+Walks contain content.
+
+Journeys organise Walks.
+
+Bible Study becomes its own section.
+
+Remove duplicate Bible Study navigation.
+
+====================================================
+ADMIN DESIGN
+====================================================
+
+Admin should feel simple.
+
+No complicated library management.
+
+Every content page should simply have:
+
+Search
+
++ New
+
+Recent items
+
+Show older
+
+Avoid unnecessary filters unless genuinely required.
+
+====================================================
+GENERAL UX RULES
+====================================================
+
+One tap whenever possible.
+
+No unnecessary screens.
+
+No unnecessary confirmation pages.
+
+No duplicated navigation.
+
+No duplicate data sources.
+
+The user should never need to understand Emmaus' internal structure.
+
+====================================================
+SUCCESS CRITERIA
+====================================================
+
+A new believer should understand Emmaus within minutes.
+
+Every screen should have one obvious purpose.
+
+Ask Emmaus should feel like a companion.
+
+Today's Steps should feel like today.
+
+Discover should feel like exploration.
+
+My Journey should feel personal.
+
+The app should feel calm, simple and Christ-centred.
+
+Before completing this update, audit every changed screen to ensure it follows these standards.

@@ -21,6 +21,7 @@ import { listCollections, type CollectionSummary } from '@/lib/collections-api';
 import { checkJourneysHaveIntro } from '@/lib/journeys-api';
 import { ChevronLeft, Search, X, Bookmark, BookmarkCheck, ArrowRight } from 'lucide-react';
 import type { Journey } from '@/contexts/JourneyContext';
+import { goBackOrFallback } from '@/lib/return-context';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -263,7 +264,7 @@ export default function ExploreJourneys() {
     // getState() defaults to 'active' for any journey with no localStorage record —
     // that default must never be used to infer the journey has been opened.
     if (startedIds.has(journeyId)) {
-      setLocation(`/journey/${journeyId}/day/${progress[journeyId]?.currentDay ?? 1}`);
+      setLocation(`/journey/${journeyId}/navigate`);
       return;
     }
     // Not yet started — check enrollment capacity, then open the start modal.
@@ -287,31 +288,39 @@ export default function ExploreJourneys() {
     if (!pendingJourneyId) return;
     const id  = pendingJourneyId;
     const day = pendingStartDay;
+    const journeyType = journeys.find(j => j.id === id)?.journeyType;
+    const srcAlone = journeyType === 'walk' ? 'nextStepsWalks' : 'nextStepsJourneys';
     // Throws on failure — the modal catches this and shows an inline error message.
-    await startJourney(id);
+    await startJourney(id, srcAlone === 'nextStepsWalks' ? 'walk' : 'journey');
     setPendingJourneyId(null);
-    setLocation(`/journey/${id}/day/${day}`);
+    setLocation(`/journey/${id}/day/${day}?source=${srcAlone}`);
   }
 
   async function handleStartWithRoom(roomId: string) {
     if (!pendingJourneyId || !user) return;
     const id  = pendingJourneyId;
     const day = pendingStartDay;
+    const journeyType = journeys.find(j => j.id === id)?.journeyType;
+    const srcShared = journeyType === 'walk' ? 'nextStepsWalks' : 'nextStepsJourneys';
+    const displayOrigin = srcShared === 'nextStepsWalks' ? 'walk' : 'journey';
     // Single atomic call — throws on failure; the sheet surfaces the error inline.
-    await apiStartShared(user.id, { journeyId: id, roomId });
-    await startJourney(id); // sync local progress cache (no-op at DB)
+    await apiStartShared(user.id, { journeyId: id, roomId, displayOrigin });
+    await startJourney(id, displayOrigin); // sync local progress cache (no-op at DB)
     setPendingJourneyId(null);
-    setLocation(`/journey/${id}/day/${day}`);
+    setLocation(`/journey/${id}/day/${day}?source=${srcShared}`);
   }
 
   async function handleCreateAndStart(roomName: string) {
     if (!pendingJourneyId || !user) return;
     const id  = pendingJourneyId;
     const day = pendingStartDay;
-    const { roomId } = await apiStartShared(user.id, { journeyId: id, roomName });
-    await Promise.all([startJourney(id), loadRooms()]);
+    const journeyType = journeys.find(j => j.id === id)?.journeyType;
+    const srcRoom = journeyType === 'walk' ? 'nextStepsWalks' : 'nextStepsJourneys';
+    const displayOrigin = srcRoom === 'nextStepsWalks' ? 'walk' : 'journey';
+    const { roomId } = await apiStartShared(user.id, { journeyId: id, roomName, displayOrigin });
+    await Promise.all([startJourney(id, displayOrigin), loadRooms()]);
     setPendingJourneyId(null);
-    setLocation(`/journey/${id}/day/${day}`);
+    setLocation(`/journey/${id}/day/${day}?source=${srcRoom}`);
   }
 
   const pendingJourney = journeys.find(j => j.id === pendingJourneyId) ?? null;
@@ -337,7 +346,7 @@ export default function ExploreJourneys() {
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="flex items-center gap-3 px-5 pt-12 pb-3">
           <button
-            onClick={() => setLocation('/journeys')}
+            onClick={() => goBackOrFallback('/journeys', setLocation)}
             className="h-9 w-9 flex items-center justify-center rounded-full hover:bg-muted transition-colors shrink-0"
             aria-label="Back to Journeys"
           >

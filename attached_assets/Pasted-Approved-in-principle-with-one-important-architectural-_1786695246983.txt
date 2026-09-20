@@ -1,0 +1,90 @@
+Approved in principle, with one important architectural requirement.
+
+Your overall sequence is correct:
+
+Sprint 1 — immediate interaction improvements
+Sprint 2 — LLM tool/action dispatch
+Sprint 3 — contextual chaining and polish
+
+Proceed with Sprint 1.
+
+For Sprint 2, YES: tool/function calling is the correct architectural direction. Emmaus capabilities should become explicit tools/actions available to the conversational model rather than continuing to expand regex and phrase matching.
+
+However, do NOT assume that the final Voice architecture should remain:
+
+record complete utterance
+→ stop
+→ upload/transcribe
+→ classify
+→ send to conversational endpoint
+→ wait
+→ synthesize TTS
+→ restart microphone
+
+Tool calling alone will improve intelligence but will not necessarily solve the unnatural turn-taking that physical-device testing has exposed.
+
+Before implementing Sprint 2, investigate the CURRENT OpenAI realtime voice capabilities available to this project and determine whether we can use a persistent realtime audio/conversation session with tool/function calling.
+
+The desired architecture is conceptually:
+
+live user audio
+↕
+persistent realtime conversational session
+↕
+Emmaus tools/actions
+↕
+canonical Emmaus services/content
+
+with streamed audio response and genuine barge-in/interruption.
+
+NOT merely:
+
+speech-to-text
+→ normal LLM request
+→ tool call
+→ text response
+→ separate TTS.
+
+If a true realtime architecture is practical with the current application, we should architect toward it now rather than spending substantial effort perfecting an intermediate voice-command pipeline that we later replace.
+
+The five initial Emmaus tools remain the correct proof scope:
+
+1. Ask Emmaus conversation
+2. Open/navigate My Bible
+3. Retrieve/read Bible passage
+4. Retrieve/read today's Daily Rhythm / 10 Minutes with Jesus
+5. Retrieve/read today's Daily Devotional / Psalms Daily Devotional
+
+Also preserve the existing deterministic shortcuts only where they provide useful instant handling for simple commands such as:
+
+stop
+pause
+resume
+end session
+
+Do not allow the regex system to remain the primary natural-language understanding layer.
+
+So:
+
+1. Implement Sprint 1.
+2. Checkpoint.
+3. Before coding Sprint 2, report whether the current OpenAI integration can support a persistent realtime voice session + tool/function calling.
+4. Compare that architecture with adding tool calls to the existing STT → LLM → TTS pipeline.
+5. Recommend which architecture gets us closest to genuinely natural, low-latency Emmaus Voice.
+6. Include migration risk and what existing Phase 1–4 work can be retained.
+7. STOP for approval before implementing Sprint 2.
+
+The product target remains:
+
+I start Emmaus Voice once and then simply have a conversation with Emmaus.
+
+I should not need to think about when it is listening.
+I should not need to formulate commands.
+I should not need to speak unnaturally loudly or clearly.
+I should be able to interrupt naturally.
+Emmaus should understand follow-up references from context.
+Emmaus should be able to operate the application for me.
+Navigation should not end the conversation.
+Reading should not end the conversation.
+
+Do Sprint 1 now, then give me the realtime architecture assessment before Sprint 2.

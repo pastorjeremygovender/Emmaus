@@ -1,0 +1,100 @@
+Fix the Sermon Companion overflow menu actions completely.
+
+CURRENT BUG:
+The three-dot button now opens the Pause/Hide menu correctly.
+
+However, when the user taps “Pause” or “Hide”, the Sermon Companion opens instead of performing only the selected menu action.
+
+CAUSE TO CHECK:
+The menu item click is still propagating to the parent Sermon Companion card, whose click handler navigates to the devotional.
+
+REQUIRED FIX:
+
+1. Stop event propagation at every relevant level:
+
+- three-dot menu trigger
+- menu container
+- Pause menu item
+- Hide menu item
+- any backdrop or popover wrapper
+
+Use:
+
+event.preventDefault()
+event.stopPropagation()
+
+or the equivalent for the current framework.
+
+2. The Pause and Hide actions must not be rendered inside a clickable navigation element.
+
+Do not place the menu inside:
+
+- a Link
+- a button that wraps the full card
+- an anchor
+- a parent element with navigation attached in a way that cannot be isolated
+
+Refactor the card if necessary so the structure is:
+
+Card container
+├── Independent card navigation area
+├── Independent three-dot menu trigger
+└── Independent action menu
+
+3. Correct action behaviour:
+
+PAUSE
+- Update the user’s active Sermon Companion state to paused.
+- Remove it from Today’s Steps.
+- Preserve all progress.
+- Close the menu.
+- Remain on Today’s Steps.
+- Do not navigate anywhere.
+
+HIDE
+- Hide the card from Today’s Steps.
+- Preserve all progress.
+- Keep the companion available in Next Steps or the sermon archive.
+- Close the menu.
+- Remain on Today’s Steps.
+- Do not navigate anywhere.
+
+4. Do not use the same click handler for:
+- card navigation
+- menu trigger
+- Pause
+- Hide
+
+Each must have its own explicit handler.
+
+5. After the action completes, update the Today’s Steps UI in place.
+
+Do not:
+- open the devotional
+- refresh the entire page
+- navigate to the companion
+- reset progress
+
+6. Test specifically on the published mobile version:
+
+TEST 1:
+Tap ⋯.
+The menu opens and the companion does not open.
+
+TEST 2:
+Tap Pause.
+The menu closes, the card is removed from Today’s Steps, progress is preserved, and the user remains on Today’s Steps.
+
+TEST 3:
+Restore the companion, tap ⋯, then tap Hide.
+The menu closes, the card disappears from Today’s Steps, and the user remains on Today’s Steps.
+
+TEST 4:
+Tap anywhere outside the menu.
+The menu closes without opening the companion.
+
+TEST 5:
+Tap the card itself.
+Only then should the Sermon Companion open.
+
+Do not report this as fixed until all five tests pass.

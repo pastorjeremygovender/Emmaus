@@ -1,0 +1,98 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace = "za.co.emmaus.app"
+    compileSdk = rootProject.ext.compileSdkVersion
+    testBuildType = System.getenv("EMMAUS_ANDROID_TEST_BUILD_TYPE") ?: "release"
+    defaultConfig {
+        applicationId = "za.co.emmaus.app"
+        minSdk = rootProject.ext.minSdkVersion
+        targetSdk = rootProject.ext.targetSdkVersion
+        versionCode = 16
+        versionName = "1.2.0-rc14"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        release {
+            def configuredKeystorePath = System.getenv("EMMAUS_ANDROID_KEYSTORE_PATH")
+            def configuredKeystorePassword = System.getenv("EMMAUS_ANDROID_KEYSTORE_PASSWORD")
+            def configuredKeyAlias = System.getenv("EMMAUS_ANDROID_KEY_ALIAS")
+            def configuredKeyPassword = System.getenv("EMMAUS_ANDROID_KEY_PASSWORD")
+            if (configuredKeystorePath && configuredKeystorePassword && configuredKeyAlias && configuredKeyPassword) {
+                storeFile = rootProject.file(configuredKeystorePath)
+                storePassword = configuredKeystorePassword
+                keyAlias = configuredKeyAlias
+                keyPassword = configuredKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled = true
+            shrinkResources = true
+            signingConfig = signingConfigs.release
+            proguardFiles = [getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro']
+        }
+    }
+}
+
+def verifyReleaseSigning = tasks.register("verifyReleaseSigning") {
+    doLast {
+        def required = [
+            "EMMAUS_ANDROID_KEYSTORE_PATH",
+            "EMMAUS_ANDROID_KEYSTORE_PASSWORD",
+            "EMMAUS_ANDROID_KEY_ALIAS",
+            "EMMAUS_ANDROID_KEY_PASSWORD",
+        ]
+        def missing = required.findAll { !System.getenv(it) }
+        if (!missing.isEmpty()) {
+            throw new GradleException("Release signing is required. Configure the missing Android signing environment values: ${missing.join(', ')}")
+        }
+        def keystore = rootProject.file(System.getenv("EMMAUS_ANDROID_KEYSTORE_PATH"))
+        if (!keystore.isFile()) {
+            throw new GradleException("Release signing keystore was not found at the configured path.")
+        }
+    }
+}
+
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn(verifyReleaseSigning)
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    implementation "com.google.android.gms:play-services-location:21.3.0"
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    androidTestImplementation "androidx.test:runner:1.7.0"
+    androidTestImplementation "androidx.test:rules:1.7.0"
+    androidTestImplementation "androidx.test.uiautomator:uiautomator:2.3.0"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

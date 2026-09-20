@@ -1,0 +1,398 @@
+URGENT PRODUCTION BUG.
+
+I have just tested the newly published Daily Rhythm first-opening fix using a completely NEW normal user account.
+
+The good news:
+
+The FIRST OPENING worked correctly.
+
+Emmaus automatically opened 10 Minutes with Jesus Day 1.
+
+The bad news is CRITICAL:
+
+After entering Daily Rhythm, the user is now effectively TRAPPED inside Day 1.
+
+Every navigation attempt reloads/reopens Daily Rhythm Day 1.
+
+Examples I have personally reproduced in production:
+
+- Tap Today's Steps in the bottom navigation → Daily Rhythm Day 1 opens again.
+- Tap Today's Steps from the Previous Days screen → Daily Rhythm Day 1 opens again.
+- Navigate away from Daily Rhythm → Day 1 is forced open again.
+- The user cannot return normally to the rest of Emmaus.
+
+This began after the per-launch startup-session fix.
+
+DO NOT touch the Daily Rhythm progression rules.
+
+The progression rules appear to be separate from this issue.
+
+This is now specifically a STARTUP ROUTING / NAVIGATION GUARD bug.
+
+MOST LIKELY CAUSE
+
+The new "first opening / startup destination" logic appears to remain active after initial startup.
+
+A per-launch Daily Rhythm destination may now be getting reapplied on ordinary in-app navigation.
+
+Conceptually the current behaviour appears to be:
+
+App launch
+→ startup destination = DAILY_RHYTHM
+→ open Day 1
+
+THEN:
+
+user taps Today's Steps
+→ startup logic runs again
+→ sees same launch session destination = DAILY_RHYTHM
+→ forces Day 1 again
+
+That is WRONG.
+
+The persisted launch-session claim was created to ensure duplicate STARTUP requests from the same app launch return the same destination.
+
+It must NOT mean:
+
+"Every route request during this entire app session must return Daily Rhythm."
+
+REQUIRED BEHAVIOUR
+
+The startup redirect applies ONCE ONLY during app bootstrap.
+
+Correct flow:
+
+FIRST REAL APP OPEN TODAY:
+
+App launches
+→ startup decision
+→ DAILY_RHYTHM
+→ Daily Rhythm Day 1 renders successfully
+
+AT THAT POINT THE STARTUP ROUTING PHASE IS FINISHED.
+
+From then onward, normal Emmaus navigation must work.
+
+User taps Today's Steps
+→ Today's Steps
+
+User taps My Bible
+→ My Bible
+
+User taps Discover
+→ Discover
+
+User taps My Journey
+→ My Journey
+
+User taps Previous Days
+→ Previous Days
+
+User presses back
+→ normal navigation
+
+NONE of those actions may invoke or reapply the first-opening redirect.
+
+IMPORTANT DISTINCTION
+
+There are THREE separate concepts:
+
+1. DAILY PROGRESSION STATE
+
+Which 10 Minutes with Jesus Step is currently unlocked.
+
+2. DAILY FIRST-OPEN STATE
+
+Whether this user's first real Emmaus launch today should initially land in Daily Rhythm.
+
+3. CURRENT IN-APP NAVIGATION
+
+Where the user chooses to go AFTER Emmaus has launched.
+
+These MUST remain independent.
+
+The first-open state must NEVER override deliberate navigation after initial startup has completed.
+
+REQUIRED STARTUP LIFECYCLE
+
+Implement an explicit startup lifecycle.
+
+Conceptually:
+
+APP_BOOTSTRAPPING
+→ resolve startup destination
+
+If Daily Rhythm:
+→ navigate to Daily Rhythm
+
+Once Daily Rhythm route has successfully rendered:
+→ mark this CLIENT LAUNCH as STARTUP_ROUTING_COMPLETE
+
+After "STARTUP_ROUTING_COMPLETE":
+
+DO NOT call the startup redirect logic during ordinary route changes.
+
+DO NOT redirect the user back to Daily Rhythm.
+
+DO NOT consult the startup destination to override navigation.
+
+The persisted launch-session claim may remain server-side for duplicate startup-request consistency, but the client must stop treating it as an active redirect after initial startup resolution.
+
+CRITICAL
+
+Do not solve this by changing the server to say Today's Steps immediately after the first request.
+
+That would recreate yesterday's original race condition:
+
+Request 1 → Daily Rhythm
+Request 2 → Today's Steps
+
+The correct solution is:
+
+Duplicate requests DURING BOOTSTRAP
+→ all consistently return Daily Rhythm.
+
+But once bootstrap has successfully completed
+→ startup routing ends.
+
+Ordinary application navigation is then completely independent.
+
+AUDIT THESE AREAS
+
+Inspect:
+
+- global route guards
+- auth guards
+- Welcome component
+- root App component
+- useEffect startup hooks
+- navigation listeners
+- location/pathname effects
+- startup destination query
+- startup session ID handling
+- React remount behaviour
+- Daily Rhythm route
+- Today's Steps route
+- bottom tab navigation
+- back navigation
+- Previous Days navigation
+- PWA visibility/focus listeners
+- service worker navigation handling
+
+Find exactly what is causing the Daily Rhythm startup destination to be reapplied when I tap Today's Steps.
+
+ALSO CHECK THE CONTINUE BUTTON
+
+In the screenshot I am at the end of Day 1 and the button says "Continue".
+
+Verify what this button is supposed to do.
+
+If this is the final action of today's Daily Rhythm Step, it should correctly complete today's Step and then allow the user to return to Today's Steps.
+
+Completion must NOT:
+
+- reload Day 1 endlessly
+- unlock Day 2 today
+- restart startup routing
+- trigger another first-open redirect
+
+After completion:
+
+Today's Steps should show today's Daily Rhythm as completed.
+
+Example:
+
+10 Minutes with Jesus
+
+Day 1 — Complete ✓
+
+Come back tomorrow to continue
+
+The user can reopen Day 1 for review if they choose.
+
+But Emmaus must never force them back into Day 1 after they navigate elsewhere.
+
+PRODUCTION FAILURE TEST
+
+Reproduce exactly what I just did.
+
+Use a NEW normal user.
+
+TEST 1
+
+New account.
+First ever opening.
+
+EXPECTED:
+Daily Rhythm Day 1 automatically opens.
+
+PASS only if this works.
+
+TEST 2
+
+While Day 1 is open, tap Today's Steps bottom navigation.
+
+EXPECTED:
+Today's Steps opens and remains open.
+
+It must NOT redirect back to Day 1.
+
+TEST 3
+
+From Today's Steps tap My Bible.
+
+EXPECTED:
+My Bible.
+
+TEST 4
+
+Tap Discover.
+
+EXPECTED:
+Discover.
+
+TEST 5
+
+Tap My Journey.
+
+EXPECTED:
+My Journey.
+
+TEST 6
+
+Open Daily Rhythm manually.
+
+EXPECTED:
+Day 1.
+
+Then use back navigation.
+
+EXPECTED:
+normal previous destination.
+
+No forced redirect.
+
+TEST 7
+
+Open Previous Days.
+
+EXPECTED:
+Previous Days.
+
+Tap Today's Steps.
+
+EXPECTED:
+Today's Steps.
+
+This exact flow currently FAILS in production.
+
+TEST 8
+
+Complete Day 1.
+
+EXPECTED:
+Day 1 becomes completed.
+
+Day 2 remains locked.
+
+Navigate to Today's Steps.
+
+EXPECTED:
+Today's Steps remains visible.
+
+TEST 9
+
+Navigate around Emmaus after completion.
+
+EXPECTED:
+all normal navigation works.
+
+No automatic Daily Rhythm redirects.
+
+TEST 10
+
+Close the PWA completely.
+
+Reopen it later the SAME calendar day.
+
+EXPECTED:
+Today's Steps.
+
+This is now a genuine second launch.
+
+TEST 11
+
+Simulate next calendar day.
+
+First new launch:
+
+EXPECTED:
+Daily Rhythm opens automatically.
+
+Once it has opened:
+
+tap Today's Steps.
+
+EXPECTED:
+Today's Steps.
+
+Daily Rhythm must NOT trap the user again.
+
+PRESERVE THE PREVIOUS FIX
+
+Do NOT remove the per-launch duplicate-startup protection.
+
+We still require:
+
+During one real app bootstrap:
+
+startup request A → Daily Rhythm
+
+startup request B caused by auth/remount → ALSO Daily Rhythm
+
+The second startup request must not override the first.
+
+But after initial navigation has completed:
+
+Today's Steps → Today's Steps
+My Bible → My Bible
+Discover → Discover
+My Journey → My Journey
+
+The launch destination must no longer act as a global redirect.
+
+REPORT BEFORE CLOSING
+
+Tell me:
+
+1. Exactly which function/guard caused Today's Steps to redirect back to Daily Rhythm.
+
+2. Why the launch-session claim remained active during ordinary navigation.
+
+3. What now defines "startup routing complete."
+
+4. How duplicate startup calls remain protected.
+
+5. How ordinary navigation is prevented from invoking first-open routing.
+
+6. Whether the Continue/completion action was also involved.
+
+7. Results of Tests 1–11 above.
+
+DO NOT mark this fixed based only on an API test.
+
+The current bug is visible in the real deployed PWA.
+
+Test the actual application navigation lifecycle.
+
+Permanent rule:
+
+FIRST OPENING OF EMMAUS EACH DAY
+→ automatically enter Daily Rhythm ONCE.
+
+AFTER DAILY RHYTHM HAS OPENED
+→ USER HAS FULL NORMAL CONTROL OF EMMAUS NAVIGATION.
+
+Daily Rhythm is the first destination.
+
+It is NOT a navigation prison.

@@ -1,0 +1,4 @@
+BEGIN;
+UPDATE bible_study_notes SET key_truth='Because God inclines His ear to hear our cries, calling on Him in every crisis is the wisest and most faithful response we can make.', reflection_question='Where in your life right now do you need to cry out to God and trust that He is inclining His ear toward you?', related_scriptures='Psalm 18:6, Lamentations 3:55-57, Matthew 7:7-8, Romans 8:26', updated_at=now() WHERE book_id='psalms' AND chapter=116 AND verse_start=1;
+UPDATE bible_study_notes SET key_truth='Those who love God''s word find a deep, unshakeable peace that sustains them even when powerful opponents oppose them without cause.', reflection_question='How does your love for God''s word shape your response when you face opposition or pressure from others?', related_scriptures='Philippians 4:7, Psalm 119:165, John 16:33, Isaiah 26:3', updated_at=now() WHERE book_id='psalms' AND chapter=119 AND verse_start=161;
+COMMIT;

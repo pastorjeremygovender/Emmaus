@@ -1,37 +1,37 @@
 /**
  * Journey CMS Routes
  *
- * Admin mutation routes require an authenticated caller (via signed session cookie
- * or X-User-Id header). Identity is always derived server-side via extractUserId().
+ * Admin mutation routes require an authenticated caller. Identity is always
+ * derived server-side from the secure session cookie via extractUserId().
  *
- * Progress routes accept userId from body/query as a fallback so the user-facing
- * app works before full session auth is wired. A future task (#48) will tighten
- * these to session-only once Clerk/Replit Auth is integrated.
+ * Progress routes also derive identity server-side via the session cookie —
+ * body and query params are never trusted as an identity source.
  */
 
 import { Router, type Request, type Response } from "express";
+import { randomUUID } from "node:crypto";
 import { extractUserId, requireAuth, requireSuperAdmin } from "../emmaus/auth.js";
 import * as store from "../lib/journey-store.js";
 import type { FrontendStep } from "../lib/journey-store.js";
 import { parseImportCsv, exportJourneysToCsv } from "../lib/journey-csv.js";
-import { generateJourney, generateStructuredJourney, aiBlockAction, type BuilderPayload } from "../lib/journey-ai.js";
+import { generateJourney, generateStructuredJourney, generateWalkIntroduction, aiBlockAction, type BuilderPayload } from "../lib/journey-ai.js";
+import { logAuditEvent } from "../lib/audit-log.js";
+import { isAdmin, getUserRole } from "../lib/user-role-store.js";
+import * as dailyRhythmGroups from "../lib/daily-rhythm-groups-store.js";
+import { selectDailyRhythmSteps } from "../lib/daily-rhythm-content-access.js";
 
 const router = Router();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Resolve userId for progress routes:
- * 1. Signed session cookie / X-User-Id header (trusted, server-derived)
- * 2. Body / query param (fallback for user-facing app before full auth is added)
+ * Resolve userId for progress routes from trusted server-side identity only.
+ * The secure session cookie is the only accepted source — body and query params
+ * are NOT trusted to prevent a caller from reading or writing another user's
+ * progress.
  */
 function resolveUserId(req: Request): string | null {
-  return (
-    extractUserId(req) ||
-    (req.query.userId as string) ||
-    (req.body?.userId as string) ||
-    null
-  );
+  return extractUserId(req);
 }
 
 function slugify(str: string): string {
@@ -71,15 +71,80 @@ router.get("/journeys/progress", async (req: Request, res: Response) => {
   const userId = resolveUserId(req);
   if (!userId) { res.status(400).json({ error: "userId is required" }); return; }
   const progress = await store.getAllProgress(userId);
+  res.set("Cache-Control", "no-store");
   res.json({ progress });
 });
 
-router.post("/journeys/progress/import", async (req: Request, res: Response) => {
+router.get("/journeys/daily-rhythm/state", async (req: Request, res: Response) => {
   const userId = resolveUserId(req);
-  if (!userId) { res.status(400).json({ error: "userId is required" }); return; }
-  const { progress } = req.body as { progress: Record<string, { currentDay: number; completedDays: number[]; startedAt: string; lastCompletedAt: string | null }> };
-  await store.upsertProgressFromLocal(userId, progress ?? {});
-  res.json({ ok: true });
+  if (!userId) { res.status(401).json({ error: "Authentication required" }); return; }
+  try {
+    res.set("Cache-Control", "no-store");
+    res.json(await store.getDailyRhythmState(userId));
+  } catch (err) {
+    console.error("GET /journeys/daily-rhythm/state failed", err);
+    res.status(500).json({ error: "Could not load Daily Rhythm state" });
+  }
+});
+
+router.get("/journeys/daily-rhythm/history", async (req: Request, res: Response) => {
+  const userId = resolveUserId(req);
+  if (!userId) { res.status(401).json({ error: "Authentication required" }); return; }
+  try {
+    res.set("Cache-Control", "no-store");
+    const history = await store.getDailyRhythmHistory(userId);
+    if (!history) { res.status(404).json({ error: "Daily Rhythm progress not found" }); return; }
+    res.json(history);
+  } catch (err) {
+    console.error("GET /journeys/daily-rhythm/history failed", err);
+    res.status(500).json({ error: "Could not load Daily Rhythm history" });
+  }
+});
+
+router.get("/journeys/daily-rhythm/startup", async (req: Request, res: Response) => {
+  const userId = resolveUserId(req);
+  if (!userId) { res.status(401).json({ error: "Authentication required" }); return; }
+  try {
+    res.set("Cache-Control", "no-store");
+    const startupSession = String(req.get("x-emmaus-startup-session") ?? "").trim();
+    const clientTimezone = String(req.get("x-emmaus-timezone") ?? "").trim();
+    const result = await store.getDailyRhythmStartup(userId, startupSession, clientTimezone);
+    console.info("[DailyOpen]", {
+      traceId: String(req.id ?? "unknown"),
+      timestamp: new Date().toISOString(),
+      user: `u-${Buffer.from(userId).toString("base64url").slice(0, 10)}`,
+      session: startupSession ? startupSession.slice(0, 12) : "none",
+      localDate: result.localDate,
+      localTimezone: result.localTimezone,
+      currentDay: result.currentDay,
+      state: result.state,
+      decisionId: result.decisionId,
+      returnedDestination: result.destination,
+      timings: result.timings,
+    });
+    res.json(result);
+  } catch (err) {
+    const diagnosticReference = `opening-${randomUUID()}`;
+    const message = err instanceof Error ? err.message : "unknown";
+    console.error("GET /journeys/daily-rhythm/startup failed", {
+      diagnosticReference,
+      code: message,
+    });
+    const unavailable = message === "DAILY_RHYTHM_OPENING_LEDGER_UNAVAILABLE";
+    res.status(unavailable ? 503 : 500).json({
+      state: "OPENING_ERROR",
+      error: "Could not resolve today's opening.",
+      reason: unavailable ? "opening_ledger_unavailable" : "opening_resolution_failed",
+      diagnosticReference,
+      destination: null,
+    });
+  }
+});
+
+router.post("/journeys/progress/import", (_req: Request, res: Response) => {
+  res.status(410).json({
+    error: "Legacy progress import has been removed. Browser progress cannot be imported into an authenticated account.",
+  });
 });
 
 // ─── Intro-step check (public) ────────────────────────────────────────────────
@@ -117,6 +182,7 @@ router.get("/journeys/search", async (req: Request, res: Response) => {
 router.get("/journeys/export", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const rawIds = String(req.query.ids ?? "").trim();
   const ids = rawIds ? rawIds.split(",").map(s => s.trim()).filter(Boolean) : [];
@@ -146,6 +212,7 @@ router.get("/journeys/export", async (req: Request, res: Response) => {
 router.post("/journeys/import", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const { csv, batchId } = req.body as { csv: string; batchId?: string };
   if (!csv || typeof csv !== "string") {
@@ -209,6 +276,14 @@ router.post("/journeys/import", async (req: Request, res: Response) => {
       }
     }
 
+    await logAuditEvent({
+      contentType: "journey",
+      contentId: journeyId,
+      action: "create",
+      performedBy: callerId,
+      previousState: null,
+      newState: { id: journeyId, title: importJourney.title, status: "Draft", source: "csv-import", batchId: importBatchId, stepCount: importJourney.steps.length },
+    });
     createdJourneyIds.push(journeyId);
   }
 
@@ -225,6 +300,7 @@ router.post("/journeys/import", async (req: Request, res: Response) => {
 router.post("/journeys/generate", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const { prompt } = req.body as { prompt: string };
   if (!prompt?.trim()) {
@@ -261,6 +337,14 @@ router.post("/journeys/generate", async (req: Request, res: Response) => {
     });
   }
 
+  await logAuditEvent({
+    contentType: "journey",
+    contentId: journeyId,
+    action: "create",
+    performedBy: callerId,
+    previousState: null,
+    newState: { id: journeyId, title: generated.title, status: "Draft", source: "ai-generate", stepCount: generated.steps.length },
+  });
   res.status(201).json({ journeyId, title: generated.title, stepCount: generated.steps.length });
 });
 
@@ -275,6 +359,7 @@ const BUILD_DEDUP_MS = 90_000;
 router.post("/journeys/ai-build", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const payload = req.body as BuilderPayload;
 
@@ -300,19 +385,26 @@ router.post("/journeys/ai-build", async (req: Request, res: Response) => {
   }
   buildInProgress.set(dedupKey, now + BUILD_DEDUP_MS);
 
+  // Hoisted so the catch block can clean up a partially-created journey on failure.
+  let journeyId = "";
+
   try {
     const generated = await generateStructuredJourney(payload);
 
     // Create Journey in DB as Draft
     const baseId = slugify(payload.title) || `journey-${Date.now()}`;
-    const journeyId = await findUniqueId(baseId);
+    journeyId = await findUniqueId(baseId);
 
     await store.createJourney({
       id: journeyId,
       title: generated.title,
       description: generated.description,
       subtitle: generated.subtitle,
-      journeyType: payload.contentType ?? "core",
+      // Map the wizard's UI contentType to a valid DB journey_type.
+      // 'core' is a longer discipleship journey; everything else the wizard
+      // produces ('daily-devotional', 'sermon-companion', 'bible-study',
+      // 'prayer-journey', 'small-group') is a quick-study Walk.
+      journeyType: payload.contentType === "core" ? "core" : "walk",
       status: "Draft",
       tags: generated.tags,
       durationDays: generated.steps.length,
@@ -363,6 +455,31 @@ router.post("/journeys/ai-build", async (req: Request, res: Response) => {
       });
     }
 
+    // Restore durationDays: refreshJourneyDuration (called inside createStep) only
+    // counts Published steps, so Draft-only AI-built journeys end up with durationDays=0.
+    // Set it explicitly here after all steps are created.
+    await store.updateJourney(journeyId, { durationDays: generated.steps.length });
+
+    // Generate and save the Walk Introduction (introductionContent) — the plain-text
+    // welcome passage shown before Day 1. Fire-and-forget pattern: if it fails we
+    // still return the journey; the admin can write the intro manually.
+    try {
+      const introText = await generateWalkIntroduction(payload, generated.title);
+      if (introText) {
+        await store.updateJourney(journeyId, { introductionContent: introText });
+      }
+    } catch (introErr) {
+      console.warn("[journey-ai] Walk Introduction generation failed (non-fatal):", introErr);
+    }
+
+    await logAuditEvent({
+      contentType: "journey",
+      contentId: journeyId,
+      action: "create",
+      performedBy: callerId,
+      previousState: null,
+      newState: { id: journeyId, title: generated.title, status: "Draft", source: "ai-build", stepCount: generated.steps.length },
+    });
     buildInProgress.delete(dedupKey);
     res.status(201).json({
       journeyId,
@@ -372,8 +489,38 @@ router.post("/journeys/ai-build", async (req: Request, res: Response) => {
     });
   } catch (err: unknown) {
     buildInProgress.delete(dedupKey);
-    const msg = err instanceof Error ? err.message : "Journey generation failed";
-    res.status(500).json({ error: msg });
+
+    // Clean up a partially-created journey (steps failed mid-loop or intro errored
+    // before we returned 201). Avoids orphan Draft journeys accumulating in the admin.
+    if (journeyId) {
+      try {
+        const { pool: cleanupPool } = await import("@workspace/db");
+        await cleanupPool.query("DELETE FROM journey_steps WHERE journey_id=$1", [journeyId]);
+        await cleanupPool.query("DELETE FROM journeys WHERE id=$1", [journeyId]);
+        console.warn(`[journey-ai] Cleaned up orphan journey "${journeyId}" after build failure`);
+      } catch (cleanErr) {
+        console.error("[journey-ai] Failed to clean up orphan journey:", cleanErr);
+      }
+    }
+
+    // Surface OpenAI / upstream API errors with their actual status code and message
+    // rather than wrapping everything as a generic 500.
+    const apiStatus = (err as Record<string, unknown>)?.status;
+    const isUpstreamClientError =
+      typeof apiStatus === "number" && apiStatus >= 400 && apiStatus < 500;
+
+    const msg =
+      err instanceof Error
+        ? err.message
+        : "Journey generation failed — please try again";
+
+    if (isUpstreamClientError) {
+      console.error("[journey-ai] Upstream API error:", apiStatus, msg);
+      res.status(400).json({ error: `API error ${apiStatus}: ${msg}` });
+    } else {
+      console.error("[journey-ai] Generation error:", msg);
+      res.status(500).json({ error: msg });
+    }
   }
 });
 
@@ -382,6 +529,7 @@ router.post("/journeys/ai-build", async (req: Request, res: Response) => {
 router.post("/journeys/ai-block-action", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const { action, blockType, currentContent, journeyContext } = req.body as {
     action: string;
@@ -428,6 +576,7 @@ router.get("/journeys", async (_req: Request, res: Response) => {
 router.post("/journeys", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const { title, description = "", journeyType = "core", status = "Draft", ...rest } = req.body as Record<string, unknown>;
   if (!title || typeof title !== "string") {
@@ -464,6 +613,15 @@ router.post("/journeys", async (req: Request, res: Response) => {
       overloadExempt: rest.overloadExempt as boolean | undefined,
       pastorEdited: rest.pastorEdited as boolean | undefined,
       collectionId: rest.collectionId as string | undefined,
+      stepLabelPrefix: (rest.stepLabelPrefix as string | null | undefined) ?? undefined,
+    });
+    await logAuditEvent({
+      contentType: "journey",
+      contentId: journey.id,
+      action: "create",
+      performedBy: callerId,
+      previousState: null,
+      newState: { id: journey.id, title: journey.title, status: journey.status },
     });
     res.status(201).json(journey);
   } catch (err: unknown) {
@@ -485,84 +643,313 @@ router.get("/journeys/:id", async (req: Request, res: Response) => {
 router.patch("/journeys/:id", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const id = String(req.params["id"]);
+  const before = await store.getJourney(id);
   const updated = await store.updateJourney(id, req.body as Record<string, unknown>);
   if (!updated) { res.status(404).json({ error: "Journey not found" }); return; }
+
+  const reqStatus = (req.body as Record<string, unknown>).status as string | undefined;
+  let auditAction: "edit" | "publish" | "unpublish" | "archive" = "edit";
+  if (reqStatus) {
+    if (reqStatus === "Published" && before?.status !== "Published") auditAction = "publish";
+    else if (reqStatus === "Draft" && before?.status === "Published") auditAction = "unpublish";
+    else if (reqStatus === "Archived") auditAction = "archive";
+  }
+  await logAuditEvent({
+    contentType: "journey",
+    contentId: id,
+    action: auditAction,
+    performedBy: callerId,
+    previousState: before ? { id: before.id, title: before.title, status: before.status } : null,
+    newState: { id: updated.id, title: updated.title, status: updated.status },
+  });
+
   res.json(updated);
 });
 
 router.delete("/journeys/:id", async (req: Request, res: Response) => {
-  // Permanent deletion is restricted to Super Administrators only
-  const callerId = requireSuperAdmin(req, res);
-  if (!callerId) return;
-
   const id = String(req.params["id"]);
+  const isPermanent = (req.body as Record<string, unknown>)?.confirm === "PERMANENTLY_DELETE";
 
-  // In-memory dedup guard — prevent double-delete if button is clicked twice
-  const dedupeKey = `delete:${id}`;
-  if (deleteInProgress.has(dedupeKey)) {
-    res.status(409).json({ error: "A deletion is already in progress for this journey." });
-    return;
-  }
-  deleteInProgress.set(dedupeKey, Date.now());
-
-  try {
-    const adminEmail = req.headers["x-user-email"] as string ?? "";
-    const counts = await store.permanentDeleteJourney(id, callerId, adminEmail);
-    res.json({ ok: true, ...counts });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Deletion failed";
-    if (message === "Journey not found") {
-      res.status(404).json({ error: message });
-    } else {
-      console.error("[delete journey]", err);
-      res.status(500).json({ error: "Journey could not be deleted." });
+  if (isPermanent) {
+    // Permanent hard delete — Super Administrators only.
+    // Role is resolved server-side from user-role-store, never from headers.
+    const callerId = requireAuth(req, res);
+    if (!callerId) return;
+    if ((await getUserRole(callerId)) !== "superAdmin") {
+      res.status(403).json({ error: "Super admin access required for permanent deletion" });
+      return;
     }
-  } finally {
-    deleteInProgress.delete(dedupeKey);
+
+    const dedupeKey = `delete:${id}`;
+    if (deleteInProgress.has(dedupeKey)) {
+      res.status(409).json({ error: "A deletion is already in progress for this journey." });
+      return;
+    }
+    deleteInProgress.set(dedupeKey, Date.now());
+
+    try {
+      const adminEmail = req.user?.email ?? "";
+      // Use getJourneyIncludingDeleted so this works after a prior soft-delete.
+      const journeySnapshot = await store.getJourneyIncludingDeleted(id);
+
+      // Insert tombstone BEFORE deleting — prevents a resurrection window where
+      // the server restarts between the delete and the tombstone write.
+      // If the table doesn't exist yet (pre-migration first boot), this is non-fatal.
+      try {
+        const { pool: dbPool } = await import("@workspace/db");
+        await dbPool.query(
+          `INSERT INTO reseed_tombstones (journey_id, deleted_by) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [id, callerId],
+        );
+      } catch { /* non-fatal: table may not exist on very first boot */ }
+
+      const counts = await store.permanentDeleteJourney(id, callerId, adminEmail);
+
+      await logAuditEvent({
+        contentType: "journey",
+        contentId: id,
+        action: "permanent_delete",
+        performedBy: callerId,
+        previousState: journeySnapshot
+          ? { id: journeySnapshot.id, title: journeySnapshot.title, status: journeySnapshot.status }
+          : null,
+        newState: null,
+      });
+      res.json({ ok: true, ...counts });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Deletion failed";
+      if (message === "Journey not found") {
+        res.status(404).json({ error: message });
+      } else {
+        res.status(500).json({ error: "Journey could not be deleted." });
+      }
+    } finally {
+      deleteInProgress.delete(dedupeKey);
+    }
+  } else {
+    // Soft delete — requires admin or superAdmin (server-side verified).
+    const callerId = requireAuth(req, res);
+    if (!callerId) return;
+    if (!(await isAdmin(callerId))) {
+      res.status(403).json({ error: "Admin access required" });
+      return;
+    }
+
+    const journey = await store.getJourney(id);
+    if (!journey) { res.status(404).json({ error: "Journey not found" }); return; }
+
+    if (journey.status === "Published") {
+      res.status(400).json({
+        error: "Published journeys must be archived before deleting. Use POST /journeys/:id/archive first.",
+      });
+      return;
+    }
+
+    await store.softDeleteJourney(id);
+    await logAuditEvent({
+      contentType: "journey",
+      contentId: id,
+      action: "delete",
+      performedBy: callerId,
+      previousState: { id: journey.id, title: journey.title, status: journey.status },
+      newState: { deletedAt: new Date().toISOString() },
+    });
+    res.json({ ok: true });
   }
 });
 
 router.post("/journeys/:id/publish", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const id = String(req.params["id"]);
+  const before = await store.getJourney(id);
   const updated = await store.updateJourney(id, { status: "Published" });
   if (!updated) { res.status(404).json({ error: "Journey not found" }); return; }
+  await logAuditEvent({
+    contentType: "journey",
+    contentId: id,
+    action: "publish",
+    performedBy: callerId,
+    previousState: before ? { status: before.status } : null,
+    newState: { status: "Published" },
+  });
   res.json(updated);
 });
 
 router.post("/journeys/:id/archive", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const id = String(req.params["id"]);
+  const before = await store.getJourney(id);
   const updated = await store.updateJourney(id, { status: "Archived" });
   if (!updated) { res.status(404).json({ error: "Journey not found" }); return; }
+  await logAuditEvent({
+    contentType: "journey",
+    contentId: id,
+    action: "archive",
+    performedBy: callerId,
+    previousState: before ? { status: before.status } : null,
+    newState: { status: "Archived" },
+  });
   res.json(updated);
 });
 
 router.post("/journeys/:id/duplicate", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const copy = await store.duplicateJourney(String(req.params["id"]));
   if (!copy) { res.status(404).json({ error: "Journey not found" }); return; }
+  await logAuditEvent({
+    contentType: "journey",
+    contentId: copy.id,
+    action: "create",
+    performedBy: callerId,
+    previousState: null,
+    newState: { id: copy.id, title: copy.title, status: copy.status, source: "duplicate", sourceJourneyId: String(req.params["id"]) },
+  });
   res.status(201).json(copy);
+});
+
+// ─── Daily Rhythm day groups ─────────────────────────────────────────────────
+router.get("/journeys/:id/daily-rhythm-groups", async (req: Request, res: Response) => {
+  const callerId = requireAuth(req, res);
+  if (!callerId) return;
+  try {
+    const journey = await store.getJourney(String(req.params["id"]));
+    if (!journey || journey.journeyType !== "daily-rhythm") {
+      res.status(404).json({ error: "Daily Rhythm journey not found" });
+      return;
+    }
+    const adminAccess = await isAdmin(callerId);
+    if (!adminAccess && journey.status !== "Published") {
+      res.status(404).json({ error: "Daily Rhythm journey not found" });
+      return;
+    }
+    res.set("Cache-Control", "no-store");
+    res.json(await dailyRhythmGroups.listGroups(journey.id, !adminAccess));
+  } catch (err) {
+    console.error("GET daily rhythm groups failed", err);
+    res.status(500).json({ error: "Failed to fetch Daily Rhythm groups" });
+  }
+});
+
+router.post("/journeys/:id/daily-rhythm-groups", async (req: Request, res: Response) => {
+  const callerId = requireAuth(req, res);
+  if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+  if (!title) { res.status(400).json({ error: "title is required" }); return; }
+  try {
+    const group = await dailyRhythmGroups.createGroup(String(req.params["id"]), {
+      title,
+      description: typeof req.body.description === "string" ? req.body.description : "",
+      displayOrder: Number.isFinite(req.body.displayOrder) ? Number(req.body.displayOrder) : 0,
+    });
+    if (!group) { res.status(404).json({ error: "Daily Rhythm journey not found" }); return; }
+    res.status(201).json(group);
+  } catch (err) {
+    console.error("POST daily rhythm group failed", err);
+    res.status(500).json({ error: "Failed to create Daily Rhythm group" });
+  }
+});
+
+router.patch("/journeys/:id/daily-rhythm-groups/:groupId", async (req: Request, res: Response) => {
+  const callerId = requireAuth(req, res);
+  if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const data: Record<string, unknown> = {};
+  for (const key of ["title", "description", "status"]) {
+    if (req.body?.[key] !== undefined) data[key] = String(req.body[key]);
+  }
+  if (req.body?.displayOrder !== undefined && Number.isFinite(req.body.displayOrder)) {
+    data.display_order = Number(req.body.displayOrder);
+  }
+  if (data.status && !["Draft", "Published", "Archived"].includes(String(data.status))) {
+    res.status(400).json({ error: "Invalid group status" });
+    return;
+  }
+  try {
+    const group = await dailyRhythmGroups.updateGroup(String(req.params["id"]), String(req.params["groupId"]), data);
+    if (!group) { res.status(404).json({ error: "Group not found" }); return; }
+    res.json(group);
+  } catch (err) {
+    console.error("PATCH daily rhythm group failed", err);
+    res.status(500).json({ error: "Failed to update Daily Rhythm group" });
+  }
+});
+
+router.delete("/journeys/:id/daily-rhythm-groups/:groupId", async (req: Request, res: Response) => {
+  const callerId = requireAuth(req, res);
+  if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const deleted = await dailyRhythmGroups.deleteGroup(String(req.params["id"]), String(req.params["groupId"]));
+  if (!deleted) { res.status(404).json({ error: "Group not found" }); return; }
+  res.json({ ok: true });
+});
+
+router.put("/journeys/:id/daily-rhythm-groups/:groupId/items", async (req: Request, res: Response) => {
+  const callerId = requireAuth(req, res);
+  if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const stepIds = Array.isArray(req.body?.stepIds)
+    ? req.body.stepIds.filter((id: unknown): id is string => typeof id === "string")
+    : null;
+  if (!stepIds) { res.status(400).json({ error: "stepIds must be an array" }); return; }
+  try {
+    const group = await dailyRhythmGroups.replaceGroupItems(String(req.params["id"]), String(req.params["groupId"]), stepIds);
+    if (!group) { res.status(404).json({ error: "Group not found" }); return; }
+    res.json(group);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Server error";
+    res.status(message.includes("grouped day") ? 400 : 500).json({ error: message });
+  }
 });
 
 // ─── Steps (admin mutations require auth) ─────────────────────────────────────
 
 router.get("/journeys/:id/steps", async (req: Request, res: Response) => {
-  const steps = await store.listSteps(String(req.params["id"]));
+  res.set("Cache-Control", "no-store");
+  const journeyId = String(req.params["id"]);
+  const steps = await store.listSteps(journeyId);
+  const userId = resolveUserId(req);
+  const journey = await store.getJourney(journeyId);
+  const isDailyRhythm = journey?.journeyType === "daily-rhythm" || journey?.journeyType === "core";
+  if (isDailyRhythm) {
+    if (!userId) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+    const role = await getUserRole(userId);
+    if (role === "admin" || role === "superAdmin") {
+      // Do not read member progress for authoring requests. Admins need the
+      // complete authored catalogue, including future and Draft steps.
+      res.json({ steps });
+      return;
+    }
+    const progress = await store.getProgress(userId, journeyId);
+    const currentDay = progress?.currentDay ?? 1;
+    // Members can read every published day. The opening ledger remains the
+    // authority for today's assigned progression; it is not a content-visibility
+    // filter.
+    res.json({ steps: selectDailyRhythmSteps(steps, role, currentDay) });
+    return;
+  }
   res.json({ steps });
 });
 
 router.post("/journeys/:id/steps", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const journeyId = String(req.params["id"]);
   const { day, title = "", ...rest } = req.body as Record<string, unknown>;
@@ -570,20 +957,67 @@ router.post("/journeys/:id/steps", async (req: Request, res: Response) => {
     res.status(400).json({ error: "day (number) is required" });
     return;
   }
-  const step = await store.createStep(journeyId, { day: day as number, title: title as string, ...rest } as Parameters<typeof store.createStep>[1]);
+
+  // Upsert logic: if a step already exists at this day (e.g. a spurious
+  // non-completion step left over from the old Walk Complete bug), update it
+  // in-place rather than failing with a unique-constraint violation.
+  const existing = await store.getStep(journeyId, day as number);
+  let step;
+  if (existing) {
+    step = await store.updateStep(journeyId, day as number, { title: title as string, ...rest } as Parameters<typeof store.updateStep>[2]);
+    if (!step) {
+      res.status(404).json({ error: "Step not found after upsert" });
+      return;
+    }
+    await logAuditEvent({
+      contentType: "journey_step",
+      contentId: `${journeyId}:day:${step.day}`,
+      action: "edit",
+      performedBy: callerId,
+      previousState: { day: existing.day, title: existing.title, status: existing.status },
+      newState: { journeyId: step.journeyId, day: step.day, title: step.title, status: step.status },
+    });
+    res.status(200).json(step);
+    return;
+  }
+
+  step = await store.createStep(journeyId, { day: day as number, title: title as string, ...rest } as Parameters<typeof store.createStep>[1]);
+  await logAuditEvent({
+    contentType: "journey_step",
+    contentId: `${journeyId}:day:${step.day}`,
+    action: "create",
+    performedBy: callerId,
+    previousState: null,
+    newState: { journeyId: step.journeyId, day: step.day, title: step.title, status: step.status },
+  });
   res.status(201).json(step);
 });
 
 router.patch("/journeys/:id/steps/:day", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const journeyId = String(req.params["id"]);
   const day = parseInt(String(req.params["day"]), 10);
   if (isNaN(day)) { res.status(400).json({ error: "day must be a number" }); return; }
+  const stepBefore = await store.getStep(journeyId, day);
+
+  // The completion-step position and uniqueness invariant is enforced inside
+  // updateStep (store layer), using a live max-regular-day query that covers
+  // renumber payloads and draft steps. The route passes the body through unchanged.
+  const body = req.body as Parameters<typeof store.updateStep>[2];
   try {
-    const updated = await store.updateStep(journeyId, day, req.body as Parameters<typeof store.updateStep>[2]);
+    const updated = await store.updateStep(journeyId, day, body);
     if (!updated) { res.status(404).json({ error: "Step not found" }); return; }
+    await logAuditEvent({
+      contentType: "journey_step",
+      contentId: `${journeyId}:day:${day}`,
+      action: "edit",
+      performedBy: callerId,
+      previousState: stepBefore ? { day: stepBefore.day, title: stepBefore.title, status: stepBefore.status } : null,
+      newState: { day: updated.day, title: updated.title, status: updated.status },
+    });
     res.json(updated);
   } catch (err: unknown) {
     // Unique constraint violation (postgres code 23505) — day already exists in this journey
@@ -597,14 +1031,100 @@ router.patch("/journeys/:id/steps/:day", async (req: Request, res: Response) => 
   }
 });
 
+// ─── Bulk-generate display labels for all steps (admin only) ─────────────────
+
+router.post("/journeys/:id/steps/bulk-labels", async (req: Request, res: Response) => {
+  const callerId = requireAuth(req, res);
+  if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
+
+  const journeyId = String(req.params["id"]);
+  const { startDate, format, overwriteExisting } = req.body as {
+    startDate: string;
+    format: string;
+    overwriteExisting?: boolean;
+  };
+  if (!startDate || !format) {
+    res.status(400).json({ error: "startDate and format are required" });
+    return;
+  }
+
+  // Simple date-label formatter — token order matters (longer tokens first)
+  const MONTHS_LONG = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function formatDateLabel(date: Date, fmt: string): string {
+    const d = date.getUTCDate();
+    const m = date.getUTCMonth();
+    const y = date.getUTCFullYear();
+    return fmt
+      .replace("MMMM", MONTHS_LONG[m])
+      .replace("MMM",  MONTHS_SHORT[m])
+      .replace("YYYY", String(y))
+      .replace("DD",   String(d).padStart(2, "0"))
+      .replace("MM",   String(m + 1).padStart(2, "0"))
+      .replace("D",    String(d))
+      .replace("M",    String(m + 1));
+  }
+
+  try {
+    const allSteps = await store.listSteps(journeyId);
+    const orderedSteps = allSteps
+      .filter(s => !s.isCompletionStep)
+      .sort((a, b) => a.day - b.day);
+
+    const startTs = new Date(startDate);
+    const labels: Array<{ day: number; displayLabel: string }> = [];
+
+    orderedSteps.forEach((step, index) => {
+      if (!overwriteExisting && step.displayLabel?.trim()) return;
+      const date = new Date(startTs);
+      date.setUTCDate(date.getUTCDate() + index);
+      labels.push({ day: step.day, displayLabel: formatDateLabel(date, format) });
+    });
+
+    const updated = await store.bulkSetStepDisplayLabels(journeyId, labels);
+
+    await logAuditEvent({
+      contentType: "journey_step",
+      contentId: journeyId,
+      action: "edit",
+      performedBy: callerId,
+      previousState: null,
+      newState: { action: "bulk-labels", format, startDate, updated },
+    });
+
+    res.json({
+      updated,
+      previewFirst: labels[0]?.displayLabel ?? null,
+      previewLast:  labels[labels.length - 1]?.displayLabel ?? null,
+    });
+  } catch (err) {
+    console.error("POST /journeys/:id/steps/bulk-labels failed", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 router.delete("/journeys/:id/steps/:day", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const journeyId = String(req.params["id"]);
   const day = parseInt(String(req.params["day"]), 10);
   if (isNaN(day)) { res.status(400).json({ error: "day must be a number" }); return; }
-  await store.deleteStep(journeyId, day);
+
+  const stepBefore = await store.getStep(journeyId, day);
+  await store.softDeleteStep(journeyId, day);
+  if (stepBefore) {
+    await logAuditEvent({
+      contentType: "journey_step",
+      contentId: `${journeyId}:day:${day}`,
+      action: "delete",
+      performedBy: callerId,
+      previousState: { day: stepBefore.day, title: stepBefore.title, status: stepBefore.status },
+      newState: { deletedAt: new Date().toISOString() },
+    });
+  }
   res.json({ ok: true });
 });
 
@@ -613,20 +1133,57 @@ router.delete("/journeys/:id/steps/:day", async (req: Request, res: Response) =>
 router.post("/journeys/:id/progress/start", async (req: Request, res: Response) => {
   const userId = resolveUserId(req);
   if (!userId) { res.status(400).json({ error: "userId is required" }); return; }
-  const prog = await store.startJourney(userId, String(req.params["id"]));
+  const journey = await store.getJourney(String(req.params["id"]));
+  if (!journey || journey.status !== "Published") {
+    res.status(404).json({ error: "Published journey not found" });
+    return;
+  }
+  const requestedOrigin = req.body?.displayOrigin;
+  if (requestedOrigin !== undefined && store.parseJourneyDisplayOrigin(requestedOrigin) === null) {
+    res.status(400).json({ error: "displayOrigin must be walk or journey" });
+    return;
+  }
+  const prog = await store.startJourney(
+    userId,
+    String(req.params["id"]),
+    store.parseJourneyDisplayOrigin(requestedOrigin),
+  );
   res.json(prog);
 });
 
 router.post("/journeys/:id/progress/complete-step", async (req: Request, res: Response) => {
   const userId = resolveUserId(req);
   if (!userId) { res.status(400).json({ error: "userId is required" }); return; }
+  const journeyId = String(req.params["id"]);
   const { day, reflectionText } = req.body as { day: number; reflectionText?: string };
-  if (!day || typeof day !== "number") {
+  if (!Number.isInteger(day) || day < 0) {
     res.status(400).json({ error: "day is required" });
     return;
   }
-  const prog = await store.completeStep(userId, String(req.params["id"]), day, reflectionText);
-  res.json(prog);
+  try {
+    const prog = await store.completeStep(userId, journeyId, day, reflectionText);
+    const journey = await store.getJourney(journeyId);
+    const isDailyRhythm = journey?.journeyType === "daily-rhythm" || journey?.journeyType === "core";
+    if (!isDailyRhythm) {
+      res.json({ progress: prog });
+      return;
+    }
+
+    // Return the same server-authoritative opening decision that now reflects
+    // the committed completion. The client can update the gate in-place instead
+    // of clearing it and remounting the completion screen.
+    const startupSession = String(req.get("x-emmaus-startup-session") ?? "");
+    const dailyRhythmStartup = await store.getDailyRhythmStartup(userId, startupSession);
+    const dailyRhythmState = await store.getDailyRhythmState(userId);
+    res.json({ progress: prog, dailyRhythmStartup, dailyRhythmState });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not complete step";
+    if (message.includes("Daily Rhythm step is unavailable")) {
+      res.status(409).json({ error: message, code: "DAILY_RHYTHM_STEP_UNAVAILABLE" });
+      return;
+    }
+    res.status(500).json({ error: message });
+  }
 });
 
 // ─── Development-mode progress tools (self-only) ──────────────────────────────

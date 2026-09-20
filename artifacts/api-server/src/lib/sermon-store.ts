@@ -12,8 +12,10 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { logger } from "./logger.js";
+import { readArchiveState, writeArchiveState } from "./archive-state-store.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,6 +83,7 @@ export interface YoutubeVideoRecord {
   sermonStartConfidence?: number;
   sermonStartMethod?: "phrase" | "music-gap" | "duration-estimate";
   manualSermonStartSeconds?: number;
+  manualSermonEndSeconds?: number;
   sermonStartVerified?: boolean;
   finalSermonStartSeconds?: number; // = manualSermonStartSeconds ?? detectedSermonStartSeconds ?? 0
 
@@ -135,7 +138,7 @@ export type JobType =
   | "generate-audio"
   | "repair-timestamps"
   | "detect-sermon-starts";
-export type JobStatus = "queued" | "running" | "completed" | "failed" | "paused";
+export type JobStatus = "queued" | "running" | "completed" | "failed" | "paused" | "cancelled";
 
 export interface ImportJob {
   id: string;
@@ -148,15 +151,44 @@ export interface ImportJob {
     total: number;
     done: number;
     failed: number;
+    skipped?: number;
     currentItem?: string;
+    failures?: Array<{
+      itemId: string;
+      itemTitle?: string;
+      stage: string;
+      error: string;
+      at: string;
+    }>;
   };
   error?: string;
   options?: Record<string, unknown>;
 }
 
+export interface IndexingCheckpoint {
+  version: 1;
+  jobId: string;
+  videoIds: string[];
+  position: number;
+  completedVideoIds: string[];
+  completedCount: number;
+  remainingCount: number;
+  status: "running" | "paused";
+  pauseReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Storage paths ────────────────────────────────────────────────────────────
 
-const DATA_DIR = join(process.cwd(), "data", "sermons");
+// Resolve relative to this source file so the path is correct regardless of
+// which directory the Node process was launched from.
+// Dev:  pnpm runs from artifacts/api-server/ → process.cwd() = that dir ✓
+// Prod: node runs from workspace root        → process.cwd() = wrong dir ✗
+// import.meta.url always points at the compiled file inside dist/, so
+// join(__dir, "..", "data", "sermons") always resolves to the right place.
+const _storeDir = dirname(fileURLToPath(import.meta.url));
+const DATA_DIR = join(_storeDir, "..", "data", "sermons");
 const VIDEOS_FILE = join(DATA_DIR, "videos.json");
 const SEGMENTS_FILE = join(DATA_DIR, "segments.json");
 const JOBS_FILE = join(DATA_DIR, "jobs.json");
@@ -188,10 +220,43 @@ async function readJsonFile<T>(filePath: string, defaultValue: T): Promise<T> {
   }
 }
 
+// ─── Startup diagnostic ────────────────────────────────────────────────────────
+
+/**
+ * Log resolved paths and record counts so deployment logs can confirm whether
+ * sermon data is visible to the running server.  Called once from startup-migrations.
+ */
+export async function verifySermonStore(): Promise<void> {
+  const videosExist = existsSync(VIDEOS_FILE);
+  const segmentsExist = existsSync(SEGMENTS_FILE);
+  const [videos, segments] = await Promise.all([getAllVideos(), getAllSegments()]);
+
+  logger.info(
+    {
+      dataDir: DATA_DIR,
+      videosFile: VIDEOS_FILE,
+      segmentsFile: SEGMENTS_FILE,
+      videosExist,
+      segmentsExist,
+      totalVideos: videos.length,
+      approvedVideos: videos.filter(
+        (v) => v.reviewStatus === "approved" || v.reviewStatus === "auto-approved"
+      ).length,
+      totalSegments: segments.length,
+      source: "postgresql-with-file-migration-fallback",
+    },
+    "Sermon store diagnostic"
+  );
+}
+
 // ─── Video Records ────────────────────────────────────────────────────────────
 
 export async function getAllVideos(): Promise<YoutubeVideoRecord[]> {
-  return readJsonFile<YoutubeVideoRecord[]>(VIDEOS_FILE, []);
+  const durable = await readArchiveState<YoutubeVideoRecord[]>("videos");
+  if (durable) return durable;
+  const fromFile = await readJsonFile<YoutubeVideoRecord[]>(VIDEOS_FILE, []);
+  if (fromFile.length) await writeArchiveState("videos", fromFile);
+  return fromFile;
 }
 
 export async function getVideoById(id: string): Promise<YoutubeVideoRecord | null> {
@@ -248,6 +313,7 @@ export async function upsertVideo(
     };
     videos[idx] = merged;
     await atomicWrite(VIDEOS_FILE, videos);
+    await writeArchiveState("videos", videos);
     return merged;
   }
 
@@ -258,6 +324,7 @@ export async function upsertVideo(
   };
   videos.push(record);
   await atomicWrite(VIDEOS_FILE, videos);
+  await writeArchiveState("videos", videos);
   return record;
 }
 
@@ -272,13 +339,18 @@ export async function updateVideo(
   const updated = { ...videos[idx], ...patch } as YoutubeVideoRecord;
   videos[idx] = updated;
   await atomicWrite(VIDEOS_FILE, videos);
+  await writeArchiveState("videos", videos);
   return updated;
 }
 
 // ─── Segments ─────────────────────────────────────────────────────────────────
 
 export async function getAllSegments(): Promise<SermonSegment[]> {
-  return readJsonFile<SermonSegment[]>(SEGMENTS_FILE, []);
+  const durable = await readArchiveState<SermonSegment[]>("segments");
+  if (durable) return durable;
+  const fromFile = await readJsonFile<SermonSegment[]>(SEGMENTS_FILE, []);
+  if (fromFile.length) await writeArchiveState("segments", fromFile);
+  return fromFile;
 }
 
 export async function getSegmentsForVideo(videoId: string): Promise<SermonSegment[]> {
@@ -311,7 +383,9 @@ export async function replaceSegments(
     ...s,
     id: randomUUID(),
   }));
-  await atomicWrite(SEGMENTS_FILE, [...kept, ...created]);
+  const next = [...kept, ...created];
+  await atomicWrite(SEGMENTS_FILE, next);
+  await writeArchiveState("segments", next);
   return created;
 }
 
@@ -324,13 +398,18 @@ export async function updateSegment(
   if (idx >= 0) {
     segments[idx] = { ...segments[idx], ...patch } as SermonSegment;
     await atomicWrite(SEGMENTS_FILE, segments);
+    await writeArchiveState("segments", segments);
   }
 }
 
 // ─── Jobs ─────────────────────────────────────────────────────────────────────
 
 export async function getAllJobs(): Promise<ImportJob[]> {
-  return readJsonFile<ImportJob[]>(JOBS_FILE, []);
+  const durable = await readArchiveState<ImportJob[]>("jobs");
+  if (durable) return durable;
+  const fromFile = await readJsonFile<ImportJob[]>(JOBS_FILE, []);
+  if (fromFile.length) await writeArchiveState("jobs", fromFile);
+  return fromFile;
 }
 
 export async function getJob(id: string): Promise<ImportJob | null> {
@@ -358,6 +437,7 @@ export async function createJob(
   // Prune old completed/failed jobs beyond 50
   const pruned = jobs.slice(-50);
   await atomicWrite(JOBS_FILE, pruned);
+  await writeArchiveState("jobs", pruned);
   return job;
 }
 
@@ -374,7 +454,20 @@ export async function updateJob(
       updatedAt: new Date().toISOString(),
     } as ImportJob;
     await atomicWrite(JOBS_FILE, jobs);
+    await writeArchiveState("jobs", jobs);
   }
+}
+
+export async function getIndexingCheckpoint(): Promise<IndexingCheckpoint | null> {
+  return readArchiveState<IndexingCheckpoint>("indexing-checkpoint");
+}
+
+export async function saveIndexingCheckpoint(checkpoint: IndexingCheckpoint): Promise<void> {
+  await writeArchiveState("indexing-checkpoint", checkpoint);
+}
+
+export async function clearIndexingCheckpoint(): Promise<void> {
+  await writeArchiveState("indexing-checkpoint", null);
 }
 
 // ─── Stats ────────────────────────────────────────────────────────────────────

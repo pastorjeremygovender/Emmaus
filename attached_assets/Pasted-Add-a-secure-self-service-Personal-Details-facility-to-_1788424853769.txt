@@ -1,0 +1,251 @@
+Add a secure self-service Personal Details facility to the Emmaus user app.
+
+PURPOSE
+
+Users must be able to provide and update the information currently shown as “Not yet provided” in their administrator Church Register profile:
+
+* Phone
+* Physical address
+* Date of birth
+* ICC membership
+
+The authenticated email already exists and must remain connected to the person’s sign-in identity.
+
+USER LOCATION
+
+Add this under the existing user Profile/person icon:
+
+Profile → Personal Details
+
+Do not add another main navigation tab.
+
+Use the existing calm Emmaus design and make the form work cleanly on mobile.
+
+PAGE
+
+Title:
+
+Personal Details
+
+Introduction:
+
+Keep your details up to date so your church can care for and communicate with you appropriately. This information is private and is available only to you and authorised church administrators.
+
+FIELDS
+
+Preferred name
+
+* Show the existing preferred name.
+* Allow the user to update it only if the current profile model already supports safe self-editing.
+* Do not alter authentication identity.
+
+Email address
+
+* Display the authenticated email.
+* Read-only on this form.
+* Explain that the email is connected to their Emmaus account.
+* Do not create a new email-change flow in this task.
+
+Contact number
+
+* Optional text/tel input.
+* Mobile-friendly telephone keyboard.
+* Allow South African and international formats.
+* Trim unnecessary spaces while preserving a leading `+`.
+* Do not reject legitimate numbers through overly strict formatting.
+
+Physical address
+
+* Optional multiline input.
+* Allow ordinary South African address formatting.
+* Do not require location/GPS access.
+* Do not geocode the address.
+* Do not expose it in Groups or to other users.
+
+Date of birth
+
+* Optional date input.
+* Must not allow a future date.
+* Store and display the date consistently without timezone shifting it to the previous or next day.
+* Do not display age publicly.
+
+Are you a member of Isipingo Community Church?
+
+Options:
+
+* Yes
+* No
+* I’m not sure
+
+Until answered, the administrator profile must continue displaying “Not yet provided.”
+
+This answer is self-declared pastoral information only.
+
+It must never:
+
+* Grant administrator access
+* Grant Group Leadership
+* Grant audio/video meeting permission
+* Change authentication roles
+* Automatically create attendance expectations
+* Automatically add the user to a Group
+
+ACTIONS
+
+* Save changes
+* Cancel
+
+Save only when the user presses Save.
+
+Show a clear success confirmation without reloading the full application.
+
+If saving fails:
+
+* Preserve the entered values.
+* Show a calm error.
+* Do not partially display unsaved information as saved.
+
+PROFILE COMPLETION
+
+If one or more fields are missing, show a gentle “Complete your personal details” prompt inside Profile.
+
+* It must not block the app.
+* It must not open automatically every time the app starts.
+* It must not interfere with Daily Rhythm.
+* The user may dismiss it and complete the form later.
+* Do not place it permanently on Today’s Steps.
+
+PRIVACY AND AUTHORIZATION
+
+Enforce server-side that:
+
+* A user can read and edit only their own self-service fields.
+* A user cannot submit another person ID to edit someone else.
+* A user cannot alter email, roles, account status, church ID, pastoral roles, attendance, Group Leadership, media permissions or administrative fields through this endpoint.
+* Other ordinary users and Group members cannot see these personal details.
+* Authorised Church Administrators may continue viewing the fields through the existing Church Register profile.
+* Values must be validated and safely parameterized.
+* Do not expose these details in analytics, client logs, error messages or browser URLs.
+
+PERSISTENCE
+
+Inspect and reuse the existing profile fields already read by the administrator profile.
+
+Prefer the current `user_profiles`/person-profile mapping and existing API contracts.
+
+Do not create duplicate contact-information storage.
+
+Add a backward-compatible migration only if one of the required fields genuinely does not exist.
+
+Do not directly update production users during implementation.
+
+ADMIN SYNCHRONISATION
+
+After a user saves:
+
+* The same person’s Church Register profile must display the updated information.
+* No manual relinking or duplication may be required.
+* The update must remain attached to the correct authenticated identity.
+* Refreshing either user Profile or administrator profile must retain the values.
+* “ICC membership” must show Yes, No, I’m not sure, or Not yet provided accurately.
+
+AUDIT AND PRIVACY
+
+Record that the user updated their Personal Details using the existing audit system.
+
+For sensitive fields, record:
+
+* Acting user ID
+* Person/profile ID
+* Names of fields changed
+* Timestamp
+
+Do not duplicate the full phone number, physical address or date of birth into audit-log previous/new-value text unless the existing secure audit design explicitly requires and protects it.
+
+TESTS
+
+Add focused tests proving:
+
+1. Authenticated user can load their own Personal Details.
+2. User can save phone, address, date of birth and ICC membership.
+3. Saved values persist after refresh and sign-in.
+4. Administrator Church Register shows the same updated fields.
+5. One user cannot read or edit another user’s fields.
+6. Self-service submission cannot change email, roles, church, admin authority, Group Leadership or meeting permissions.
+7. ICC membership Yes does not grant permissions.
+8. Date of birth does not shift because of timezone conversion.
+9. Future dates are rejected.
+10. Optional blank fields remain allowed.
+11. Invalid values return a clear validation error without partial updates.
+12. Sensitive values do not appear in URLs or client logs.
+13. The completion prompt is non-blocking and dismissible.
+14. Daily Rhythm, Bible and ordinary navigation remain unchanged.
+15. Existing administrator person-profile tests remain green.
+
+PROTECTIONS
+
+Do not modify:
+
+* Daily Rhythm
+* Bible
+* Today’s Steps
+* Content Studio or authored content
+* Resource classification
+* Groups or meetings
+* Group Leadership permissions
+* Pastoral Briefing Rules
+* Attendance records or expectations
+* Church Register recovery
+* Authentication provider configuration
+* Production data directly
+* Deployment, DNS, secrets or environment variables
+* Unrelated type/test failures
+
+Before editing:
+
+* Confirm the current branch, commit and clean working state.
+* Create a local safety branch at the exact current commit:
+  `safety/pre-personal-details-2026-09-03`
+* Do not switch to it.
+* Record its commit ID.
+
+Run:
+
+* Personal Details API and UI tests
+* Profile identity/authorization tests
+* Administrator Church Register/profile tests
+* Auth identity tests
+* Member-flow regression tests
+* Frontend production build
+* API production build
+* Smoke tests
+* Mobile-width preview
+* Browser console check
+* `git diff --check`
+
+Manually verify using safe test accounts:
+
+* User enters and saves all four fields.
+* The same values appear on that user’s administrator profile.
+* Another user cannot view or modify them.
+* ICC membership does not change permissions.
+
+Create one local commit only after all required checks pass.
+
+Do not publish automatically.
+
+REPORT
+
+Provide:
+
+* Existing profile fields/storage reused
+* Any migration required
+* Exact self-editable field whitelist
+* Authorization enforcement
+* Privacy protections
+* Exact files changed
+* Tests/builds and totals
+* Confirmation that no roles, permissions, attendance or production records were changed during implementation
+* Safety branch and commit
+* New commit ID
+* READY FOR MANUAL PUBLISH or NOT READY

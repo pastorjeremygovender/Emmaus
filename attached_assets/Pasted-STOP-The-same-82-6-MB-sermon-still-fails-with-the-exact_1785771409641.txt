@@ -1,0 +1,186 @@
+STOP. The same 82.6 MB sermon still fails with the exact same production message:
+
+“Sermon audio is 82.6 MB and automatic compression failed.
+Please compress it to under 25 MB and upload again.”
+
+Therefore the large-audio fix is NOT working in the published application.
+
+Do not give me another general explanation. Diagnose the exact production request and fix the real execution path.
+
+==================================================
+1. TRACE THIS EXACT FAILED SERMON
+==================================================
+
+Find the canonical sermon record for the current “New Sermon” upload and trace the latest processing attempt.
+
+Report:
+
+- sermon ID
+- audio object-storage path
+- original file size
+- processing attempt timestamp
+- production deployment/commit handling the request
+- exact backend route called
+- exact server error and stack trace
+- whether ffmpeg resolution ran
+- resolved absolute ffmpeg path
+- whether compression started
+- ffmpeg exit code
+- ffmpeg stderr
+- compressed output path
+- compressed output size, if created
+- whether transcribeInChunks() was called
+- whether Whisper was called
+- the exact stage where execution stopped
+
+Do not infer. Use the actual production logs for this failed attempt.
+
+==================================================
+2. REMOVE THE OLD MANUAL-COMPRESSION FAILURE PATH
+==================================================
+
+Search the entire codebase for this text and every equivalent branch:
+
+“Please compress it to under 25 MB and upload again.”
+
+This must never be shown for a valid sermon audio upload.
+
+Remove or replace every legacy size-limit branch that bypasses automatic compression and chunking.
+
+There must be one production transcription function used by:
+
+- Process Sermon
+- Retry Processing
+- any direct transcription endpoint
+- any background processing worker
+
+All of them must call the same large-file-safe pipeline.
+
+==================================================
+3. VERIFY THE DEPLOYED FFMPEG BINARY
+==================================================
+
+The earlier diagnosis said production could not find ffmpeg.
+
+Prove that the current published runtime can execute it.
+
+At application startup or through a protected diagnostic:
+
+- resolve the absolute ffmpeg path
+- execute: ffmpeg -version
+- capture success/failure
+- log the absolute path and version
+- fail deployment clearly if ffmpeg is unavailable
+
+Do not rely on a development-shell PATH.
+
+Do not claim it is fixed merely because the source code contains resolver logic.
+
+==================================================
+4. MAKE COMPRESSION AND CHUNKING FAIL-SAFE
+==================================================
+
+Required processing logic:
+
+A. Download/read the original audio from persistent object storage.
+
+B. If original is under the safe API threshold:
+   - transcribe directly.
+
+C. If original exceeds the threshold:
+   - transcode to mono speech audio at an appropriate bitrate.
+   - verify the output exists.
+   - verify output size.
+   - verify duration is non-zero.
+
+D. If compressed output is still above the safe threshold:
+   - split it into sequential chunks under the threshold.
+   - transcribe every chunk in order.
+   - preserve or offset timestamps correctly.
+   - merge all transcript text.
+   - clean up temporary files.
+
+E. If compression itself fails:
+   - do not tell the admin to compress manually.
+   - automatically attempt direct chunking from the source using ffmpeg segmentation.
+   - only show a technical failure after both compression and chunking paths fail.
+
+F. Retry Processing must reuse the stored original audio.
+   - no re-upload required.
+
+==================================================
+5. FIX STALE ERROR STATE
+==================================================
+
+Confirm whether the page is showing an old processing_error saved in the database.
+
+When Retry Processing starts:
+
+- clear the previous processing_error
+- create a new processing attempt ID
+- reset the current stage
+- show fresh live progress
+- never display the previous error as if it came from the new attempt
+
+The UI must poll or stream the active processing attempt, not a stale sermon-level error.
+
+==================================================
+6. ADD REAL STAGE DETAILS
+==================================================
+
+The processing screen should show the actual stage:
+
+- Audio uploaded
+- Preparing audio
+- Compressing audio
+- Checking compressed size
+- Splitting into X parts, when needed
+- Transcribing part 1 of X
+- Combining transcript
+- Identifying sections and themes
+- Generating summary and keywords
+- Creating 5-Day Companion
+- Ready for review
+
+Do not label the entire audio-preparation process merely “Transcribing sermon audio.”
+
+==================================================
+7. TEST THE EXACT 82.6 MB FILE IN PRODUCTION
+==================================================
+
+Do not use a tiny test file.
+
+After fixing and publishing, retry the exact stored 82.6 MB sermon audio.
+
+Verify end to end:
+
+1. Original file is retrieved from App Storage.
+2. ffmpeg executes in production.
+3. Compression or chunking succeeds.
+4. Transcript is created.
+5. Theme/sections are created.
+6. Summary/keywords are created.
+7. 5-Day Companion is created.
+8. Review page opens.
+
+Do not report success until this exact sermon reaches Ready for Review in the published app.
+
+==================================================
+8. REPORT BACK WITH EVIDENCE
+==================================================
+
+Report:
+
+1. Exact root cause of this second failure.
+2. Whether the old error text existed in another code path.
+3. Resolved production ffmpeg path and version.
+4. Compression command used.
+5. Original size.
+6. Compressed size.
+7. Number of chunks, if any.
+8. Whisper calls completed.
+9. Production deployment/commit tested.
+10. Confirmation that the exact 82.6 MB sermon reached Ready for Review.
+
+Do not ask me to compress or re-upload the sermon.
+Use Retry Processing against the existing stored audio.

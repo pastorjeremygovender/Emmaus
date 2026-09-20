@@ -1,0 +1,223 @@
+Add separate audio-meeting and video-meeting permissions to the admin person profile.
+
+IMPORTANT PERMISSION RULE
+
+Every genuine authenticated Emmaus user may:
+
+* Create a Group
+* Become the owner/leader of the Group they create
+* Invite or admit members according to the existing Group flow
+* Start and use text-based Group discussions
+* Use the existing non-audio/video Group tools allowed to the Group owner or member role
+
+Text-based Groups must not require special Church Administrator authorization.
+
+The only church-wide media restrictions are:
+
+* Allow audio meetings
+* Allow video meetings
+
+Do not introduce or preserve any global permission that blocks ordinary users from creating or operating a text-based Group.
+
+ADMIN UI
+
+Inside:
+
+People → Person → Administrative Details → Group Leadership
+
+Replace the current single “Authorized Group Leader” meeting gate with:
+
+Text Groups
+Available to all Emmaus users. Users may create and lead their own text-based Groups.
+
+This is informational, not a toggle.
+
+Then add two independent administrator-controlled toggles:
+
+Allow audio meetings
+Can start and schedule audio-only Group meetings.
+
+Allow video meetings
+Can start and schedule Group meetings with video.
+
+Audio and video permissions must be independent:
+
+* Audio on, video off: may host audio-only meetings but not video meetings.
+* Audio off, video on: may host video meetings but not audio-only meetings.
+* Both on: may host both.
+* Both off: may still create and run text-based Groups normally.
+
+Do not automatically turn one permission on or off when the other changes.
+
+Church Administrators:
+
+* Automatically retain permission to host audio and video meetings.
+* Display this clearly in the interface.
+* Do not require redundant manual overrides for an automatically authorised Church Administrator.
+
+PERMISSION SCOPE
+
+These permissions control only whether a person may:
+
+* Create or schedule an audio-only meeting
+* Start an audio-only meeting
+* Create or schedule a video meeting
+* Start a video meeting
+* Generate host credentials or host tokens for the restricted meeting type
+* Change an existing text meeting into the restricted meeting type
+
+These permissions must not restrict:
+
+* Creating a Group
+* Text chat
+* Starting a text discussion
+* Group invitations
+* Group ownership
+* Ordinary non-media Group management
+* Joining another person’s audio/video meeting as a participant
+* Using microphone or camera as a participant after joining a meeting they did not host, subject to the meeting’s existing controls
+
+GROUP ROLES
+
+Continue using actual Group membership roles for owner, leader and member behaviour inside each Group.
+
+Do not confuse:
+
+* Group ownership/leadership within a specific Group
+* Church-wide permission to host audio
+* Church-wide permission to host video
+
+A user automatically becomes the appropriate owner/leader of a Group they create, without requiring either media permission.
+
+SERVER ENFORCEMENT
+
+Do not implement this through hidden buttons alone.
+
+Enforce audio and video host permissions server-side on every relevant route/action:
+
+* Schedule audio meeting
+* Start audio meeting
+* Generate audio host credentials
+* Schedule video meeting
+* Start video meeting
+* Generate video host credentials
+* Change meeting mode
+
+Return a clear permission-denied response for the restricted media type.
+
+Do not block text-based Group creation or discussion when media permission is denied.
+
+CLIENT BEHAVIOUR
+
+When creating or starting a meeting:
+
+* Text remains available to everyone who is otherwise entitled by their Group role.
+* Show Audio only when the person has audio-host permission.
+* Show Video only when the person has video-host permission.
+* If unavailable, show a calm explanation:
+
+  * Audio meetings have not been enabled for your account.
+  * Video meetings have not been enabled for your account.
+
+Do not show a generic “not a Group Leader” message for a person who owns or leads their own Group.
+
+PERSISTENCE
+
+Inspect the existing authorization model before changing it.
+
+Prefer the existing capability/permission storage if it supports separate media permissions safely.
+
+If a backward-compatible persistence change is required:
+
+* Add the smallest migration possible.
+* Do not directly modify production records.
+* Existing people previously authorised to start live meetings must retain both audio and video host permissions after migration.
+* Other existing users retain full text-based Group capability but begin with audio and video hosting disabled.
+* Church Administrators receive both permissions through administrator authority.
+* Do not delete the legacy authorization field until all existing consumers have been safely migrated away from it.
+* Stop using the legacy global field to block text Group creation or text discussions.
+
+AUDIT
+
+Record each audio/video permission change using the existing audit system:
+
+* Acting administrator
+* Person changed
+* Permission changed
+* Previous value
+* New value
+* Timestamp
+
+TESTS
+
+Add tests proving:
+
+1. An ordinary authenticated user can create a Group with both media permissions off.
+2. The creator becomes owner/leader of that Group.
+3. The creator can start and use text discussions.
+4. Group members can participate in text chat.
+5. Audio off prevents hosting audio but does not affect text.
+6. Video off prevents hosting video but does not affect text.
+7. Audio on/video off allows audio-only hosting.
+8. Audio off/video on allows video hosting but not audio-only hosting.
+9. Both on allows both meeting types.
+10. Church Administrators can host both automatically.
+11. Client manipulation cannot bypass server enforcement.
+12. A person without host permission may still join someone else’s authorised audio/video meeting as a participant.
+13. Existing authorised live-meeting leaders retain both permissions.
+14. Permission changes create correct audit entries.
+15. Existing Group ownership, invitation, membership, chat and meeting tests remain green.
+
+PROTECTIONS
+
+Do not modify:
+
+* Daily Rhythm lifecycle or reminders
+* Pastoral Briefing Rules
+* Resource classification
+* Bible
+* User-facing Today’s Steps
+* Existing Group membership or meeting data
+* Church Register recovery
+* Production data directly
+* Unrelated admin pages
+* Secrets, environment variables or dependencies
+
+Do not perform broad refactoring or unrelated test/type cleanup.
+
+Run:
+
+* Focused media-permission tests
+* Group creation/ownership tests
+* Text-chat tests
+* Meeting and identity/authority tests
+* Admin permission tests
+* Frontend and API production builds
+* Smoke tests
+* `git diff --check`
+
+Manually preview:
+
+* Ordinary user creating and using a text Group with both permissions off
+* Audio-only authorised account
+* Video-only authorised account
+* Church Administrator
+* Person-profile controls at desktop and mobile widths
+
+Create one local commit only after all checks pass.
+
+Do not publish automatically.
+
+Report:
+
+* Existing permission model found
+* How text Group access was protected for everyone
+* Persistence method
+* Backward compatibility for existing authorised meeting hosts
+* Server routes/actions protected
+* Exact files changed
+* Test/build results
+* Confirmation that text Groups remain available to ordinary users
+* Confirmation that participants may still join authorised meetings
+* New commit ID
+* READY FOR MANUAL PUBLISH or NOT READY

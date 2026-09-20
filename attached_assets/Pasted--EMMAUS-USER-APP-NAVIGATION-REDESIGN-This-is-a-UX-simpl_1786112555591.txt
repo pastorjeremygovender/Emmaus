@@ -1,0 +1,357 @@
+# EMMAUS USER APP NAVIGATION REDESIGN
+
+This is a UX simplification.
+
+The goal is NOT to add features.
+
+The goal is to make Emmaus feel effortless for someone who has never used it before.
+
+Preserve all existing functionality, progress, content and routing wherever possible.
+
+Do not redesign visual styling unnecessarily.
+
+Focus on simplifying navigation and user flow.
+
+--------------------------------------------------
+PRIMARY NAVIGATION
+--------------------------------------------------
+
+Replace the current bottom navigation with:
+
+1. Today's Steps
+2. My Bible
+3. Discover
+4. My Journey
+
+Rename:
+
+"Next Steps"
+
+to
+
+"Discover"
+
+throughout the user app.
+
+--------------------------------------------------
+TODAY'S STEPS
+--------------------------------------------------
+
+Today's Steps should answer one question:
+
+"What should I do today?"
+
+Keep this screen clean.
+
+Display cards in this order:
+
+1.
+10 Minutes with Jesus
+
+(always first)
+
+2.
+This Week's Sermon Companion
+
+(always second)
+
+This is a permanent card.
+
+If no sermon has been published this week display:
+
+"This week's Sermon Companion will appear here."
+
+Do not hide the card.
+
+3.
+Active Walks
+
+Display every active walk the user has started.
+
+Examples:
+
+Made Free
+
+Prayer
+
+Walking with God
+
+Continue where the user left off.
+
+Completed walks should disappear from Today's Steps.
+
+4.
+
+Discover More
+
+Instead of sending users to another "Next Steps" list,
+
+display a simple button:
+
+Discover More
+
+which opens Discover.
+
+--------------------------------------------------
+DISCOVER
+--------------------------------------------------
+
+Rename Next Steps to Discover.
+
+This screen is NOT a task list.
+
+It is a place to explore.
+
+Display sections:
+
+Featured
+
+Walks
+
+Journeys
+
+Daily Devotionals
+
+Bible Studies
+
+Recent Sermons
+
+Search
+
+Keep everything scrollable.
+
+Do not overload the screen.
+
+No unnecessary categories.
+
+--------------------------------------------------
+MY BIBLE
+--------------------------------------------------
+
+No major redesign.
+
+Keep existing functionality.
+
+--------------------------------------------------
+MY JOURNEY
+--------------------------------------------------
+
+This becomes the user's personal space.
+
+Sections:
+
+Continue
+
+Completed
+
+⭐ Favourites
+
+History
+
+--------------------------------------------------
+CONTINUE
+--------------------------------------------------
+
+Display everything currently in progress.
+
+Examples:
+
+Prayer
+
+Made Free
+
+Bible Study
+
+Daily Devotional
+
+Sermon Companion
+
+Continue opens exactly where the user stopped.
+
+--------------------------------------------------
+COMPLETED
+--------------------------------------------------
+
+Display completed content.
+
+Allow Review.
+
+Do not clutter Today's Steps with completed content.
+
+--------------------------------------------------
+FAVOURITES
+--------------------------------------------------
+
+Introduce a universal Favourites feature.
+
+Every content type should support a ⭐ button.
+
+Supported content:
+
+Bible verses
+
+Bible chapters
+
+Walks
+
+Journeys
+
+Daily Devotionals
+
+Bible Studies
+
+Sermon Companions
+
+Ask Emmaus responses
+
+Rooms
+
+Favourite behaviour:
+
+Tap ⭐ once
+
+Saved immediately
+
+Tap again
+
+Remove
+
+No confirmation dialog.
+
+No folders.
+
+No collections.
+
+No tags.
+
+Everything appears together inside:
+
+⭐ Favourites
+
+--------------------------------------------------
+HISTORY
+--------------------------------------------------
+
+Display recently viewed content.
+
+Examples:
+
+Recently opened sermon
+
+Bible chapter
+
+Walk
+
+Devotional
+
+Ask Emmaus conversation
+
+Newest first.
+
+--------------------------------------------------
+GLOBAL SEARCH
+--------------------------------------------------
+
+Create one global search.
+
+Searching:
+
+Prayer
+
+should return:
+
+Prayer Walk
+
+Prayer Bible Study
+
+Prayer devotionals
+
+Prayer sermons
+
+Bible passages
+
+Ask Emmaus conversations
+
+Do not separate searches by content type.
+
+--------------------------------------------------
+GENERAL UX PRINCIPLES
+--------------------------------------------------
+
+The user should never need to understand Emmaus' internal structure.
+
+They should only think:
+
+What should I do today?
+
+What do I want to explore?
+
+Where is my Bible?
+
+Where are my things?
+
+Every screen should answer one of those questions.
+
+--------------------------------------------------
+REMOVE UNNECESSARY COMPLEXITY
+--------------------------------------------------
+
+Do not introduce:
+
+Libraries
+
+Collections
+
+Folders
+
+Nested navigation
+
+Extra confirmation pages
+
+Multiple taps where one tap will do
+
+--------------------------------------------------
+KEEP EXISTING FEATURES
+--------------------------------------------------
+
+Preserve:
+
+Daily Rhythm
+
+Current progress
+
+Walk progress
+
+Journey progress
+
+Bible
+
+Sermon Companion
+
+Daily Devotionals
+
+Ask Emmaus
+
+Rooms
+
+Notifications
+
+Sharing
+
+Voice
+
+Do not delete any existing functionality.
+
+Simply reorganize it into the new navigation.
+
+--------------------------------------------------
+SUCCESS CRITERIA
+--------------------------------------------------
+
+A first-time user should understand the app within two minutes.
+
+Every screen should have one obvious purpose.
+
+Emmaus should feel like a companion, not a system.
+
+If a feature adds confusion, simplify it before adding new functionality.

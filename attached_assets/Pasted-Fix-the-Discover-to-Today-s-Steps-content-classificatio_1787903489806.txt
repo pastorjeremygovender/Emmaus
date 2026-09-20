@@ -1,0 +1,134 @@
+Fix the Discover-to-Today’s-Steps content classification and Journey enrollment behaviour.
+
+CURRENT BUG
+
+When a user opens a Journey from Discover and engages with one of the Walks inside it, the child Walk is being added to the Walks section on Today’s Steps.
+
+Example:
+Discover → Journeys → New Testament Bible Study → Luke
+
+Luke currently appears under Walks on Today’s Steps. This is incorrect.
+
+REQUIRED CONTENT RULES
+
+Content placement on Today’s Steps must be determined by the content’s actual parent relationship and origin:
+
+1. A genuinely standalone Walk must appear under Walks.
+2. A Walk that belongs to a Journey must never be added as a standalone Walk.
+3. When the user first meaningfully engages with a Walk inside a Journey, add or activate the parent Journey under Journeys on Today’s Steps.
+4. Display the parent Journey title on the Today’s Steps card, not the child Walk title.
+5. Do not add anything merely because the user opened or browsed a Journey.
+6. Engagement means the user actually starts, continues, or completes meaningful content within one of the Journey’s Walks.
+7. Do not create duplicate entries in both Journeys and Walks.
+
+EXAMPLES
+
+Discover → Journeys → Coming to Jesus → Who Is God?
+
+After the user engages with Who Is God?:
+- Add “Coming to Jesus” under Journeys on Today’s Steps.
+- Do not add “Who Is God?” under Walks.
+
+Discover → Journeys → New Testament Bible Study → Luke
+
+After the user engages with Luke:
+- Add “New Testament Bible Study” under Journeys on Today’s Steps.
+- Do not add “Luke” under Walks.
+
+Discover → Walks → a genuine standalone Walk
+
+After engagement:
+- Add that Walk under Walks on Today’s Steps.
+
+IMPLEMENTATION REQUIREMENTS
+
+Use the database relationship as the source of truth.
+
+Before creating or updating a Today’s Steps item, determine whether the engaged Walk has a valid parent Journey relationship, such as:
+- journey_id
+- parent_journey_id
+- journey_walk relationship
+- journey membership table
+
+Use the correct existing schema rather than inferring the relationship from the route, title, UI tab, or cached navigation state.
+
+If the Walk belongs to a Journey:
+- Create or update the user’s Journey enrollment/progress record.
+- Store the parent Journey ID as the Today’s Steps content ID.
+- Set the Today’s Steps classification/type to Journey.
+- Preserve the active child Walk ID separately as current_walk_id or equivalent for progress and resume behaviour.
+- Remove or suppress any Today’s Steps standalone-Walk record for that same child Walk.
+- Do not remove the user’s progress inside the Walk.
+
+If the Walk does not belong to a Journey:
+- Create or update the standalone Walk enrollment.
+- Classify it as Walk.
+- Display it under Walks.
+
+TODAY’S STEPS JOURNEY CARD
+
+The Journey card must display:
+- Journey title
+- Journey image, if available
+- Overall Journey progress
+- Current or next Walk information, if the existing design supports it
+
+When the Journey card is tapped:
+- Open the parent Journey overview.
+- Show all Walks belonging to that Journey.
+- Preserve the user’s progress in each Walk.
+- Visually indicate the current Walk.
+- Allow the user to resume the current Walk from there.
+
+Do not make the Journey card open the child Walk directly unless the user taps a clearly labelled Resume/Continue control.
+
+EXISTING INCORRECT DATA
+
+Add a safe reconciliation step for existing users:
+
+For every active Today’s Steps Walk record:
+1. Check whether the Walk belongs to a Journey.
+2. If it does, create or activate the parent Journey entry.
+3. Preserve the child Walk’s progress and save it as the Journey’s current Walk.
+4. Remove or deactivate only the incorrectly classified standalone Today’s Steps entry.
+5. Do not delete completed steps, notes, reflections, bookmarks, or progress.
+6. Do not create duplicate Journey entries if the parent Journey is already active.
+
+IMPORTANT
+
+This must work consistently:
+- In the published mobile PWA
+- In desktop browsers
+- After refreshing or reopening the app
+- When content is started from Discover
+- When resumed from Today’s Steps
+- For all existing and future Journeys
+
+Do not modify Daily Rhythm, Daily Devotional, Sermon Devotional, or other exempt content behaviour.
+
+After implementing, test these flows:
+
+A. Browse a Journey without engaging:
+Nothing appears on Today’s Steps.
+
+B. Engage with a Walk inside a Journey:
+Only the parent Journey appears under Journeys.
+
+C. Engage with a standalone Walk:
+Only the Walk appears under Walks.
+
+D. Engage with two Walks inside the same Journey:
+Only one Journey card appears.
+
+E. Engage with Walks from two different Journeys:
+Two separate Journey cards appear.
+
+F. Refresh and reopen the mobile PWA:
+Classification, progress, and resume behaviour remain correct.
+
+Report:
+- The original root cause
+- The database relationship used to identify Journey membership
+- Files and database logic changed
+- Whether existing incorrect records were reconciled
+- Results of all six tests

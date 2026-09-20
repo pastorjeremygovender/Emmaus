@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useLocation } from 'wouter';
 import type { ScriptureRef } from '@/lib/emmaus-client';
-import { bibleProvider } from '@/lib/bible-provider';
+import { formatScriptureReference, parseScriptureRef } from '@/lib/scripture-ref';
 
 interface ScriptureCardProps {
   scripture: ScriptureRef;
@@ -23,13 +23,21 @@ export function ScriptureCard({ scripture }: ScriptureCardProps) {
   const [unavailable, setUnavailable] = useState(false);
 
   function handleOpen() {
-    const bookId = scripture.book.toLowerCase().replace(/\s+/g, '-');
-    if (!bibleProvider.supportsBook(bookId)) {
+    const parsed = parseScriptureRef(scripture.reference) ??
+      parseScriptureRef(`${scripture.book} ${scripture.chapter}`);
+    if (!parsed) {
       setUnavailable(true);
       return;
     }
-    setLocation(`/bible/read/${bookId}/${scripture.chapter}`);
+    const startVerse = scripture.verseStart ?? parsed.startVerse;
+    const endVerse = scripture.verseEnd ?? parsed.endVerse;
+    const verse = startVerse
+      ? `?startVerse=${startVerse}${endVerse && endVerse >= startVerse ? `&endVerse=${endVerse}` : ''}`
+      : '';
+    setLocation(`/bible/read/${parsed.bookId}/${parsed.chapter}${verse}`);
   }
+
+  const displayReference = formatScriptureReference(scripture);
 
   return (
     <Card className="border-primary/20 bg-primary/5">
@@ -44,11 +52,11 @@ export function ScriptureCard({ scripture }: ScriptureCardProps) {
           <p className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-1">
             Scripture
           </p>
-          <p className="text-[16px] font-sans font-medium text-foreground">
-            {scripture.reference}
+          <p className="text-[16px] font-sans font-medium text-foreground break-words">
+            {displayReference}
           </p>
           {scripture.displayText && (
-            <p className="text-[14px] text-muted-foreground mt-1 leading-relaxed">
+            <p className="text-[14px] text-muted-foreground mt-1 leading-relaxed break-words">
               {scripture.displayText}
             </p>
           )}

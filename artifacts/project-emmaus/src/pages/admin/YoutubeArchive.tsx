@@ -7,10 +7,12 @@ import {
 import {
   getArchiveStatus, syncChannel, listVideos, getVideo, updateVideo,
   processVideo, getSegments, listJobs, startOAuthFlow, disconnectOAuth,
-  runPipeline, runEnrichment, formatDuration, formatTimestamp,
+  runPipeline, startSafeIndexingBatch, resumeSafeIndexing, getIndexingCheckpoint,
+  runEnrichment, cancelArchiveJob, formatDuration, formatTimestamp,
   detectSermonStarts, repairTimestamps, generateAudio, getAudioStreamUrl,
-  type ArchiveStatus, type VideoRecord, type SermonSegment, type ImportJob,
+  type ArchiveStatus, type VideoRecord, type SermonSegment, type ImportJob, type IndexingCheckpoint,
 } from '@/lib/youtube-archive-api';
+import { getPublicOrigin, getApiBase } from '@/lib/api';
 
 // ─── Shared mini-components ──────────────────────────────────────────────────
 
@@ -153,7 +155,7 @@ function ConnectionPanel({
         <div className="rounded-md bg-gray-50 border border-gray-200 px-3 py-2">
           <p className="text-[11px] font-medium text-gray-500 mb-1">Authorized redirect URI (must match Google Cloud Console exactly)</p>
           <code className="text-[11px] text-gray-700 break-all select-all">
-            {window.location.origin.replace(/:\d+$/, '')}/api/youtube-archive/oauth/callback
+            {getPublicOrigin()}/api/youtube-archive/oauth/callback
           </code>
         </div>
       )}
@@ -181,6 +183,7 @@ function VideoDetail({
   const [editDate, setEditDate] = useState('');
   const [editSeries, setEditSeries] = useState('');
   const [editSermonStart, setEditSermonStart] = useState('');
+  const [editSermonEnd, setEditSermonEnd] = useState('');
   const [savingSermonStart, setSavingSermonStart] = useState(false);
   const [generatingAudio, setGeneratingAudio] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -194,6 +197,7 @@ function VideoDetail({
       setEditDate(v.sermonDate ?? '');
       setEditSeries(v.series ?? '');
       setEditSermonStart(v.manualSermonStartSeconds !== undefined ? String(v.manualSermonStartSeconds) : '');
+      setEditSermonEnd(v.manualSermonEndSeconds !== undefined ? String(v.manualSermonEndSeconds) : String(v.durationSeconds));
       const segs = await getSegments(videoId);
       setSegments(segs.segments);
     } catch (e) {
@@ -235,7 +239,11 @@ function VideoDetail({
     setSavingSermonStart(true);
     try {
       const seconds = editSermonStart ? parseInt(editSermonStart, 10) : undefined;
-      await updateVideo(video.id, { manualSermonStartSeconds: seconds, sermonStartVerified: true });
+      const end = editSermonEnd ? parseInt(editSermonEnd, 10) : undefined;
+      if (seconds === undefined || !Number.isFinite(seconds) || seconds < 0 || (end !== undefined && (!Number.isFinite(end) || end <= seconds || end > video.durationSeconds))) {
+        throw new Error('Please set a valid range: start must be before the end and both must fit inside the video.');
+      }
+      await updateVideo(video.id, { manualSermonStartSeconds: seconds, manualSermonEndSeconds: end, sermonStartVerified: true });
       await load();
       onUpdated();
     } catch (e) {
@@ -424,7 +432,11 @@ function VideoDetail({
             className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white rounded text-[13px] hover:bg-teal-700 transition-colors disabled:opacity-50 ml-auto"
           >
             {processing ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
-            {processing ? 'Processing…' : 'Import Captions & Segment'}
+            {processing
+              ? 'Processing…'
+              : video.transcriptStatus === 'failed'
+                ? 'Retry Caption Import'
+                : 'Import Captions & Segment'}
           </button>
         </div>
 
@@ -500,6 +512,50 @@ function VideoDetail({
           </div>
         )}
 
+        <div className="rounded-lg border border-violet-100 bg-violet-50/50 p-3 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-[12px] font-medium text-gray-700">Mark the sermon section</div>
+              <div className="text-[11px] text-gray-500">Drag the handles to set where the sermon starts and ends in the service.</div>
+            </div>
+            <div className="text-[12px] font-mono text-violet-700 whitespace-nowrap">
+              {formatTimestamp(parseInt(editSermonStart || '0', 10))} – {formatTimestamp(parseInt(editSermonEnd || String(video.durationSeconds), 10))}
+            </div>
+          </div>
+          <label className="block">
+            <span className="flex justify-between text-[11px] text-gray-500 mb-1">
+              <span>Start · {formatTimestamp(parseInt(editSermonStart || '0', 10))}</span>
+              <span>0:00 – {formatDuration(video.durationSeconds)}</span>
+            </span>
+            <input
+              type="range"
+              min="0"
+              max={video.durationSeconds}
+              step="1"
+              value={Math.min(video.durationSeconds, Math.max(0, parseInt(editSermonStart || '0', 10)))}
+              onChange={(e) => setEditSermonStart(e.target.value)}
+              className="w-full accent-violet-600"
+              aria-label="Sermon start"
+            />
+          </label>
+          <label className="block">
+            <span className="flex justify-between text-[11px] text-gray-500 mb-1">
+              <span>End · {formatTimestamp(parseInt(editSermonEnd || String(video.durationSeconds), 10))}</span>
+              <span>{formatDuration(video.durationSeconds)}</span>
+            </span>
+            <input
+              type="range"
+              min="1"
+              max={video.durationSeconds}
+              step="1"
+              value={Math.min(video.durationSeconds, Math.max(1, parseInt(editSermonEnd || String(video.durationSeconds), 10)))}
+              onChange={(e) => setEditSermonEnd(e.target.value)}
+              className="w-full accent-violet-600"
+              aria-label="Sermon end"
+            />
+          </label>
+        </div>
+
         <div className="flex items-center gap-2 flex-wrap">
           <input
             type="number"
@@ -509,6 +565,17 @@ function VideoDetail({
             placeholder="Seconds"
             value={editSermonStart}
             onChange={(e) => setEditSermonStart(e.target.value)}
+          />
+          <input
+            type="number"
+            min="1"
+            max={video.durationSeconds}
+            step="1"
+            className="border border-gray-200 rounded px-2 py-1.5 text-[13px] w-28 focus:outline-none focus:ring-1 focus:ring-teal-400"
+            placeholder="End seconds"
+            value={editSermonEnd}
+            onChange={(e) => setEditSermonEnd(e.target.value)}
+            aria-label="Sermon end seconds"
           />
           <button
             onClick={handleSaveSermonStart}
@@ -640,6 +707,9 @@ export default function YoutubeArchive() {
   const [pipelining, setPipelining] = useState(false);
   const [pipelineJobId, setPipelineJobId] = useState<string | null>(null);
   const [pipelineJob, setPipelineJob] = useState<ImportJob | null>(null);
+  const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
+  const [checkpoint, setCheckpoint] = useState<IndexingCheckpoint | null>(null);
+  const [showFullRebuild, setShowFullRebuild] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [enrichJobId, setEnrichJobId] = useState<string | null>(null);
   const [enrichJob, setEnrichJob] = useState<ImportJob | null>(null);
@@ -653,6 +723,7 @@ export default function YoutubeArchive() {
   const [videosLoading, setVideosLoading] = useState(false);
   const [filterReview, setFilterReview] = useState<string>('');
   const [filterContent, setFilterContent] = useState<string>('');
+  const [showFailedOnly, setShowFailedOnly] = useState(false);
   const [filterTimingReview, setFilterTimingReview] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -670,12 +741,17 @@ export default function YoutubeArchive() {
     }
   }, []);
 
+  const loadCheckpoint = useCallback(async () => {
+    try { setCheckpoint((await getIndexingCheckpoint()).checkpoint); } catch { setCheckpoint(null); }
+  }, []);
+
   const loadVideos = useCallback(async () => {
     setVideosLoading(true);
     try {
       const result = await listVideos({
         reviewStatus: filterReview as VideoRecord['reviewStatus'] || undefined,
         contentType: filterContent as VideoRecord['contentType'] || undefined,
+        transcriptStatus: showFailedOnly ? 'failed' : undefined,
       });
       setVideos(result.videos);
       setVideosTotal(result.total);
@@ -684,7 +760,7 @@ export default function YoutubeArchive() {
     } finally {
       setVideosLoading(false);
     }
-  }, [filterReview, filterContent]);
+  }, [filterReview, filterContent, showFailedOnly]);
 
   const loadJobs = useCallback(async () => {
     try {
@@ -696,6 +772,7 @@ export default function YoutubeArchive() {
   }, []);
 
   useEffect(() => { loadStatus(); }, [loadStatus]);
+  useEffect(() => { loadCheckpoint(); }, [loadCheckpoint]);
   useEffect(() => { if (view === 'videos') loadVideos(); }, [view, loadVideos]);
   useEffect(() => { loadJobs(); }, [loadJobs]);
 
@@ -766,15 +843,43 @@ export default function YoutubeArchive() {
     }
   };
 
-  const handleRunPipeline = async () => {
+  const handleSafeBatch = async (resume = false) => {
     setPipelining(true);
     setPipelineJob(null);
     try {
-      const result = await runPipeline();
+      const result = resume ? await resumeSafeIndexing() : await startSafeIndexingBatch();
       setPipelineJobId(result.jobId);
     } catch (e) {
       setPipelining(false);
       setStatusError(String(e));
+    }
+  };
+
+  const handleFullRebuild = async () => {
+    if (!confirm('This may re-request captions and rebuild completed sermons. Continue only for an intentional full rebuild?')) return;
+    setPipelining(true);
+    setPipelineJob(null);
+    try {
+      const result = await runPipeline(true);
+      setPipelineJobId(result.jobId);
+    } catch (e) {
+      setPipelining(false);
+      setStatusError(String(e));
+    }
+  };
+
+  const handleCancelJob = async (job: ImportJob) => {
+    if (!confirm('Stop this pipeline? The current video may finish, then the job will stop. Completed videos will be kept and safe indexing can be resumed later.')) return;
+    setCancellingJobId(job.id);
+    try {
+      const result = await cancelArchiveJob(job.id);
+      setPipelineJob(result.job);
+      setPipelining(false);
+      await Promise.all([loadJobs(), loadCheckpoint(), loadStatus()]);
+    } catch (e) {
+      setStatusError(String(e));
+    } finally {
+      setCancellingJobId(null);
     }
   };
 
@@ -812,6 +917,16 @@ export default function YoutubeArchive() {
     }
   };
 
+  const handleReviewStatus = async (video: VideoRecord, reviewStatus: 'approved' | 'rejected') => {
+    try {
+      await updateVideo(video.id, { reviewStatus });
+      setVideos((current) => current.map((item) => item.id === video.id ? { ...item, reviewStatus } : item));
+      await loadStatus();
+    } catch (e) {
+      setStatusError(String(e));
+    }
+  };
+
   // Poll while pipeline is running
   useEffect(() => {
     if (!pipelineJobId || !pipelining) return;
@@ -820,18 +935,19 @@ export default function YoutubeArchive() {
       const job = result.jobs.find((j: ImportJob) => j.id === pipelineJobId);
       if (job) {
         setPipelineJob(job);
-        if (job.status === 'completed' || job.status === 'failed') {
+        if (job.status === 'completed' || job.status === 'failed' || job.status === 'paused') {
           setPipelining(false);
           clearInterval(interval);
           await loadStatus();
           await loadJobs();
           if (view === 'videos') await loadVideos();
+          await loadCheckpoint();
         }
       }
       setJobs(result.jobs.slice(0, 10));
     }, 3000);
     return () => clearInterval(interval);
-  }, [pipelineJobId, pipelining, view, loadStatus, loadJobs, loadVideos]);
+  }, [pipelineJobId, pipelining, view, loadStatus, loadJobs, loadVideos, loadCheckpoint]);
 
   // Poll while enrichment is running
   useEffect(() => {
@@ -854,6 +970,7 @@ export default function YoutubeArchive() {
   }, [enrichJobId, enriching, loadStatus, loadJobs]);
 
   const filteredVideos = videos.filter((v) => {
+    if (showFailedOnly && v.transcriptStatus !== 'failed') return false;
     if (filterTimingReview) {
       // Needs review = approved/transcribed but no detection, OR low confidence and unverified
       const isApproved = v.reviewStatus === 'approved' || v.reviewStatus === 'auto-approved';
@@ -994,15 +1111,35 @@ export default function YoutubeArchive() {
                       <Pill label={v.transcriptStatus} color={transcriptColor(v.transcriptStatus)} />
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <a
-                        href={v.youtubeUrl}
-                        target="_blank"
-                        rel="noopener"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-gray-400 hover:text-gray-700 inline-flex"
-                      >
-                        <ExternalLink size={14} />
-                      </a>
+                      <div className="inline-flex items-center gap-2">
+                        {v.reviewStatus === 'pending' && (
+                          <>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleReviewStatus(v, 'approved'); }}
+                              className="text-green-600 hover:text-green-800 text-[11px] font-medium"
+                              title="Approve as sermon"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleReviewStatus(v, 'rejected'); }}
+                              className="text-red-500 hover:text-red-700 text-[11px] font-medium"
+                              title="Reject video"
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        <a
+                          href={v.youtubeUrl}
+                          target="_blank"
+                          rel="noopener"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-gray-400 hover:text-gray-700 inline-flex"
+                        >
+                          <ExternalLink size={14} />
+                        </a>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1017,6 +1154,9 @@ export default function YoutubeArchive() {
   // ── Dashboard view ────────────────────────────────────────────────────────
 
   const activeJob = jobs.find((j) => j.status === 'running' || j.status === 'queued');
+  const activePipelineJob = jobs.find((j) =>
+    (j.status === 'running' || j.status === 'queued') && j.type === 'pipeline-run'
+  );
 
   return (
     <div className="p-6 lg:p-8 max-w-5xl space-y-6">
@@ -1122,20 +1262,54 @@ export default function YoutubeArchive() {
         <div>
           <div className="font-semibold text-[14px] text-gray-800">Sermon Indexing Pipeline</div>
           <p className="text-[12px] text-gray-500 mt-1">
-            Auto-approves all sermon-classified videos by Pastor Jeremy Govender, downloads captions,
-            splits transcripts into timestamped segments, and builds the search index for Ask Emmaus.
+            Processes only videos you have approved, downloads captions, splits transcripts into
+            timestamped segments, and builds the search index for Ask Emmaus.
           </p>
         </div>
 
         {/* Pipeline progress */}
+        {checkpoint?.status === 'paused' && !pipelining && (
+          <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4 space-y-2">
+            <div className="flex items-center gap-2 text-[14px] text-amber-900 font-semibold">
+              <AlertCircle size={16} /> Indexing paused — resumable checkpoint saved
+            </div>
+            <div className="text-[12px] text-amber-800">
+              Position {checkpoint.position + 1} of {checkpoint.videoIds.length} · {checkpoint.completedCount} completed · {checkpoint.remainingCount} remaining
+            </div>
+            <div className="text-[12px] text-amber-800">
+              Pause reason: {checkpoint.pauseReason || 'Quota or service limit reached'}
+            </div>
+            <button onClick={() => handleSafeBatch(true)} className="mt-1 flex items-center gap-2 px-4 py-2 bg-amber-700 text-white rounded-lg text-[13px] font-medium hover:bg-amber-800">
+              <Play size={14} /> Resume Indexing
+            </button>
+          </div>
+        )}
+        {!checkpoint && !pipelining && (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-[12px] text-gray-600">
+            No resumable checkpoint exists. Start Safe Indexing Batch.
+          </div>
+        )}
         {pipelining && pipelineJob && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1.5">
-            <div className="flex items-center gap-2 text-[13px] text-blue-800 font-medium">
-              <Loader2 size={14} className="animate-spin" />
-              Indexing sermons…
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-[13px] text-blue-800 font-medium">
+                <Loader2 size={14} className="animate-spin" />
+                Indexing sermons…
+              </div>
+              {(pipelineJob.status === 'running' || pipelineJob.status === 'queued') && (
+                <button
+                  onClick={() => handleCancelJob(pipelineJob)}
+                  disabled={cancellingJobId === pipelineJob.id}
+                  className="flex items-center gap-1.5 px-2.5 py-1 border border-red-300 text-red-700 rounded-md text-[12px] font-medium hover:bg-red-50 disabled:opacity-50"
+                >
+                  {cancellingJobId === pipelineJob.id ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
+                  Stop
+                </button>
+              )}
             </div>
             <div className="text-[12px] text-blue-700">
               {pipelineJob.progress.done} / {pipelineJob.progress.total} processed
+              {pipelineJob.progress.skipped ? ` · ${pipelineJob.progress.skipped} already complete` : ''}
               {pipelineJob.progress.failed ? ` · ${pipelineJob.progress.failed} failed` : ''}
             </div>
             {pipelineJob.progress.currentItem && (
@@ -1143,6 +1317,22 @@ export default function YoutubeArchive() {
                 {pipelineJob.progress.currentItem}
               </div>
             )}
+          </div>
+        )}
+        {!pipelining && activePipelineJob && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-[13px] text-blue-800 font-medium">
+              <Loader2 size={14} className="animate-spin" />
+              Indexing pipeline is still running ({activePipelineJob.progress.done}/{activePipelineJob.progress.total})
+            </div>
+            <button
+              onClick={() => handleCancelJob(activePipelineJob)}
+              disabled={cancellingJobId === activePipelineJob.id}
+              className="flex items-center gap-1.5 px-2.5 py-1 border border-red-300 text-red-700 rounded-md text-[12px] font-medium hover:bg-red-50 disabled:opacity-50"
+            >
+              {cancellingJobId === activePipelineJob.id ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
+              Stop
+            </button>
           </div>
         )}
 
@@ -1165,6 +1355,15 @@ export default function YoutubeArchive() {
             {pipelineJob.progress.currentItem && (
               <div className="text-[12px] text-green-700">{pipelineJob.progress.currentItem}</div>
             )}
+            {!!pipelineJob.progress.failures?.length && (
+              <div className="mt-2 space-y-1 text-[11px] text-red-700">
+                {pipelineJob.progress.failures.map((failure) => (
+                  <div key={`${failure.itemId}-${failure.at}`}>
+                    <strong>{failure.itemTitle || failure.itemId}:</strong> {failure.error}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -1179,15 +1378,38 @@ export default function YoutubeArchive() {
 
         <div className="flex gap-3 items-center flex-wrap">
           <button
-            onClick={handleRunPipeline}
+            onClick={() => handleSafeBatch(false)}
             disabled={pipelining || enriching || !status?.oauth.connected}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-[13px] font-medium hover:bg-indigo-700 transition-colors disabled:opacity-40"
           >
             {pipelining
               ? <><Loader2 size={14} className="animate-spin" /> Running…</>
-              : <><Play size={14} /> Run Full Indexing Pipeline</>
+              : <><Play size={14} /> Start Safe Indexing Batch</>
             }
           </button>
+          {!pipelining && (pipelineJob?.progress.failures?.length || (status?.stats.failedImports ?? 0) > 0) ? (
+            <button
+              onClick={() => handleSafeBatch(false)}
+              disabled={enriching || !status?.oauth.connected}
+              className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-700 rounded-lg text-[13px] hover:bg-red-50 transition-colors disabled:opacity-40"
+            >
+              <RefreshCw size={14} /> Retry Failed
+            </button>
+          ) : null}
+          <button
+            onClick={() => setShowFullRebuild((value) => !value)}
+            className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-500 rounded-lg text-[12px] hover:bg-gray-50"
+          >
+            <ChevronRight size={13} className={showFullRebuild ? 'rotate-90' : ''} /> Advanced
+          </button>
+          {(status?.stats.failedImports ?? 0) > 0 && (
+            <button
+              onClick={() => { setShowFailedOnly(true); setView('videos'); }}
+              className="flex items-center gap-2 px-4 py-2 border border-amber-300 text-amber-800 rounded-lg text-[13px] hover:bg-amber-50 transition-colors"
+            >
+              <AlertCircle size={14} /> View Failed Items ({status.stats.failedImports})
+            </button>
+          )}
           <button
             onClick={handleRunEnrichment}
             disabled={pipelining || enriching || !status?.oauth.connected}
@@ -1203,10 +1425,20 @@ export default function YoutubeArchive() {
           )}
           {status?.oauth.connected && !pipelining && !enriching && (
             <span className="text-[12px] text-gray-400">
-              {status.stats.pendingReview} pending · {status.stats.approvedSermons} approved · {status.stats.segmentsCreated} segments indexed
+              {status.stats.pendingReview} pending · {status.stats.approvedSermons} approved · {status.stats.segmentsCreated} persisted segments
             </span>
           )}
         </div>
+
+        {showFullRebuild && (
+          <div className="border border-red-200 bg-red-50 rounded-lg p-3 text-[12px] text-red-800 space-y-2">
+            <strong>Advanced full rebuild</strong>
+            <p>This may re-request captions and reprocess completed sermons. Use only for deliberate maintenance; normal indexing must use the safe batch.</p>
+            <button onClick={handleFullRebuild} disabled={pipelining || enriching || !status?.oauth.connected} className="px-3 py-1.5 border border-red-300 rounded text-red-700 hover:bg-red-100 disabled:opacity-40">
+              Confirm and Run Full Rebuild
+            </button>
+          </div>
+        )}
 
         {/* Enrichment progress */}
         {enriching && enrichJob && (

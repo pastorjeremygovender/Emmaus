@@ -8,6 +8,7 @@
 import { db, pool } from "@workspace/db";
 import { randomUUID } from "node:crypto";
 import { logger } from "./logger.js";
+import { syncKnowledgeIndexForSermon } from "./sermon-knowledge-index.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,8 @@ export interface CompanionEntry {
   closing: string;
   /** Timestamped YouTube URL linking to the relevant sermon segment. */
   sermonLink: string;
+  /** Optional share image — object-storage path ("/objects/…"). Members see a "Take this with you" card. */
+  shareImageUrl?: string | null;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -33,11 +36,19 @@ export interface CompanionEntry {
 export interface Companion {
   id: string;
   sermonId: string;
+  /** Canonical sermon UUID (sermons.id) — null when companion was created before the sermons table existed. */
+  sermonUuid?: string | null;
+  /** Canonical order inherited from sermons.display_order for member discovery. */
+  displayOrder?: number;
   title: string;
+  /** Admin-authored companion-level introduction shown at the top of the member overview. */
+  description: string;
   numberOfDays: number;
   status: string;
   isCurrentWeek: boolean;
   publishedAt: string | null;
+  /** Set when admin opts-in to notifying members on publish (Smart Content Indicators). */
+  notifyPublishedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   entries?: CompanionEntry[];
@@ -53,16 +64,65 @@ export interface CompanionProgress {
   updatedAt: string;
   /** Engagement lifecycle status — active | paused */
   status: string;
+  /** Set when the member opens the content — used for UPDATED badge computation. */
+  lastOpenedAt?: string | null;
+}
+
+export const EXPECTED_GENERATED_COMPANION_DAYS = 5;
+
+type CompanionEntryInput = Omit<
+  CompanionEntry,
+  'id' | 'companionId' | 'createdAt' | 'updatedAt' | 'status'
+> & { status?: string };
+
+function assertExpectedCompanionDays(
+  entries: CompanionEntryInput[] | CompanionEntry[],
+  expectedDays: number,
+): void {
+  const dayNumbers = entries.map(entry => entry.dayNumber).sort((a, b) => a - b);
+  const expected = Array.from({ length: expectedDays }, (_, index) => index + 1);
+  if (
+    entries.length !== expectedDays ||
+    dayNumbers.some((day, index) => day !== expected[index])
+  ) {
+    throw new Error(`Companion persistence requires exactly ${expectedDays} entries numbered 1-${expectedDays}.`);
+  }
+}
+
+export async function verifyCompanionPersistence(
+  companionId: string,
+  expectedDays = EXPECTED_GENERATED_COMPANION_DAYS,
+): Promise<Companion & { entries: CompanionEntry[] }> {
+  const companion = await getCompanionById(companionId);
+  if (!companion) {
+    throw new Error("Companion header was not found after persistence.");
+  }
+  if (companion.numberOfDays !== expectedDays) {
+    throw new Error(`Companion saved with ${companion.numberOfDays} days; expected ${expectedDays}.`);
+  }
+  assertExpectedCompanionDays(companion.entries ?? [], expectedDays);
+  return companion;
 }
 
 // ─── Companion CRUD ───────────────────────────────────────────────────────────
 
 export async function createCompanion(data: {
   sermonId: string;
+  /** Optional canonical UUID FK — set to link companion.sermon_uuid to sermons.id */
+  sermonUuid?: string;
   title: string;
   numberOfDays?: number;
-  entries: Array<Omit<CompanionEntry, 'id' | 'companionId' | 'createdAt' | 'updatedAt' | 'status'> & { status?: string }>;
+  entries: CompanionEntryInput[];
+  /** When supplied, the transaction validates the complete generated shape. */
+  expectedDays?: number;
 }): Promise<Companion & { entries: CompanionEntry[] }> {
+  const numberOfDays = data.numberOfDays ?? 5;
+  if (data.expectedDays !== undefined) {
+    if (numberOfDays !== data.expectedDays) {
+      throw new Error(`Companion persistence requires numberOfDays=${data.expectedDays}.`);
+    }
+    assertExpectedCompanionDays(data.entries, data.expectedDays);
+  }
   const id = randomUUID();
   const now = new Date().toISOString();
   const entryRows: CompanionEntry[] = [];
@@ -75,9 +135,9 @@ export async function createCompanion(data: {
     await client.query("BEGIN");
 
     await client.query(
-      `INSERT INTO sermon_companion (id, sermon_id, title, number_of_days, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'Draft', NOW(), NOW())`,
-      [id, data.sermonId, data.title, data.numberOfDays ?? 5]
+      `INSERT INTO sermon_companion (id, sermon_id, sermon_uuid, title, number_of_days, status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, 'Draft', NOW(), NOW())`,
+      [id, data.sermonId, data.sermonUuid ?? null, data.title, numberOfDays]
     );
 
     for (const entry of data.entries) {
@@ -120,7 +180,127 @@ export async function createCompanion(data: {
     id,
     sermonId: data.sermonId,
     title: data.title,
-    numberOfDays: data.numberOfDays ?? 5,
+    description: '',
+    numberOfDays,
+    status: 'Draft',
+    isCurrentWeek: false,
+    publishedAt: null,
+    createdAt: now,
+    updatedAt: now,
+    entries: entryRows,
+  };
+}
+
+/**
+ * Atomically replace the generated companion for a sermon.
+ *
+ * The new parent and all children are inserted and verified before the old
+ * companion is removed. Any failure rolls back the whole transaction, leaving
+ * the previous authored companion untouched.
+ */
+export async function replaceCompanionForSermon(data: {
+  sermonId: string;
+  title: string;
+  entries: CompanionEntryInput[];
+  expectedDays?: number;
+}): Promise<Companion & { entries: CompanionEntry[] }> {
+  const expectedDays = data.expectedDays ?? EXPECTED_GENERATED_COMPANION_DAYS;
+  assertExpectedCompanionDays(data.entries, expectedDays);
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  const entryRows: CompanionEntry[] = [];
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    // Serialize retries for the same canonical sermon. Without this row lock,
+    // two overlapping retries could both observe the same old companion and
+    // leave two newly generated companions behind.
+    await client.query(
+      `SELECT id FROM sermons WHERE id = $1 FOR UPDATE`,
+      [data.sermonId],
+    );
+
+    const oldRes = await client.query<{ id: string }>(
+      `SELECT id::text
+         FROM sermon_companion
+        WHERE sermon_uuid = $1::uuid OR sermon_id = $1::text
+        ORDER BY created_at DESC
+        LIMIT 1
+        FOR UPDATE`,
+      [data.sermonId],
+    );
+    const oldId = oldRes.rows[0]?.id ?? null;
+
+    await client.query(
+      `INSERT INTO sermon_companion (id, sermon_id, sermon_uuid, title, number_of_days, status, created_at, updated_at)
+       VALUES ($1, $2, $3::uuid, $4, $5, 'Draft', NOW(), NOW())`,
+      [id, data.sermonId, data.sermonId, data.title, expectedDays],
+    );
+
+    for (const entry of data.entries) {
+      const entryId = randomUUID();
+      await client.query(
+        `INSERT INTO sermon_companion_entry
+           (id, companion_id, day_number, title, scripture_reference, greeting, reflection, prayer, next_step, closing, sermon_link, status, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Draft',NOW(),NOW())`,
+        [entryId, id, entry.dayNumber, entry.title, entry.scriptureReference ?? '',
+         entry.greeting ?? '', entry.reflection ?? '', entry.prayer ?? '',
+         entry.nextStep ?? '', entry.closing ?? '', entry.sermonLink ?? ''],
+      );
+      entryRows.push({
+        id: entryId,
+        companionId: id,
+        dayNumber: entry.dayNumber,
+        title: entry.title,
+        scriptureReference: entry.scriptureReference ?? '',
+        greeting: entry.greeting ?? '',
+        reflection: entry.reflection ?? '',
+        prayer: entry.prayer ?? '',
+        nextStep: entry.nextStep ?? '',
+        closing: entry.closing ?? '',
+        sermonLink: entry.sermonLink ?? '',
+        status: 'Draft',
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    const persisted = await client.query<{ number_of_days: number; count: string }>(
+      `SELECT sc.number_of_days, COUNT(sce.id)::text AS count
+         FROM sermon_companion sc
+         LEFT JOIN sermon_companion_entry sce ON sce.companion_id = sc.id
+        WHERE sc.id = $1
+        GROUP BY sc.id`,
+      [id],
+    );
+    const row = persisted.rows[0];
+    if (!row || Number(row.number_of_days) !== expectedDays || Number(row.count) !== expectedDays) {
+      throw new Error(`Companion persistence verification failed for ${expectedDays} entries.`);
+    }
+
+    if (oldId && oldId !== id) {
+      await client.query("DELETE FROM sermon_companion_progress WHERE companion_id = $1", [oldId]);
+      await client.query("DELETE FROM sermon_companion_entry WHERE companion_id = $1", [oldId]);
+      await client.query("DELETE FROM sermon_companion WHERE id = $1", [oldId]);
+    }
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  return {
+    id,
+    sermonId: data.sermonId,
+    sermonUuid: data.sermonId,
+    title: data.title,
+    description: '',
+    numberOfDays: expectedDays,
     status: 'Draft',
     isCurrentWeek: false,
     publishedAt: null,
@@ -135,10 +315,17 @@ export async function createCompanion(data: {
  * Used as a compensating transaction when sermon persistence fails after companion creation.
  */
 export async function deleteCompanion(companionId: string): Promise<void> {
+  const linked = await pool.query<{ sermon_id: string | null }>(
+    `SELECT sermon_uuid::text AS sermon_id FROM sermon_companion WHERE id = $1`,
+    [companionId],
+  );
+  const sermonId = linked.rows[0]?.sermon_id ?? null;
   // Entries reference companion via foreign key — delete them first to avoid
   // constraint violations on DBs without ON DELETE CASCADE configured.
+  await pool.query(`DELETE FROM sermon_companion_progress WHERE companion_id = $1`, [companionId]);
   await pool.query(`DELETE FROM sermon_companion_entry WHERE companion_id = $1`, [companionId]);
   await pool.query(`DELETE FROM sermon_companion WHERE id = $1`, [companionId]);
+  if (sermonId) await syncKnowledgeIndexForSermon(sermonId);
 }
 
 // ─── UUID helpers ─────────────────────────────────────────────────────────────
@@ -292,10 +479,25 @@ export async function deleteSermonCompanionContent({
 }
 
 export async function getCompanionBySermonId(sermonId: string): Promise<(Companion & { entries: CompanionEntry[] }) | null> {
-  const res = await pool.query(
-    `SELECT * FROM sermon_companion WHERE sermon_id = $1 ORDER BY created_at DESC LIMIT 1`,
-    [sermonId]
-  );
+  // sermon_id is the legacy text key while sermon_uuid is a real UUID FK.
+  // Do not compare both columns to one parameter: PostgreSQL cannot resolve
+  // `uuid = text`, and canonical sermon IDs are UUIDs while old IDs are not.
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sermonId);
+  const res = isUuid
+    ? await pool.query(
+        `SELECT * FROM sermon_companion
+          WHERE sermon_id = $1 OR sermon_uuid = $1::uuid
+          ORDER BY created_at DESC
+          LIMIT 1`,
+        [sermonId]
+      )
+    : await pool.query(
+        `SELECT * FROM sermon_companion
+          WHERE sermon_id = $1
+          ORDER BY created_at DESC
+          LIMIT 1`,
+        [sermonId]
+      );
   if (!res.rows[0]) return null;
   const companion = rowToCompanion(res.rows[0]);
   const entries = await getEntriesForCompanion(companion.id);
@@ -315,12 +517,13 @@ type CompanionStatus = typeof ALLOWED_COMPANION_STATUSES[number];
 
 export async function updateCompanion(
   id: string,
-  patch: { title?: string; status?: CompanionStatus }
+  patch: { title?: string; description?: string; status?: CompanionStatus }
 ): Promise<void> {
   const sets: string[] = [];
   const vals: unknown[] = [];
   let idx = 1;
   if (patch.title !== undefined) { sets.push(`title = $${idx++}`); vals.push(patch.title); }
+  if (patch.description !== undefined) { sets.push(`description = $${idx++}`); vals.push(patch.description); }
   if (patch.status !== undefined) {
     if (!ALLOWED_COMPANION_STATUSES.includes(patch.status)) {
       throw new Error(`Invalid status: ${patch.status}`);
@@ -370,6 +573,7 @@ export async function updateEntry(
     nextStep: 'next_step',
     closing: 'closing',
     sermonLink: 'sermon_link',
+    shareImageUrl: 'share_image_url',
     status: 'status',
   };
 
@@ -408,9 +612,16 @@ export async function getProgressForUser(userId: string, companionId: string): P
 
 export async function startCompanion(userId: string, companionId: string): Promise<CompanionProgress> {
   const res = await pool.query(
-    `INSERT INTO sermon_companion_progress (id, user_id, companion_id, current_day, completed_days, started_at, updated_at)
-     VALUES (gen_random_uuid(), $1, $2, 1, '[]', NOW(), NOW())
-     ON CONFLICT (user_id, companion_id) DO UPDATE SET updated_at = NOW()
+    // Include last_opened_at on creation so the badge is immediately cleared —
+    // a member who begins a companion should not see UPDATED on reload.
+    // On first visit: INSERT with last_opened_at = NOW() so no UPDATED badge fires.
+    // On conflict (returning member): also update last_opened_at so the UPDATED badge
+    // clears atomically when the reader loads, without relying on the fire-and-forget
+    // dismissBadge call winning the race against /member/engagements.
+    `INSERT INTO sermon_companion_progress
+       (id, user_id, companion_id, current_day, completed_days, last_opened_at, started_at, updated_at)
+     VALUES (gen_random_uuid(), $1, $2, 1, '[]', NOW(), NOW(), NOW())
+     ON CONFLICT (user_id, companion_id) DO UPDATE SET last_opened_at = NOW(), updated_at = NOW()
      RETURNING *`,
     [userId, companionId]
   );
@@ -440,12 +651,18 @@ function rowToCompanion(row: Record<string, unknown>): Companion {
   return {
     id: String(row.id),
     sermonId: String(row.sermon_id),
+    sermonUuid: row.sermon_uuid != null ? String(row.sermon_uuid) : null,
+    displayOrder: Number(row.canonical_display_order ?? row.display_order ?? 0),
     title: String(row.title ?? ''),
+    description: String(row.description ?? ''),
     numberOfDays: Number(row.number_of_days ?? 5),
     status: String(row.status ?? 'Draft'),
     isCurrentWeek: row.is_current_week === true || row.is_current_week === 'true',
     publishedAt: row.published_at ? String(row.published_at) : null,
-    createdAt: String(row.created_at ?? ''),
+    notifyPublishedAt: row.notify_published_at ? String(row.notify_published_at) : null,
+    // Use the canonical sermon timestamp when this row came from the ordered
+    // member-discovery query, matching Content Studio's default tie-breaker.
+    createdAt: String(row.canonical_created_at ?? row.created_at ?? ''),
     updatedAt: String(row.updated_at ?? ''),
   };
 }
@@ -466,25 +683,66 @@ export async function publishAllEntries(companionId: string): Promise<void> {
   );
 }
 
+/**
+ * P2-12: Atomically publish the companion header AND all its entries in a single
+ * transaction. Prevents the non-atomic two-call race where the header publishes
+ * but the entry UPDATE fails, leaving members with a broken reading experience.
+ */
+export async function publishCompanionAtomic(id: string, notifyMembers = false): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `UPDATE sermon_companion
+       SET status = 'Published',
+           published_at = COALESCE(published_at, NOW()),
+           notify_published_at = CASE WHEN $2 THEN NOW() ELSE NULL END,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [id, notifyMembers],
+    );
+    await client.query(
+      `UPDATE sermon_companion_entry
+       SET status = 'Published', updated_at = NOW()
+       WHERE companion_id = $1`,
+      [id],
+    );
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // ─── Member discovery ──────────────────────────────────────────────────────────
 
 /**
  * Returns all Published companions that have at least one Published entry,
- * ordered by publication date descending (most-recent first).
+ * ordered by the canonical sermon display order used by Content Studio,
+ * with publication date as the fallback for older records.
  * Used by the member Next Steps endpoint.
  */
 export async function listPublishedSermonCompanions(): Promise<
   Array<Companion & { publishedEntryCount: number }>
 > {
   const res = await pool.query(`
-    SELECT sc.*,
-           COUNT(sce.id) FILTER (WHERE sce.status = 'Published') AS published_entry_count
+     SELECT sc.*,
+            COALESCE(s.display_order, sc.display_order, 0) AS canonical_display_order,
+            COALESCE(s.created_at, sc.created_at) AS canonical_created_at,
+            COUNT(sce.id) FILTER (WHERE sce.status = 'Published') AS published_entry_count
     FROM   sermon_companion sc
+     LEFT JOIN sermons s
+       ON s.id = sc.sermon_uuid
+       OR sc.sermon_id = s.id::text
+       OR sc.sermon_id = s.legacy_json_id
     LEFT JOIN sermon_companion_entry sce ON sce.companion_id = sc.id
     WHERE  sc.status = 'Published'
-    GROUP  BY sc.id
+     GROUP  BY sc.id, s.display_order, s.created_at
     HAVING COUNT(sce.id) FILTER (WHERE sce.status = 'Published') > 0
-    ORDER  BY COALESCE(sc.published_at, sc.updated_at) DESC
+     ORDER  BY COALESCE(s.display_order, sc.display_order, 0) ASC,
+               COALESCE(s.created_at, sc.created_at, sc.published_at, sc.updated_at) DESC
   `);
   return res.rows.map(row => ({
     ...rowToCompanion(row),
@@ -523,12 +781,9 @@ export async function setCurrentWeekCompanion(id: string): Promise<void> {
  * Return the single Published companion marked as This Week's Sermon,
  * with only its Published entries.
  *
- * Falls back to the most-recently-published companion when:
- *   • no companion has is_current_week = true (flag not yet set), OR
- *   • the is_current_week column does not yet exist in the DB (PostgreSQL
- *     error 42703: undefined_column — occurs before the startup migration runs).
- *
- * Returns null only when no Published companion exists at all.
+ * Returns null when no Published companion has been explicitly assigned to
+ * the current week. Publishing a companion alone must not put it in Today's
+ * Steps; an admin must choose "Set as This Week's Sermon".
  */
 export async function getCurrentWeekPublicCompanion(): Promise<
   (Companion & { entries: CompanionEntry[] }) | null
@@ -550,29 +805,16 @@ export async function getCurrentWeekPublicCompanion(): Promise<
       );
       return { ...companion, entries: eRes.rows.map(rowToEntry) };
     }
-    // No companion explicitly flagged — fall through to most-recently-published.
+     // No companion explicitly flagged — this is intentionally empty.
   } catch (err: unknown) {
     const pg = err as { code?: string };
     if (pg?.code !== '42703') throw err; // unexpected error — re-throw
-    // 42703 = undefined_column: is_current_week not yet added — fall through.
+    // 42703 = undefined_column. Startup migration has not completed, so do
+    // not guess by selecting the newest companion.
+    return null;
   }
 
-  // Fallback: return the most recently published companion.
-  const cRes = await pool.query(
-    `SELECT * FROM sermon_companion
-     WHERE status = 'Published'
-     ORDER BY COALESCE(published_at, updated_at) DESC
-     LIMIT 1`,
-  );
-  if (!cRes.rows[0]) return null;
-  const companion = rowToCompanion(cRes.rows[0]);
-  const eRes = await pool.query(
-    `SELECT * FROM sermon_companion_entry
-     WHERE companion_id = $1 AND status = 'Published'
-     ORDER BY day_number ASC`,
-    [companion.id],
-  );
-  return { ...companion, entries: eRes.rows.map(rowToEntry) };
+  return null;
 }
 
 /**
@@ -630,6 +872,7 @@ function rowToEntry(row: Record<string, unknown>): CompanionEntry {
     nextStep: String(row.next_step ?? ''),
     closing: String(row.closing ?? ''),
     sermonLink: String(row.sermon_link ?? ''),
+    shareImageUrl: row.share_image_url != null ? String(row.share_image_url) : null,
     status: String(row.status ?? 'Draft'),
     createdAt: String(row.created_at ?? ''),
     updatedAt: String(row.updated_at ?? ''),
@@ -646,7 +889,11 @@ function rowToProgress(row: Record<string, unknown>): CompanionProgress {
     startedAt: String(row.started_at ?? ''),
     updatedAt: String(row.updated_at ?? ''),
     status: String(row.status ?? 'active'),
-  };
+    lastOpenedAt: row.last_opened_at ? String(row.last_opened_at) : null,
+    // hidden_from_today is added via startup migration and must be mapped here
+    // so the member/engagements route can correctly return hiddenFromToday.
+    hidden_from_today: row.hidden_from_today === true || row.hidden_from_today === 'true',
+  } as CompanionProgress & { hidden_from_today: boolean };
 }
 
 // ─── Engagement lifecycle ─────────────────────────────────────────────────────

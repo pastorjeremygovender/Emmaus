@@ -4,7 +4,7 @@
  * Typed fetch helpers for the Ask Emmaus conversation service.
  * Streaming uses the browser Fetch API and ReadableStream — never EventSource.
  *
- * Identity: passes X-User-Id header from the auth context (demo mode).
+ * Identity: derived server-side from the secure session cookie.
  * API base:  VITE_API_URL env var, defaulting to '' (empty string).
  *            Empty string means requests go to /api/emmaus/… — the shared
  *            Replit reverse proxy routes /api → API server on port 8080.
@@ -28,11 +28,19 @@ export interface FlatContext {
   // Journey
   journeyId?: string;
   journeyTitle?: string;
+  journeyType?: string;
   currentDay?: number;
   // Sermon
   sermonId?: string;
   sermonTitle?: string;
   scriptureReference?: string;
+  /**
+   * Phase 3: Voice Mode injects a plain-text summary of the user's current
+   * app state (active content, reading context) so Emmaus can answer voice
+   * questions such as "what's in My Emmaus?" or "explain that scripture"
+   * without the user needing to navigate to the relevant page first.
+   */
+  voiceAppContext?: string;
 }
 
 export interface HistoryItem {
@@ -44,6 +52,8 @@ export interface ScriptureRef {
   reference: string;
   book: string;
   chapter: number;
+  verseStart?: number;
+  verseEnd?: number;
   displayText?: string;
 }
 
@@ -66,13 +76,38 @@ export interface NextStepItem {
   relativeStartSeconds?: number;    // position within the trimmed audio (Listen)
   absoluteStartSeconds?: number;    // same as timestampSeconds (YouTube anchor)
   watchUrl?: string;                // explicit Watch URL (YouTube at absolute time)
+  /** Trusted canonical sermon identity, when this is a sermon listen step. */
+  sermonId?: string;
+  /** Trusted resource identity for non-canonical sermon resource shapes. */
+  resourceId?: string;
+}
+
+/**
+ * Remove only verified listen steps already represented by a trusted sermon
+ * card. Display titles are deliberately not considered identity.
+ */
+export function filterDuplicateSermonNextSteps(
+  steps: NextStepItem[],
+  trustedSermons: Array<{ sermonId?: string; resourceId?: string }>,
+): NextStepItem[] {
+  const identities = new Set(
+    trustedSermons.flatMap((sermon) => [sermon.sermonId, sermon.resourceId].filter(
+      (id): id is string => Boolean(id),
+    )),
+  );
+  return steps.filter((step) =>
+    step.type !== 'listen' ||
+    ![step.sermonId, step.resourceId].some((id) => id && identities.has(id)),
+  );
 }
 
 export interface Recommendation {
-  type: 'journey' | 'sermon' | 'bible' | 'prayer' | 'room' | 'pastor';
+  type: 'journey' | 'walk' | 'sermon' | 'bible' | 'prayer' | 'room' | 'pastor' | 'daily-rhythm' | 'devotional' | 'bible-study' | 'sermon-companion';
   title: string;
   description?: string;
   path?: string;
+  resourceId?: string;
+  parentId?: string;
   sermonId?: string;
   timestampSeconds?: number;
   /** Custom badge label shown on the card (e.g. "Preached Here"). */
@@ -81,14 +116,167 @@ export interface Recommendation {
   speakerName?: string;
 }
 
+export interface SermonRecommendation {
+  sermonId: string;
+  segmentId?: string;
+  source: 'canonical' | 'archive';
+  title: string;
+  speaker: string;
+  sermonDate: string;
+  excerpt: string;
+  reason: string;
+  /** Present only when the result maps to a published canonical sermon. */
+  openPath?: string;
+  /** Present only when a verified YouTube URL exists. */
+  watchUrl?: string;
+  watchTimestampSeconds?: number;
+  listenAvailable: boolean;
+  listenPath?: string;
+  /** Relative API audio path used by the in-app player. */
+  audioUrl?: string;
+  relativeStartSeconds?: number;
+}
+
 export interface EmmausMetadata {
+  answer?: string;
+  displayAnswer?: string;
+  speakableAnswer?: string;
   scripture: ScriptureRef | null;
   nextStep: NextStep | null;
   /** Practical next-steps footer (📖 🙏 🎧 🚶). */
   nextSteps: NextStepItem[];
   recommendations: Recommendation[];
+  sermonRecommendations?: SermonRecommendation[];
   followUpPrompts: string[];
   handoffType: 'pastoral' | 'crisis' | null;
+  scriptureReferences?: ScriptureRef[];
+  resourceRecommendations?: Array<{
+    resourceType: string;
+    resourceId: string;
+    parentId?: string;
+    reason: string;
+    relevanceReasons?: string[];
+  }>;
+  prayer?: string | null;
+  requestedIntent?: 'ASK' | 'READ' | 'OPEN' | 'CONTINUE' | 'FIND';
+  retrievalFailures?: string[];
+  resourceActions?: Array<{
+    kind: 'OPEN' | 'READ' | 'CONTINUE';
+    resourceType: string;
+    resourceId: string;
+    parentId?: string;
+    route: string;
+  }>;
+  capabilityActions?: Array<{
+    kind: 'OPEN' | 'READ' | 'CONTINUE';
+    capabilityId: string;
+    label: string;
+    route: string;
+  }>;
+  conversationFocus?: {
+    version: 1;
+    resourceType: string;
+    candidates: Array<{
+      resourceType: string;
+      resourceId: string;
+      title: string;
+      route: string;
+      parentId?: string;
+    }>;
+    pendingSelection?: boolean;
+  };
+  jarvis?: JarvisResponseContract;
+  jarvisIntent?: JarvisIntent;
+  pipelineTimings?: {
+    authMs: number | null;
+    contextMs: number;
+    routingMs: number;
+    retrievalScriptureMs: number;
+    retrievalSermonsMs: number;
+    retrievalResourcesMs: number;
+    retrievalMemoriesMs: number;
+    retrievalRoomsMs: number;
+    modelTtftMs: number | null;
+    firstValidatedVisibleMs: number | null;
+    modelGenerationMs: number;
+    validationMs: number;
+    totalMs: number;
+  };
+}
+
+export type JarvisIntent =
+  | 'TODAY'
+  | 'CONTINUE'
+  | 'DAILY_RHYTHM'
+  | 'DAILY_DEVOTIONAL'
+  | 'BIBLE_READ'
+  | 'SERMON_SEARCH'
+  | 'APP_HELP'
+  | 'ASK';
+
+export interface JarvisAction {
+  kind: 'OPEN' | 'READ' | 'CONTINUE';
+  targetType: 'capability' | 'resource' | 'scripture';
+  targetId: string;
+  label: string;
+  route: string;
+  resourceType?: string;
+  parentId?: string;
+}
+
+export interface JarvisResponseContract {
+  contractVersion: 'jarvis.v1';
+  intent: JarvisIntent;
+  pastoralText: string;
+  scriptureReferences: ScriptureRef[];
+  contentReferences: Array<{
+    resourceType: string;
+    resourceId: string;
+    parentId?: string;
+    title: string;
+    reason: string;
+  }>;
+  suggestedNextAction: JarvisAction | null;
+  actions: JarvisAction[];
+  handoffType: 'pastoral' | 'crisis' | null;
+  retrievalFailures: string[];
+}
+
+/** Pick only the server-returned action that may execute an imperative request. */
+export function getImmediateEmmausAction(
+  metadata: Pick<
+    EmmausMetadata,
+    'requestedIntent' | 'jarvis' | 'resourceActions' | 'capabilityActions' | 'nextStep'
+  > | null | undefined,
+): { route?: string } | null {
+  if (
+    metadata?.requestedIntent !== 'OPEN'
+    && metadata?.requestedIntent !== 'READ'
+    && metadata?.requestedIntent !== 'CONTINUE'
+  ) {
+    return null;
+  }
+  const nextStepAction = metadata.nextStep?.path
+    ? { route: metadata.nextStep.path }
+    : null;
+  return metadata.jarvis?.suggestedNextAction
+    ?? metadata.resourceActions?.[0]
+    ?? metadata.capabilityActions?.[0]
+    ?? nextStepAction
+    ?? null;
+}
+
+/** Execute only routes that were validated and returned by the Emmaus server. */
+export function executeValidatedEmmausAction(
+  action: { route?: string } | null | undefined,
+  navigate: (route: string) => void,
+): boolean {
+  const route = action?.route;
+  if (!route || !route.startsWith('/') || route.startsWith('//') || /[\r\n]/u.test(route)) {
+    return false;
+  }
+  navigate(route);
+  return true;
 }
 
 export interface ConversationStub {
@@ -208,10 +396,9 @@ async function consumeStream(
 
 // ─── API Calls ────────────────────────────────────────────────────────────────
 
-function headers(userId: string): Record<string, string> {
+function headers(_userId: string): Record<string, string> {
   return {
     'Content-Type': 'application/json',
-    'X-User-Id': userId,
   };
 }
 
@@ -268,6 +455,24 @@ export function startConversation(opts: {
       });
 
       if (!res.ok) {
+        // A workflow restart can clear the development in-memory conversation
+        // store while the browser still holds the old conversation ID. Start
+        // a fresh thread for that one recoverable case; do not retry auth or
+        // ownership failures.
+        if (res.status === 404) {
+          const freshContext = opts.context
+            ? { ...opts.context, conversationId: undefined }
+            : undefined;
+          startConversation({
+            userId: opts.userId,
+            message: opts.message,
+            context: freshContext,
+            history: opts.history,
+            callbacks: opts.callbacks,
+            signal: opts.signal,
+          });
+          return;
+        }
         opts.callbacks.onError(`Server error: ${res.status}`);
         return;
       }

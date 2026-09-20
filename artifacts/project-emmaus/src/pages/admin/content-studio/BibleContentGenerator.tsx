@@ -6,12 +6,13 @@
  * (overview + all passage notes). Content enters as Draft, never auto-publishes.
  */
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getApiUrl } from '@/lib/api';
+import { BIBLE_BOOKS } from '@/lib/bible-data';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Sparkles, BookOpen, ChevronDown, Check,
-  Loader2, AlertCircle, CheckCircle2, RefreshCw,
+  Loader2, AlertCircle, CheckCircle2, RefreshCw, Pause, Play, RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -28,14 +29,33 @@ type GenerationResult = {
   passages?: unknown[];
 };
 
-const BOOKS: { id: string; name: string; chapters: number }[] = [
-  { id: 'luke',         name: 'Luke',           chapters: 24  },
-  { id: 'acts',         name: 'Acts',           chapters: 28  },
-  { id: 'romans',       name: 'Romans',         chapters: 16  },
-  { id: '1corinthians', name: '1 Corinthians',  chapters: 16  },
-  { id: '2corinthians', name: '2 Corinthians',  chapters: 13  },
-  { id: 'psalms',       name: 'Psalms',         chapters: 150 },
-];
+type BookStats = {
+  bookId: string;
+  totalChapters: number;
+  bookIntroStatus: string | null;
+  chaptersWithOverview: number;
+  chaptersWithPassages: number;
+};
+
+type GenerationJob = {
+  id: string;
+  scope: 'book-intros' | 'study-sheets' | 'both';
+  force: boolean;
+  status: 'queued' | 'running' | 'paused' | 'completed' | 'failed';
+  total: number;
+  completed: number;
+  skipped: number;
+  failed: number;
+  queued: number;
+  running: number;
+  failed_items: number;
+};
+
+const BOOKS = BIBLE_BOOKS.map(book => ({
+  id: book.id,
+  name: book.name,
+  chapters: book.chapters,
+}));
 
 const GEN_TYPES: { id: GenerateType; label: string; description: string }[] = [
   {
@@ -92,8 +112,33 @@ function Select({
 
 function ResultSummary({ result }: { result: GenerationResult }) {
   if (result.type === 'book-intro') {
-    type RecordShape = { genre?: string; testament?: string; date_range?: string; major_themes?: string[] };
+    type OutlineItem = { section?: string; chapters?: string; description?: string };
+    type RecordShape = {
+      book_name?: string;
+      testament?: string;
+      genre?: string;
+      author_attribution?: string;
+      date_range?: string;
+      original_audience?: string;
+      historical_setting?: string;
+      purpose?: string;
+      major_themes?: string[];
+      key_people?: string[];
+      key_places?: string[];
+      outline?: OutlineItem[];
+      key_passages?: string[];
+      points_to_jesus?: string;
+      interpretation_notes?: string;
+    };
     const rec = result.record as RecordShape | undefined;
+    const textFields: Array<[string, string | undefined]> = [
+      ['Author / Attribution', rec?.author_attribution],
+      ['Original Audience', rec?.original_audience],
+      ['Historical Setting', rec?.historical_setting],
+      ['Purpose', rec?.purpose],
+      ['How This Points to Jesus', rec?.points_to_jesus],
+      ['Interpretation Notes', rec?.interpretation_notes],
+    ];
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2 text-green-700">
@@ -109,6 +154,59 @@ function ResultSummary({ result }: { result: GenerationResult }) {
               <p><span className="text-gray-500">Themes: </span>{rec.major_themes.slice(0, 4).join(', ')}</p>
             ) : null}
           </div>
+        )}
+        {rec && (
+          <details className="border border-gray-200 rounded-lg">
+            <summary className="cursor-pointer px-3 py-2.5 text-[12px] font-semibold text-gray-700">
+              View all populated fields
+            </summary>
+            <div className="border-t border-gray-100 px-3 py-3 space-y-3 text-[12px]">
+              {textFields.map(([label, value]) => value ? (
+                <div key={label}>
+                  <p className="font-medium text-gray-500 mb-0.5">{label}</p>
+                  <p className="text-gray-700 whitespace-pre-wrap">{value}</p>
+                </div>
+              ) : null)}
+              {rec.major_themes?.length ? (
+                <div>
+                  <p className="font-medium text-gray-500 mb-0.5">Major Themes</p>
+                  <p className="text-gray-700">{rec.major_themes.join(', ')}</p>
+                </div>
+              ) : null}
+              {rec.key_people?.length ? (
+                <div>
+                  <p className="font-medium text-gray-500 mb-0.5">Key People</p>
+                  <p className="text-gray-700">{rec.key_people.join(', ')}</p>
+                </div>
+              ) : null}
+              {rec.key_places?.length ? (
+                <div>
+                  <p className="font-medium text-gray-500 mb-0.5">Key Places</p>
+                  <p className="text-gray-700">{rec.key_places.join(', ')}</p>
+                </div>
+              ) : null}
+              {rec.key_passages?.length ? (
+                <div>
+                  <p className="font-medium text-gray-500 mb-0.5">Key Passages</p>
+                  <p className="text-gray-700">{rec.key_passages.join(', ')}</p>
+                </div>
+              ) : null}
+              {rec.outline?.length ? (
+                <div>
+                  <p className="font-medium text-gray-500 mb-1">Outline</p>
+                  <div className="space-y-1.5">
+                    {rec.outline.map((item, index) => (
+                      <div key={`${item.section ?? 'section'}-${index}`} className="text-gray-700">
+                        <span className="font-medium">{item.section}</span>
+                        {item.chapters ? ` (${item.chapters})` : ''}
+                        {item.description ? ` — ${item.description}` : ''}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </details>
         )}
       </div>
     );
@@ -187,6 +285,102 @@ export default function BibleContentGenerator({ initialBookId }: Props) {
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<BookStats[]>([]);
+  const [bulkScope, setBulkScope] = useState<'book-intros' | 'study-sheets' | 'both'>('both');
+  const [bulkForce, setBulkForce] = useState(false);
+  const [bulkJob, setBulkJob] = useState<GenerationJob | null>(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(getApiUrl('/api/bible/study-stats'))
+      .then(response => response.ok ? response.json() : [])
+      .then(data => {
+        if (!cancelled) setStats(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        // The generator remains usable if coverage stats are temporarily unavailable.
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadJobs = async () => {
+      try {
+        const response = await fetch(getApiUrl('/api/bible/generation-jobs'));
+        if (!response.ok) return;
+        const data = await response.json() as { jobs?: GenerationJob[] };
+        const latest = data.jobs?.[0];
+        if (!cancelled && latest && ['queued', 'running', 'paused'].includes(latest.status)) {
+          setBulkJob(latest);
+        }
+      } catch {
+        // The single-item generator remains usable if the queue is unavailable.
+      }
+    };
+    void loadJobs();
+    return () => { cancelled = true; };
+  }, [user]);
+
+  useEffect(() => {
+    if (!bulkJob || !['queued', 'running'].includes(bulkJob.status)) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const response = await fetch(getApiUrl(`/api/bible/generation-jobs/${bulkJob.id}`));
+        if (!response.ok) return;
+        const data = await response.json() as {
+          job: GenerationJob;
+          counts?: Record<string, number>;
+        };
+        if (!cancelled) {
+          setBulkJob({
+            ...data.job,
+            queued: data.counts?.queued ?? 0,
+            running: data.counts?.running ?? 0,
+            failed_items: data.counts?.failed ?? 0,
+          });
+        }
+      } catch {
+        // Polling retries on the next interval.
+      }
+    };
+    const timer = window.setInterval(() => { void poll(); }, 2500);
+    void poll();
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [bulkJob?.id, bulkJob?.status]);
+
+  const statByBook = useMemo(
+    () => new Map(stats.map(stat => [stat.bookId, stat])),
+    [stats],
+  );
+
+  function isComplete(book: typeof BOOKS[number]) {
+    const stat = statByBook.get(book.id);
+    if (!stat) return false;
+    // Draft content still needs review and must not be presented as complete.
+    if (genType === 'book-intro') return stat.bookIntroStatus === 'Published';
+    if (genType === 'chapter-overview') {
+      return stat.chaptersWithOverview >= book.chapters;
+    }
+    return stat.chaptersWithOverview >= book.chapters
+      && stat.chaptersWithPassages >= book.chapters;
+  }
+
+  const orderedBooks = useMemo(() => {
+    return [...BOOKS].sort((a, b) => Number(isComplete(a)) - Number(isComplete(b)));
+  }, [genType, statByBook]);
+
+  useEffect(() => {
+    if (initialBookId && BOOKS.some(book => book.id === initialBookId)) {
+      setBookId(initialBookId);
+      return;
+    }
+    const firstIncomplete = orderedBooks.find(book => !isComplete(book));
+    if (firstIncomplete) setBookId(firstIncomplete.id);
+  }, [initialBookId, orderedBooks, genType]);
 
   const selectedBook = BOOKS.find(b => b.id === bookId) ?? BOOKS[0];
   const chapterOptions = Array.from({ length: selectedBook.chapters }, (_, i) => ({
@@ -209,8 +403,6 @@ export default function BibleContentGenerator({ initialBookId }: Props) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': user?.id ?? '',
-          'x-user-role': (user as { role?: string })?.role ?? '',
         },
         body: JSON.stringify(body),
       });
@@ -230,6 +422,58 @@ export default function BibleContentGenerator({ initialBookId }: Props) {
     }
   }
 
+  async function startBulkGeneration() {
+    setBulkLoading(true);
+    setBulkMessage(null);
+    try {
+      const response = await fetch(getApiUrl('/api/bible/generation-jobs'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: bulkScope, force: bulkForce }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setBulkMessage((data as { error?: string }).error ?? 'Could not start bulk generation.');
+        return;
+      }
+      setBulkJob({
+        ...(data as GenerationJob),
+        queued: Number(data.total ?? 0),
+        running: 0,
+        failed_items: 0,
+      });
+      setBulkMessage('Bulk generation queued. You can leave this page and return later.');
+    } catch {
+      setBulkMessage('Network error — could not start bulk generation.');
+    } finally {
+      setBulkLoading(false);
+    }
+  }
+
+  async function updateBulkJob(action: 'pause' | 'resume' | 'retry') {
+    if (!bulkJob) return;
+    setBulkLoading(true);
+    try {
+      const response = await fetch(getApiUrl(`/api/bible/generation-jobs/${bulkJob.id}/${action}`), { method: 'POST' });
+      if (!response.ok) throw new Error();
+      setBulkMessage(action === 'pause' ? 'Generation paused.' : action === 'retry' ? 'Failed items re-queued.' : 'Generation resumed.');
+      const refreshed = await fetch(getApiUrl(`/api/bible/generation-jobs/${bulkJob.id}`));
+      if (refreshed.ok) {
+        const data = await refreshed.json();
+        setBulkJob({
+          ...data.job,
+          queued: data.counts?.queued ?? 0,
+          running: data.counts?.running ?? 0,
+          failed_items: data.counts?.failed ?? 0,
+        });
+      }
+    } catch {
+      setBulkMessage('Could not update this generation job.');
+    } finally {
+      setBulkLoading(false);
+    }
+  }
+
   return (
     <div className="max-w-xl">
       <div className="mb-6">
@@ -240,6 +484,72 @@ export default function BibleContentGenerator({ initialBookId }: Props) {
       </div>
 
       <div className="space-y-4">
+        {/* Resumable all-books generation */}
+        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <p className="text-[13px] font-semibold text-slate-800">Generate across all 66 books</p>
+              <p className="text-[12px] text-slate-500 mt-0.5">
+                Resumable, one book/chapter at a time. Existing Draft, In Review, and Published records are protected by default.
+              </p>
+            </div>
+            <BookOpen size={17} className="text-teal-600 shrink-0" />
+          </div>
+          <div className="grid sm:grid-cols-[1fr_auto] gap-2">
+            <Select
+              label="Bulk scope"
+              value={bulkScope}
+              onChange={v => setBulkScope(v as typeof bulkScope)}
+              options={[
+                { value: 'both', label: 'Book intros + chapter study sheets' },
+                { value: 'book-intros', label: 'Book introductions only' },
+                { value: 'study-sheets', label: 'Chapter study sheets only' },
+              ]}
+              disabled={bulkLoading || Boolean(bulkJob && ['queued', 'running'].includes(bulkJob.status))}
+            />
+            <Button
+              onClick={startBulkGeneration}
+              disabled={bulkLoading || Boolean(bulkJob && ['queued', 'running'].includes(bulkJob.status))}
+              className="self-end bg-slate-800 hover:bg-slate-900 text-white"
+            >
+              {bulkLoading ? <Loader2 size={15} className="mr-2 animate-spin" /> : <Sparkles size={15} className="mr-2" />}
+              Start bulk run
+            </Button>
+          </div>
+          <label className="flex items-center gap-2 mt-3 text-[12px] text-slate-600">
+            <input type="checkbox" checked={bulkForce} onChange={e => setBulkForce(e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-teal-600" />
+            Regenerate existing Draft/In Review content (Published content is never overwritten)
+          </label>
+          {bulkJob && (
+            <div className="mt-4 pt-3 border-t border-slate-200">
+              <div className="flex items-center justify-between text-[12px] mb-1.5">
+                <span className="font-medium text-slate-700">
+                  {bulkJob.status === 'completed' ? 'Run complete' : `Run ${bulkJob.status}`}
+                </span>
+                <span className="text-slate-500">{bulkJob.completed + bulkJob.skipped}/{bulkJob.total}</span>
+              </div>
+              <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                <div className="h-full bg-teal-600 rounded-full transition-all" style={{ width: `${bulkJob.total ? Math.min(100, ((bulkJob.completed + bulkJob.skipped) / bulkJob.total) * 100) : 0}%` }} />
+              </div>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[11px] text-slate-500">
+                <span>{bulkJob.completed} generated</span><span>{bulkJob.skipped} skipped</span><span>{bulkJob.failed} failed</span>
+                {bulkJob.running > 0 && <span>{bulkJob.running} running</span>}
+              </div>
+              <div className="flex gap-2 mt-3">
+                {bulkJob.status === 'paused' ? (
+                  <Button size="sm" variant="outline" onClick={() => updateBulkJob('resume')} disabled={bulkLoading}><Play size={13} className="mr-1" />Resume</Button>
+                ) : ['queued', 'running'].includes(bulkJob.status) ? (
+                  <Button size="sm" variant="outline" onClick={() => updateBulkJob('pause')} disabled={bulkLoading}><Pause size={13} className="mr-1" />Pause</Button>
+                ) : null}
+                {bulkJob.failed > 0 && (
+                  <Button size="sm" variant="outline" onClick={() => updateBulkJob('retry')} disabled={bulkLoading}><RotateCcw size={13} className="mr-1" />Retry failed</Button>
+                )}
+              </div>
+            </div>
+          )}
+          {bulkMessage && <p className="mt-2 text-[12px] text-teal-700">{bulkMessage}</p>}
+        </div>
+
         {/* Generation type */}
         <div>
           <label className="block text-[12px] font-medium text-gray-600 mb-1.5">What to generate</label>
@@ -276,7 +586,14 @@ export default function BibleContentGenerator({ initialBookId }: Props) {
             label="Book"
             value={bookId}
             onChange={v => { setBookId(v); setChapter(1); setResult(null); }}
-            options={BOOKS.map(b => ({ value: b.id, label: b.name }))}
+            options={orderedBooks.map(b => ({
+              value: b.id,
+              label: isComplete(b)
+                ? `✓ ${b.name} — published`
+                : statByBook.get(b.id)?.bookIntroStatus === 'Draft' && genType === 'book-intro'
+                  ? `${b.name} — Draft to review`
+                  : `${b.name} — needs work`,
+            }))}
             disabled={generating}
           />
           {needsChapter && (
@@ -300,7 +617,7 @@ export default function BibleContentGenerator({ initialBookId }: Props) {
           />
           <span className="text-[13px] text-gray-600">
             Regenerate even if content already exists
-            <span className="text-gray-400"> (won't overwrite Published records unless checked)</span>
+            <span className="text-gray-400"> (Published records are always protected)</span>
           </span>
         </label>
 
@@ -368,7 +685,9 @@ export default function BibleContentGenerator({ initialBookId }: Props) {
         <p className="text-[12px] font-semibold text-amber-800 mb-1">Workflow reminder</p>
         <p className="text-[12px] text-amber-700 leading-[1.6]">
           All generated content starts as <strong>Draft</strong>. Review each record in Bible Study admin,
-          edit where needed, then publish. Never approve without reading — AI can occasionally misstate dates,
+          edit where needed, then publish. Book introductions appear in the <strong>Book Intros</strong> tab.
+          Full-chapter generation keeps suggested cross-references with each passage note; they do not appear
+          in the separate canonical <strong>Cross References</strong> table until added there. Never approve without reading — AI can occasionally misstate dates,
           people, or make forced connections.
         </p>
       </div>

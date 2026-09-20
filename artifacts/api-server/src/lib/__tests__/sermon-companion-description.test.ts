@@ -5,7 +5,7 @@
  * The "Day N of M · Title" progress string is computed in two independent
  * places:
  *
- *   A. Walk.tsx  (Today's Steps card) — inline inside the JSX render.
+ *   A. Walk.tsx  (My Emmaus card) — inline inside the JSX render.
  *   B. next-steps.ts  (buildCompanionItem) — server-side, returned as
  *      item.description and rendered by Journeys.tsx (Next Steps tab).
  *
@@ -21,7 +21,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-// ─── Formula A: Walk.tsx (Today's Steps) ─────────────────────────────────────
+// ─── Formula A: Walk.tsx (My Emmaus) ─────────────────────────────────────────
 //
 // Transcribed verbatim from Walk.tsx lines 857-870 (scCompanion inline block).
 // Variable names mirror the Walk component:

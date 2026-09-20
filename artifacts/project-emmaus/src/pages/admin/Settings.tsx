@@ -3,7 +3,7 @@ import { useLocation } from 'wouter';
 import { useAdmin } from '@/contexts/AdminContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
-import { ChurchSettings } from '@/lib/admin-demo-data';
+import { ChurchSettings } from '@/lib/admin-types';
 import {
   UnsavedBanner, SaveMessage, PageHeader, Field,
   TextInput, AdminBtn, ConfirmDialog,
@@ -18,11 +18,520 @@ import {
   clearDevAuditLog,
   type DevAuditEntry,
 } from '@/lib/dev-mode';
-import { FlaskConical, ChevronDown } from 'lucide-react';
+import { FlaskConical, ChevronDown, Video, Mic } from 'lucide-react';
+import {
+  getVoiceSettings,
+  updateVoiceSettings,
+  getVoiceProviderStatus,
+  getVoiceUsageMetrics,
+  fetchComparisonSpeechBlobUrl,
+  sensitivityFromSettings,
+  VAD_PRESETS,
+  type VoiceSettings,
+  type VadSensitivity,
+} from '@/lib/voice-client';
+import { apiGetVideoSettings, apiUpdateVideoSettings } from '@/lib/rooms-api';
+
+// ─── Rooms & Video settings section ──────────────────────────────────────────
+
+const ROLE_LABELS: Record<string, string> = {
+  group_leader: 'Group Leader',
+  pastor:       'Pastor',
+  admin:        'Admin',
+  superAdmin:   'Super Admin',
+};
+
+type VidSettings = {
+  videoEnabled: boolean;
+  maxConcurrentRooms: number;
+  maxParticipantsPerRoom: number;
+  maxDurationMinutes: number;
+  allowedRoles: string[];
+};
+
+type LiveKitStatus = {
+  configured: boolean;
+  missingSecrets: string[];
+};
+
+function VideoSettingsSection() {
+  const { user } = useAuth();
+  const [settings, setSettings] = useState<VidSettings | null>(null);
+  const [livekit, setLivekit] = useState<LiveKitStatus | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    apiGetVideoSettings(user.id)
+      .then(({ settings: nextSettings, livekit: nextLivekit }) => {
+        setSettings(nextSettings);
+        setLivekit(nextLivekit);
+        setError(null);
+      })
+      .catch(() => setError('Unable to load Live Meetings settings.'));
+  }, [user]);
+
+  async function patch<K extends keyof VidSettings>(key: K, value: VidSettings[K]) {
+    if (!settings || !user) return;
+    const previous = settings;
+    const next: VidSettings = { ...settings, [key]: value };
+    setSettings(next);
+    setSaving(true);
+    setError(null);
+    setSavedMessage(null);
+    try {
+      const updated = await apiUpdateVideoSettings(user.id, { [key]: value });
+      setSettings(updated);
+      setSavedMessage(
+        key === 'videoEnabled'
+          ? value
+            ? 'Live audio and video meetings enabled.'
+            : 'Live audio and video meetings disabled.'
+          : 'Saved',
+      );
+      setTimeout(() => setSavedMessage(null), 3000);
+    } catch {
+      setSettings(previous);
+      setError('Unable to save Live Meetings settings. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (error && !settings) {
+    return (
+      <div className="bg-white rounded-xl border border-red-200 p-6">
+        <h2 className="text-sm font-semibold text-gray-700">Groups</h2>
+        <p className="text-sm text-red-600 mt-2">{error}</p>
+      </div>
+    );
+  }
+
+  if (!settings || !livekit) return null;
+
+  const ALL_ROLES = ['group_leader', 'pastor', 'admin', 'superAdmin'];
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Video size={16} className="text-gray-500" />
+          <h2 className="text-sm font-semibold text-gray-700">Groups</h2>
+        </div>
+        {saving && <span className="text-xs text-gray-400">Saving…</span>}
+      </div>
+
+      <div className="rounded-xl border border-gray-200 p-5 space-y-5">
+        <div>
+          <h3 className="text-xs font-bold tracking-widest text-gray-500">LIVE MEETINGS</h3>
+          <p className="text-sm text-gray-500 mt-2">Allow Groups to use live audio and video meetings.</p>
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-gray-700">Live Meetings Enabled</div>
+            <div className="text-xs text-gray-400 mt-1">
+              When off, Groups cannot start or join live meetings.
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.videoEnabled}
+            aria-label="Live Meetings Enabled"
+            disabled={saving}
+            onClick={() => patch('videoEnabled', !settings.videoEnabled)}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+              settings.videoEnabled ? 'bg-teal-700' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                settings.videoEnabled ? 'translate-x-5' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="border-t border-gray-100 pt-4 space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-600">Live Audio</span>
+            <span className={settings.videoEnabled ? 'text-emerald-600' : 'text-gray-400'}>
+              — {settings.videoEnabled ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-600">Live Video</span>
+            <span className={settings.videoEnabled ? 'text-emerald-600' : 'text-gray-400'}>
+              — {settings.videoEnabled ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-sm gap-4">
+            <span className="text-gray-600">LiveKit configuration</span>
+            <span className={livekit.configured ? 'text-emerald-600' : 'text-amber-600'}>
+              — {livekit.configured ? 'Connected' : 'Missing configuration'}
+            </span>
+          </div>
+          {!livekit.configured && livekit.missingSecrets.length > 0 && (
+            <p className="text-xs text-amber-700 pt-1">
+              Missing secret{livekit.missingSecrets.length === 1 ? '' : 's'}: {livekit.missingSecrets.join(', ')}
+            </p>
+          )}
+        </div>
+
+        {savedMessage && (
+          <p className="text-sm text-emerald-600" role="status">{savedMessage}</p>
+        )}
+        {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+      </div>
+
+      {/* Limits */}
+      <div className="grid grid-cols-3 gap-4">
+        <Field label="Max concurrent rooms">
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={settings.maxConcurrentRooms}
+            onChange={e => patch('maxConcurrentRooms', Number(e.target.value))}
+            className="w-full h-9 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </Field>
+        <Field label="Max participants / room">
+          <input
+            type="number"
+            min={2}
+            max={500}
+            value={settings.maxParticipantsPerRoom}
+            onChange={e => patch('maxParticipantsPerRoom', Number(e.target.value))}
+            className="w-full h-9 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </Field>
+        <Field label="Max duration (min)">
+          <input
+            type="number"
+            min={15}
+            max={480}
+            value={settings.maxDurationMinutes}
+            onChange={e => patch('maxDurationMinutes', Number(e.target.value))}
+            className="w-full h-9 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </Field>
+      </div>
+
+      {/* Allowed roles */}
+      <Field label="Who can start Live Meetings">
+        <div className="flex flex-wrap gap-3 pt-1">
+          {ALL_ROLES.map(role => (
+            <label key={role} className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.allowedRoles.includes(role)}
+                onChange={e => {
+                  const next = e.target.checked
+                    ? [...settings.allowedRoles, role]
+                    : settings.allowedRoles.filter(r => r !== role);
+                  patch('allowedRoles', next);
+                }}
+                className="w-4 h-4 rounded"
+              />
+              <span className="text-sm text-gray-700">{ROLE_LABELS[role] ?? role}</span>
+            </label>
+          ))}
+        </div>
+        <p className="text-xs text-gray-400 mt-1">
+           Members can always join authorised meetings but cannot start Live Meetings unless granted a role above.
+        </p>
+      </Field>
+
+      {/* Room type legend */}
+      <div className="pt-2 border-t border-gray-100 space-y-2">
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Group Types</p>
+        <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
+           <div><span className="font-medium text-gray-700">Personal</span> — any member, no live meetings</div>
+           <div><span className="font-medium text-gray-700">Ministry</span> — Group Leader+, live meetings allowed</div>
+          <div><span className="font-medium text-gray-700">Leadership</span> — Pastor+, private</div>
+          <div><span className="font-medium text-gray-700">Church Service</span> — future: reserved</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Emmaus Voice settings section ───────────────────────────────────────────
+
+const VOICE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'nova',    label: 'Nova (warm, calm)' },
+  { value: 'shimmer', label: 'Shimmer (gentle, bright)' },
+  { value: 'alloy',   label: 'Alloy (neutral)' },
+  { value: 'echo',    label: 'Echo (clear, confident)' },
+  { value: 'fable',   label: 'Fable (expressive)' },
+  { value: 'onyx',    label: 'Onyx (deep, authoritative)' },
+];
+
+function VoiceSettingsSection() {
+  const { user } = useAuth();
+  const [settings, setSettings] = useState<VoiceSettings | null>(null);
+  const [saving,  setSaving]  = useState(false);
+  const [saved,   setSaved]   = useState(false);
+  const [error,   setError]   = useState<string | null>(null);
+  const [providerStatus, setProviderStatus] = useState<Awaited<ReturnType<typeof getVoiceProviderStatus>> | null>(null);
+  const [usageMetrics, setUsageMetrics] = useState<Awaited<ReturnType<typeof getVoiceUsageMetrics>>>([]);
+  const [testingProvider, setTestingProvider] = useState<'openai' | 'elevenlabs' | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    getVoiceSettings(user.id).then(setSettings).catch(() => {});
+    getVoiceProviderStatus(user.id).then(setProviderStatus).catch(() => {});
+    getVoiceUsageMetrics(user.id).then(setUsageMetrics).catch(() => {});
+  }, [user]);
+
+  async function patch<K extends keyof VoiceSettings>(key: K, value: VoiceSettings[K]) {
+    if (!settings || !user) return;
+    const next: VoiceSettings = { ...settings, [key]: value };
+    setSettings(next);
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await updateVoiceSettings(user.id, { [key]: value });
+      setSettings(updated);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!settings) return null;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Mic size={16} className="text-gray-500" />
+          <h2 className="text-sm font-semibold text-gray-700">Emmaus Voice Settings</h2>
+        </div>
+        {saving && <span className="text-xs text-gray-400">Saving…</span>}
+        {saved  && <span className="text-xs text-green-600">Saved</span>}
+      </div>
+
+      <p className="text-xs text-gray-400 leading-relaxed">
+        Voice mode lets members speak their questions and hear Emmaus respond in a natural voice.
+         Members use OpenAI gpt-4o-mini-transcribe for input and free device speech for output.
+         Paid TTS providers below are comparison-only and never run for normal members.
+      </p>
+
+      {error && (
+        <p className="text-xs text-red-500">{error}</p>
+      )}
+
+      {/* Enable / disable */}
+      <label className="flex items-center gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={settings.enabled}
+          onChange={e => patch('enabled', e.target.checked)}
+          className="w-4 h-4 rounded"
+        />
+        <div>
+          <div className="text-sm font-medium text-gray-700">Voice mode enabled</div>
+          <div className="text-xs text-gray-400">
+            When off, the mic button and "Hear Emmaus" feature are disabled for all members.
+          </div>
+        </div>
+      </label>
+
+      {/* Voice selection */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block">
+          Voice
+        </label>
+        <select
+          value={settings.voice}
+          onChange={e => patch('voice', e.target.value as VoiceSettings['voice'])}
+          className="w-full h-9 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
+        >
+          {VOICE_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <p className="text-xs text-gray-400">Nova and Shimmer are recommended for a warm, pastoral feel.</p>
+      </div>
+
+      {/* Provider policy and explicit comparison controls */}
+      <div className="border-t border-gray-100 pt-4 space-y-3">
+        <div>
+          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Provider policy</div>
+          <p className="text-xs text-gray-400 mt-1">
+            Normal Voice: OpenAI gpt-4o-mini-transcribe + device voice. Comparison audio is admin-only,
+            uncached, and billed to the configured provider.
+          </p>
+        </div>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={settings.openaiTtsComparisonEnabled}
+            onChange={e => patch('openaiTtsComparisonEnabled', e.target.checked)}
+            className="w-4 h-4 rounded mt-0.5"
+          />
+          <div>
+            <div className="text-sm font-medium text-gray-700">Allow OpenAI TTS comparison</div>
+            <div className="text-xs text-gray-400">
+              {providerStatus?.comparisons.openai.available ? 'Configured' : 'OpenAI is not configured'}
+            </div>
+          </div>
+        </label>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={settings.elevenLabsComparisonEnabled}
+            onChange={e => patch('elevenLabsComparisonEnabled', e.target.checked)}
+            className="w-4 h-4 rounded mt-0.5"
+          />
+          <div>
+            <div className="text-sm font-medium text-gray-700">Allow ElevenLabs comparison</div>
+            <div className="text-xs text-gray-400">
+              Disabled by default and requires the server comparison feature gate.
+              {providerStatus?.comparisons.elevenlabs.available ? ' Key configured.' : ' Key not configured.'}
+            </div>
+          </div>
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {(['openai', 'elevenlabs'] as const).map(provider => {
+            const enabled = provider === 'openai'
+              ? settings.openaiTtsComparisonEnabled
+              : settings.elevenLabsComparisonEnabled;
+            return (
+              <button
+                key={provider}
+                type="button"
+                disabled={!enabled || testingProvider !== null}
+                onClick={async () => {
+                  if (!user || !enabled) return;
+                  setTestingProvider(provider);
+                  setError(null);
+                  try {
+                    const url = await fetchComparisonSpeechBlobUrl(
+                      'This is a short Emmaus Voice provider comparison sample.',
+                      user.id,
+                      provider,
+                    );
+                    const audio = new Audio(url);
+                    audio.onended = () => URL.revokeObjectURL(url);
+                    await audio.play();
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : 'Comparison playback failed');
+                  } finally {
+                    setTestingProvider(null);
+                  }
+                }}
+                className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-700 hover:border-gray-300 disabled:opacity-50"
+              >
+                {testingProvider === provider ? 'Playing…' : `Test ${provider === 'openai' ? 'OpenAI Voice' : 'ElevenLabs Voice'}`}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-gray-400">
+          Device Voice is always the default. The ElevenLabs comparison also requires
+          VOICE_ENABLE_ELEVENLABS_COMPARISON=true on the server.
+        </p>
+        {usageMetrics.length > 0 && (
+          <div className="rounded-lg bg-gray-50 border border-gray-100 p-3 space-y-2">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Current-process usage</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {usageMetrics.map(metric => (
+                <div key={`${metric.operation}-${metric.provider}`} className="text-[11px] text-gray-500">
+                  <span className="font-medium text-gray-700 capitalize">{metric.operation} · {metric.provider}</span>
+                  <div>
+                    {metric.requests} requests · {metric.failures} failures · {metric.totalCharacters.toLocaleString()} chars
+                    · approx ${metric.estimatedCostUsd.toFixed(4)}
+                  </div>
+                  <div>{metric.cacheReuses} cache reuses · {metric.elevenLabsCalls} ElevenLabs calls</div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-gray-400">Aggregated only; no transcript, audio, or member identifiers are retained. Resets when the API restarts.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Speed */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block">
+          Speed: {settings.speed.toFixed(1)}×
+        </label>
+        <input
+          type="range"
+          min={0.5}
+          max={2.0}
+          step={0.1}
+          value={settings.speed}
+          onChange={e => patch('speed', Number(e.target.value))}
+          className="w-full"
+        />
+        <div className="flex justify-between text-xs text-gray-400">
+          <span>0.5× (slower)</span>
+          <span>2.0× (faster)</span>
+        </div>
+      </div>
+
+      {/* Microphone sensitivity */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block">
+          Microphone sensitivity
+        </label>
+        <div className="grid grid-cols-3 gap-2">
+          {(['low', 'medium', 'high'] as VadSensitivity[]).map(level => {
+            const active = sensitivityFromSettings(settings) === level;
+            const labels: Record<VadSensitivity, { name: string; hint: string }> = {
+              low:    { name: 'Low',    hint: 'Noisy rooms — harder to trigger' },
+              medium: { name: 'Medium', hint: 'Balanced (default)' },
+              high:   { name: 'High',   hint: 'Quiet rooms — easier to trigger' },
+            };
+            return (
+              <button
+                key={level}
+                onClick={() => {
+                  const preset = VAD_PRESETS[level];
+                  // patch both fields in one optimistic update then save each
+                  const next = { ...settings, ...preset };
+                  setSettings(next);
+                  setSaving(true);
+                  setError(null);
+                  updateVoiceSettings(user!.id, preset)
+                    .then(updated => { setSettings(updated); setSaved(true); setTimeout(() => setSaved(false), 2000); })
+                    .catch(e => setError(e instanceof Error ? e.message : 'Failed to save'))
+                    .finally(() => setSaving(false));
+                }}
+                className={[
+                  'flex flex-col items-center py-2.5 px-1 rounded-lg border text-center transition-colors',
+                  active
+                    ? 'border-primary bg-primary/5 text-primary'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300',
+                ].join(' ')}
+              >
+                <span className="text-sm font-medium">{labels[level].name}</span>
+                <span className="text-[10px] text-gray-400 mt-0.5 leading-tight">{labels[level].hint}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-gray-400">
+          Controls how easily the microphone picks up speech. Use High in quiet rooms or for soft speakers; use Low in noisy environments.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 // ─── Church settings section ──────────────────────────────────────────────────
 
-export default function AdminSettings() {
+export default function AdminSettings({ onOpenBriefingRules }: { onOpenBriefingRules?: () => void }) {
   const { settings, updateSettings } = useAdmin();
   const [form, setForm] = useState<ChurchSettings>({ ...settings });
   const [isDirty, setIsDirty] = useState(false);
@@ -55,6 +564,25 @@ export default function AdminSettings() {
             </div>
           }
         />
+
+        {onOpenBriefingRules && (
+          <button
+            type="button"
+            onClick={onOpenBriefingRules}
+            className="w-full rounded-xl border border-teal-100 bg-teal-50/50 p-5 text-left transition-colors hover:border-teal-200 hover:bg-teal-50"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-semibold text-teal-900">Pastoral Briefing Rules</h2>
+                <p className="mt-1 max-w-xl text-xs leading-relaxed text-teal-800/70">
+                  Decide which observable attendance and discipleship patterns appear in the Today briefing.
+                  Preview changes safely before saving.
+                </p>
+              </div>
+              <span className="shrink-0 text-sm font-medium text-teal-700">Open →</span>
+            </div>
+          </button>
+        )}
 
         <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
           <h2 className="text-sm font-semibold text-gray-700">Church Identity</h2>
@@ -128,6 +656,12 @@ export default function AdminSettings() {
 
         {/* Development section — visible only to authorised admin/superAdmin accounts */}
         <DevSection />
+
+        {/* Rooms & Video Settings section */}
+        <VideoSettingsSection />
+
+        {/* Emmaus Voice Settings section */}
+        <VoiceSettingsSection />
       </div>
     </div>
   );
@@ -268,6 +802,7 @@ function DevSection() {
 
   return (
     <>
+      <DailyRhythmTestClock />
       {/* Confirm dialog */}
       {showResetConfirm && (
         <ConfirmDialog
@@ -451,5 +986,46 @@ function DevSection() {
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * Local-only calendar simulator. This intentionally has no JourneyContext or
+ * API wiring: it cannot alter member progress, send notifications, or create
+ * production writes. Existing development progress tools remain separate.
+ */
+function DailyRhythmTestClock() {
+  const [enabled, setEnabled] = useState(false);
+  const [date, setDate] = useState('');
+  const [day, setDay] = useState(1);
+  const reset = () => { setEnabled(false); setDate(''); setDay(1); };
+  return (
+    <div className="bg-slate-50 rounded-xl border border-slate-200 p-6 space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold text-gray-700">Daily Rhythm Test Clock</h2>
+        <p className="text-xs text-gray-500 mt-1">
+          Admin preview only. This simulates calendar routing locally and never changes member progress or sends notifications.
+        </p>
+      </div>
+      <label className="flex items-center gap-3 text-sm text-gray-700">
+        <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} className="w-4 h-4 rounded" />
+        Enable local simulation
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Simulated date">
+          <input type="date" value={date} disabled={!enabled} onChange={e => setDate(e.target.value)}
+            className="w-full h-9 rounded-lg border border-gray-200 px-3 text-sm disabled:opacity-50" />
+        </Field>
+        <Field label="Assigned day">
+          <input type="number" min={1} value={day} disabled={!enabled} onChange={e => setDay(Math.max(1, Number(e.target.value) || 1))}
+            className="w-full h-9 rounded-lg border border-gray-200 px-3 text-sm disabled:opacity-50" />
+        </Field>
+      </div>
+      <div className="flex gap-2">
+        <AdminBtn variant="secondary" onClick={reset}>Reset clock</AdminBtn>
+        <AdminBtn variant="secondary" onClick={() => { setDate(''); setDay(1); }}>Clear simulation</AdminBtn>
+      </div>
+      {enabled && date && <p className="text-xs text-slate-600">Preview: {date} · Day {day} (local only)</p>}
+    </div>
   );
 }

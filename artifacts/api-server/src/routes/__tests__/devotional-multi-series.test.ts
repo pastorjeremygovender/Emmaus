@@ -24,8 +24,10 @@
 
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import http from "node:http";
 import https from "node:https";
+import { authHeader, cleanupTestAuth } from "../../test-utils/test-auth.ts";
 
 const BASE_URL = process.env.TEST_SERVER_URL ?? "http://localhost:8080";
 const url = new URL(BASE_URL);
@@ -38,16 +40,20 @@ type ReqOpts = {
   method?: string;
   path: string;
   userId?: string;
-  role?: string;
+  role?: "user" | "admin" | "superAdmin";
   body?: object;
 };
 
-function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
+async function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
+  const authHeaders = opts.userId
+    ? await authHeader(opts.userId, { role: opts.role ?? "user" })
+    : {};
   return new Promise((resolve, reject) => {
     const payload = opts.body ? JSON.stringify(opts.body) : undefined;
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (opts.userId) headers["X-User-Id"] = opts.userId;
-    if (opts.role) headers["X-User-Role"] = opts.role;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...authHeaders,
+    };
     if (payload) headers["Content-Length"] = String(Buffer.byteLength(payload));
 
     const req = transport.request(
@@ -74,7 +80,9 @@ function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
 
 // ─── Test fixtures ────────────────────────────────────────────────────────────
 
-const RUN_TAG = Date.now();
+const RUN_TAG = `${Date.now()}-${process.pid}-${randomBytes(8).toString("hex")}`;
+// Synthetic superAdmin setup key — the harness maps it to a real test session
+// with app_role superAdmin. No demo-user ownership semantics.
 const ADMIN_USER_ID = `test-admin-mseries-${RUN_TAG}`;
 const MEMBER_USER_ID = `test-member-mseries-${RUN_TAG}`;
 
@@ -170,7 +178,13 @@ before(async () => {
 // ─── After: clean up test series ─────────────────────────────────────────────
 
 after(async () => {
-  await Promise.all([deleteSeries(seriesAId), deleteSeries(seriesBId)]);
+  try {
+    await Promise.all([deleteSeries(seriesAId), deleteSeries(seriesBId)]);
+  } finally {
+    // Remove helper-created auth rows + server-persisted residue (progress,
+    // created_by) keyed by our verified ids. Always runs.
+    await cleanupTestAuth();
+  }
 });
 
 // ─── Test 1 — Multi-series: both appear in progress/all ──────────────────────

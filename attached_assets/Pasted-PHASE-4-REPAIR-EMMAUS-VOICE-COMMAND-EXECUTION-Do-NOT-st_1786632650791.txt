@@ -1,0 +1,301 @@
+PHASE 4 REPAIR — EMMAUS VOICE COMMAND EXECUTION
+
+Do NOT start Phase 5.
+
+The Phase 4 manual device test has exposed three critical failures.
+
+CURRENTLY WORKING — DO NOT REGRESS:
+- Voice Session remains active across navigation.
+- Voice Session remains active when app is backgrounded.
+- Audio continues on lock screen.
+- Lock-screen media controls appear and work.
+- Existing Phase 1–4 TTS/transcription/session infrastructure must remain intact.
+
+CURRENT FAILURES:
+
+1. VOICE NAVIGATION DOES NOT EXECUTE
+
+Test:
+User says:
+"Open My Bible."
+
+Current behaviour:
+Emmaus responds conversationally instead of navigating.
+
+Required behaviour:
+Voice intent classifier identifies this as NAVIGATE.
+The existing Emmaus router navigates directly to My Bible.
+Voice Session remains active.
+
+This command MUST NOT be sent to the generic Ask Emmaus/conversation pipeline.
+
+Verify at minimum:
+
+"Open My Bible"
+"Go to Today's Steps"
+"Open Discover"
+"Open My Journey"
+"Go back"
+
+All must execute real application navigation.
+
+
+2. SCRIPTURE READING DOES NOT EXECUTE
+
+Test:
+User says:
+"Read Psalm 23."
+
+Current behaviour:
+Emmaus says it cannot directly read Scripture.
+
+THIS IS INCORRECT.
+
+Emmaus already has Bible content inside the application.
+
+Required flow:
+
+speech
+→ transcription
+→ voice intent classifier
+→ READ_BIBLE
+→ parse Scripture reference
+→ retrieve Scripture using the SAME Bible content/data layer used by My Bible
+→ send Scripture content to VoiceContentReader
+→ TTS reads it aloud.
+
+Do NOT ask the conversational AI whether it can read Scripture.
+
+Do NOT generate Scripture from the AI model.
+
+Do NOT allow READ_BIBLE to fall through to generic conversation when a valid reference is recognised.
+
+The Bible text must come from Emmaus's existing Bible data/content source and respect the user's selected/available translation architecture.
+
+Test at minimum:
+
+"Read Psalm 23"
+"Read John chapter 3"
+"Read Romans 8"
+"Read Romans 8 verse 28"
+
+Expected:
+Emmaus begins reading the requested actual Scripture.
+
+
+3. EMMAUS CONTENT READING DOES NOT EXECUTE
+
+Test:
+User says:
+"Read today's 10 Minutes with Jesus."
+
+Current behaviour:
+Emmaus does not open/read the content.
+
+Required flow:
+
+speech
+→ transcription
+→ intent classifier
+→ READ_DAILY_RHYTHM / READ_DEVOTIONAL / READ_SERMON_COMPANION / READ_WALK
+→ use current authenticated user's Voice Context
+→ resolve the actual current content
+→ optionally navigate to that content's screen
+→ VoiceContentReader reads the REAL stored content section-by-section.
+
+Do not have AI recreate or summarize the content.
+
+Use the existing Emmaus content database/data services.
+
+Verify:
+
+"Read today's 10 Minutes with Jesus."
+"Read today's devotional."
+"Read my sermon companion."
+"Continue my walk."
+
+Where multiple pieces of content make the request genuinely ambiguous, Emmaus may ask a short clarification question.
+
+Otherwise execute directly.
+
+
+4. INTERRUPTION / BARGE-IN IS NOT WORKING
+
+Manual test:
+Emmaus was speaking.
+User spoke over Emmaus.
+Nothing happened.
+Emmaus continued speaking.
+
+This contradicts the intended Phase 2/3 behaviour.
+
+Repair real-time interruption.
+
+While TTS is SPEAKING:
+
+microphone/VAD must be capable of detecting deliberate user speech.
+
+When deliberate user speech is detected:
+
+1. Immediately stop/pause current TTS playback.
+2. Cancel remaining queued TTS sections.
+3. Transition SPEAKING → LISTENING.
+4. Capture the user's complete utterance.
+5. Transcribe it.
+6. Route it through Voice intent handling.
+7. Execute the command or obtain Emmaus response.
+8. Resume the continuous Voice conversation.
+
+Examples:
+
+Emmaus is reading Psalm 23.
+User says:
+"Stop."
+
+→ reading stops.
+
+User says:
+"Explain that."
+
+→ reading stops.
+→ current verse/section is injected as context.
+→ Emmaus explains it.
+→ Voice conversation continues.
+
+User says:
+"Repeat that."
+
+→ replay current/previous reading section.
+
+User says:
+"Continue."
+
+→ resume from the correct position.
+
+IMPORTANT:
+Prevent Emmaus from hearing its own TTS.
+Do not simply leave the microphone fully open and cause feedback/self-interruption.
+
+Use the existing Phase 2 VAD/interruption architecture and diagnose why it is not firing on the real mobile device.
+
+
+ARCHITECTURE REQUIREMENT
+
+Voice commands must have TWO clearly separated execution paths:
+
+A. DETERMINISTIC APP COMMANDS
+
+Navigation
+Bible reading
+Daily Rhythm reading
+Devotional reading
+Sermon Companion reading
+Walk reading
+Reading controls
+Media controls
+
+These execute directly against Emmaus application services.
+
+They DO NOT go through generic conversational AI first.
+
+
+B. CONVERSATIONAL REQUESTS
+
+Examples:
+
+"What does grace mean?"
+"Why did Jesus say that?"
+"Explain this verse."
+"How does this apply to me?"
+"Pray with me about this."
+
+These go through the existing Ask Emmaus intelligence pipeline with current Voice/App/reading context injected.
+
+
+CRITICAL RULE:
+
+CLASSIFY → EXECUTE deterministic command when matched.
+
+Only FALL THROUGH → Ask Emmaus when no deterministic application command applies.
+
+
+ADD DIAGNOSTIC LOGGING
+
+For development/testing, log:
+
+[VOICE]
+transcript:
+intent:
+confidence/match:
+resolvedTarget:
+executionPath: deterministic | conversational
+navigationRoute:
+contentResolved:
+readingStarted:
+bargeInDetected:
+ttsCancelled:
+nextState:
+
+This will allow us to identify whether failures occur in:
+transcription,
+classification,
+resolution,
+execution,
+navigation,
+content retrieval,
+TTS,
+or interruption.
+
+
+DO NOT:
+- redesign Voice UI
+- change the Voice orb
+- change the working lock-screen/media implementation
+- replace Ask Emmaus
+- create duplicate Bible/content stores
+- create new AI pipelines
+- change existing Emmaus navigation architecture
+- start Phase 5
+- remove any working Phase 1–4 functionality
+
+
+TEST ON THE ACTUAL EXECUTION PATH, NOT ONLY UNIT TESTS.
+
+Required end-to-end verification:
+
+TEST 1
+"Open My Bible"
+PASS = actual My Bible screen opens and Voice remains active.
+
+TEST 2
+"Read Psalm 23"
+PASS = actual stored Bible text begins playing through Emmaus Voice.
+
+TEST 3
+"Read today's 10 Minutes with Jesus"
+PASS = today's actual entry resolves and begins reading.
+
+TEST 4
+During reading say:
+"Stop."
+PASS = TTS stops immediately and Voice listens.
+
+TEST 5
+During reading say:
+"Explain that."
+PASS = TTS stops and Ask Emmaus responds using the current section/verse as context.
+
+TEST 6
+Lock phone during reading.
+PASS = existing background audio and media controls still work.
+
+Before changing code:
+1. Inspect the existing Phase 1–4 implementation.
+2. Identify WHY deterministic intents are falling through/not executing.
+3. Identify WHY barge-in is not firing on the physical mobile test.
+4. Report the root causes.
+5. Then implement the smallest architectural repair.
+
+Create a checkpoint before modifications.
+
+After implementation provide a concise QA report showing the result of each of the six tests and any limitations that still require physical-device verification.

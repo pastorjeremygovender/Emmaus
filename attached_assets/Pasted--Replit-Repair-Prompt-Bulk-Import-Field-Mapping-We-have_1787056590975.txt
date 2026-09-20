@@ -1,0 +1,310 @@
+# Replit Repair Prompt — Bulk Import Field Mapping
+
+We have discovered a specific Bulk Import parser bug in Emmaus Content Studio.
+
+This is **not a request to create or rewrite content**.
+
+Do not alter existing authored content except where explicitly required to repair the importer.
+
+## Context
+
+We are manually building the Journey:
+
+**Come and See**
+
+Inside it, we created the Walk:
+
+**What Went Wrong?**
+
+The Walk already contains:
+
+* Walk Introduction
+* Day 1
+
+We then tested Bulk Import for Days 2–5.
+
+The import successfully created Days 2–5 and correctly mapped several fields.
+
+However, two fields were not imported.
+
+## What worked
+
+For Day 2, Bulk Import correctly mapped:
+
+* Day number
+* Step Title
+* Scripture
+* Prayer
+* Your Next Step
+* Closing
+
+Example:
+
+**Title:** When We Chose Our Own Way
+**Scripture:** Genesis 3:1–7
+
+These appeared correctly in the Walk Editor.
+
+## What failed
+
+The following editor fields were left completely blank:
+
+* **Consider This**
+* **Looking Ahead**
+
+The source import contained:
+
+`CONSIDER:`
+
+and
+
+`LOOKING_AHEAD:`
+
+but the parser did not map these into the Walk Editor fields.
+
+Do not solve this by making those labels appear visibly inside another content field.
+
+They must map to the actual dedicated fields.
+
+## Source of truth
+
+The Walk Editor currently supports these fields for every normal Day/Step:
+
+1. Step Title
+2. Welcome
+3. Scripture
+4. Consider This
+5. Prayer
+6. Your Next Step
+7. Closing
+8. Looking Ahead
+
+The Bulk Import system must support every one of these fields directly.
+
+The import parser and manual Walk Editor must use the same content model.
+
+## Required importer schema
+
+Please standardize Bulk Import support for the following canonical field labels:
+
+`DAY:`
+
+`TITLE:`
+
+`WELCOME:`
+
+`SCRIPTURE:`
+
+`CONSIDER_THIS:`
+
+`PRAYER:`
+
+`NEXT_STEP:`
+
+`CLOSING:`
+
+`LOOKING_AHEAD:`
+
+These labels must map exactly as follows:
+
+* `DAY:` → Step/day number
+* `TITLE:` → Step Title
+* `WELCOME:` → Welcome
+* `SCRIPTURE:` → Scripture
+* `CONSIDER_THIS:` → Consider This
+* `PRAYER:` → Prayer
+* `NEXT_STEP:` → Your Next Step
+* `CLOSING:` → Closing
+* `LOOKING_AHEAD:` → Looking Ahead
+
+## Important rendering rule
+
+Field labels are import syntax only.
+
+They must **never render visibly in the user-facing devotional content**.
+
+For example:
+
+`CONSIDER_THIS:`
+
+must populate the dedicated **Consider This** database field.
+
+The user should see the normal styled Consider This section in Emmaus.
+
+The literal text `CONSIDER_THIS:` must never appear inside the reflection itself.
+
+This is important because we previously experienced a bug where raw import labels appeared in user-facing content.
+
+## Backward compatibility
+
+If the importer already supports older aliases such as:
+
+`CONSIDER:`
+
+or another existing label, you may preserve them as backward-compatible aliases.
+
+However, the canonical documented import syntax going forward must be:
+
+`CONSIDER_THIS:`
+
+and
+
+`LOOKING_AHEAD:`
+
+Do not remove working legacy aliases if doing so would break previously valid imports.
+
+## Existing imported Days 2–5
+
+Do not delete or overwrite the existing content in:
+
+**What Went Wrong? → Days 2–5**
+
+unless required for a controlled test.
+
+The administrator has already verified that several fields imported successfully.
+
+We do not want to lose:
+
+* titles
+* Scripture
+* prayers
+* next steps
+* closings
+* any other correctly imported text
+
+## Update/re-import behaviour
+
+We need a safe way to correct the missing fields in the existing Days 2–5.
+
+If Bulk Import currently supports matching an existing Walk/Day and updating that Day, ensure that re-import can update the intended fields without creating duplicate Days.
+
+If it does not support safe update/upsert behaviour, do not silently add duplicate Days.
+
+Instead, implement or expose a clear update mode so an administrator can bulk update existing Steps by matching:
+
+* Walk
+* Day number
+
+The administrator should be able to update missing fields without manually editing every Day.
+
+## Duplicate prevention
+
+Bulk Import must never create duplicate Day records simply because an existing Walk already contains the same Day number.
+
+For an existing Walk, the parser should either:
+
+1. explicitly update the matching Day when update mode is chosen, or
+2. clearly warn the administrator before creating duplicates.
+
+Never silently produce two Day 2 records.
+
+## Preview
+
+Before final import, the preview should make it clear that each detected field is mapped correctly.
+
+For example, Day 2 should visibly indicate detected values for:
+
+* Title
+* Welcome
+* Scripture
+* Consider This
+* Prayer
+* Your Next Step
+* Closing
+* Looking Ahead
+
+If a field label is unknown, the preview should warn the administrator rather than silently discarding its content.
+
+## Unsupported fields
+
+Do not silently throw away recognised-looking sections.
+
+If the importer encounters an unsupported field label, display a clear warning such as:
+
+**Unrecognised field: CONSIDER**
+
+This is safer than importing only part of the content without telling the administrator.
+
+## Scope
+
+This repair applies to Bulk Import for Walk/Step content.
+
+Do not redesign Content Studio or change unrelated areas.
+
+Do not alter:
+
+* Daily Rhythm
+* Daily Devotionals
+* Sermons
+* Bible Study
+* Journey structure
+* published user content
+* user progress
+* existing navigation
+* styling
+* Groups
+* Ask Emmaus
+
+## Architectural requirement
+
+Emmaus must be self-supporting for normal content creation.
+
+An administrator must be able to create large amounts of discipleship content using Content Studio and Bulk Import without returning to Replit or manually entering every field.
+
+Replit is being used here only to repair the platform.
+
+## Testing required
+
+After implementing the fix, perform these tests.
+
+### Test 1 — Single Day
+
+Create a temporary draft import using:
+
+DAY: 1
+TITLE: Test Day
+WELCOME: Test welcome
+SCRIPTURE: John 1:1
+CONSIDER_THIS: Test reflection
+PRAYER: Test prayer
+NEXT_STEP: Test next step
+CLOSING: Test closing
+LOOKING_AHEAD: Test looking ahead
+
+Confirm every field appears in its matching Walk Editor field.
+
+Confirm none of the import labels appear in user-facing content.
+
+Delete the temporary test content afterwards.
+
+### Test 2 — Existing What Went Wrong? Walk
+
+Verify that Days 2–5 remain intact.
+
+Confirm we can safely update the missing:
+
+* Consider This
+* Looking Ahead
+
+fields without creating duplicate Days.
+
+### Test 3 — Preview warnings
+
+Use an intentionally unsupported label such as:
+
+`UNKNOWN_FIELD:`
+
+Confirm the preview warns the administrator instead of silently discarding the content.
+
+## Completion report
+
+When finished, report:
+
+1. Why Consider This failed to import.
+2. Why Looking Ahead failed to import.
+3. The canonical Bulk Import field schema now supported.
+4. Whether legacy aliases remain supported.
+5. How duplicate Days are prevented.
+6. How existing Days can be safely updated.
+7. Confirmation that raw import labels never render to users.
+8. The exact format I should now use for future Emmaus Bulk Imports.

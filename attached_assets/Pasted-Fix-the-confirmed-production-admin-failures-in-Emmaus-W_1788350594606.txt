@@ -1,0 +1,153 @@
+Fix the confirmed production admin failures in Emmaus. Work carefully within the existing application and existing production database.
+
+The published user-facing Daily Rhythm is currently working. Do not redesign it or republish unrelated changes.
+
+DATA SAFETY — NON-NEGOTIABLE
+
+- Do not delete, reset, truncate, overwrite, recreate or replace any database, schema, table, record, user, progress record or content.
+- Do not create or connect a second database.
+- Do not seed, backfill, import, export or run the broader production data sync.
+- Do not copy existing information into replacement tables merely to make the dashboard work.
+- Do not alter DATABASE_URL, Secrets, deployment settings or domains unless you first prove a specific configuration mismatch and report it.
+- Never expose database URLs, passwords, tokens or credentials.
+- Preserve all existing users, content, attendance, Walk activity and Daily Rhythm progress.
+- If production database identity is uncertain, stop immediately and report it.
+
+CONFIRMED FAILURE 1 — DAILY RHYTHM CONTENT STUDIO
+
+Content Studio shows only the Daily Rhythm days permitted by Pastor Jeremy’s personal user-side progress. This prevents him from accessing and editing all the days he has already authored.
+
+This separation must be absolute:
+
+USER SIDE
+
+- Continue using the existing Daily Rhythm progression rules.
+- Users may access only the days made available to them.
+- Do not unlock future days.
+- Preserve all existing progress and completion history.
+
+ADMIN CONTENT STUDIO
+
+- Load every authored Daily Rhythm day directly from the content source.
+- Show all published and draft days regardless of Pastor Jeremy’s personal progress, start date, current day, unlocked day or completion history.
+- Never use user-progress selectors, availability filters or progression services in an admin authoring query.
+- Allow all existing days to be scrolled, opened, edited, reordered and published.
+- Preserve the stored content, order and publication status.
+- Ensure pagination, virtualization, fixed-height containers or query limits cannot restrict the list to five or six days.
+- Audit the other Content Studio sections for the same accidental user-progress filtering and correct only affected admin queries.
+
+CONFIRMED FAILURE 2 — PASTORAL DASHBOARD
+
+Production currently displays:
+
+- Pastoral briefing: could not be loaded.
+- Church register: 0 people.
+- People on Emmaus: 0.
+- Active Walks: 0.
+- May need your attention: None.
+
+These are not valid empty results. Emmaus already has registered users and existing Walk activity.
+
+Trace every figure to its exact:
+
+- API route or server function
+- Database query
+- Source table
+- Join
+- Church/tenant filter
+- Authentication and authorization check
+- Production database connection
+
+Compare these queries with the established working authentication, user, Walk-progress, attendance and admin systems.
+
+The intended meanings are:
+
+- Church register: existing people associated with Isipingo Community Church.
+- People on Emmaus: registered Emmaus users associated with the church.
+- Active Walks: genuine active user Walk enrolments or progress.
+- Pastoral briefing: calculated from existing production attendance, Emmaus activity, Walk activity and the configured Pastoral Briefing Rules.
+- May need your attention: genuine pastoral signals generated using those rules.
+
+Do not display 0 or “None” when a request fails, is unauthorized, uses the wrong tenant, or cannot find the expected schema. Failed states must remain visibly different from successful zero-result states.
+
+DATABASE VERIFICATION
+
+Using read-only inspection and redacted fingerprints, determine:
+
+1. Which database the active deployment at https://www.emmaus.co.za uses.
+2. Which database the development workspace uses.
+3. Whether production and development intentionally reference the same established database.
+4. Whether the app, pastoral briefing, register, attendance, user activity, Walk progress and background jobs use the same intended production database.
+5. Whether any code path overrides DATABASE_URL or opens a second connection.
+6. Whether a wrong tenant/church identifier is hiding the existing information.
+7. Whether production is missing schema expected by the deployed code.
+
+Identify databases only using safe details such as provider, environment, database name, project/database identifier and redacted host fingerprint.
+
+Do not display credentials.
+
+GUARDED MIGRATION RULE
+
+If the code expects missing production schema:
+
+1. Identify the exact missing table, column, constraint or index.
+2. Confirm that the required migration already exists and is the previously tested guarded/idempotent migration.
+3. Inspect it for destructive statements or operations that could overwrite existing data.
+4. Confirm that it changes schema only and does not synchronize or replace production records.
+5. Report the finding before running it.
+6. Do not run a new, modified or broader migration without explicit approval.
+
+IMPLEMENTATION
+
+If the investigation proves that the database is correct and the failures are caused only by incorrect application queries, tenant filters, error handling or admin/user query coupling, make the minimal code correction.
+
+Do not change working features or introduce a new data model.
+
+Before deployment, test all of the following:
+
+- Content Studio returns the full Daily Rhythm authoring count independently of personal user progress.
+- A Daily Rhythm day beyond Pastor Jeremy’s current user-side day can be opened and edited in Content Studio.
+- An ordinary user still cannot access future Daily Rhythm days.
+- The production register query succeeds and returns the genuine existing count.
+- The People on Emmaus query succeeds and returns the genuine existing count.
+- Active Walks returns the genuine existing count.
+- Attendance queries succeed.
+- The pastoral briefing loads successfully using the configured Pastoral Briefing Rules.
+- “May need your attention” uses genuine data.
+- Failed requests are never converted into zeros or “None.”
+- All relevant services use the same intended redacted production database fingerprint and church/tenant.
+- No existing record or progress history was changed, deleted, seeded, duplicated or synchronized.
+- Automated regression tests cover admin/user Daily Rhythm separation, full-list loading, tenant filtering and failed-versus-empty dashboard states.
+
+STOP CONDITIONS
+
+Stop immediately without deploying if:
+
+- The production database identity remains uncertain.
+- Existing data appears missing.
+- More than one unintended production database is active.
+- The required migration differs from the tested guarded migration.
+- A destructive operation would be required.
+- Any verification test fails.
+
+FINAL REPORT
+
+Report:
+
+- Root cause of the Daily Rhythm Content Studio restriction.
+- Full authored Daily Rhythm count.
+- Root cause of each dashboard failure.
+- Redacted production database fingerprint.
+- Redacted development database fingerprint.
+- Whether they match.
+- Correct register count.
+- Correct People on Emmaus count.
+- Correct Active Walks count.
+- Pastoral briefing result.
+- Files changed.
+- Tests run and their results.
+- Whether a migration was required.
+- Confirmation that no data was deleted, replaced, seeded or synchronized.
+- Deployment result.
+
+Deploy only this verified minimal fix. Do not republish or alter unrelated work.

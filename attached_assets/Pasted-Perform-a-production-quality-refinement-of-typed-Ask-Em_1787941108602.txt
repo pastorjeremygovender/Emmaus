@@ -1,0 +1,302 @@
+Perform a production-quality refinement of typed Ask Emmaus.
+
+Do not work on Voice. Do not add speech, transcription, always-listening behaviour or a separate Voice service. Typed Ask Emmaus must first reach the same standard of reliability, polish and attention to detail as the rest of Emmaus.
+
+This is not merely a cosmetic task. Correct the response validation, canonical reference handling, resource grounding, conversational quality and presentation problems demonstrated in current production responses.
+
+CURRENT OBSERVED DEFECTS
+
+1. Some Bible references in the answer are links while others are plain text.
+2. Some Bible book names are lowercase, including examples such as “john 20:30–31” and “genesis 50:1–14”.
+3. “Psalms 91:1–2” is displayed instead of the canonical “Psalm 91:1–2”.
+4. A resource can appear more than once through different cards.
+5. Answers use “Pastor Jeremy Govender” instead of the preferred conversational “Pastor Jeremy”.
+6. The signed-in user’s name is repeated too frequently.
+7. Answers are often unnecessarily long.
+8. Vague input such as “devotional” can produce a long assumed answer instead of resolving what the user wants.
+9. Ask Emmaus sometimes mentions a generic Walk, Journey or other Emmaus resource without resolving a real eligible resource and providing a validated action.
+10. Resource recommendations can feel appended rather than naturally relevant.
+11. The current output would not yet work well as a future spoken response.
+
+Create a checkpoint, inspect the full current response-generation and rendering path, identify why these inconsistencies bypass the structured response contract, and implement the following.
+
+1. ADD A FINAL SERVER-SIDE RESPONSE NORMALIZATION GATE
+
+Every generated answer must pass through one final server-side normalization and validation stage before streaming completion or persistence.
+
+This stage must process the complete answer, not only model-supplied citation metadata.
+
+It must:
+
+* detect every syntactically valid Bible reference in prose;
+* recognize numbered books and common aliases;
+* normalize the canonical Bible book name;
+* normalize chapter and verse punctuation;
+* resolve the exact passage;
+* produce a canonical internal Bible action;
+* mark every occurrence for frontend linking;
+* ensure repeated occurrences are handled consistently;
+* reject or leave unlinked malformed references without inventing a destination.
+
+Examples:
+
+* “john 20:30-31” → “John 20:30–31”
+* “genesis 50:1-14” → “Genesis 50:1–14”
+* “psalms 91:1-2” → “Psalm 91:1–2”
+* “heb 11:1” → “Hebrews 11:1”
+* “1 cor 13” → “1 Corinthians 13”
+
+Do not rely on the model to capitalize or link references correctly.
+
+All Bible links must open the exact chapter and starting verse. Add automated tests that exercise actual frontend rendering and route generation, not only normalization functions.
+
+2. GROUND EVERY EMMAUS-SPECIFIC CLAIM
+
+After generation, inspect every named or implied Emmaus resource in the answer.
+
+Sermons, devotionals, Bible Studies, Walks and Journeys may only be named or recommended when they correspond to a canonical, published and user-eligible resource record.
+
+If the answer says:
+
+* “this Walk”;
+* “the Emmaus Walk”;
+* “a Journey in Emmaus”;
+* “this devotional series”;
+* “Pastor Jeremy’s sermon”;
+* or names a specific resource;
+
+then the server must be able to associate that mention with a canonical resource ID and validated action.
+
+If no record can be resolved:
+
+* remove the specific resource claim;
+* rewrite it as a general suggestion without implying that the resource exists;
+* or omit the recommendation.
+
+Never allow the model to imply the existence of a particular Emmaus resource without verified evidence.
+
+3. DEDUPLICATE RESOURCES
+
+Deduplicate all supporting resources by canonical resource ID.
+
+The same sermon must not appear as:
+
+* a Preached Here card;
+* a separate Sermon card;
+* and another duplicate Next Step.
+
+Choose one primary presentation per resource.
+
+For a sermon used directly in the answer:
+
+* link its title inline;
+* render one Preached Here card;
+* include one validated play/watch action;
+* include the verified timestamp when available.
+
+Do not display duplicate cards merely because the resource arrived through multiple retrieval sources.
+
+4. IMPROVE RESOURCE RELEVANCE
+
+Do not include a resource simply because it shares a keyword or Scripture book.
+
+Require a defensible relationship between:
+
+* the user’s actual concern;
+* the Scripture used in the answer;
+* the retrieved resource segment;
+* the recommendation being made.
+
+Record a structured relevance reason internally.
+
+Use conservative thresholds. One strongly relevant resource is preferable to several weak matches.
+
+For broad pastoral questions, search all appropriate Emmaus resource types. Select only the best genuinely useful result or small set of results.
+
+For application-help and navigation requests, do not run broad pastoral resource retrieval.
+
+5. REFINE CONVERSATIONAL QUALITY
+
+Ask Emmaus must feel warm, relational, confident and natural—not effusive, formulaic or overly familiar.
+
+Rules:
+
+* Acknowledge emotional or pastoral disclosures naturally.
+* Do not add exaggerated encouragement to neutral requests.
+* Use the signed-in user’s name no more than once in an ordinary answer, and often not at all.
+* Use “Pastor Jeremy” in conversational prose and card attribution.
+* Do not use “Pastor Jeremy Govender” unless presenting a formal stored title that cannot be altered.
+* Do not begin every answer with phrases such as “It is deeply encouraging that…”
+* Do not repeatedly say “you might consider”.
+* Do not end every answer with several reflective questions.
+* Avoid generic filler.
+* Do not make the answer sound like marketing copy for Emmaus.
+* Preserve a pastoral tone without pretending to know more about the user’s situation than was disclosed.
+
+6. MAKE ANSWERS MORE CONCISE
+
+Use progressive disclosure.
+
+A normal answer should generally contain:
+
+1. A brief direct response or acknowledgment.
+2. The central Scripture-based answer.
+3. One relevant local-church insight or resource when verified.
+4. One practical next step.
+
+Do not turn a one-word or simple request into a long essay.
+
+Target lengths:
+
+* Application help: 1–3 short sentences plus an action.
+* Direct action confirmation: 1 short sentence plus the action.
+* Simple biblical question: approximately 150–250 words unless the user asks for depth.
+* Pastoral concern: approximately 180–300 words unless more is genuinely required.
+* Resource search: short explanation plus verified results.
+
+The user may ask to go deeper in a follow-up.
+
+7. HANDLE UNDERSPECIFIED REQUESTS INTELLIGENTLY
+
+For input such as:
+
+* “devotional”;
+* “sermon”;
+* “Walk”;
+* “Journey”;
+* “Bible Study”;
+
+use conversation context and user state first.
+
+If the intention remains uncertain, respond with one concise clarification containing useful verified choices.
+
+For example:
+
+“Would you like to open today’s devotional, continue one you’ve started, or browse devotionals?”
+
+The choices must be supported by real capabilities and the user’s eligibility. Do not retrieve and summarize an arbitrary resource without sufficient intent.
+
+8. PREPARE A CLEAN CANONICAL ANSWER CONTRACT
+
+Without implementing Voice, ensure the canonical response contains:
+
+* `displayAnswer`: the polished text response;
+* `speakableAnswer`: a concise plain-language version suitable for future speech;
+* verified Scripture references;
+* verified Emmaus resources;
+* validated actions.
+
+The `speakableAnswer` must not contain:
+
+* Markdown;
+* raw URLs;
+* card labels;
+* repeated citations;
+* long resource metadata;
+* navigation instructions that cannot be spoken naturally.
+
+Do not connect this to Voice yet. This is preparation only.
+
+9. FIX FRONTEND REFERENCE RENDERING
+
+Ensure every normalized Scripture or verified resource mention is rendered inline as a working accessible link.
+
+The frontend must not depend on exact original casing to identify references.
+
+Confirm:
+
+* keyboard accessibility;
+* clear focus state;
+* correct tap target;
+* no nested or overlapping links;
+* exact Bible passage destination;
+* exact resource destination;
+* graceful display when an action becomes unavailable.
+
+Cards must display canonical Bible capitalization and properly formatted passage ranges.
+
+10. ADD A GOLDEN QUALITY EVALUATION SUITE
+
+Create a production-equivalent evaluation set covering at least:
+
+* “devotional”
+* “Where can I find devotionals?”
+* “Read today’s devotional.”
+* “What is faith?”
+* “Prodigal”
+* “I’m afraid.”
+* “I feel alone.”
+* “What does the Bible say about forgiveness?”
+* “Have we preached about the prodigal son?”
+* “Show me a Bible Study about faith.”
+* “Continue my Walk.”
+* “Continue my Journey.”
+* “Read Psalm 23.”
+* “Read John 3:16–18.”
+* “What can Emmaus help me with?”
+
+For each case verify:
+
+* correct intent;
+* appropriate length;
+* canonical capitalization;
+* every valid Bible reference linked;
+* exact Bible route;
+* no invented Emmaus resources;
+* no duplicate cards;
+* relevant resources only;
+* correct user eligibility;
+* appropriate acknowledgment;
+* no excessive name usage;
+* usable actions;
+* concise speakable answer.
+
+Add paraphrase variations so the implementation is not tuned only to these exact phrases.
+
+11. MANUAL PRODUCTION-QUALITY REVIEW
+
+After automated tests pass, inspect the rendered answers at desktop and mobile widths.
+
+Specifically verify the currently observed examples:
+
+* the devotional response using Psalm 91:1–2;
+* the faith response using Hebrews 11:1;
+* Bible Study references to John and Genesis;
+* the prodigal response using Luke 15:11–32;
+* inline sermon linking;
+* duplicate sermon-card removal;
+* concise handling of “devotional”.
+
+Click every displayed Scripture and resource link.
+
+Do not describe the work as complete if authenticated production-equivalent flows have not been tested.
+
+12. RELEASE GATE
+
+Do not modify Voice and do not recommend adding Voice yet.
+
+This refinement is ready only when:
+
+* every valid Scripture reference is normalized and linked;
+* every Bible book is correctly capitalized;
+* every Emmaus-specific recommendation is grounded in a real eligible resource;
+* duplicate resource presentations are removed;
+* irrelevant resources are suppressed;
+* answers are noticeably shorter and more natural;
+* Pastor Jeremy and the signed-in user are addressed appropriately;
+* vague requests are clarified intelligently;
+* the golden evaluation suite passes;
+* key links and actions have been manually verified.
+
+FINAL REPORT
+
+Provide:
+
+1. The causes of inconsistent linking and capitalization.
+2. The causes of ungrounded or duplicate resource references.
+3. Files and services changed.
+4. Tests added and exact results.
+5. Before-and-after examples for the observed responses.
+6. Link and route verification results.
+7. Any remaining production or authenticated testing limitations.
+8. A clear recommendation on whether typed Ask Emmaus is ready for broader user testing—but do not recommend Voice yet.

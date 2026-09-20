@@ -8,6 +8,19 @@ import { type Request, type Response } from "express";
 import { requireAuth } from "../emmaus/auth.js";
 import { getBibleData, patchBibleData, type UserBibleData } from "../bible/store.js";
 import { isAdmin } from "../lib/user-role-store.js";
+import { pool } from "@workspace/db";
+import {
+  parseBulkImport,
+  type VerseCountResolver,
+} from "../lib/bible-bulk-import.js";
+import {
+  addImportConflicts,
+  importBibleStudyChapters,
+  listBibleStudyImportHistory,
+  PUBLISHED_STUDY_NOTE_FOR_VERSE_SQL,
+  type ImportConflictMode,
+  type ImportTargetStatus,
+} from "../lib/bible-bulk-import-store.js";
 
 // Resolve data dir relative to the compiled bundle file, not process.cwd().
 // In production the run command is `node artifacts/api-server/dist/index.mjs`
@@ -192,8 +205,14 @@ function isValidTranslation(id: string): boolean {
 
 import { BOOK_INTROS, CHAPTER_OVERVIEWS } from "../bible/book-intros.js";
 
-router.get("/bible/book-intro/:bookId", (req, res) => {
+router.get("/bible/book-intro/:bookId", (req, res, next) => {
   const bookId = String(req.params.bookId).toLowerCase().trim();
+  // Keep the literal admin collection route reachable below. Express treats
+  // /admin as a valid :bookId unless this dynamic route explicitly passes it on.
+  if (bookId === "admin") {
+    next();
+    return;
+  }
   const intro = BOOK_INTROS[bookId];
   if (!intro) {
     res.status(404).json({ error: "No intro available for this book" });
@@ -524,6 +543,7 @@ router.patch("/bible/data", async (req: Request, res: Response) => {
 
   // Only allow known fields to prevent injection of arbitrary data
   const allowed: (keyof UserBibleData)[] = [
+    "translationId",
     "history",
     "completed",
     "journeyProgress",
@@ -538,6 +558,11 @@ router.patch("/bible/data", async (req: Request, res: Response) => {
   const sanitized: Partial<UserBibleData> = {};
   for (const key of allowed) {
     if (key in patch) {
+      if (key === "translationId" &&
+        (typeof patch.translationId !== "string" || !isValidTranslation(patch.translationId))) {
+        res.status(400).json({ error: "Invalid Bible translation." });
+        return;
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (sanitized as any)[key] = (patch as any)[key];
     }
@@ -763,8 +788,6 @@ router.delete("/bible/cross-references/admin/:id", async (req: Request, res: Res
 //   PATCH  /api/bible/study-notes/admin/:id/status
 //   DELETE /api/bible/study-notes/admin/:id
 
-import { pool } from "@workspace/db";
-
 /**
  * Verifies the caller is an authenticated admin or superAdmin using the
  * server-side role store — never trusts the client-controlled x-user-role header.
@@ -782,6 +805,144 @@ async function requireAdminRole(req: Request, res: Response): Promise<string | n
   return userId;
 }
 
+// ─── Bulk Bible Study Import ──────────────────────────────────────────────────
+
+const MAX_BULK_IMPORT_CHARS = 10_000_000;
+const bulkImportVerseCountCache = new Map<string, number | null>();
+
+const resolveBulkImportVerseCount: VerseCountResolver = (bookId, chapter) => {
+  const key = `${bookId}:${chapter}`;
+  if (bulkImportVerseCountCache.has(key)) {
+    return bulkImportVerseCountCache.get(key) ?? null;
+  }
+  if (!VALID_BOOK_IDS.has(bookId)) return null;
+
+  try {
+    const filePath = join(DATA_DIR, "bsb", `${bookId}.json`);
+    if (!existsSync(filePath)) {
+      bulkImportVerseCountCache.set(key, null);
+      return null;
+    }
+    const data = JSON.parse(readFileSync(filePath, "utf8")) as {
+      chapters?: Record<string, Array<{ verse: number; text: string }>>;
+    };
+    const count = data.chapters?.[String(chapter)]?.length ?? null;
+    bulkImportVerseCountCache.set(key, count);
+    return count;
+  } catch {
+    bulkImportVerseCountCache.set(key, null);
+    return null;
+  }
+};
+
+function validateBulkImportText(
+  value: unknown,
+  res: Response,
+): value is string {
+  if (typeof value !== "string" || !value.trim()) {
+    res.status(400).json({ error: "A non-empty text block is required" });
+    return false;
+  }
+  if (value.length > MAX_BULK_IMPORT_CHARS) {
+    res.status(413).json({
+      error: "Import text is too large",
+      maxCharacters: MAX_BULK_IMPORT_CHARS,
+    });
+    return false;
+  }
+  return true;
+}
+
+router.post("/bible/study-import/preview", async (req: Request, res: Response) => {
+  const userId = await requireAdminRole(req, res);
+  if (!userId) return;
+  const text = req.body?.text;
+  if (!validateBulkImportText(text, res)) return;
+
+  try {
+    const parsed = await parseBulkImport(text, resolveBulkImportVerseCount);
+    const preview = await addImportConflicts(parsed);
+    res.json(preview);
+  } catch (err) {
+    logger.error({ err, userId }, "POST /bible/study-import/preview failed");
+    res.status(500).json({ error: "Failed to parse Bible Study import" });
+  }
+});
+
+router.post("/bible/study-import", async (req: Request, res: Response) => {
+  const userId = await requireAdminRole(req, res);
+  if (!userId) return;
+
+  const text = req.body?.text;
+  const mode = req.body?.mode as ImportConflictMode;
+  const targetStatus = req.body?.targetStatus as ImportTargetStatus;
+  const selectedChapterKeys = req.body?.selectedChapterKeys;
+
+  if (!validateBulkImportText(text, res)) return;
+  if (!["skip", "replace", "merge"].includes(mode)) {
+    res.status(400).json({ error: "mode must be skip, replace, or merge" });
+    return;
+  }
+  if (!["Draft", "Published"].includes(targetStatus)) {
+    res.status(400).json({ error: "targetStatus must be Draft or Published" });
+    return;
+  }
+  if (
+    !Array.isArray(selectedChapterKeys) ||
+    selectedChapterKeys.length === 0 ||
+    !selectedChapterKeys.every(
+      (key: unknown) => typeof key === "string" && /^[a-z0-9]+:\d+$/.test(key),
+    )
+  ) {
+    res.status(400).json({ error: "At least one valid chapter must be selected" });
+    return;
+  }
+
+  try {
+    // Reparse on import so writes never trust a client-edited preview payload.
+    const parsed = await parseBulkImport(text, resolveBulkImportVerseCount);
+    if (!parsed.valid) {
+      res.status(400).json({
+        error: "The import contains validation errors",
+        preview: await addImportConflicts(parsed),
+      });
+      return;
+    }
+
+    const result = await importBibleStudyChapters({
+      preview: parsed,
+      selectedChapterKeys,
+      mode,
+      targetStatus,
+      userId,
+    });
+    res.status(201).json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Import failed";
+    logger.error({ err, userId }, "POST /bible/study-import failed");
+    if (message === "No valid chapters were selected") {
+      res.status(400).json({ error: message });
+      return;
+    }
+    res.status(500).json({ error: "Bible Study import failed" });
+  }
+});
+
+router.get("/bible/study-import/history", async (req: Request, res: Response) => {
+  const userId = await requireAdminRole(req, res);
+  if (!userId) return;
+  const limit = Number(req.query.limit ?? 50);
+  try {
+    const history = await listBibleStudyImportHistory(
+      Number.isFinite(limit) ? limit : 50,
+    );
+    res.json({ history });
+  } catch (err) {
+    logger.error({ err, userId }, "GET /bible/study-import/history failed");
+    res.status(500).json({ error: "Failed to load import history" });
+  }
+});
+
 // Member: fetch Published study note for a specific verse
 router.get("/bible/study-notes", async (req: Request, res: Response) => {
   const bookId  = String(req.query.bookId ?? "").trim().toLowerCase();
@@ -794,17 +955,11 @@ router.get("/bible/study-notes", async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await pool.query(
-      `SELECT * FROM bible_study_notes
-       WHERE book_id = $1
-         AND chapter = $2
-         AND verse_start <= $3
-         AND (verse_end IS NULL OR verse_end >= $3)
-         AND status = 'Published'
-       ORDER BY verse_start ASC
-       LIMIT 1`,
-      [bookId, chapter, verse]
-    );
+    const result = await pool.query(PUBLISHED_STUDY_NOTE_FOR_VERSE_SQL, [
+      bookId,
+      chapter,
+      verse,
+    ]);
     res.json(result.rows[0] ?? null);
   } catch (err) {
     logger.error({ err }, "GET /bible/study-notes failed");
@@ -845,7 +1000,7 @@ router.post("/bible/study-notes/admin", async (req: Request, res: Response) => {
   const {
     book_id, chapter, verse_start, verse_end, title, content,
     context_note, historical_note, original_language_note,
-    jesus_connection, apply_it, status,
+    jesus_connection, apply_it, key_truth, reflection_question, related_scriptures, status,
   } = req.body;
 
   if (!book_id || !chapter || !verse_start) {
@@ -858,8 +1013,9 @@ router.post("/bible/study-notes/admin", async (req: Request, res: Response) => {
       `INSERT INTO bible_study_notes
          (book_id, chapter, verse_start, verse_end, title, content,
           context_note, historical_note, original_language_note,
-          jesus_connection, apply_it, status, created_by, updated_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$13)
+          jesus_connection, apply_it, key_truth, reflection_question, related_scriptures,
+          status, created_by, updated_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$16)
        RETURNING *`,
       [
         book_id, Number(chapter), Number(verse_start),
@@ -867,6 +1023,7 @@ router.post("/bible/study-notes/admin", async (req: Request, res: Response) => {
         title ?? '', content ?? '', context_note ?? '',
         historical_note ?? '', original_language_note ?? '',
         jesus_connection ?? '', apply_it ?? '',
+        key_truth ?? '', reflection_question ?? '', related_scriptures ?? '',
         status ?? 'Draft', userId,
       ]
     );
@@ -886,7 +1043,7 @@ router.put("/bible/study-notes/admin/:id", async (req: Request, res: Response) =
   const {
     book_id, chapter, verse_start, verse_end, title, content,
     context_note, historical_note, original_language_note,
-    jesus_connection, apply_it, status,
+    jesus_connection, apply_it, key_truth, reflection_question, related_scriptures, status,
   } = req.body;
 
   try {
@@ -895,14 +1052,16 @@ router.put("/bible/study-notes/admin/:id", async (req: Request, res: Response) =
          book_id = $1, chapter = $2, verse_start = $3, verse_end = $4,
          title = $5, content = $6, context_note = $7, historical_note = $8,
          original_language_note = $9, jesus_connection = $10, apply_it = $11,
-         status = $12, updated_by = $13, updated_at = now()
-       WHERE id = $14 RETURNING *`,
+         key_truth = $12, reflection_question = $13, related_scriptures = $14,
+         status = $15, updated_by = $16, updated_at = now()
+       WHERE id = $17 RETURNING *`,
       [
         book_id, Number(chapter), Number(verse_start),
         verse_end ? Number(verse_end) : null,
         title ?? '', content ?? '', context_note ?? '',
         historical_note ?? '', original_language_note ?? '',
         jesus_connection ?? '', apply_it ?? '',
+        key_truth ?? '', reflection_question ?? '', related_scriptures ?? '',
         status ?? 'Draft', userId, id,
       ]
     );
@@ -952,6 +1111,30 @@ router.delete("/bible/study-notes/admin/:id", async (req: Request, res: Response
   } catch (err) {
     logger.error({ err }, "DELETE /bible/study-notes/admin/:id failed");
     res.status(500).json({ error: "Failed to delete study note" });
+  }
+});
+
+// Admin: bulk-status update for all overviews in a book (P2-9)
+router.patch("/bible/chapter-overviews/admin/book-status", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const { bookId, status } = req.body as { bookId?: string; status?: string };
+  const VALID = ['Draft', 'In Review', 'Published', 'Archived'];
+  if (!bookId || !VALID.includes(status ?? '')) {
+    res.status(400).json({ error: "bookId and valid status required" }); return;
+  }
+  try {
+    const r = await pool.query(
+      `UPDATE bible_chapter_overviews
+       SET status=$1, updated_by=$2, updated_at=now()
+       WHERE book_id=$3 AND status IN ('Draft','In Review') RETURNING id`,
+      [status, userId, bookId.toLowerCase()]
+    );
+    res.json({ ok: true, updated: r.rowCount });
+  } catch (err) {
+    logger.error({ err }, "PATCH /bible/chapter-overviews/admin/book-status failed");
+    res.status(500).json({ error: "Bulk overview status update failed" });
   }
 });
 
@@ -1317,7 +1500,7 @@ router.post("/bible/chapter-overview/admin/bulk-publish", async (req: Request, r
 // GET /api/bible/study-stats?bookId=   → admin: coverage stats per book (or single book)
 
 const BOOK_CHAPTER_COUNTS: Record<string, number> = {
-  genesis:49, exodus:40, leviticus:27, numbers:36, deuteronomy:34,
+  genesis:50, exodus:40, leviticus:27, numbers:36, deuteronomy:34,
   joshua:24, judges:21, ruth:4, "1samuel":31, "2samuel":24,
   "1kings":22, "2kings":25, "1chronicles":29, "2chronicles":36,
   ezra:10, nehemiah:13, esther:10, job:42, psalms:150, proverbs:31,
@@ -1341,7 +1524,7 @@ router.get("/bible/study-stats", async (req: Request, res: Response) => {
   const filterBook = String(req.query.bookId ?? "").trim().toLowerCase() || null;
   const targetBooks = filterBook
     ? [filterBook]
-    : ["luke","acts","romans","1corinthians","2corinthians","psalms"]; // default to 6 target books
+    : Object.keys(BOOK_CHAPTER_COUNTS); // report coverage for all 66 Bible books
 
   try {
     const [introRes, overviewRes, noteRes] = await Promise.all([
@@ -1470,7 +1653,7 @@ router.post("/bible/generate", async (req: Request, res: Response) => {
   function buildCreateParams(outputTokens: number, extraMessages?: OpenAI.ChatCompletionMessageParam[]) {
     // Reasoning models need a large total budget; standard models can stay lean.
     const maxTokens = isReasoningModel ? Math.max(outputTokens * 6, 25000) : outputTokens;
-    const params: Parameters<typeof openaiClient!.chat.completions.create>[0] = {
+    const params: OpenAI.ChatCompletionCreateParamsNonStreaming = {
       model,
       messages: extraMessages ?? [],
       max_completion_tokens: maxTokens,
@@ -1478,8 +1661,7 @@ router.post("/bible/generate", async (req: Request, res: Response) => {
     };
     if (isReasoningModel) {
       // reasoning_effort: "low" caps chain-of-thought to avoid excessive latency
-      // @ts-expect-error reasoning_effort is valid for reasoning models (o-series, gpt-5)
-      params.reasoning_effort = "low";
+      (params as unknown as Record<string, unknown>).reasoning_effort = "low";
     }
     return params;
   }
@@ -1487,13 +1669,13 @@ router.post("/bible/generate", async (req: Request, res: Response) => {
   try {
     // ── book-intro ────────────────────────────────────────────────────────────
     if (type === "book-intro") {
-      // Skip if already Published (unless force)
+      // Published content is immutable to AI generation, even when force is set.
       const existing = await pool.query(
         `SELECT id, status FROM bible_book_introductions WHERE book_id=$1 LIMIT 1`,
         [bookId]
       );
-      if (existing.rows[0]?.status === "Published" && !force) {
-        res.status(409).json({ error: "A Published intro already exists. Use force=true to regenerate." });
+      if (existing.rows[0]?.status === "Published") {
+        res.status(409).json({ error: "A Published intro already exists. Published content cannot be regenerated here." });
         return;
       }
 
@@ -1573,6 +1755,14 @@ Guidelines: accessible language, not academic, honest about debates, concise.`;
 
       const verseText = verses.map(v => `${v.verse} ${v.text}`).join("\n");
       const includePasages = type === "chapter-batch";
+      const existingOverview = await pool.query(
+        `SELECT id, status FROM bible_chapter_overviews WHERE book_id=$1 AND chapter=$2 LIMIT 1`,
+        [bookId, chapter],
+      );
+      if (existingOverview.rows[0]?.status === "Published") {
+        res.status(409).json({ error: "A Published chapter overview already exists. Published content cannot be regenerated here." });
+        return;
+      }
 
       const prompt = `You are a biblical scholar creating study content for the Emmaus Christian app.
 Generate study content for ${bookName} chapter ${chapter}.
@@ -1606,6 +1796,9 @@ Return ONLY a valid JSON object (no markdown):
       "original_language_note": "Key Greek or Hebrew word if genuinely significant (leave empty string if not needed)",
       "jesus_connection": "How this passage connects to Jesus — direct, typological, or thematic. Be honest about the strength of the connection.",
       "apply_it": "2–3 questions or invitations for reflection. Invitational, not prescriptive. No checklists or guilt.",
+      "key_truth": "One concise sentence stating the central truth of this passage",
+      "reflection_question": "One thoughtful, open-ended question for personal reflection",
+      "related_scriptures": "2–4 related Scripture references with a short reason for each",
       "cross_references": [
         {"reference": "Book Chapter:Verse", "explanation": "why this is connected", "type": "Shared Theme"}
       ]
@@ -1635,7 +1828,7 @@ Keep content concise and mobile-friendly. Do not use academic jargon.`;
          ON CONFLICT (book_id, chapter) DO UPDATE SET
            summary=$3, main_themes=$4, important_people=$5, important_locations=$6,
            passage_divisions=$7, key_verse=$8, book_connection=$9, jesus_connection=$10,
-           status=CASE WHEN bible_chapter_overviews.status='Published' AND NOT $12 THEN 'Published' ELSE 'Draft' END,
+           status=CASE WHEN bible_chapter_overviews.status='Published' THEN 'Published' ELSE 'Draft' END,
            updated_by=$11, updated_at=now()
          RETURNING *`,
         [
@@ -1644,7 +1837,7 @@ Keep content concise and mobile-friendly. Do not use academic jargon.`;
           JSON.stringify(ov.important_people ?? []), JSON.stringify(ov.important_locations ?? []),
           JSON.stringify(ov.passage_divisions ?? []), ov.key_verse ?? '',
           ov.book_connection ?? '', ov.jesus_connection ?? '',
-          userId, force,
+          userId,
         ]
       );
 
@@ -1658,15 +1851,16 @@ Keep content concise and mobile-friendly. Do not use academic jargon.`;
              WHERE book_id=$1 AND chapter=$2 AND verse_start=$3 LIMIT 1`,
             [bookId, chapter, p.verse_start]
           );
-          const skip = existingNote.rows[0]?.status === "Published" && !force;
+          const skip = existingNote.rows[0]?.status === "Published";
           if (skip) { passageRecords.push(existingNote.rows[0]); continue; }
 
           const pr = await pool.query(
             `INSERT INTO bible_study_notes
                (book_id, chapter, verse_start, verse_end, title, content,
                 context_note, historical_note, original_language_note,
-                jesus_connection, apply_it, cross_references, status, created_by, updated_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'Draft',$13,$13)
+                jesus_connection, apply_it, key_truth, reflection_question,
+                related_scriptures, cross_references, status, created_by, updated_by)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'Draft',$16,$16)
              ON CONFLICT DO NOTHING
              RETURNING *`,
             [
@@ -1675,7 +1869,8 @@ Keep content concise and mobile-friendly. Do not use academic jargon.`;
               p.title ?? '', p.content ?? '',
               p.context_note ?? '', p.historical_note ?? '',
               p.original_language_note ?? '', p.jesus_connection ?? '',
-              p.apply_it ?? '', JSON.stringify(p.cross_references ?? []),
+              p.apply_it ?? '', p.key_truth ?? '', p.reflection_question ?? '',
+              p.related_scriptures ?? '', JSON.stringify(p.cross_references ?? []),
               userId,
             ]
           );
@@ -1694,5 +1889,298 @@ Keep content concise and mobile-friendly. Do not use academic jargon.`;
     res.status(500).json({ error: "Content generation failed" });
   }
 });
+
+// ─── Resumable bulk AI generation ────────────────────────────────────────────
+//
+// Jobs are deliberately itemised by book intro or chapter. A server restart
+// leaves queued/running work in the database; the worker reclaims stale running
+// items and continues without creating a second job.
+
+type GenerationJobScope = "book-intros" | "study-sheets" | "both";
+type ClaimedGenerationItem = {
+  id: string;
+  job_id: string;
+  item_type: "book-intro" | "chapter-batch";
+  book_id: string;
+  chapter: number | null;
+  force: boolean;
+  created_by: string;
+};
+const GENERATION_SCOPES = new Set<GenerationJobScope>(["book-intros", "study-sheets", "both"]);
+const CANONICAL_CHAPTER_COUNTS: Record<string, number> = {
+  genesis: 50, exodus: 40, leviticus: 27, numbers: 36, deuteronomy: 34,
+  joshua: 24, judges: 21, ruth: 4, "1samuel": 31, "2samuel": 24,
+  "1kings": 22, "2kings": 25, "1chronicles": 29, "2chronicles": 36,
+  ezra: 10, nehemiah: 13, esther: 10, job: 42, psalms: 150, proverbs: 31,
+  ecclesiastes: 12, songofsolomon: 8, isaiah: 66, jeremiah: 52,
+  lamentations: 5, ezekiel: 48, daniel: 12, hosea: 14, joel: 3, amos: 9,
+  obadiah: 1, jonah: 4, micah: 7, nahum: 3, habakkuk: 3, zephaniah: 3,
+  haggai: 2, zechariah: 14, malachi: 4, matthew: 28, mark: 16, luke: 24,
+  john: 21, acts: 28, romans: 16, "1corinthians": 16, "2corinthians": 13,
+  galatians: 6, ephesians: 6, philippians: 4, colossians: 4,
+  "1thessalonians": 5, "2thessalonians": 3, "1timothy": 6, "2timothy": 4,
+  titus: 3, philemon: 1, hebrews: 13, james: 5, "1peter": 5, "2peter": 3,
+  "1john": 5, "2john": 1, "3john": 1, jude: 1, revelation: 22,
+};
+
+async function invokeSingleGeneration(
+  userId: string,
+  item: { item_type: "book-intro" | "chapter-batch"; book_id: string; chapter: number | null },
+  force: boolean,
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  return new Promise((resolve) => {
+    const fakeReq = {
+      method: "POST",
+      url: "/bible/generate",
+      originalUrl: "/bible/generate",
+      body: {
+        type: item.item_type,
+        bookId: item.book_id,
+        chapter: item.chapter ?? undefined,
+        force,
+      },
+      user: { id: userId, role: "admin" },
+      headers: {},
+    } as unknown as Request;
+    let statusCode = 200;
+    let settled = false;
+    const finish = (body: Record<string, unknown>) => {
+      if (!settled) {
+        settled = true;
+        resolve({ status: statusCode, body });
+      }
+    };
+    const fakeRes = {
+      status(code: number) { statusCode = code; return fakeRes; },
+      json(body: Record<string, unknown>) { finish(body); return fakeRes; },
+      send(body: Record<string, unknown>) { finish(body); return fakeRes; },
+      end() { finish({}); return fakeRes; },
+      setHeader() { return fakeRes; },
+      headersSent: false,
+    } as unknown as Response;
+    // Express's Router type does not expose handle, but the runtime router is
+    // callable through this internal adapter and keeps one generation contract.
+    (router as unknown as { handle: Function }).handle(fakeReq, fakeRes, () => finish({ error: "Generation route not found" }));
+  });
+}
+
+async function shouldSkipQueuedItem(item: {
+  item_type: "book-intro" | "chapter-batch";
+  book_id: string;
+  chapter: number | null;
+}, force: boolean): Promise<boolean> {
+  if (force) return false;
+  if (item.item_type === "book-intro") {
+    const r = await pool.query(
+      "SELECT status FROM bible_book_introductions WHERE book_id=$1 LIMIT 1",
+      [item.book_id],
+    );
+    return ["Published", "Draft", "In Review"].includes(r.rows[0]?.status);
+  }
+  const overview = await pool.query(
+    "SELECT status FROM bible_chapter_overviews WHERE book_id=$1 AND chapter=$2 LIMIT 1",
+    [item.book_id, item.chapter],
+  );
+  if (["Published", "Draft", "In Review"].includes(overview.rows[0]?.status)) return true;
+  const notes = await pool.query(
+    "SELECT status FROM bible_study_notes WHERE book_id=$1 AND chapter=$2 LIMIT 1",
+    [item.book_id, item.chapter],
+  );
+  return ["Published", "Draft", "In Review"].includes(notes.rows[0]?.status);
+}
+
+async function refreshGenerationJob(jobId: string): Promise<void> {
+  await pool.query(`
+    UPDATE bible_generation_jobs j SET
+      completed=(SELECT count(*) FROM bible_generation_items WHERE job_id=j.id AND status='completed'),
+      skipped=(SELECT count(*) FROM bible_generation_items WHERE job_id=j.id AND status='skipped'),
+      failed=(SELECT count(*) FROM bible_generation_items WHERE job_id=j.id AND status='failed'),
+      status=CASE
+        WHEN j.status='paused' THEN 'paused'
+        WHEN EXISTS (SELECT 1 FROM bible_generation_items WHERE job_id=j.id AND status='failed')
+          AND NOT EXISTS (SELECT 1 FROM bible_generation_items WHERE job_id=j.id AND status IN ('queued','running'))
+          THEN 'failed'
+        WHEN NOT EXISTS (SELECT 1 FROM bible_generation_items WHERE job_id=j.id AND status IN ('queued','running','failed'))
+          THEN 'completed'
+        ELSE j.status
+      END,
+      updated_at=now()
+    WHERE j.id=$1
+  `, [jobId]);
+}
+
+async function runGenerationWorker(): Promise<void> {
+  let claimed: ClaimedGenerationItem | null = null;
+  try {
+    const claim = await pool.query(`
+      WITH candidate AS (
+        SELECT i.id
+        FROM bible_generation_items i
+        JOIN bible_generation_jobs j ON j.id=i.job_id
+        WHERE i.status='queued' AND j.status IN ('queued','running')
+        ORDER BY i.created_at
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+      )
+      UPDATE bible_generation_items i SET status='running', attempts=i.attempts+1, locked_at=now()
+      FROM candidate, bible_generation_jobs j
+      WHERE i.id=candidate.id AND j.id=i.job_id
+      RETURNING i.id, i.job_id, i.item_type, i.book_id, i.chapter, j.force, j.created_by
+    `);
+    if (!claim.rows[0]) return;
+    const item = claim.rows[0] as ClaimedGenerationItem;
+    claimed = item;
+    await pool.query("UPDATE bible_generation_jobs SET status='running', updated_at=now() WHERE id=$1 AND status='queued'", [item.job_id]);
+
+    if (await shouldSkipQueuedItem(item, item.force)) {
+      await pool.query("UPDATE bible_generation_items SET status='skipped', completed_at=now(), locked_at=NULL WHERE id=$1", [item.id]);
+    } else {
+      const response = await invokeSingleGeneration(item.created_by, item, item.force);
+      if (response.status >= 200 && response.status < 300) {
+        await pool.query("UPDATE bible_generation_items SET status='completed', completed_at=now(), locked_at=NULL, last_error='' WHERE id=$1", [item.id]);
+      } else {
+        throw new Error(String(response.body.error ?? `Generation failed (${response.status})`));
+      }
+    }
+    await refreshGenerationJob(item.job_id);
+  } catch (err) {
+    if (claimed) {
+      await pool.query(
+        "UPDATE bible_generation_items SET status='failed', last_error=$2, locked_at=NULL WHERE id=$1",
+        [claimed.id, err instanceof Error ? err.message : "Generation failed"],
+      ).catch(() => undefined);
+      await refreshGenerationJob(claimed.job_id).catch(() => undefined);
+    } else {
+      logger.warn({ err }, "Bible generation worker unavailable");
+    }
+  }
+}
+
+let generationWorkerActive = false;
+function startGenerationWorker(): void {
+  if (generationWorkerActive) return;
+  generationWorkerActive = true;
+  void (async function loop() {
+    while (generationWorkerActive) {
+      await runGenerationWorker();
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }
+  })();
+}
+
+router.post("/bible/generation-jobs", async (req: Request, res: Response) => {
+  const userId = await requireAdminRole(req, res);
+  if (!userId) return;
+  const scope = String(req.body?.scope ?? "both") as GenerationJobScope;
+  const force = req.body?.force === true;
+  if (!GENERATION_SCOPES.has(scope)) {
+    res.status(400).json({ error: "scope must be book-intros, study-sheets, or both" });
+    return;
+  }
+  try {
+    const job = await pool.query(
+      "INSERT INTO bible_generation_jobs (scope, force, created_by) VALUES ($1,$2,$3) RETURNING *",
+      [scope, force, userId],
+    );
+    const jobId = job.rows[0].id;
+    const rows: Array<[string, string, string, number | null]> = [];
+    if (scope === "book-intros" || scope === "both") {
+      for (const bookId of Object.keys(CANONICAL_CHAPTER_COUNTS)) rows.push([jobId, "book-intro", bookId, null]);
+    }
+    if (scope === "study-sheets" || scope === "both") {
+      for (const [bookId, count] of Object.entries(CANONICAL_CHAPTER_COUNTS)) {
+        for (let chapter = 1; chapter <= count; chapter++) rows.push([jobId, "chapter-batch", bookId, chapter]);
+      }
+    }
+    for (let offset = 0; offset < rows.length; offset += 200) {
+      const batch = rows.slice(offset, offset + 200);
+      const values: string[] = [];
+      const params: unknown[] = [];
+      batch.forEach((row, index) => {
+        const base = index * 4;
+        values.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4})`);
+        params.push(...row);
+      });
+      await pool.query(
+        `INSERT INTO bible_generation_items (job_id,item_type,book_id,chapter) VALUES ${values.join(",")}`,
+        params,
+      );
+    }
+    await pool.query("UPDATE bible_generation_jobs SET total=$2 WHERE id=$1", [jobId, rows.length]);
+    startGenerationWorker();
+    res.status(201).json({ ...job.rows[0], total: rows.length });
+  } catch (err) {
+    logger.error({ err }, "POST /bible/generation-jobs failed");
+    res.status(500).json({ error: "Could not create generation job" });
+  }
+});
+
+router.get("/bible/generation-jobs", async (req: Request, res: Response) => {
+  const userId = await requireAdminRole(req, res);
+  if (!userId) return;
+  try {
+    const jobs = await pool.query(`
+      SELECT j.*,
+        count(i.id) FILTER (WHERE i.status='queued')::int AS queued,
+        count(i.id) FILTER (WHERE i.status='running')::int AS running,
+        count(i.id) FILTER (WHERE i.status='failed')::int AS failed_items
+      FROM bible_generation_jobs j
+      LEFT JOIN bible_generation_items i ON i.job_id=j.id
+      GROUP BY j.id ORDER BY j.created_at DESC LIMIT 10
+    `);
+    res.json({ jobs: jobs.rows });
+  } catch (err) {
+    logger.error({ err }, "GET /bible/generation-jobs failed");
+    res.status(500).json({ error: "Could not load generation jobs" });
+  }
+});
+
+router.get("/bible/generation-jobs/:id", async (req: Request, res: Response) => {
+  const userId = await requireAdminRole(req, res);
+  if (!userId) return;
+  try {
+    const job = await pool.query("SELECT * FROM bible_generation_jobs WHERE id=$1", [req.params.id]);
+    if (!job.rows[0]) { res.status(404).json({ error: "Job not found" }); return; }
+    const items = await pool.query(`
+      SELECT status, count(*)::int AS count FROM bible_generation_items
+      WHERE job_id=$1 GROUP BY status
+    `, [req.params.id]);
+    res.json({ job: job.rows[0], counts: Object.fromEntries(items.rows.map(r => [r.status, r.count])) });
+  } catch {
+    res.status(500).json({ error: "Could not load generation job" });
+  }
+});
+
+router.post("/bible/generation-jobs/:id/pause", async (req: Request, res: Response) => {
+  const userId = await requireAdminRole(req, res);
+  if (!userId) return;
+  await pool.query("UPDATE bible_generation_jobs SET status='paused', updated_at=now() WHERE id=$1 AND status IN ('queued','running')", [req.params.id]);
+  res.json({ ok: true });
+});
+
+router.post("/bible/generation-jobs/:id/resume", async (req: Request, res: Response) => {
+  const userId = await requireAdminRole(req, res);
+  if (!userId) return;
+  await pool.query("UPDATE bible_generation_jobs SET status='queued', updated_at=now() WHERE id=$1 AND status='paused'", [req.params.id]);
+  startGenerationWorker();
+  res.json({ ok: true });
+});
+
+router.post("/bible/generation-jobs/:id/retry", async (req: Request, res: Response) => {
+  const userId = await requireAdminRole(req, res);
+  if (!userId) return;
+  await pool.query(
+    "UPDATE bible_generation_items SET status='queued', last_error='', locked_at=NULL WHERE job_id=$1 AND status='failed'",
+    [req.params.id],
+  );
+  await pool.query("UPDATE bible_generation_jobs SET status='queued', updated_at=now() WHERE id=$1", [req.params.id]);
+  startGenerationWorker();
+  res.json({ ok: true });
+});
+
+// Recover items left running by a terminated process, then begin polling.
+void pool.query("UPDATE bible_generation_items SET status='queued', locked_at=NULL WHERE status='running' AND locked_at < now() - interval '10 minutes'")
+  .then(() => startGenerationWorker())
+  .catch(() => undefined);
 
 export default router;

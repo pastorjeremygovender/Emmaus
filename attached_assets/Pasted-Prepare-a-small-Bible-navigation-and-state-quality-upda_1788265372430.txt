@@ -1,0 +1,92 @@
+Prepare a small Bible navigation and state-quality update. The app is currently working; protect all existing behaviour.
+
+Do not modify Daily Rhythm opening, calendar advancement, completion, reminders, Previous Days, authentication, route permissions, production data, database schemas, secrets, environment variables, dependencies or unrelated features.
+
+Do not publish automatically.
+
+Fix only these three issues:
+
+1. Bible to Today’s Steps white-screen reload
+
+Currently, switching from My Bible back to Today’s Steps flashes a blank white screen and behaves like the entire app is loading again.
+
+Restore smooth client-side navigation between My Bible and Today’s Steps.
+
+* Identify any hard navigation, `window.location`, document reload, unstable root key, or route remount causing this.
+* Use the app’s existing client-side router and preserve the mounted application shell.
+* Do not change destination URLs or authentication behaviour.
+* The bottom navigation must respond immediately without a white-screen flash.
+* Do not conceal a reload with an artificial loading screen; remove the unnecessary reload.
+
+2. Incorrect old Scripture flashing
+
+When opening the Bible from today’s content, an old Scripture from John briefly appears before the correct current Scripture, such as Daniel 4.
+
+* Do not render a stale, default or previously cached Scripture while the requested reference is resolving.
+* Resolve the intended current book, chapter and translation before rendering chapter content.
+* Show the existing neutral Bible loading/skeleton state if resolution is genuinely required.
+* Never show incorrect Scripture as a temporary placeholder.
+* Ensure a Daily Rhythm or Scripture deep link to Daniel 4 opens directly to Daniel 4 without displaying John first.
+* Preserve NIV as the online default where it is currently permitted and configured.
+
+3. Remember the last chapter separately for every Bible book
+
+Add device-local per-book chapter memory.
+
+Expected example:
+
+* User reads Daniel 4.
+* User changes to Matthew and reads Matthew 3.
+* When the user returns to Daniel through Browse Books, open Daniel 4.
+* When the user returns to Matthew, open Matthew 3.
+* A deliberate Scripture link or deep link must override remembered position and open its specified chapter.
+
+Requirements:
+
+* Store chapter position separately by translation and canonical Bible book identifier.
+* Scope it to the signed-in user where practical so accounts sharing a device do not inherit one another’s positions.
+* Use the project’s existing safe client-storage abstraction if one exists.
+* Validate stored chapters against each book’s valid chapter range.
+* If no remembered chapter exists, open Chapter 1.
+* Preserve the existing global Continue Reading card as the user’s most recently read location.
+* Do not add database or schema changes.
+* Do not alter notes, highlights, annotations, Study, Preached Here or sharing.
+
+Add focused regression tests proving:
+
+* Bible → Today’s Steps uses client-side navigation without a document reload.
+* Today’s Steps → Bible is equally smooth.
+* A requested Daniel 4 route never renders John first.
+* Daniel 4 and Matthew 3 are remembered independently.
+* An explicit Scripture link overrides stored per-book memory.
+* Invalid or obsolete stored values safely fall back to Chapter 1.
+* Different translations do not overwrite one another’s remembered chapters.
+* Existing Daily Rhythm and OpeningGate tests remain unchanged and pass.
+
+Run:
+
+* Focused Bible navigation and state tests
+* Existing Bible tests
+* Daily Rhythm authority and OpeningGate regression tests
+* Frontend production build
+* API production build
+* Web and API smoke tests
+* Browser-console check
+* `git diff --check`
+
+Do not implement offline Bible storage in this task. Only report the existing Bible-text provider and whether its current licence/API terms permit offline storage; do not download, bundle or cache the complete NIV text.
+
+Create one local commit only after all tests pass.
+
+Do not publish.
+
+Report:
+
+* Root cause of the white-screen reload
+* Root cause of the stale John flash
+* Exact files changed
+* How per-book position is stored and scoped
+* Test and build results
+* New commit ID
+* Bible provider and confirmed offline-storage restriction
+* READY FOR MANUAL PUBLISH or NOT READY

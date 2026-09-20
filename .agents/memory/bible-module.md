@@ -63,8 +63,14 @@ Returns a single text blob with inline `[N]` or `[N-M]` markers.
 
 ## Key Decisions
 - **`process.cwd()` not `import.meta.url`** for DATA_DIR in compiled bundle
+- **Literal admin routes must bypass dynamic member routes** — Express will otherwise treat `/book-intro/admin` as `bookId = "admin"` and return the member-route 404 before admin handlers run.
 - **Strict allowlist** for bookId (66 canonical IDs) and translationId before any filesystem access
 - **KJV local data kept** — `kjv-luke.ts` and `kjv-john.ts` still used for Walk journey chapter headings and reading-minute estimates (separate from the full KJV served via API)
 - **Search limited to local translations** — API.Bible search not implemented; search route returns 400 for licensed IDs
 - **Licensed caching**: `private, max-age=300` header, in-process Map only, cleared on restart
 - **MSG Bible ID was originally given as `61f1fa7de016f942e-01` (typo)** — actual ID is `6f11a7de016f942e-01`; found by searching the account's 250-Bible catalogue
+- **Unavailable licensed chapters** keep the user's selected translation unchanged and offer an explicit BSB/public-domain action; never silently substitute licensed text.
+
+**Why:** API.Bible can confirm a translation catalogue while still returning 404 for an individual chapter such as NIV Nahum 1.
+
+**How to apply:** Treat a null licensed chapter as a recoverable reader state with a visible translation choice, not as permission to rewrite the saved preference.

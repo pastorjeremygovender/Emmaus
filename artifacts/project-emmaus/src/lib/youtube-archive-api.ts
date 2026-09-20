@@ -56,6 +56,7 @@ export interface VideoRecord {
   sermonStartConfidence?: number;
   sermonStartMethod?: string;
   manualSermonStartSeconds?: number;
+  manualSermonEndSeconds?: number;
   sermonStartVerified?: boolean;
   finalSermonStartSeconds?: number;
   // Audio asset
@@ -88,7 +89,20 @@ export interface ImportJob {
   createdAt: string;
   updatedAt: string;
   targetVideoId?: string;
-  progress: { total: number; done: number; failed: number; currentItem?: string };
+  progress: {
+    total: number;
+    done: number;
+    failed: number;
+    skipped?: number;
+    currentItem?: string;
+    failures?: Array<{
+      itemId: string;
+      itemTitle?: string;
+      stage: string;
+      error: string;
+      at: string;
+    }>;
+  };
   error?: string;
 }
 
@@ -121,6 +135,20 @@ export interface ArchiveStatus {
   };
   stats: ArchiveStats;
   activeJob: ImportJob | null;
+}
+
+export interface IndexingCheckpoint {
+  version: 1;
+  jobId: string;
+  videoIds: string[];
+  position: number;
+  completedVideoIds: string[];
+  completedCount: number;
+  remainingCount: number;
+  status: 'running' | 'paused';
+  pauseReason?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -206,13 +234,32 @@ export interface PipelineStatus {
   error?: string;
 }
 
-export async function runPipeline(): Promise<PipelineResult> {
-  return apiFetch('/api/youtube-archive/pipeline/run', { method: 'POST' });
+export async function runPipeline(confirmFullRebuild = false): Promise<PipelineResult> {
+  return apiFetch('/api/youtube-archive/pipeline/run', {
+    method: 'POST',
+    body: JSON.stringify({ confirmFullRebuild }),
+  });
+}
+
+export async function getIndexingCheckpoint(): Promise<{ checkpoint: IndexingCheckpoint | null }> {
+  return apiFetch('/api/youtube-archive/pipeline/checkpoint');
+}
+
+export async function startSafeIndexingBatch(): Promise<PipelineResult> {
+  return apiFetch('/api/youtube-archive/pipeline/safe-batch', { method: 'POST' });
+}
+
+export async function resumeSafeIndexing(): Promise<PipelineResult> {
+  return apiFetch('/api/youtube-archive/pipeline/resume', { method: 'POST' });
 }
 
 export async function getPipelineJob(jobId: string): Promise<ImportJob | null> {
   const result = await listJobs();
   return result.jobs.find(j => j.id === jobId) ?? null;
+}
+
+export async function cancelArchiveJob(jobId: string): Promise<{ job: ImportJob }> {
+  return apiFetch(`/api/youtube-archive/jobs/${jobId}/cancel`, { method: 'POST' });
 }
 
 export async function runEnrichment(): Promise<PipelineResult> {

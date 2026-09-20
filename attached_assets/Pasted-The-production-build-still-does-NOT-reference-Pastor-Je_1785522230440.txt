@@ -1,0 +1,157 @@
+The production build still does NOT reference Pastor Jeremy's sermons.
+
+Current symptoms:
+
+- Ask Emmaus keeps falling back to Psalm 42.
+- No sermon titles.
+- No sermon timestamps.
+- No "Pastor Jeremy preached..." references.
+- Media Studio reports:
+  • 19 Approved sermons
+  • 19 Transcripts ready
+  • 2,179 Indexed segments
+
+This strongly suggests the data exists but is not being retrieved correctly in production.
+
+DO NOT guess.
+DO NOT make random fixes.
+DO NOT redesign Ask Emmaus.
+DO NOT modify prompts until the fault has been proven.
+
+Work through the pipeline in this exact order.
+
+--------------------------------------------------
+STEP 1 – Verify production data
+--------------------------------------------------
+
+Run the exact production Ask Emmaus endpoint.
+
+Log:
+
+- Sermons loaded
+- Transcript documents loaded
+- Indexed sermon segments loaded
+- Retrieval service initialized (YES/NO)
+
+Example:
+
+Loaded sermons: __
+Loaded transcripts: __
+Loaded indexed segments: __
+
+--------------------------------------------------
+STEP 2 – Trace retrieval
+--------------------------------------------------
+
+Run this query:
+
+"I've been struggling with anger."
+
+BEFORE the LLM is called, print every retrieval result.
+
+For every retrieved item show:
+
+Type:
+Score:
+Title:
+Timestamp:
+
+If nothing is retrieved, explain exactly why.
+
+--------------------------------------------------
+STEP 3 – Trace the entire pipeline
+--------------------------------------------------
+
+Show PASS or FAIL for every stage.
+
+Configuration
+↓
+
+Approved sermons loaded
+↓
+
+Transcript data loaded
+↓
+
+Indexed sermon segments loaded
+↓
+
+Vector/search index initialized
+↓
+
+Similarity search executed
+↓
+
+Results returned
+↓
+
+Prompt assembled
+↓
+
+LLM called
+
+--------------------------------------------------
+STEP 4 – If production loads ZERO sermon segments
+--------------------------------------------------
+
+Find the exact cause.
+
+Do NOT say "probably."
+
+Identify the exact file, path, deployment configuration or environment difference that causes production to load zero sermon data.
+
+--------------------------------------------------
+STEP 5 – If production loads sermon segments correctly
+--------------------------------------------------
+
+If the data exists but retrieval returns nothing:
+
+Fix ONLY the retrieval logic.
+
+Do NOT redesign Ask Emmaus.
+
+Do NOT rewrite prompts.
+
+Do NOT change UI.
+
+--------------------------------------------------
+STEP 6 – Republish
+--------------------------------------------------
+
+Republish the production build.
+
+Run the exact same production query again.
+
+The answer must now include REAL Emmaus content, for example:
+
+• Relevant Scripture
+• "Pastor Jeremy preached about this in..."
+• Sermon title
+• Timestamp
+• Related Walk
+• Related Bible Study
+• Related Psalm Devotional
+
+if those resources exist.
+
+--------------------------------------------------
+ACCEPTANCE CRITERIA
+--------------------------------------------------
+
+This ticket is NOT complete until ALL of the following are demonstrated from the PUBLISHED production build:
+
+✓ Production loads sermon segments.
+
+✓ Sermon retrieval returns real results.
+
+✓ Ask Emmaus references Pastor Jeremy's sermons.
+
+✓ Sermon title is displayed.
+
+✓ Timestamp is displayed.
+
+✓ Scripture is displayed.
+
+✓ Related Emmaus content is displayed.
+
+Do NOT mark this ticket complete until every acceptance criterion has been demonstrated from production with evidence.

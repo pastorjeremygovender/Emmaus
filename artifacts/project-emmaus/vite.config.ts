@@ -5,30 +5,28 @@ import { defineConfig } from 'vite';
 
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 
-const rawPort = process.env.PORT;
-
-if (!rawPort) {
-  throw new Error(
-    'PORT environment variable is required but was not provided.',
-  );
-}
-
+// PORT is only used by the dev/preview server — it is irrelevant during
+// `vite build`.  Default to 3000 so the build step does not throw when the
+// deployment platform does not forward runtime env vars to the build phase.
+const rawPort = process.env.PORT ?? '3000';
 const port = Number(rawPort);
-
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const basePath = process.env.BASE_PATH;
-
-if (!basePath) {
-  throw new Error(
-    'BASE_PATH environment variable is required but was not provided.',
-  );
-}
+// BASE_PATH controls the Vite `base` option (public URL prefix for all assets).
+// Default to '/' — the value the deployment platform sets at runtime anyway.
+const basePath = process.env.BASE_PATH ?? '/';
+const isMemberBuild = process.env.VITE_EMMAUS_BUILD_TARGET === 'member';
 
 export default defineConfig({
   base: basePath,
+  // Expose REPLIT_DEV_DOMAIN to the client bundle so invite links and OAuth
+  // redirect URIs use the correct public domain instead of window.location.origin
+  // (which resolves to localhost inside the Replit proxy container).
+  define: {
+    'import.meta.env.REPLIT_DEV_DOMAIN': JSON.stringify(process.env.REPLIT_DEV_DOMAIN ?? ''),
+  },
   plugins: [
     react(),
     tailwindcss(),
@@ -50,6 +48,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),
+      '@admin-route': path.resolve(
+        import.meta.dirname,
+        'src',
+        'routes',
+        isMemberBuild ? 'AdminRoute.member.tsx' : 'AdminRoute.web.tsx',
+      ),
       '@assets': path.resolve(
         import.meta.dirname,
         '..',

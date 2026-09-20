@@ -1,0 +1,86 @@
+Fix only the Daily Rhythm locking and synchronization issue shown in the attached video. I have already completed the other corrections in Replit. Do not modify, revert, replace, or rebuild any unrelated feature.
+
+Required behaviour:
+
+* Remove every Daily Rhythm viewing lock.
+* Every published Daily Rhythm day must be tappable and readable, including days after the currently assigned day.
+* Remove the future-day redirect/guard from all member-facing Daily Rhythm routes.
+* Remove all “Locked,” “Available tomorrow,” disabled-card, and blocked-navigation behaviour from Daily Rhythm only.
+* Do not remove locks or progression rules from ordinary Walks, Journeys, Sermon Companions, or other content.
+
+Keep these three states completely separate:
+
+1. Availability
+   Every published Daily Rhythm day is available to read.
+
+2. Completion
+   A day is marked “Completed” or shown as “Review” only if that exact day exists in the member’s genuine completed-days record. Opening or viewing a day must never mark it completed.
+
+3. Assigned day
+   The assigned Daily Rhythm day advances sequentially according to the existing server-authoritative calendar-day logic. It must not depend on pressing Continue or completing the previous day.
+
+Day-list behaviour:
+
+* Actually completed day: show “Completed” and “Review.”
+* Assigned day not completed: show “Today” or “Open,” with a normal open action.
+* Any other published, uncompleted day: show “Open,” with a normal open action.
+* Never show “Review” merely because a day is earlier than the assigned day.
+* Never show a lock icon, “Locked,” or a disabled published day.
+* Do not infer completion from the day number, assigned day, elapsed date, widget state, or page visit.
+
+Reader behaviour:
+
+* Permit direct navigation to every published Daily Rhythm day.
+* Remove the `day > currentDay` member redirect and any equivalent future-day guard.
+* Reading a non-assigned day must not change the assigned day.
+* Reading any day must not write completion automatically.
+* Continue may record completion only for the exact day on which the member deliberately presses it.
+* Do not let completing a day force-unlock or advance the assigned day. Calendar progression remains independent.
+
+Widget behaviour:
+
+* The widget must display the same server-assigned Daily Rhythm day as the app.
+* It must advance sequentially when the server-assigned day advances, whether or not Continue was pressed.
+* It must not remain on Day 5 because Day 5 is unfinished.
+* Tapping the widget must open the exact published day displayed by the widget.
+* Widget refresh, cold start, app resume, and date rollover must all use the same authoritative assigned-day value.
+* Do not use completion status to select the widget day.
+
+Inspect and correct every applicable implementation, including:
+
+* the Daily Rhythm reader’s future-day guard;
+* the Daily Rhythm day-list/status mapping;
+* shared list components where Daily Rhythm is passed a `locked` state;
+* API/server Daily Rhythm state and history mapping;
+* native Android widget refresh/cache/deep-link handling;
+* tests that currently encode the old locking behaviour.
+
+Preserve all current Replit workspace changes. Before editing:
+
+* confirm the current branch, HEAD, and uncommitted files;
+* do not reset, replace, pull over, or discard the current workspace;
+* create a safe checkpoint if current changes are not already committed;
+* make the smallest possible targeted change.
+
+Add regression tests proving:
+
+* all published Daily Rhythm days are readable;
+* an uncompleted earlier day is “Open,” not “Review” or “Completed”;
+* an uncompleted later published day is readable and not locked;
+* opening a day does not complete it;
+* pressing Continue completes only that selected day;
+* the assigned day advances sequentially by calendar day without requiring completion;
+* the widget and app resolve the same assigned day;
+* the widget advances even when the previous day remains unfinished;
+* ordinary Walk and Journey progression is unchanged.
+
+Do not republish, generate an APK, or change the database, secrets, migrations, deployment configuration, authentication, reminders, geofence, Bluetooth, personal details, sharing, or any other feature.
+
+When finished, report only:
+
+* the root cause;
+* the exact files changed;
+* the test results;
+* the checkpoint/commit SHA;
+* confirmation that no unrelated files or completed Replit corrections were changed;
+* whether a Replit republish and/or new APK will be required for this correction to appear.

@@ -1,0 +1,55 @@
+The YouTube/Google OAuth connection is reaching the Google consent screen successfully, but after authorization the callback ends with:
+
+{"error":"Authentication required."}
+
+Please diagnose and fix the OAuth flow rather than changing the existing Emmaus authentication system unnecessarily.
+
+Current behaviour:
+
+1. I am logged into Emmaus as an admin.
+2. I start the YouTube connection.
+3. Google correctly asks me to authorize access to the ICC Google/YouTube account.
+4. After authorization, the flow returns to the Replit application.
+5. Instead of completing the connection and returning me to Emmaus, the browser displays:
+   {"error":"Authentication required."}
+
+Please investigate whether the authenticated Emmaus session/cookie is being lost during the Google OAuth redirect/callback.
+
+Check specifically:
+
+- OAuth callback route authentication
+- session cookie persistence across the Google redirect
+- SameSite cookie configuration
+- Secure cookie configuration
+- domain/cookie mismatch between emmaus.co.za and the *.replit.dev development domain
+- whether the OAuth flow begins on one hostname and returns to another
+- OAuth state handling
+- redirect URI configuration
+- whether the callback incorrectly requires a session that is unavailable after the redirect
+
+Important:
+
+The production Emmaus application is at emmaus.co.za. The Google authorization screen is currently identifying the application using a temporary *.janeway.replit.dev hostname.
+
+Please configure the production OAuth flow so that it consistently starts and returns through the Emmaus production domain rather than mixing emmaus.co.za and replit.dev URLs.
+
+Do not weaken authentication or make the YouTube callback publicly usable simply to bypass the error.
+
+After successful authorization:
+
+1. Securely associate the authorized YouTube account with the authenticated Emmaus admin/church account.
+2. Return the admin to the appropriate Emmaus admin screen.
+3. Display a clear "YouTube connected" state.
+4. Do not expose OAuth tokens to the browser.
+5. Store refresh/access credentials securely server-side.
+6. Preserve the existing Emmaus login and user authentication behaviour.
+
+Before making changes, inspect the existing implementation and identify the exact cause of the "Authentication required" response.
+
+Then implement the smallest safe fix and report:
+
+- the root cause,
+- files changed,
+- OAuth redirect URI being used,
+- production callback URL,
+- and how I should test the connection again.

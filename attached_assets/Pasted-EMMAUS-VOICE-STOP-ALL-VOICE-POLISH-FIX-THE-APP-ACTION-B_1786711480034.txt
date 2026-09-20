@@ -1,0 +1,337 @@
+EMMAUS VOICE — STOP ALL VOICE POLISH. FIX THE APP ACTION BRIDGE.
+
+Physical-device testing after Sprint 2/3 and ElevenLabs integration still fails.
+
+Observed failures:
+
+1. Voice attempts to navigate/open content and the app lands on:
+   “We couldn't find what you were looking for.”
+
+2. User says:
+   “Read Daily Rhythm, Ten Minutes with Jesus, please.”
+
+   Speech is recognized correctly.
+
+   Voice responds:
+   “I wasn't able to find that content right now. Check Today's Steps to see what's available.”
+
+This proves the remaining problem is NOT:
+
+- microphone quality
+- ElevenLabs STT
+- ElevenLabs TTS
+- VAD tuning
+- conversational phrasing
+- latency
+- voice quality
+
+The remaining problem is the APP ACTION / CONTENT SERVICE BRIDGE.
+
+STOP ALL OTHER WORK.
+
+Do not:
+- tune VAD
+- change STT
+- change TTS
+- change ElevenLabs configuration
+- add more voice commands
+- add more tools
+- add more conversational polish
+- start another sprint
+
+We need to make Voice call the SAME canonical app actions and content services that the visible Emmaus UI already uses.
+
+==================================================
+1. TRACE THE FAILED NAVIGATION
+==================================================
+
+Use the physical-device failure path.
+
+When Voice issues a navigation tool call, log:
+
+[VOICE TOOL NAV TRACE]
+
+toolName=
+toolArguments=
+requestedDestination=
+resolvedRoute=
+routeExists=
+routerFunctionUsed=
+navigationCalled=
+finalLocation=
+pageRendered=
+
+Determine exactly why Voice reaches the app’s “not found” screen.
+
+Do not guess route names.
+
+Find the ACTUAL route/component used when the user manually taps:
+
+My Bible
+
+and use that exact canonical route/action.
+
+Voice must not maintain its own guessed route map.
+
+==================================================
+2. CREATE A SINGLE CANONICAL APP ACTION LAYER
+==================================================
+
+Voice should not directly invent routes or duplicate UI logic.
+
+Create/reuse an application action service that both Voice and UI can call.
+
+Conceptually:
+
+appActions.openBible()
+appActions.openTodaysSteps()
+appActions.openJourney(id)
+appActions.openWalk(id)
+
+These functions must use the same router/navigation behaviour already proven by touch UI.
+
+For “Open My Bible”:
+
+Voice tool
+→ appActions.openBible()
+→ same route as tapping My Bible
+
+PASS only if the actual Bible screen opens.
+
+==================================================
+3. TRACE DAILY RHYTHM CONTENT RESOLUTION
+==================================================
+
+For the exact request:
+
+“Read Daily Rhythm, Ten Minutes with Jesus, please.”
+
+log:
+
+[VOICE CONTENT TRACE]
+
+userId=
+toolName=
+toolArguments=
+requestedContentType=
+titleHint=
+canonicalServiceCalled=
+dailyRhythmFound=
+journeyId=
+currentStep=
+currentEntryId=
+entryTitle=
+sectionsFound=
+sectionLabels=
+failureStage=
+failureReason=
+
+Find the FIRST point where Voice differs from the visible Today’s Steps implementation.
+
+==================================================
+4. DO NOT BUILD ANOTHER VOICE CONTENT LOOKUP
+==================================================
+
+The visible Emmaus app already knows how to display today’s 10 Minutes with Jesus.
+
+Voice must call the SAME data access/service layer.
+
+Find the exact code path used by Today’s Steps to determine:
+
+- the active Daily Rhythm
+- current day/step
+- today’s real entry
+- its ordered content sections
+
+Then expose that existing logic through a reusable service if necessary.
+
+Do NOT:
+
+- search by display title alone
+- infer content from a hardcoded slug
+- maintain a voice-only map
+- create another database query that approximates the UI logic
+- hardcode “10 Minutes with Jesus”
+
+There must be ONE canonical resolver.
+
+==================================================
+5. VERIFY DAILY RHYTHM BY COMPARING UI VS VOICE
+==================================================
+
+For the same logged-in user, compare:
+
+A. What Today’s Steps renders for 10 Minutes with Jesus.
+
+B. What Voice resolves for:
+   “Read today’s 10 Minutes with Jesus.”
+
+These MUST resolve to the SAME:
+
+journey/content ID
+current step/day
+entry ID
+entry title
+section set
+
+Add a temporary comparison log:
+
+[VOICE/UI CONTENT PARITY]
+
+uiContentId=
+voiceContentId=
+uiEntryId=
+voiceEntryId=
+uiCurrentStep=
+voiceCurrentStep=
+match=true/false
+
+If false, fix the shared service architecture.
+
+==================================================
+6. SAME REQUIREMENT FOR PSALMS DAILY DEVOTIONAL
+==================================================
+
+Repeat the exact same parity test for:
+
+“Read today’s Psalms Daily Devotional.”
+
+Compare Voice against the content the user would see by manually opening the Psalms Daily Devotional.
+
+Voice and UI must resolve the exact same current entry.
+
+==================================================
+7. TOOL CALLS MUST RETURN STRUCTURED RESULTS
+==================================================
+
+Voice tools should not return vague success/failure strings.
+
+Example:
+
+getCurrentDailyRhythm()
+
+should return something like:
+
+{
+  success: true,
+  contentId,
+  title,
+  currentStep,
+  entryId,
+  entryTitle,
+  sections: [...]
+}
+
+If it fails:
+
+{
+  success: false,
+  errorCode,
+  stage,
+  reason
+}
+
+The conversational model should not decide whether content exists.
+
+The canonical Emmaus service decides.
+
+==================================================
+8. DO NOT LET AI INVENT A FAILURE MESSAGE
+==================================================
+
+The current response:
+
+“I wasn't able to find that content right now. Check Today's Steps…”
+
+is hiding the engineering problem.
+
+During this repair:
+
+If tool resolution fails, show/log the real failure reason.
+
+For example:
+
+VOICE_RESOLVER_NO_ACTIVE_DAILY_RHYTHM
+VOICE_RESOLVER_ENTRY_NOT_FOUND
+VOICE_ROUTE_NOT_REGISTERED
+
+Do not let Ask Emmaus make up a friendly generic fallback until the action bridge is correct.
+
+==================================================
+9. TEST ONLY THREE THINGS
+==================================================
+
+Do not test the whole Voice system yet.
+
+TEST A
+
+User:
+“Open the Bible.”
+
+PASS:
+actual My Bible screen opens.
+
+TEST B
+
+User:
+“Read today’s 10 Minutes with Jesus.”
+
+PASS:
+same entry shown on Today’s Steps is resolved and begins reading from section 0.
+
+TEST C
+
+User:
+“Read today’s Psalms Daily Devotional.”
+
+PASS:
+same current Psalms entry shown in the UI is resolved and begins reading from section 0.
+
+Nothing else matters in this pass.
+
+==================================================
+10. PROVE THE FIX WITH PARITY, NOT MOCK TESTS
+==================================================
+
+For each of A–C give me:
+
+voice utterance
+→ tool call
+→ canonical app/service function
+→ resolved route/content
+→ UI parity result
+→ executed result
+
+Do not report classifier scores.
+
+Do not report synthetic mocks.
+
+Do not report “tool call generated successfully.”
+
+I need proof that the tool call reaches the SAME app logic the touch interface uses.
+
+==================================================
+11. ELEVENLABS STAYS AS-IS
+==================================================
+
+Do not remove ElevenLabs.
+
+Do not change the API key.
+
+Do not change STT/TTS providers in this repair.
+
+ElevenLabs is not the current failure.
+
+==================================================
+12. CHECKPOINT
+==================================================
+
+Create a checkpoint first.
+
+Fix only the application-action/content bridge.
+
+Then give me:
+
+EMMAUS VOICE — APP BRIDGE QA REPORT
+
+and STOP for physical-device verification.

@@ -1,7 +1,7 @@
 /**
  * BibleProgressDashboard
  *
- * Shows coverage stats per book for the 6 target books.
+ * Shows coverage stats for all 66 Bible books.
  * Provides a quick view of how much content has been generated,
  * reviewed, and published.
  */
@@ -14,6 +14,7 @@ import {
   TrendingUp, AlertCircle, RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { BIBLE_BOOKS } from '@/lib/bible-data';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,14 +34,9 @@ type BookStats = {
   chaptersWithPassages: number;
 };
 
-const BOOK_NAMES: Record<string, string> = {
-  luke: 'Luke',
-  acts: 'Acts',
-  romans: 'Romans',
-  '1corinthians': '1 Corinthians',
-  '2corinthians': '2 Corinthians',
-  psalms: 'Psalms',
-};
+const BOOK_NAMES: Record<string, string> = Object.fromEntries(
+  BIBLE_BOOKS.map(book => [book.id, book.name]),
+);
 
 const STATUS_DOT: Record<string, string> = {
   Published:  'bg-green-500',
@@ -82,12 +78,7 @@ export default function BibleProgressDashboard({ onGenerate }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch(getApiUrl('/api/bible/study-stats'), {
-        headers: {
-          'x-user-id': user?.id ?? '',
-          'x-user-role': (user as { role?: string })?.role ?? '',
-        },
-      });
+      const r = await fetch(getApiUrl('/api/bible/study-stats'));
       if (!r.ok) throw new Error('Failed to load stats');
       setStats(await r.json());
     } catch {
@@ -103,12 +94,8 @@ export default function BibleProgressDashboard({ onGenerate }: Props) {
     setPublishing(bookId);
     try {
       // Bulk publish all In Review passages
-      const notes = await fetch(getApiUrl(`/api/bible/study-notes/admin?bookId=${bookId}`), {
-        headers: {
-          'x-user-id': user?.id ?? '',
-          'x-user-role': (user as { role?: string })?.role ?? '',
-        },
-      }).then(r => r.json()) as { id: string; status: string }[];
+      const notes = await fetch(getApiUrl(`/api/bible/study-notes/admin?bookId=${bookId}`))
+        .then(r => r.json()) as { id: string; status: string }[];
 
       const inReviewIds = notes.filter(n => n.status === 'In Review').map(n => n.id);
       if (inReviewIds.length > 0) {
@@ -116,12 +103,18 @@ export default function BibleProgressDashboard({ onGenerate }: Props) {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            'x-user-id': user?.id ?? '',
-            'x-user-role': (user as { role?: string })?.role ?? '',
           },
           body: JSON.stringify({ ids: inReviewIds, status: 'Published' }),
         });
       }
+      // P2-9: also publish all In Review overviews for this book (previously missing)
+      await fetch(getApiUrl('/api/bible/chapter-overviews/admin/book-status'), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ bookId, status: 'Published' }),
+      });
       await load();
     } finally {
       setPublishing(null);

@@ -1,0 +1,507 @@
+# EMMAUS ROOMS — FULL INTERACTIVE LEADER EXPERIENCE
+
+We are proceeding with the complete interactive Rooms experience.
+
+Do NOT reduce scope to video only.
+
+The goal is to make an Emmaus Room feel like a live shared discipleship space where a leader can guide the group through Scripture, content, discussion, prayer and interaction in real time.
+
+Preserve all existing:
+- LiveKit integration
+- room permissions
+- room membership
+- room invitations
+- current Room UI
+- discussion
+- prayer requests
+- shared progress
+- Ask Emmaus
+- database and APIs unless additions are required
+
+==================================================
+CORE EXPERIENCE
+==================================================
+
+An authorized Room Leader should be able to guide everyone in the Room through the same discipleship experience in real time.
+
+Build:
+
+1. Gather Together
+2. Shared Scripture
+3. Leader-controlled navigation
+4. Shared highlighting
+5. Shared notes
+6. Shared Ask Emmaus
+7. Polls
+8. Prayer Mode
+9. Attendance
+10. Session completion
+
+All of these should feel like parts of ONE Room, not separate apps or pages.
+
+==================================================
+AUTHORIZED LEADER CONTROLS
+==================================================
+
+For Authorized Group Leaders, Pastors and Super Admins, add:
+
+GUIDE GROUP
+
+• Open Today's Step
+• Open Scripture for Everyone
+• Go to Previous Step
+• Go to Next Step
+• Start Discussion
+• Prayer Time
+• Launch Poll
+• Ask Emmaus Together
+• Gather Together
+• End Gathering
+• Complete Session
+
+Do not expose these controls to ordinary members.
+
+Keep them accessible through a compact "Guide Group" control rather than cluttering the Room.
+
+==================================================
+1. GATHER TOGETHER
+==================================================
+
+Use the existing LiveKit integration.
+
+Leader:
+- Start Gathering
+- End Gathering
+
+Members:
+- Join Gathering
+- Leave Gathering
+
+Embedded video remains inside the Room.
+
+Do not navigate users away from the Room.
+
+==================================================
+2. SHARED SCRIPTURE
+==================================================
+
+Authorized Leader can tap:
+
+Open Scripture for Everyone
+
+Choose:
+- Bible book
+- chapter
+- optional verse range
+
+When selected:
+
+Every connected Room member should receive the navigation event and open the same Scripture passage.
+
+The member should not have to manually navigate.
+
+Display a subtle notice:
+
+"Pastor Jeremy opened John 15."
+
+Allow members to browse independently afterward unless "Follow Leader" is enabled.
+
+==================================================
+FOLLOW LEADER
+==================================================
+
+Add a simple toggle for members:
+
+Follow Leader
+
+Default ON during a live guided session.
+
+When ON:
+- Leader navigation changes move the member to the same Step/Scripture/panel.
+
+When OFF:
+- Member can browse independently.
+
+The user should always be able to re-enable Follow Leader.
+
+==================================================
+3. SHARED HIGHLIGHTING
+==================================================
+
+Allow Room participants to highlight Scripture during the Room session.
+
+Store:
+
+- roomId
+- scripture reference
+- verse
+- userId
+- highlight
+- optional note
+- timestamp
+
+Highlights should be visible to everyone in the Room.
+
+Show attribution subtly:
+
+Jeremy
+Sarah
+John
+
+Do not use competitive colors or rankings.
+
+Tapping a shared highlight can show:
+
+"Jeremy highlighted this verse."
+
+Optional:
+
+Why this stood out...
+
+==================================================
+LEADER HIGHLIGHT
+==================================================
+
+Authorized Leader can mark a verse as:
+
+Focus Verse
+
+When selected:
+
+- all followers are moved to the verse
+- verse receives a clear but calm emphasis
+- members see:
+
+"Focus Verse"
+
+This should not overwrite personal highlights.
+
+==================================================
+4. SHARED NOTES
+==================================================
+
+Add:
+
+Shared Notes
+
+Members can contribute short notes during the Room.
+
+Notes should show:
+- author
+- timestamp
+- note text
+
+Leader can optionally pin an important note.
+
+Do not turn this into a document editor.
+
+Keep it lightweight.
+
+==================================================
+5. SHARED ASK EMMAUS
+==================================================
+
+Add:
+
+Ask Emmaus Together
+
+When a leader or permitted participant asks a question in shared mode:
+
+- Ask Emmaus receives Room context
+- current content
+- current Step
+- current Scripture
+- current discussion context
+
+The answer appears to everyone in the Room.
+
+Do NOT replace the existing private Ask Emmaus experience.
+
+There are now two modes:
+
+Private Ask Emmaus
+Shared Ask Emmaus
+
+Make the difference obvious.
+
+Shared answers should use the existing Emmaus pastoral and theological response parameters.
+
+At the bottom, continue to suggest relevant:
+- Scriptures
+- Daily Rhythm
+- Walks
+- Journeys
+- Sermons
+- Bible Studies
+
+==================================================
+6. POLLS
+==================================================
+
+Authorized Leader can launch a simple poll.
+
+Examples:
+
+Which statement best describes where you are today?
+
+What stood out most?
+
+Should we spend more time on this passage?
+
+Poll types:
+
+- Multiple choice
+- Yes / No
+
+Keep V1 simple.
+
+Members vote once.
+
+Show aggregate results to the Room after voting or when the leader reveals results.
+
+Do not introduce scores or competition.
+
+==================================================
+7. PRAYER MODE
+==================================================
+
+Leader taps:
+
+Prayer Time
+
+Room UI shifts focus to Prayer Requests.
+
+Video remains available but becomes visually secondary.
+
+Show:
+
+PRAYER TIME
+
+Current Room Prayer Requests
+
+Leader can move through requests one at a time.
+
+Members can add requests during Prayer Mode.
+
+Provide:
+
+Return to Study
+
+This restores the normal Room view.
+
+==================================================
+8. DISCUSSION MODE
+==================================================
+
+Leader taps:
+
+Start Discussion
+
+Surface:
+
+- current discussion prompt from the content
+- Group Discussion
+- shared notes
+- optional Ask Emmaus Together
+
+Do not open a disconnected chat page unless the user explicitly chooses full discussion history.
+
+The current study context must remain visible.
+
+==================================================
+9. ATTENDANCE
+==================================================
+
+Record Room session attendance automatically when a user meaningfully joins the live Room session.
+
+Track:
+
+- sessionId
+- roomId
+- userId
+- joinedAt
+- leftAt
+- duration if appropriate
+
+Do not infer spiritual engagement from attendance.
+
+Admin/leader can later view:
+
+Attended
+Joined late
+Left early
+Did not attend
+
+Keep this pastoral and factual.
+
+==================================================
+10. SESSION PLAN
+==================================================
+
+Use the existing Session Plan concept.
+
+For example:
+
+Welcome
+Today's Step
+Read Scripture
+Discussion
+Prayer
+Next Step
+Complete Session
+
+Leader can move freely between stages.
+
+Do not enforce prescribed times.
+
+==================================================
+11. COMPLETE SESSION
+==================================================
+
+Leader taps:
+
+Complete Session
+
+Show:
+
+Session Complete
+
+✓ Studied
+✓ Discussed
+✓ Prayed
+
+Next Step Ready
+
+Record:
+- session completion
+- attendance
+- current group position
+- Room activity
+- prayer requests
+- relevant shared notes
+
+Do not delete anything.
+
+==================================================
+REAL-TIME ARCHITECTURE
+==================================================
+
+Use a real-time event layer for:
+
+- leader navigation
+- scripture changes
+- follow-leader state
+- focus verse
+- shared highlights
+- shared notes
+- shared Ask Emmaus answers
+- polls
+- prayer mode
+- discussion mode
+- session state
+
+Use the existing architecture where possible.
+
+If LiveKit data messages are appropriate for ephemeral real-time events, use them.
+
+Persist important state in the database so reconnecting users can restore the current session.
+
+Do not rely only on browser memory.
+
+==================================================
+RECONNECTION
+==================================================
+
+If a user temporarily loses connection:
+
+- reconnect gracefully
+- restore current Room session
+- restore current Step
+- restore current Scripture
+- restore current mode
+- restore shared notes/highlights
+- rejoin video if appropriate
+
+Do not lose Room state.
+
+==================================================
+MOBILE UX
+==================================================
+
+This must work cleanly on mobile.
+
+Avoid side-by-side layouts that become unusable.
+
+Use panels/sheets that open over the Room while keeping context.
+
+Examples:
+
+Open Scripture
+Shared Notes
+Prayer Time
+Discussion
+Poll
+
+Everything should be reachable with large touch targets.
+
+==================================================
+DO NOT BUILD
+==================================================
+
+Still exclude:
+
+- synchronized Bible audio
+- synchronized sermon playback
+- whiteboard
+- Emmaus Voice participating as a live group participant
+- complex media synchronization
+
+These are deliberately deferred.
+
+==================================================
+TESTING
+==================================================
+
+Test with at least two simultaneous authenticated users.
+
+Verify:
+
+1. Leader starts Gathering.
+2. Member joins.
+3. Leader opens Scripture.
+4. Member automatically receives it.
+5. Member disables Follow Leader and can browse independently.
+6. Member re-enables Follow Leader.
+7. Leader opens today's Step.
+8. Member follows.
+9. Member highlights a verse.
+10. Leader sees the highlight.
+11. Leader sets Focus Verse.
+12. Member sees it.
+13. Shared note appears to both users.
+14. Shared Ask Emmaus answer appears to both users.
+15. Poll works for both users.
+16. Prayer Mode moves both users into prayer-focused UI.
+17. Return to Study restores normal Room.
+18. Attendance records both users.
+19. Leader completes session.
+20. Session state remains stored after refresh.
+21. Ordinary members cannot access leader-only controls.
+22. LiveKit credentials remain server-side.
+23. Reconnecting user restores current Room state.
+
+==================================================
+SUCCESS CONDITION
+==================================================
+
+The finished experience should allow a church leader to guide a small group through an Emmaus Walk, Journey, Devotional, Bible Study or Sermon Companion without saying:
+
+"Can everyone turn to..."
+"Can everyone find..."
+"Can everyone see my screen..."
+
+Emmaus should already keep the group together.
+
+The technology should disappear into the background.
+
+Build the full interactive Room experience.

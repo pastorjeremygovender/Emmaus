@@ -13,13 +13,18 @@ import {
   apiCreateRoom,
   apiJoinByCode,
   apiJoinByToken,
-  apiLinkJourney,
+  apiGetInvitePreview,
+  apiGetCodeInvitePreview,
+  apiStartShared,
   apiLeaveRoom,
   apiDeleteRoom,
-  apiTransferAdmin,
+  apiTransferOwnership,
+  apiPromoteMember,
+  apiDemoteLeader,
   apiRemoveMember,
 } from '../lib/rooms-api';
-import type { RoomSummary, RoomDetail, RoomMember, RoomRole } from '../lib/rooms-types';
+import { isRoomLeaderRole } from '../lib/rooms-types';
+import type { RoomSummary, RoomDetail, RoomMember, RoomRole, RoomInvitePreview } from '../lib/rooms-types';
 
 // ─── Context type ──────────────────────────────────────────────────────────
 
@@ -46,12 +51,17 @@ interface RoomsContextType {
   getMyMembership: (roomId: string, userId: string) => { role: RoomRole } | undefined;
 
   // Mutations
-  createRoom: (userId: string, name: string) => Promise<{ roomId: string; inviteCode: string; inviteToken: string }>;
-  joinRoomByCode: (userId: string, code: string) => Promise<{ success: boolean; error?: string; roomId?: string }>;
-  joinRoomByToken: (userId: string, token: string) => Promise<{ success: boolean; error?: string; roomId?: string }>;
+  createRoom: (userId: string, name: string, description?: string, roomType?: string) => Promise<{ roomId: string; inviteCode: string; inviteToken: string }>;
+  joinRoomByCode: (userId: string, code: string) => Promise<{ success: boolean; error?: string; roomId?: string; alreadyMember?: boolean }>;
+  joinRoomByToken: (userId: string, token: string) => Promise<{ success: boolean; error?: string; roomId?: string; alreadyMember?: boolean }>;
+  getInvitePreview: (token: string) => Promise<RoomInvitePreview>;
+  getCodeInvitePreview: (code: string, userId?: string) => Promise<RoomInvitePreview>;
   leaveRoom: (roomId: string, userId: string) => Promise<void>;
   deleteRoom: (roomId: string, userId: string) => Promise<void>;
   transferAdmin: (roomId: string, toUserId: string, userId: string) => Promise<void>;
+  transferOwnership: (roomId: string, toUserId: string, userId: string) => Promise<void>;
+  promoteMember: (roomId: string, targetUserId: string, userId: string) => Promise<void>;
+  demoteLeader: (roomId: string, targetUserId: string, userId: string) => Promise<void>;
   removeMember: (roomId: string, targetUserId: string, userId: string) => Promise<void>;
 
   // Stubs — journey/notification/post features planned for later tasks
@@ -114,13 +124,27 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
     loadRooms();
   }, [loadRooms]);
 
+  // Membership roles may be changed by another device. Keep list cards
+  // aligned with the server without requiring a full app reload.
+  useEffect(() => {
+    if (!user) return;
+    const timer = setInterval(loadRooms, 30_000);
+    return () => clearInterval(timer);
+  }, [user, loadRooms]);
+
   // ── Room detail ──────────────────────────────────────────────────────────
   const loadRoomDetail = useCallback(async (roomId: string): Promise<RoomDetail | null> => {
     if (!user) return null;
     try {
       const res = await apiGetRoomById(user.id, roomId);
       if (!res) return null;
-      const detail: RoomDetail = { ...res.room, currentUserRole: res.currentUserRole };
+       const detail: RoomDetail = {
+         ...res.room,
+         currentUserRole: res.currentUserRole,
+         isLeader: res.isLeader ?? false,
+         activeSession: res.activeSession ?? null,
+         mediaHostAccess: res.mediaHostAccess ?? res.room.mediaHostAccess ?? { audio: false, video: false },
+       };
       setDetailCache(prev => ({ ...prev, [roomId]: detail }));
       return detail;
     } catch {
@@ -144,7 +168,7 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
     const detail = detailCache[roomId];
     if (!detail) return false;
     const member = detail.members.find(m => m.userId === userId);
-    return member?.role === 'admin';
+    return isRoomLeaderRole(member?.role);
   }, [detailCache]);
 
   const canInvite = useCallback((roomId: string, userId: string): boolean => {
@@ -168,8 +192,12 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
   );
 
   // ── Mutations ────────────────────────────────────────────────────────────
-  const createRoom = useCallback(async (userId: string, name: string) => {
-    const result = await apiCreateRoom(userId, name);
+  const createRoom = useCallback(async (userId: string, name: string, description = "", roomType?: string) => {
+    const result = await apiCreateRoom(
+      userId, name, description,
+      // Pass through the roomType if valid; apiCreateRoom validates on the server
+      (roomType as Parameters<typeof apiCreateRoom>[3]) ?? 'personal'
+    );
     await loadRooms();
     return result;
   }, [loadRooms]);
@@ -178,7 +206,7 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
     try {
       const result = await apiJoinByCode(userId, code);
       await loadRooms();
-      return { success: true, roomId: result.roomId };
+      return { success: true, roomId: result.roomId, alreadyMember: result.alreadyMember };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : 'Failed to join room' };
     }
@@ -188,11 +216,19 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
     try {
       const result = await apiJoinByToken(userId, token);
       await loadRooms();
-      return { success: true, roomId: result.roomId };
+      return { success: true, roomId: result.roomId, alreadyMember: result.alreadyMember };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : 'Invalid invite link' };
     }
   }, [loadRooms]);
+
+  const getInvitePreview = useCallback(async (token: string) => {
+    return apiGetInvitePreview(token, user?.id ?? '');
+  }, [user]);
+
+  const getCodeInvitePreview = useCallback(async (code: string, userId?: string) => {
+    return apiGetCodeInvitePreview(code, userId ?? user?.id ?? '');
+  }, [user]);
 
   const leaveRoom = useCallback(async (roomId: string, userId: string) => {
     await apiLeaveRoom(userId, roomId);
@@ -207,10 +243,21 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const transferAdmin = useCallback(async (roomId: string, toUserId: string, userId: string) => {
-    await apiTransferAdmin(userId, roomId, toUserId);
-    // Invalidate cached detail so next load reflects updated roles
-    setDetailCache(prev => { const next = { ...prev }; delete next[roomId]; return next; });
-  }, []);
+    await apiTransferOwnership(userId, roomId, toUserId);
+    await Promise.all([loadRoomDetail(roomId), loadRooms()]);
+  }, [loadRoomDetail, loadRooms]);
+
+  const transferOwnership = transferAdmin;
+
+  const promoteMember = useCallback(async (roomId: string, targetUserId: string, userId: string) => {
+    await apiPromoteMember(userId, roomId, targetUserId);
+    await Promise.all([loadRoomDetail(roomId), loadRooms()]);
+  }, [loadRoomDetail, loadRooms]);
+
+  const demoteLeader = useCallback(async (roomId: string, targetUserId: string, userId: string) => {
+    await apiDemoteLeader(userId, roomId, targetUserId);
+    await Promise.all([loadRoomDetail(roomId), loadRooms()]);
+  }, [loadRoomDetail, loadRooms]);
 
   const removeMember = useCallback(async (roomId: string, targetUserId: string, userId: string) => {
     await apiRemoveMember(userId, roomId, targetUserId);
@@ -241,7 +288,9 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
   const getSharedReflections = useCallback(() => [] as never[], []);
   const getMySharedReflection = useCallback(() => undefined, []);
   const startSharedJourney = useCallback(async (roomId: string, journeyId: string, userId: string) => {
-    await apiLinkJourney(userId, roomId, journeyId);
+    // RM-2: use the atomic start-shared endpoint so progress is initialised
+    // server-side in a single transaction, not a bare link call that can diverge.
+    await apiStartShared(userId, { journeyId, roomId, displayOrigin: 'journey' });
     // Invalidate cached detail so next load re-fetches with the linked journey
     setDetailCache(prev => {
       const next = { ...prev };
@@ -277,9 +326,14 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
       createRoom,
       joinRoomByCode,
       joinRoomByToken,
+      getInvitePreview,
+      getCodeInvitePreview,
       leaveRoom,
       deleteRoom,
       transferAdmin,
+      transferOwnership,
+      promoteMember,
+      demoteLeader,
       removeMember,
       getUnreadCount,
       getMyNotifications,

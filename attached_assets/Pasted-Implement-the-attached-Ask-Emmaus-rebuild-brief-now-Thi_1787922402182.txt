@@ -1,0 +1,41 @@
+Implement the attached Ask Emmaus rebuild brief now.
+
+This is authorization to inspect and modify the project files, database schema where safely required, tests and application services necessary to complete the brief.
+
+Critical scope:
+
+* Stop work on “Keep Live Audio and Video connected”.
+* Do not implement or modify Ask Emmaus Voice.
+* Do not build shared text/Voice functionality yet.
+* Concentrate exclusively on making typed Ask Emmaus fully knowledgeable about Emmaus.
+* Preserve the existing quality of general biblical and pastoral answers.
+* Replace guessed Emmaus knowledge with verified application capabilities, canonical services, authenticated user context and validated resources/actions.
+* Reuse the real services used by the existing Bible, devotionals, Daily Rhythm, sermons, Bible Studies, Walks and Journeys.
+* Do not create a parallel content system.
+* Do not stop after an audit, plan or report.
+
+Begin by creating a checkpoint and auditing the current implementation. Then implement the brief in safe, testable stages.
+
+The first user-visible acceptance gate must prove:
+
+1. “Where can I find devotionals?” gives the correct Emmaus location and action, with no invented information or irrelevant sermons.
+2. “Read today’s devotional” retrieves the real current devotional.
+3. “Read Psalm 23” retrieves the correct Bible passage.
+4. “Continue reading my Bible” uses the signed-in user’s saved position.
+5. “Continue my Walk” and “Continue my Journey” use the user’s actual progress.
+6. “What have we preached about the prodigal son?” returns verified relevant sermons with working links and timestamps.
+7. “What is faith?” remains Scripture-first and includes only genuinely relevant verified Emmaus resources.
+8. All Scripture and resource links open their exact validated destinations.
+9. Daily Rhythm remains user-scoped and never exposes future locked content.
+10. Published resource changes synchronize automatically with Ask Emmaus retrieval.
+
+Implement the full safe scope, run the automated tests, restart the workflows, inspect runtime logs and verify the principal flows in the browser.
+
+Only after implementation and verification, provide the requested final report separating:
+
+* fully implemented;
+* partially implemented;
+* blocked by production data or external access;
+* not implemented.
+
+Do not mark the task complete based only on a successful build.

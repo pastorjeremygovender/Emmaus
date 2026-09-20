@@ -1,0 +1,44 @@
+name: Verify unified Emmaus release
+
+on:
+  push:
+    branches:
+      - release/emmaus-unified
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  verify-emmaus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Run complete Jarvis foundation tests
+        env:
+          DATABASE_URL: postgresql://test:test@127.0.0.1:1/test
+        run: >-
+          pnpm --filter @workspace/api-server exec node --test --import=tsx/esm
+          src/emmaus/__tests__/system-instructions.test.ts
+          src/emmaus/__tests__/response-normalization.test.ts
+          src/emmaus/__tests__/intent-router.test.ts
+          src/emmaus/__tests__/canonical-tools.test.ts
+          src/emmaus/__tests__/context-assembler.test.ts
+      - name: Typecheck API server
+        run: pnpm run typecheck:libs && pnpm --filter @workspace/api-server run typecheck
+      - name: Verify single-toggle navigation
+        run: pnpm --filter @workspace/project-emmaus exec vitest run src/components/__tests__/BottomNav.navigation.test.tsx
+      - name: Build member app
+        run: pnpm --filter @workspace/project-emmaus run build

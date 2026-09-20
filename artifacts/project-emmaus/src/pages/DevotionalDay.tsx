@@ -4,9 +4,9 @@
  * Route: /devotional/:seriesId/day/:day
  *
  * Source-aware return (spec §4):
- *   Pass ?source=today      → "Back to Today's Steps" → /walk
+ *   Pass ?source=today      → "Back to My Emmaus" → /walk
  *   Pass ?source=nextSteps  → "Back to Next Steps"    → /journeys
- *   Default (no param)      → Today's Steps (daily devotionals default to Walk)
+ *   Default (no param)      → My Emmaus (daily devotionals default to Walk)
  *
  * Completion behaviour:
  *   - Tapping "Finished" marks the current day complete and shows JourneyCompletionPanel
@@ -18,9 +18,12 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
-import { Loader2, ChevronLeft } from 'lucide-react';
+import { Loader2, ArrowLeft, Users, List } from 'lucide-react';
+import { HearEmmausButton } from '@/components/emmaus/HearEmmausButton';
 import { BottomNav } from '@/components/BottomNav';
 import { DevotionalReading } from '@/components/DevotionalReading';
+import { getDevotionalLabel } from '@/lib/step-label';
+import { FavouriteButton } from '@/components/FavouriteButton';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -34,22 +37,9 @@ import {
 } from '@/lib/devotionals-api';
 import { resolveDisplayName } from '@/components/DailyRhythmReading';
 import { resolveNextEntry } from '@/lib/resolve-next-entry';
-
-// ─── Source-aware return helpers ──────────────────────────────────────────────
-
-function resolveReturn(source: string | null): { path: string; label: string } {
-  if (source === 'nextStepsDevotionals' || source === 'nextSteps')
-    return { path: '/journeys?tab=devotionals', label: 'Back to Next Steps' };
-  if (source === 'nextStepsJourneys')
-    return { path: '/journeys?tab=journeys', label: 'Back to Next Steps' };
-  if (source === 'nextStepsSermons')
-    return { path: '/journeys?tab=sermons', label: 'Back to Next Steps' };
-  if (source === 'today' || source === 'walk')
-    return { path: '/walk', label: "Back to Today's Steps" };
-  // Fallback for deep links with no source — default to devotionals tab
-  if (!source) return { path: '/journeys?tab=devotionals', label: 'Back to Next Steps' };
-  return { path: '/walk', label: "Back to Today's Steps" };
-}
+import { dismissBadge } from '@/lib/badge-api';
+import { StudyTogetherSheet } from '@/components/StudyTogetherSheet';
+import { encodeSource, goBackOrFallback, resolveReturn } from '@/lib/return-context';
 
 export default function DevotionalDay() {
   const params = useParams<{ seriesId: string; day: string }>();
@@ -59,9 +49,16 @@ export default function DevotionalDay() {
   const seriesId = params.seriesId;
   const day = parseInt(params.day ?? '1', 10);
 
-  // Read source once on mount — query string doesn't change during the page lifetime
-  const source = new URLSearchParams(window.location.search).get('source');
-  const { path: returnPath, label: returnLabel } = resolveReturn(source);
+  // Read source/sourceId once on mount — query string doesn't change during the page lifetime
+  const source   = new URLSearchParams(window.location.search).get('source');
+  const sourceId = new URLSearchParams(window.location.search).get('sourceId');
+  const devotionalSource = source === 'nextSteps' ? 'nextStepsDevotionals' : source;
+  const { path: returnPath, label: returnLabel } = resolveReturn(
+    devotionalSource,
+    sourceId,
+    '/journeys?tab=devotionals',
+    'devotional',
+  );
 
   const [seriesData, setSeriesData] = useState<SeriesWithEntries | null>(null);
   const [progress, setProgress] = useState<DevotionalProgress | null>(null);
@@ -70,25 +67,42 @@ export default function DevotionalDay() {
   const [saveError, setSaveError] = useState(false);
   // In-page completion state — shown after a successful save, before the member
   // taps the return button. Prevents immediate auto-navigation.
-  const [justCompleted, setJustCompleted] = useState(false);
+  const [justCompleted, setJustCompleted]         = useState(false);
+  const [showStudyTogether, setShowStudyTogether] = useState(false);
 
   const load = useCallback(async () => {
     if (!seriesId) return;
     const auth = user?.id ? { userId: user.id } : undefined;
     try {
-      const [d, p] = await Promise.all([
-        getSeriesWithEntries(seriesId, auth),
-        getProgress(seriesId, auth),
-      ]);
+      // Shared devotional links must work before sign-in. The published
+      // content is public; progress is intentionally only loaded for members.
+      const d = await getSeriesWithEntries(seriesId, auth);
       setSeriesData(d);
-
-      // Auto-start as a fallback if the member navigated here directly
-      if (!p) {
-        const started = await startSeries(seriesId, auth);
-        setProgress(started);
-      } else {
-        setProgress(p);
+      // Record history view (fire-and-forget)
+      if (d?.title && user?.id) {
+        const { recordView } = await import('@/lib/history-api');
+        recordView({
+          contentType: 'devotional',
+          contentId: seriesId,
+          contentTitle: d.title,
+          contentRoute: `/devotional/${seriesId}/day/${day}`,
+        });
       }
+
+      if (user?.id) {
+        const p = await getProgress(seriesId, auth);
+        // Auto-start as a fallback if the member navigated here directly
+        if (!p) {
+          const started = await startSeries(seriesId, auth);
+          setProgress(started);
+        } else {
+          setProgress(p);
+        }
+      } else {
+        setProgress(null);
+      }
+      // Clear UPDATED badge — member has opened the content (fire-and-forget).
+      if (user?.id) void dismissBadge('devotional', seriesId);
     } catch {
       // ignore — loading errors shown via empty state below
     } finally {
@@ -101,6 +115,16 @@ export default function DevotionalDay() {
   }, [day]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Restore to My Emmaus — clears hidden_from_today when the member opens
+  // the content from Next Steps (or any other surface). Fire-and-forget; non-fatal.
+  useEffect(() => {
+    if (!seriesId || !user?.id) return;
+    const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+    fetch(`${base}/api/engagements/devotional/${encodeURIComponent(seriesId)}/unhide`, {
+      method: 'POST', credentials: 'include',
+    }).catch(() => {});
+  }, [seriesId, user?.id]);
 
   // Derive entry/published list before the route-guard effect so TypeScript
   // can see them as stable values and they aren't in the temporal dead zone.
@@ -128,8 +152,12 @@ export default function DevotionalDay() {
   const handleFinished = async () => {
     if (!seriesId || completing) return;
     setSaveError(false);
+    if (!user?.id) {
+      setSaveError(true);
+      return;
+    }
     setCompleting(true);
-    const auth = user?.id ? { userId: user.id } : undefined;
+    const auth = { userId: user.id };
     try {
       const updated = await markDayComplete(seriesId, day, auth);
       setProgress(updated);
@@ -169,10 +197,10 @@ export default function DevotionalDay() {
     const nextEntry = resolveNextEntry(seriesData.entries, day);
     const hasNextEntry = !!nextEntry;
     // Previous entries navigation — encode the back destination.
-    const prevDaysFrom = source ?? 'nextStepsDevotionals';
-    const prevDaysUrl  = `/devotional/${seriesId}/previous?from=${prevDaysFrom}`;
+      const previousSource = source ?? 'nextStepsDevotionals';
+      const prevDaysUrl = `/devotional/${seriesId}/previous${encodeSource(previousSource, sourceId ?? undefined)}`;
     const nextUrl = hasNextEntry
-      ? `/devotional/${seriesId}/day/${nextEntry.dayNumber}${source ? `?source=${source}` : ''}`
+      ? `/devotional/${seriesId}/day/${nextEntry.dayNumber}${encodeSource(previousSource, sourceId ?? undefined)}`
       : '';
     actionButton = (
       <EmmausCompletionCard
@@ -185,9 +213,9 @@ export default function DevotionalDay() {
         onContinue={hasNextEntry ? () => setLocation(nextUrl) : undefined}
         continueLabel={hasNextEntry ? 'Continue to Next Devotional' : undefined}
         returnLabel={returnLabel}
-        onReturn={() => setLocation(returnPath)}
-        previousDaysLabel="View Previous Entries →"
-        onPreviousDays={justCompleted && day > 1 ? () => setLocation(prevDaysUrl) : undefined}
+        onReturn={() => goBackOrFallback(returnPath, setLocation)}
+        previousDaysLabel="View Devotional Contents"
+        onPreviousDays={justCompleted || alreadyCompleted ? () => setLocation(prevDaysUrl) : undefined}
       />
     );
   } else {
@@ -195,16 +223,20 @@ export default function DevotionalDay() {
     actionButton = (
       <div className="space-y-2">
         {saveError && (
-          <p className="text-center text-sm text-destructive">
-            Something went wrong. Please try again.
+          <p className="text-center text-sm text-muted-foreground">
+            {user
+              ? 'Something went wrong. Please try again.'
+              : 'Sign in or create an account to save your progress.'}
           </p>
         )}
         <Button
           className="w-full h-14 text-[17px] font-semibold rounded-2xl"
-          onClick={handleFinished}
+          onClick={() => user ? void handleFinished() : setLocation('/auth')}
           disabled={completing}
         >
-          {completing ? <Loader2 size={18} className="animate-spin" /> : 'Finished'}
+          {completing
+            ? <Loader2 size={18} className="animate-spin" />
+            : user ? 'Finished' : 'Sign in to finish'}
         </Button>
       </div>
     );
@@ -213,28 +245,64 @@ export default function DevotionalDay() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
-      {/* Nav bar */}
-      <div className="flex items-center justify-between px-5 pt-4 pb-2 max-w-[640px] mx-auto">
-        <button
-          onClick={() => setLocation(returnPath)}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ChevronLeft size={16} /> {source?.startsWith('nextSteps') ? 'Next Steps' : "Today's Steps"}
-        </button>
-        {totalEntries > 1 && (
+      {/* Sticky header — matches Walk step reader pattern */}
+      <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
+        <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
+
+          {/* Back — arrow only, no text label */}
           <button
-            onClick={() => setLocation(`/devotional/${seriesId}/previous?from=${source ?? 'nextStepsDevotionals'}`)}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => goBackOrFallback(returnPath, setLocation)}
+            className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label="Back"
           >
-            Previous days
+            <ArrowLeft size={22} />
           </button>
-        )}
-      </div>
+
+          {/* Centered series title + day label */}
+          <div className="flex-1 min-w-0 text-center px-3">
+            <div className="font-medium text-sm text-foreground truncate leading-tight">{seriesData.title}</div>
+            <div className="text-[12px] text-muted-foreground">{getDevotionalLabel(entry)}</div>
+          </div>
+
+          {/* Right actions — icon-only */}
+          <div className="flex items-center justify-end">
+            <FavouriteButton
+              contentType="devotional"
+              contentId={seriesId!}
+              contentTitle={seriesData.title}
+              contentRoute={`/devotional/${seriesId}/day/1`}
+              className="shrink-0"
+            />
+            {totalEntries > 1 && (
+              <button
+                onClick={() => setLocation(`/devotional/${seriesId}/previous${encodeSource(source ?? 'nextStepsDevotionals', sourceId ?? undefined)}`)}
+                className="p-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                aria-label="All Devotionals"
+                title="All Devotionals"
+              >
+                <List size={18} />
+              </button>
+            )}
+            {user && (
+              <button
+                onClick={() => setShowStudyTogether(true)}
+                className="p-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                aria-label="Study Together"
+                title="Study Together"
+              >
+                <Users size={18} />
+              </button>
+            )}
+          </div>
+
+        </div>
+      </header>
 
       {/* Reading */}
       <DevotionalReading
         seriesTitle={seriesData.title}
         dayNumber={day}
+        displayLabel={getDevotionalLabel(entry)}
         title={entry.title}
         greeting={entry.greeting ?? ''}
         scripture={entry.scriptureReference ?? ''}
@@ -243,11 +311,32 @@ export default function DevotionalDay() {
         nextStep={entry.nextStep ?? ''}
         closing={entry.closing ?? ''}
         memberName={resolveDisplayName(user?.preferredName)}
+        shareImageUrl={entry.shareImageUrl}
         returnPath={devotionalReturnPath}
         actionButton={actionButton}
+        sharePayload={{
+          title: seriesData.title,
+          dayTitle: entry.title,
+          scripture: entry.scriptureReference ?? undefined,
+          greeting: entry.greeting ?? undefined,
+          reflection: entry.considerThis ?? undefined,
+          prayer: entry.prayer ?? undefined,
+          nextStep: entry.nextStep ?? undefined,
+          closing: entry.closing ?? undefined,
+        }}
       />
 
       <BottomNav />
+
+      {showStudyTogether && user && (
+        <StudyTogetherSheet
+          defaultName={seriesData.title}
+          userId={user.id}
+          contentId={seriesId}
+          contentType="devotional"
+          onClose={() => setShowStudyTogether(false)}
+        />
+      )}
     </div>
   );
 }

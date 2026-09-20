@@ -1,0 +1,419 @@
+Add an admin-only Illustration Studio to Emmaus Content Studio.
+
+IMPORTANT SAFETY INSTRUCTIONS
+
+Before changing anything:
+
+1. Create a restore point/checkpoint of the current working application.
+2. Inspect the existing architecture, database schema, Content Studio, Walk editor, Bible Study editor, Bulk Import system, image-generation service and media storage.
+3. Extend the current system. Do not rebuild or replace working features.
+4. Do not change the user-facing Walk layout, completion logic, Bulk Import parsing or existing shareable-image generator.
+5. Use the existing Emmaus design system, components, typography, colours, storage and authentication.
+6. Only authorized administrators may generate, edit, approve, delete or publish illustrations.
+7. Existing Walks and Bible Studies without illustrations must continue working exactly as they do now.
+
+GOAL
+
+Allow an administrator to create and insert illustrations into Walk Steps and Bible Studies.
+
+The illustration must be generated once, reviewed and saved as a permanent media asset. It must not be regenerated whenever a user opens the content.
+
+Support two clearly separated illustration systems:
+
+1. Accurate Visual
+2. Artistic Scene
+
+ACCURATE VISUAL
+
+Use controlled SVG templates and structured data for:
+
+* Bible maps
+* Timelines
+* Book outlines
+* Journey routes
+* Teaching diagrams
+* Comparisons
+* People-group diagrams
+* Genealogies
+
+Do not use the normal AI image generator to create maps, timelines, diagrams, labels or geographical information.
+
+AI-generated maps frequently contain incorrect geography, invented places and misspelled labels. All text, locations, routes and data in an Accurate Visual must come from administrator-approved structured data.
+
+SVG visuals must:
+
+* Render clearly on mobile and desktop
+* Use the Emmaus colour palette
+* Use readable text
+* Support dark and light backgrounds where necessary
+* Export to PNG for consistent display and sharing
+* Retain the SVG source for later editing
+* Include meaningful alternative text
+* Contain no external hotlinked assets
+
+ARTISTIC SCENE
+
+Use Emmaus’s existing image-generation service for:
+
+* Biblical landscapes
+* Historical settings
+* Objects and symbols
+* Atmospheric scenes
+* Parable illustrations
+* Non-photorealistic moments from a passage
+
+Artistic Scene rules:
+
+* Do not place Scripture, titles, labels or other generated text inside the image.
+* Do not automatically generate an identifiable face of Jesus.
+* Prefer respectful environmental, symbolic, silhouette or viewed-from-behind compositions.
+* Avoid modern clothing, modern buildings and historically inappropriate objects.
+* Avoid fantasy imagery unless the Scripture explicitly describes a supernatural event.
+* Do not generate graphic violence.
+* Do not publish an image automatically.
+* Every image must be reviewed and approved by an administrator.
+* Reuse the existing image-generation integration and storage system where possible.
+
+CONTENT STUDIO INTERFACE
+
+Add an optional ILLUSTRATION section to:
+
+* Walk Introduction
+* Every Walk Step
+* Walk Complete
+* Bible Study content
+
+The section must not interfere with existing fields.
+
+Provide these actions:
+
+* Add Illustration
+* Generate Illustration
+* Upload Illustration
+* Replace
+* Edit
+* Regenerate
+* Remove
+* Preview
+* Approve
+* Unapprove
+
+When Add Illustration is selected, ask the administrator to choose:
+
+* Accurate Visual
+* Artistic Scene
+* Upload Existing Image
+
+For Accurate Visual, provide template choices:
+
+* Bible Map
+* Timeline
+* Five-Part Book Outline
+* Journey Route
+* Teaching Diagram
+* Comparison
+* People Groups
+* Custom Diagram
+
+For Artistic Scene, prefill an editable generation instruction based on:
+
+* Bible book
+* Scripture reference
+* Step title
+* Step reflection
+
+The administrator must be able to edit the instruction before generating.
+
+PLACEMENT
+
+Allow the administrator to select where the illustration appears:
+
+* Below Scripture
+* Below Welcome
+* Within Reflection
+* After Reflection
+* Before Consider This
+
+If “Within Reflection” is selected, provide a paragraph-position selector rather than requiring the administrator to edit HTML.
+
+Include optional fields for:
+
+* Caption
+* Alternative text
+* Internal administrator note
+
+Captions should be hidden when empty.
+
+STATUS
+
+Every illustration must have a visible status:
+
+* Suggested
+* Generating
+* Draft
+* Approved
+* Failed
+
+Only Approved illustrations may appear in the user-facing app.
+
+If generation fails:
+
+* Preserve all existing content
+* Show a clear error
+* Allow Retry
+* Never remove or replace the previously approved illustration
+
+BULK IMPORT INTEGRATION
+
+Do not change the current Bulk Import syntax or parser.
+
+After a successful Bulk Import, analyse the imported Steps and display a separate optional action:
+
+“Suggest Illustrations”
+
+This action must not alter the imported text.
+
+When selected, Emmaus may suggest:
+
+* Illustration type
+* Recommended template
+* Suggested placement
+* Suggested caption
+* Suggested alternative text
+* Editable generation instruction
+
+Do not automatically generate all suggestions.
+
+Display the suggestions in a review list so the administrator can:
+
+* Generate individually
+* Dismiss individually
+* Generate selected
+* Dismiss all
+
+Never publish suggested or generated illustrations without administrator approval.
+
+LUKE WALK PRESETS
+
+Add the following Accurate Visual presets for the current five-day Luke Walk:
+
+DAY 1
+
+Title: Luke’s Careful Account
+
+Type: Teaching Diagram
+
+Content:
+
+Luke in the centre with six connected roles:
+
+* Gentile
+* Doctor
+* Historian
+* Traveller
+* Writer
+* Evangelist
+
+Suggested placement: After Reflection
+
+Alternative text: A diagram showing Luke as a Gentile, doctor, historian, traveller, writer and evangelist.
+
+DAY 2
+
+Title: The Beginning of Jesus’ Earthly Life
+
+Type: Timeline
+
+Content:
+
+* Announcement to Mary
+* Birth in Bethlehem
+* Boyhood in Nazareth
+* Baptism in the Jordan
+* Beginning of public ministry
+
+Suggested placement: After Reflection
+
+Alternative text: A timeline showing the announcement of Jesus’ birth, His birth in Bethlehem, His childhood in Nazareth and His baptism in the Jordan.
+
+DAY 3
+
+Title: Jesus’ Journey Toward Jerusalem
+
+Type: Bible Map
+
+Show and label:
+
+* Galilee
+* Nazareth
+* Sea of Galilee
+* Samaria
+* Jordan River
+* Perea
+* Judaea
+* Jerusalem
+
+Show a clear southward journey from Galilee toward Jerusalem.
+
+Do not claim to display every individual journey or precise route taken by Jesus. Label it as a simplified teaching map.
+
+Suggested caption:
+
+A simplified map showing the movement of Luke’s Gospel from ministry in Galilee toward Jerusalem and the Cross.
+
+Suggested placement: After Reflection
+
+Alternative text: A simplified Bible map showing Galilee, Samaria, Perea, Judaea and Jesus’ movement toward Jerusalem.
+
+DAY 4
+
+Title: The People Jesus Welcomed
+
+Type: People Groups
+
+Place “Jesus” in the centre, surrounded by:
+
+* Samaritans
+* Gentiles
+* Outcasts
+* Women
+* The Poor
+* Sinners
+
+Suggested placement: After Reflection
+
+Alternative text: A diagram showing Jesus surrounded by the groups of people who receive particular attention in Luke’s Gospel.
+
+DAY 5
+
+Title: From the Cross to the Ascension
+
+Type: Timeline
+
+Content:
+
+* The Cross
+* The Empty Tomb
+* The Road to Emmaus
+* Jesus Appears to His Disciples
+* The Ascension
+* Waiting for the Holy Spirit
+
+Suggested placement: After Reflection
+
+Alternative text: A timeline showing the Cross, empty tomb, road to Emmaus, appearances of the risen Jesus and the Ascension.
+
+USER-FACING DISPLAY
+
+In the Emmaus user app:
+
+* Show only Approved illustrations.
+* Keep the content reading experience clean and uncluttered.
+* Display the image at full available content width.
+* Preserve its aspect ratio.
+* Allow the user to tap it to view a larger version.
+* Provide an accessible close button in enlarged view.
+* Never open the image in a new browser tab.
+* Display the caption beneath the image when one exists.
+* Do not let the illustration cover Scripture, text or navigation.
+* Use lazy loading to protect performance.
+* Include a fixed display container or aspect ratio to prevent layout jumping.
+* Use compressed WebP or AVIF for normal display, with PNG fallback where necessary.
+* SVG files must be sanitised before display.
+
+DATA AND STORAGE
+
+Use the existing database and media-storage conventions.
+
+Store, at minimum:
+
+* Content type
+* Content ID
+* Step ID where applicable
+* Illustration type
+* Template type
+* Source SVG where applicable
+* Display image URL
+* Thumbnail URL
+* Generation instruction
+* Structured visual data
+* Caption
+* Alternative text
+* Placement
+* Paragraph position where applicable
+* Status
+* Approved by
+* Approved at
+* Created by
+* Created at
+* Updated at
+
+Use a backward-compatible migration.
+
+Do not store generated images as temporary external URLs. Copy approved assets into Emmaus’s permanent media storage.
+
+COST CONTROLS
+
+Because Emmaus must remain inexpensive to operate:
+
+* Generate each image only when an administrator explicitly requests it.
+* Never generate illustrations when a user opens content.
+* Never regenerate approved images automatically.
+* Show a confirmation before bulk-generating selected Artistic Scenes.
+* Reuse saved assets across previews.
+* Prevent duplicate generation caused by double-clicks or repeated requests.
+* Add request locking and idempotency.
+* Display generation status while processing.
+
+ACCURACY AND THEOLOGICAL SAFETY
+
+Before saving an Accurate Visual:
+
+* Validate that all labels come from the structured administrator-approved data.
+* Never allow the image model to invent labels.
+* Mark simplified maps clearly.
+* Do not present uncertain routes as precise historical fact.
+* Do not add theological claims not contained in the content.
+* Do not create images of God the Father.
+* Do not create sensational or irreverent depictions of Jesus, the Cross or supernatural events.
+
+TESTING
+
+Test all of the following:
+
+1. Existing Walks without illustrations still work.
+2. Existing Bible Studies without illustrations still work.
+3. Bulk Import still creates every Day correctly.
+4. Suggest Illustrations does not change imported text.
+5. An administrator can generate and approve an Accurate Visual.
+6. An administrator can generate and approve an Artistic Scene.
+7. An administrator can upload an existing image.
+8. Draft illustrations remain invisible to users.
+9. Approved illustrations appear in the selected position.
+10. Removing an illustration does not remove or damage the Step.
+11. Failed generation does not damage existing content.
+12. Mobile display is readable and does not overflow.
+13. Tapping an illustration opens and closes the enlarged view correctly.
+14. Alternative text is present for accessibility.
+15. Reopening the editor preserves the illustration and its status.
+16. Double-clicking Generate does not create duplicate jobs or charges.
+17. Unauthorized users cannot access generation or approval endpoints.
+18. All five Luke presets render correctly.
+
+DELIVERY
+
+When complete, report:
+
+* Files changed
+* Database migration added
+* New API routes
+* New administrator components
+* User-facing components
+* How accurate maps and diagrams are rendered
+* How Artistic Scenes use the existing image generator
+* Storage location of approved assets
+* Cost protections implemented
+* Tests completed
+* Any issues still requiring attention
+
+Do not report completion until the feature has been tested in both the administrator editor and the user-facing mobile layout.

@@ -1,0 +1,66 @@
+Change Daily Rhythm from a mandatory navigation lock to a daily opening screen.
+
+Core requirement:
+Keep the existing first-opening behaviour exactly as it is: on a user’s first entry into Emmaus each new day, Emmaus must automatically open today’s Daily Rhythm.
+
+However, once Daily Rhythm has opened, the user must be free to navigate anywhere in Emmaus immediately. They must not have to scroll to the end or tap Complete before leaving.
+
+Required behaviour:
+1. On the first app entry of each new day, open today’s Daily Rhythm automatically.
+2. Do not change how Emmaus determines:
+   - the current day
+   - whether Daily Rhythm has already opened today
+   - which Daily Rhythm day should be displayed
+3. Remove all navigation locking based on Daily Rhythm completion.
+4. The user may leave Daily Rhythm immediately using:
+   - bottom navigation
+   - back buttons
+   - menus
+   - internal links
+   - direct routes and deep links
+5. The user may access every area before completing Daily Rhythm, including:
+   - Today’s Steps
+   - My Bible
+   - Next Steps
+   - My Journey
+   - Groups
+   - Ask Emmaus
+   - profile and settings
+   - any other normal user feature
+6. Do not redirect the user back to Daily Rhythm after they navigate away.
+7. Do not reopen Daily Rhythm repeatedly during the same session or on every route change.
+8. Do not mark Daily Rhythm as completed merely because the user leaves it.
+9. Keep the existing Complete action and completion tracking unchanged.
+10. An incomplete Daily Rhythm must remain visible on Today’s Steps so the user can return to it.
+11. On a later visit during the same day, preserve the existing intended once-per-day opening behaviour. Do not use completion as the condition for repeatedly forcing Daily Rhythm open.
+12. On the first entry of the next new day, automatically open the next available Daily Rhythm again.
+
+Important implementation rule:
+Separate these two concepts completely:
+- `hasOpenedDailyRhythmToday`
+- `hasCompletedDailyRhythmToday`
+
+Opening controls the once-per-day automatic launch.
+Completion controls progress only.
+Completion must no longer control access to any part of Emmaus.
+
+Remove or disable every route guard, navigation guard, redirect effect, layout guard, tab handler or API rule that blocks navigation because Daily Rhythm is incomplete.
+
+Do not remove the automatic daily opening behaviour.
+
+Acceptance tests:
+- New day + Daily Rhythm incomplete → Emmaus opens directly to today’s Daily Rhythm.
+- Immediately tap My Bible without scrolling → Bible opens.
+- Immediately tap Today’s Steps, Next Steps, My Journey or Groups → selected area opens.
+- Leaving Daily Rhythm does not mark it complete.
+- Daily Rhythm remains incomplete and available on Today’s Steps.
+- Navigating between screens does not reopen Daily Rhythm.
+- Close and reopen Emmaus later the same day → it does not repeatedly force Daily Rhythm open, according to the existing once-per-day opening rule.
+- Complete Daily Rhythm → completion and progress still save correctly.
+- First entry on the following day → the next Daily Rhythm opens automatically.
+- Admin users can still access the admin panel normally.
+
+Before finishing:
+1. Search the entire codebase for all redirects and guards based on Daily Rhythm completion.
+2. Remove completion-based access blocking without altering the daily-opening logic.
+3. Report the files changed and the result of every acceptance test.

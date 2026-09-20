@@ -1,0 +1,138 @@
+Fix the Bulk Bible Study Import parser's field-label detection.
+
+The importer is now correctly detecting the Matthew batch:
+
+* 1 book
+* 10 chapters
+* 45 passage groups
+* 288 populated Study field values
+
+However, it is producing false UNKNOWN_LABEL warnings whenever ordinary prose contains a line ending with a colon.
+
+Examples currently being incorrectly detected as labels include:
+
+HIS_MESSAGE_IS_URGENT
+
+JESUS_WILL_DO_WHAT_JOHN_CANNOT
+
+THE_TEMPTER_REPEATEDLY_CHALLENGES_HIS_IDENTITY
+
+HIS_MESSAGE_IS_CLEAR
+
+JESUS_SEES_SIMON_PETER_AND_ANDREW_FISHING_AND_SAYS
+
+HIS_INSTRUCTION_IS_SIMPLE
+
+THE_DISCIPLES_ASK
+
+JESUS_SEES_MATTHEW_SITTING_AT_HIS_TAX_BOOTH_AND_SAYS
+
+These come from normal prose such as:
+
+His message is urgent:
+
+Repent, because the Kingdom of Heaven has come near.
+
+and:
+
+Jesus sees Simon Peter and Andrew fishing and says:
+
+"Follow Me."
+
+The parser must NOT treat arbitrary prose ending in a colon as a structured field label.
+
+Change field-label parsing so that ONLY the explicitly supported schema labels are recognised as control markers.
+
+Recognised structural labels must be exactly:
+
+BOOK:
+CHAPTER:
+TITLE:
+CHAPTER_OVERVIEW:
+PASSAGE:
+EXPLANATION:
+PASSAGE_CONTEXT:
+HISTORICAL_NOTE:
+ORIGINAL_LANGUAGE_NOTE:
+JESUS_CONNECTION:
+PRACTICAL_APPLICATION:
+KEY_TRUTH:
+REFLECTION_QUESTION:
+RELATED_SCRIPTURES:
+
+Matching may remain case-insensitive if currently supported.
+
+Whitespace before or after the recognised label may be ignored.
+
+Do not infer unknown labels merely because a line ends with a colon.
+
+Any other line ending with ":" must remain part of the content of the currently active field.
+
+For example:
+
+EXPLANATION:
+John's message is urgent:
+
+Repent, because the Kingdom of Heaven has come near.
+
+must result in the complete Explanation value:
+
+John's message is urgent:
+
+Repent, because the Kingdom of Heaven has come near.
+
+Likewise:
+
+EXPLANATION:
+Jesus sees Simon Peter and Andrew fishing and says:
+
+"Follow Me."
+
+must remain one complete Explanation value.
+
+UNKNOWN LABEL VALIDATION
+
+We still want protection against genuine schema mistakes, but do not detect these by treating arbitrary prose as labels.
+
+If unknown-label validation is retained, only flag something as a possible unknown schema label when it strongly resembles a structured importer token, for example:
+
+POINTS_TO_JESUS:
+HISTORICAL_BACKGROUND:
+REFLECTION:
+
+Do not flag normal sentences.
+
+The safest implementation is to parse only the known allow-listed labels above and otherwise treat text as content.
+
+TEST
+
+Re-run the exact currently pasted Matthew 1–10 content.
+
+Expected result:
+
+* 1 book
+* 10 chapters
+* 45 passages
+* all existing populated field values preserved
+* 0 false UNKNOWN_LABEL warnings from prose
+* no content following those colons is discarded
+
+Verify specifically that text following:
+
+"His message is urgent:"
+"His message is clear:"
+"The tempter repeatedly challenges His identity:"
+"Jesus sees Simon Peter and Andrew fishing and says:"
+"His instruction is simple:"
+"The disciples ask:"
+"Jesus sees Matthew sitting at his tax booth and says:"
+
+is present in the appropriate imported Study field.
+
+Do not alter the Bulk Import schema.
+
+Do not alter any Bible Study content.
+
+Do not publish or import the current Matthew batch as part of this fix.
+
+Only fix the parser and validation behaviour.

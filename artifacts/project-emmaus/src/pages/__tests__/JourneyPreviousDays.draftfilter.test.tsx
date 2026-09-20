@@ -170,6 +170,36 @@ describe('JourneyPreviousDays — Draft step filtering', () => {
     expect(screen.queryByTestId('review-day-3')).not.toBeInTheDocument();
   });
 
+  it('shows elapsed Published days even when they were opened but not finished', () => {
+    mockCurrentDay = 3;
+    mockCompletedDays = [2];
+    mockSteps = [
+      makeStep(1, 'Published', 'Day One Opened Only'),
+      makeStep(2, 'Published', 'Day Two Finished'),
+    ];
+
+    render(<JourneyPreviousDays />);
+
+    expect(screen.getByText('Day One Opened Only')).toBeInTheDocument();
+    expect(screen.getByText('Day Two Finished')).toBeInTheDocument();
+    expect(screen.getByTestId('review-day-1')).toBeInTheDocument();
+    expect(screen.getByTestId('review-day-2')).toBeInTheDocument();
+  });
+
+  it('shows elapsed Published days that were never opened', () => {
+    mockCurrentDay = 3;
+    mockCompletedDays = [];
+    mockSteps = [
+      makeStep(1, 'Published', 'Day One Not Opened'),
+      makeStep(2, 'Published', 'Day Two Not Opened'),
+    ];
+
+    render(<JourneyPreviousDays />);
+
+    expect(screen.getByText('Day One Not Opened')).toBeInTheDocument();
+    expect(screen.getByText('Day Two Not Opened')).toBeInTheDocument();
+  });
+
   it('renders an empty state when the journey has no steps at all', () => {
     mockSteps = [];
 

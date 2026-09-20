@@ -1,0 +1,412 @@
+EMMAUS VOICE — PHASE 2
+NATURAL HANDS-FREE CONVERSATION
+
+Phase 1 is now working.
+
+DO NOT rebuild or replace the working Phase 1 implementation.
+
+Preserve:
+- Existing Ask Emmaus text functionality
+- Existing transcription
+- Existing TTS
+- Existing Hear Emmaus functionality
+- Existing mobile support
+- Existing voice settings/admin controls
+- Existing database/security/rate-limit implementation
+- Existing Emmaus response pipeline and theological safeguards
+
+GOAL
+
+Emmaus Voice should now become a genuine conversational mode.
+
+The user should not have to repeatedly:
+1. tap microphone
+2. speak
+3. wait
+4. tap Hear Emmaus
+5. tap microphone again
+
+Instead, Voice Mode should behave like an ongoing spoken conversation with Emmaus.
+
+--------------------------------------------------
+1. CREATE A DEDICATED VOICE MODE
+--------------------------------------------------
+
+When the user activates Voice Mode, open a clean dedicated voice conversation interface.
+
+This is NOT just the existing Ask Emmaus text box with a microphone.
+
+The screen should feel calm, simple and conversational.
+
+Suggested layout:
+
+Top:
+< Back                    Emmaus Voice
+
+Centre:
+A subtle Emmaus voice visualizer/orb
+
+Below:
+Dynamic status text such as:
+
+Listening…
+Thinking…
+Emmaus is speaking…
+
+Bottom controls:
+
+[ Microphone ]     [ End ]
+
+Do not clutter the interface.
+
+Do not display large amounts of transcript while the conversation is happening.
+
+The user should feel like they are talking to Emmaus, not operating a chatbot.
+
+--------------------------------------------------
+2. CONTINUOUS CONVERSATION LOOP
+--------------------------------------------------
+
+Implement this conversation flow:
+
+USER SPEAKS
+↓
+speech is transcribed
+↓
+transcript is sent through the EXISTING Ask Emmaus response pipeline
+↓
+Emmaus generates the response
+↓
+response is automatically spoken
+↓
+when Emmaus finishes speaking
+↓
+listening becomes available again
+
+The user should be able to continue:
+
+User:
+"What does Psalm 23 mean?"
+
+Emmaus answers aloud.
+
+User:
+"What does that mean for me when I'm afraid?"
+
+Emmaus understands this as a continuation of the same conversation.
+
+No need to press Hear Emmaus between responses.
+
+--------------------------------------------------
+3. PRESERVE CONVERSATION CONTEXT
+--------------------------------------------------
+
+Voice Mode must maintain the same conversation context across turns.
+
+Follow-up questions must understand previous turns.
+
+Example:
+
+User:
+"Read Psalm 23."
+
+Emmaus reads it.
+
+User:
+"Explain verse 4."
+
+Emmaus must understand that "verse 4" refers to Psalm 23:4.
+
+User:
+"Why is that important?"
+
+Emmaus must understand the conversational context.
+
+Do not create a separate AI knowledge system for Voice.
+
+Voice must use the existing Ask Emmaus intelligence/context pipeline.
+
+--------------------------------------------------
+4. INTERRUPTION / STOP SPEAKING
+--------------------------------------------------
+
+The user must be able to interrupt Emmaus.
+
+While Emmaus is speaking:
+
+- tapping the visualizer/microphone should stop playback and allow the user to speak
+- provide a clearly accessible Stop Speaking action if needed
+
+Stopping speech must NOT destroy the conversation.
+
+The user can immediately ask another question.
+
+--------------------------------------------------
+5. PREVENT EMMAUS FROM HEARING ITSELF
+--------------------------------------------------
+
+This is important.
+
+Do not allow microphone capture of Emmaus's own TTS output.
+
+When Emmaus begins speaking:
+
+pause/disable active recording.
+
+When playback ends:
+
+restore listening state.
+
+Use safe state transitions so recording and playback cannot accidentally run simultaneously.
+
+--------------------------------------------------
+6. VOICE VISUALIZER
+--------------------------------------------------
+
+Add a subtle visual state indicator.
+
+It does not need advanced audio-reactive animation yet.
+
+Phase 2 can use simple animated states:
+
+IDLE
+gentle resting animation
+
+LISTENING
+soft responsive/pulsing animation
+
+THINKING
+subtle processing animation
+
+SPEAKING
+gentle speaking animation
+
+ERROR
+return safely to idle/listening with a useful message
+
+Keep this visually consistent with Emmaus:
+calm
+warm
+minimal
+not futuristic/gimmicky
+not a Siri/Alexa copy
+
+--------------------------------------------------
+7. TRANSCRIPT ACCESS
+--------------------------------------------------
+
+The conversation should still be available as text.
+
+Do not make the transcript dominate Voice Mode.
+
+Provide a small option such as:
+
+View Conversation
+
+Opening it should show:
+
+You:
+[user transcript]
+
+Emmaus:
+[response]
+
+You:
+[next transcript]
+
+Emmaus:
+[next response]
+
+The conversation should remain compatible with the existing Ask Emmaus conversation/history architecture where possible.
+
+Do not create duplicate conversation systems unnecessarily.
+
+--------------------------------------------------
+8. EXITING VOICE MODE
+--------------------------------------------------
+
+The user must always be able to exit Voice Mode.
+
+Use:
+
+End
+
+or the Back control.
+
+On exit:
+
+- stop recording
+- stop audio playback
+- clean up MediaRecorder/audio resources
+- preserve conversation history
+- return safely to the screen from which Voice Mode was opened
+
+Do not create circular navigation.
+
+--------------------------------------------------
+9. MOBILE FIRST
+--------------------------------------------------
+
+This must work properly on mobile browsers.
+
+Test specifically:
+
+- microphone permission
+- recording
+- transcription
+- automatic TTS playback
+- interruption
+- repeated conversation turns
+- ending Voice Mode
+- returning to the previous screen
+- screen locking/visibility changes where practical
+- no controls hidden behind mobile navigation/browser chrome
+
+Do not rely on hover interactions.
+
+--------------------------------------------------
+10. DO NOT ADD WAKE WORD YET
+--------------------------------------------------
+
+Do NOT implement:
+
+"Hey Emmaus"
+
+background microphone monitoring
+
+always-listening behaviour
+
+lock-screen voice assistant behaviour
+
+Those can be considered later.
+
+For Phase 2, Voice Mode begins only after the user intentionally activates it.
+
+--------------------------------------------------
+11. FAILURE HANDLING
+--------------------------------------------------
+
+Voice Mode must fail gracefully.
+
+Examples:
+
+Microphone denied:
+"Emmaus needs microphone access for Voice Mode."
+
+Transcription fails:
+"I didn't catch that. Try again."
+
+TTS fails:
+Keep the Emmaus text response and allow Retry Audio.
+
+Network interruption:
+Preserve the conversation and allow retry.
+
+Never leave Voice Mode permanently stuck on:
+
+Listening…
+Thinking…
+Speaking…
+
+Implement timeouts/recovery states where appropriate.
+
+--------------------------------------------------
+12. IMPORTANT ARCHITECTURE RULE
+--------------------------------------------------
+
+Voice is an INTERFACE to Emmaus.
+
+It is not another Emmaus.
+
+The architecture should remain conceptually:
+
+User
+↓
+Text OR Voice
+↓
+Ask Emmaus
+↓
+same knowledge/retrieval/theological response system
+↓
+Text response
+↓
+optional/automatic Voice output
+
+This is critical because later Emmaus Voice should be able to:
+
+- answer biblical questions
+- read Scripture aloud
+- read Daily Rhythm
+- read Daily Devotionals
+- guide Walks and Journeys
+- discuss Sermon Companions
+- answer follow-up questions
+- eventually operate naturally while driving, walking, exercising, etc.
+
+Do not duplicate the underlying Emmaus intelligence.
+
+--------------------------------------------------
+13. DO NOT CHANGE OTHER EMMAUS FEATURES
+--------------------------------------------------
+
+Do not modify:
+
+Groups
+Bible navigation
+Today's Steps
+Discover
+My Journey
+content gating
+Daily Rhythm
+Daily Devotionals
+Walks/Journeys
+Sermon Companion
+attendance/pastoral systems
+
+unless strictly required for Voice Mode integration.
+
+Do not redesign existing screens.
+
+--------------------------------------------------
+14. TEST BEFORE COMPLETION
+--------------------------------------------------
+
+Before marking Phase 2 complete, test this exact flow:
+
+1. Open Emmaus on mobile.
+2. Start Voice Mode.
+3. Say:
+   "Who is Jesus?"
+4. Confirm transcription succeeds.
+5. Confirm Ask Emmaus produces its normal response.
+6. Confirm Emmaus automatically speaks the response.
+7. Without leaving Voice Mode, ask:
+   "Why did He come?"
+8. Confirm Emmaus understands this as a follow-up.
+9. Interrupt Emmaus while it is speaking.
+10. Ask another question.
+11. Confirm the conversation continues.
+12. End Voice Mode.
+13. Confirm microphone and audio resources stop.
+14. Confirm navigation returns correctly.
+15. Reopen Ask Emmaus and ensure ordinary text Ask Emmaus still works.
+16. Confirm Hear Emmaus still works independently.
+
+Do not mark the task complete merely because the UI renders.
+
+The Phase 2 success criterion is:
+
+A user can hold a multi-turn spoken conversation with Emmaus on a mobile phone without manually pressing Hear Emmaus after every response.
+
+Create a checkpoint before implementation.
+
+Report exactly:
+- files changed
+- conversation state architecture used
+- recording lifecycle
+- playback lifecycle
+- interruption implementation
+- mobile testing performed
+- any browser limitations discovered
+
+Then stop for approval.

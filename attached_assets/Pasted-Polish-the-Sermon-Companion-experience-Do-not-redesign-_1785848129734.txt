@@ -1,0 +1,273 @@
+Polish the Sermon Companion experience. Do not redesign it completely. The current implementation is close, but refine it into the final Emmaus experience.
+
+==================================================
+1. SERMON IDENTITY
+==================================================
+
+The Sermon Companion must clearly feel connected to a real sermon.
+
+Below the title, display:
+
+Speaker
+Date
+Main Scripture
+Main Theme
+
+Example:
+
+Speaker
+Pastor Jeremy Govender
+
+Date
+3 August 2026
+
+Main Scripture
+Judges 7
+
+Theme
+God's strength is revealed through our weakness.
+
+If any of these are missing they should be pulled automatically from the sermon record created in Admin.
+
+==================================================
+2. INTRODUCTION
+==================================================
+
+Replace the generic introduction.
+
+Current:
+
+"A 5-step companion based on this week's sermon..."
+
+Instead generate a short personalised introduction based on the actual sermon.
+
+Example:
+
+"This week's message explored how God often chooses unlikely people to accomplish His purposes. These five steps will help you reflect on the message, pray through it and live it out throughout the week."
+
+Generate this automatically from the sermon summary.
+
+==================================================
+3. LISTEN • WATCH • READ
+==================================================
+
+Directly below the introduction add three quick actions.
+
+▶ Listen
+Play uploaded sermon audio.
+
+📺 Watch
+Open YouTube if available.
+
+📄 Read
+Open full sermon transcript.
+
+Hide Listen if no audio exists.
+
+Hide Watch if no YouTube link exists.
+
+Hide Read if no transcript exists.
+
+==================================================
+4. STEP LIST
+==================================================
+
+Improve the five-step list.
+
+Show clear progress.
+
+Current Step:
+Filled Emmaus green circle.
+
+Completed:
+Green checkmark.
+
+Future:
+Grey outline circle.
+
+Each row remains tappable.
+
+Do not make it feel like a static checklist.
+
+==================================================
+5. PROGRESS
+==================================================
+
+Improve the progress card.
+
+Example:
+
+2 of 5 Steps Completed
+
+Next:
+Step 3
+Faith is the Evidence
+
+instead of simply:
+
+Next: Step 3
+
+==================================================
+6. RELATED RESOURCES
+==================================================
+
+At the bottom automatically show:
+
+Related Bible Study
+
+Related Walk
+
+Related Scriptures
+
+Ask Emmaus about this sermon
+
+These should be generated from the sermon metadata and Emmaus Knowledge Index.
+
+==================================================
+7. KNOWLEDGE INDEX
+==================================================
+
+Every published sermon companion must automatically create or update entries in the Emmaus Knowledge Index.
+
+Store:
+
+Sermon title
+
+Speaker
+
+Date
+
+Series
+
+Main Scripture
+
+Supporting Scriptures
+
+Themes
+
+Teaching points
+
+Applications
+
+Keywords
+
+Topics
+
+Illustrations
+
+Transcript
+
+Summary
+
+Step titles
+
+Step content
+
+Prayer themes
+
+Reflection themes
+
+Audio URL
+
+Video URL
+
+Transcript timestamps
+
+Companion ID
+
+Sermon ID
+
+This indexed knowledge must immediately become available to:
+
+Ask Emmaus
+
+Bible Study links
+
+Future sermon search
+
+Future recommendations
+
+Media Studio
+
+Do not require any manual indexing.
+
+==================================================
+8. TIMESTAMPS
+==================================================
+
+Every generated step should display:
+
+From this week's sermon
+18:42
+
+Tapping it should play the sermon from that timestamp.
+
+If timestamps cannot yet be shown in the user interface, still generate and store them.
+
+==================================================
+9. ASK EMMAUS
+==================================================
+
+When Ask Emmaus is opened from inside a Sermon Companion it should automatically know the current sermon context.
+
+Example:
+
+Current Context:
+God Uses the Unlikely
+
+so responses can reference the current sermon before searching the wider Emmaus Knowledge Index.
+
+==================================================
+10. FLOATING BUTTON
+==================================================
+
+The floating Ask Emmaus button currently obscures the final step cards.
+
+Do not move the floating button.
+
+Instead increase the bottom padding of this page so every item can scroll completely above the floating button.
+
+Apply the same rule consistently to every scrollable screen in Emmaus.
+
+==================================================
+11. FINAL EXPERIENCE
+==================================================
+
+The finished flow should be:
+
+Today's Steps
+
+↓
+
+Open Sermon Companion
+
+↓
+
+Overview
+• Sermon details
+• Introduction
+• Listen
+• Watch
+• Read
+• Progress
+• Five steps
+
+↓
+
+Open current step
+
+↓
+
+Complete five steps
+
+↓
+
+Companion Complete
+
+↓
+
+Review Companion
+
+The Sermon Companion should feel like a premium Emmaus experience built around one sermon—not simply another devotional.
+
+Preserve all existing functionality while applying these refinements.

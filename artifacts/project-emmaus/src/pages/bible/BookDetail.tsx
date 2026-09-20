@@ -4,6 +4,7 @@ import { ArrowLeft, CheckCircle2, BookOpen, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getBibleBook, getBibleJourney, BIBLE_JOURNEYS } from '@/lib/bible-data';
 import { useBible } from '@/contexts/BibleContext';
+import { goBackOrFallback } from '@/lib/return-context';
 import { BottomNav } from '@/components/BottomNav';
 import { getChapterHeading } from '@/data/chapter-headings';
 
@@ -11,12 +12,12 @@ export default function BookDetail() {
   useEffect(() => { window.scrollTo(0, 0); }, []);
   const { bookId } = useParams<{ bookId: string }>();
   const [, setLocation] = useLocation();
-  const { isChapterComplete, lastRead, getJourneyProgress } = useBible();
+  const { isChapterComplete, translationId, getRememberedChapter, getJourneyProgress } = useBible();
 
   const resolvedBookId = bookId || 'luke';
   const book = getBibleBook(resolvedBookId);
   const journey = BIBLE_JOURNEYS.find(j => j.bookId === resolvedBookId && j.available);
-  const journeyProg = journey ? getJourneyProgress(journey.id) : null;
+  const journeyProgress = journey ? getJourneyProgress(journey.id) : null;
 
   if (!book) {
     return (
@@ -32,10 +33,7 @@ export default function BookDetail() {
   const completedCount = Array.from({ length: book.chapters }, (_, i) => i + 1)
     .filter(ch => isChapterComplete(book.id, ch)).length;
 
-  const nextChapter =
-    lastRead?.bookId === book.id
-      ? lastRead.chapter
-      : journeyProg?.currentChapter ?? 1;
+  const nextChapter = getRememberedChapter(book.id, translationId) ?? 1;
 
   const bookDisplayName = book.genre === 'Gospel' ? `Gospel of ${book.name}` : book.name;
 
@@ -44,7 +42,7 @@ export default function BookDetail() {
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[520px] mx-auto">
           <button
-            onClick={() => setLocation('/bible/books')}
+            onClick={() => goBackOrFallback('/bible/books', setLocation)}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             <ArrowLeft size={22} />
@@ -99,7 +97,7 @@ export default function BookDetail() {
           )}
           {journey && (
             <Button variant="outline" className="h-11 rounded-xl" onClick={() => setLocation(`/bible/journey/${journey.id}`)}>
-              {journeyProg ? 'Continue Bible Journey' : 'Start Bible Journey'}
+              {journeyProgress ? 'Continue Bible Journey' : 'Start Bible Journey'}
             </Button>
           )}
         </section>

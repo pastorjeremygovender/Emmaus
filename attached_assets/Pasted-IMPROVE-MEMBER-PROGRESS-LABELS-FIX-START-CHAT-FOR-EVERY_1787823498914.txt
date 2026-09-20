@@ -1,0 +1,198 @@
+IMPROVE MEMBER PROGRESS LABELS, FIX “START CHAT FOR EVERYONE,” AND ADD AUDIO-ONLY MEETINGS
+
+The main meeting flow is now working:
+
+- The leader can start a meeting.
+- Members can join.
+- The leader can present the Bible and other content.
+- Text input exists.
+- Video meeting functionality exists but has not yet been tested.
+
+There are three remaining changes.
+
+1. CLARIFY “NOT STARTED”
+
+On the group page, the Members section currently shows:
+
+ICC — Reading
+Jeremy — Not Started
+
+This appears to describe progress through the assigned Romans study, but “Not Started” is ambiguous and could be mistaken for meeting status.
+
+Rename the states:
+
+- “Reading” → “Reading Romans” or “Study in progress”
+- “Not Started” → “Study not started”
+- completed state → “Study completed”
+
+Prefer:
+
+ICC — Reading Romans
+Jeremy — Study not started
+
+These labels describe study progress only.
+
+Meeting presence must remain separate and use:
+
+- In meeting
+- Not yet joined
+- Left meeting
+
+Do not mix study progress with meeting attendance.
+
+2. FIX “START CHAT FOR EVERYONE”
+
+The leader’s “Start Chat for Everyone” control currently opens chat only on the leader’s screen. It does not open on all joined participants’ screens.
+
+Fix this as a real-time meeting command.
+
+When the leader taps Start Chat for Everyone:
+
+1. Confirm there is an active meeting session.
+2. Create or retrieve the single discussion associated with that meeting.
+3. Broadcast a real-time event to every participant in the active meeting:
+
+event type: OPEN_GROUP_DISCUSSION
+groupId: current group ID
+meetingSessionId: current active meeting session ID
+discussionId: shared discussion ID
+sentAt: server timestamp
+
+4. Every joined participant subscribed to that meeting must receive the event.
+5. On receipt, open the same Group Discussion screen.
+6. Confirm everyone uses the same discussion ID and message history.
+7. Participants joining after chat starts must see an “Open Group Discussion” button and access the same existing discussion.
+
+Do not create a separate discussion for each participant or device.
+
+If a participant’s app is in the background, do not silently lose the event. When they return, display:
+
+“Group Discussion has started”
+[Open Discussion]
+
+If automatic navigation is blocked or unsafe on a device, show an immediate full-width in-app banner with an Open Discussion button.
+
+The event must not be sent only through local component state. Use the existing meeting real-time channel/database subscription.
+
+Check that every joined device subscribes using exactly the same:
+
+- group ID;
+- active meeting session ID;
+- LiveKit room or real-time channel;
+- discussion ID.
+
+Add temporary logging for the broadcast and receipt of OPEN_GROUP_DISCUSSION on every device.
+
+3. ADD AUDIO-ONLY LIVE MEETINGS
+
+Add an audio-only meeting option using the existing LiveKit integration.
+
+The leader’s meeting type options should be:
+
+- Text Chat
+- Audio Meeting
+- Video Meeting
+
+Label Audio Meeting as:
+
+“Audio Meeting — uses less data”
+
+AUDIO MEETING BEHAVIOUR
+
+When the leader starts an Audio Meeting:
+
+- Connect all participants to the same LiveKit room.
+- Request microphone permission only.
+- Do not request camera permission.
+- Do not publish a video track.
+- Do not subscribe to video tracks.
+- Display participant names/initials instead of video tiles.
+- Show who is speaking.
+- Provide:
+  - Mute/Unmute
+  - Speaker output
+  - Leave Meeting
+  - participant list
+  - Group Discussion
+  - Group Notes
+  - presented Bible/study content
+
+Leader controls:
+
+- Mute their own microphone.
+- Request everyone to mute.
+- Mute a participant if existing permissions support it.
+- Allow or disable member microphones.
+- End Audio Meeting for everyone.
+- Present Bible/study content while audio continues.
+
+Members must never have authority to end the meeting for everyone.
+
+AUDIO INTERFACE
+
+Use a clean, simple participant view:
+
+Audio Meeting in Progress
+
+[participant initials]
+ICC — Speaking
+
+[participant initials]
+Jeremy — Muted
+
+[Mute/Unmute] [Discussion] [Leave]
+
+Do not display empty black video boxes during an audio meeting.
+
+OPTIONAL CAMERA UPGRADE
+
+If appropriate, allow the leader to upgrade an Audio Meeting to video later:
+
+“Enable Video”
+
+This should publish camera tracks only after explicit permission.
+
+Do not automatically activate anyone’s camera.
+
+COST AND DATA CONTROL
+
+Audio-only mode must genuinely avoid video transmission. Hiding video elements while still publishing or subscribing to camera tracks is not sufficient.
+
+Do not add:
+
+- speech-to-text;
+- AI transcription;
+- recording;
+- ElevenLabs;
+- text-to-speech.
+
+Those would introduce unnecessary additional costs.
+
+Use standard compressed LiveKit audio. Keep LiveKit’s normal audio error resilience enabled unless testing proves it causes a serious data problem, because intelligible audio is more important than a marginal bandwidth saving.
+
+TESTING
+
+Test with the ICC leader and Jeremy on separate devices.
+
+Chat test:
+
+1. Both join the active meeting.
+2. Leader taps Start Chat for Everyone.
+3. Confirm the same discussion opens on both screens.
+4. Send messages in both directions.
+5. Confirm real-time delivery and persistent history.
+
+Audio test:
+
+1. Leader starts an Audio Meeting.
+2. Jeremy joins.
+3. Confirm only microphone permission is requested.
+4. Confirm no camera track is created.
+5. Confirm both users can hear each other.
+6. Test mute/unmute.
+7. Open and use Group Discussion while audio continues.
+8. Present Romans while audio continues.
+9. Test leaving and rejoining.
+10. End the meeting and verify both devices disconnect.
+
+Report the exact cause of the Start Chat broadcast failure and the files changed.

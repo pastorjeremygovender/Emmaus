@@ -12,6 +12,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),
+      '@admin-route': path.resolve(
+        import.meta.dirname,
+        process.env.VITE_EMMAUS_BUILD_TARGET === 'member'
+          ? 'src/routes/AdminRoute.member.tsx'
+          : 'src/routes/AdminRoute.web.tsx',
+      ),
     },
   },
 });

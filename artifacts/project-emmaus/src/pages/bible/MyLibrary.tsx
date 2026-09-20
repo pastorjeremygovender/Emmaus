@@ -1,14 +1,19 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import {
   Search, Heart, Bookmark, FileText, HandIcon, Highlighter,
-  ChevronRight, Trash2, Pencil, Check, X, BookOpen,
+  ChevronRight, Trash2, Pencil, Check, X, BookOpen, Clock,
 } from 'lucide-react';
 import { useBible } from '@/contexts/BibleContext';
+import {
+  fetchFavourites,
+  removeFavourite as removeFavouriteServer,
+  type Favourite,
+} from '@/lib/favourites-api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type FilterTab = 'all' | 'notes' | 'prayers' | 'favourites' | 'bookmarks' | 'highlights';
+type FilterTab = 'all' | 'bible' | 'notes' | 'prayers' | 'favourites' | 'bookmarks' | 'highlights';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -45,6 +50,26 @@ const HIGHLIGHT_COLORS: Record<string, { bg: string; label: string }> = {
 
 function matches(text: string, query: string) {
   return text.toLowerCase().includes(query.toLowerCase());
+}
+
+function formatRelativeDate(dateStr: string): string {
+  try {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  } catch {
+    return '';
+  }
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -103,17 +128,40 @@ export default function MyLibrary() {
     favourites, removeFavourite,
     bookmarks, removeBookmark,
     highlights, removeHighlight,
+    readingHistory,
   } = useBible();
 
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  const [showAllHistory, setShowAllHistory] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingPrayerId, setEditingPrayerId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  // ── Bible chapter favourites (server-side) ─────────────────────────────────
+  const [bibleChapters, setBibleChapters] = useState<Favourite[]>([]);
+  const [bibleChaptersLoading, setBibleChaptersLoading] = useState(true);
+
+  const loadBibleChapters = () => {
+    fetchFavourites()
+      .then(all => setBibleChapters(all.filter(f => f.content_type === 'bible-chapter')))
+      .catch(() => setBibleChapters([]))
+      .finally(() => setBibleChaptersLoading(false));
+  };
+
+  useEffect(() => { loadBibleChapters(); }, []);
+
   const q = query.trim();
 
   // ── Filtered collections ────────────────────────────────────────────────────
+
+  const filteredBibleChapters = useMemo(() => {
+    if (activeTab !== 'all' && activeTab !== 'bible') return [];
+    if (!q) return bibleChapters;
+    return bibleChapters.filter(f =>
+      matches(f.content_title, q) || matches(f.content_subtitle ?? '', q),
+    );
+  }, [bibleChapters, activeTab, q]);
 
   const filteredNotes = useMemo(() => {
     if (activeTab !== 'all' && activeTab !== 'notes') return [];
@@ -154,14 +202,15 @@ export default function MyLibrary() {
     );
   }, [highlights, activeTab, q]);
 
-  const totalCount = notes.length + prayers.length + favourites.length + bookmarks.length + highlights.length;
-  const filteredCount = filteredNotes.length + filteredPrayers.length + filteredFavourites.length + filteredBookmarks.length + filteredHighlights.length;
+  const totalCount = bibleChapters.length + notes.length + prayers.length + favourites.length + bookmarks.length + highlights.length;
+  const filteredCount = filteredBibleChapters.length + filteredNotes.length + filteredPrayers.length + filteredFavourites.length + filteredBookmarks.length + filteredHighlights.length;
   const hasResults = filteredCount > 0;
 
   // ── Tab config ──────────────────────────────────────────────────────────────
 
   const tabs: { id: FilterTab; label: string; count: number }[] = [
     { id: 'all', label: 'All', count: totalCount },
+    { id: 'bible', label: 'Bible', count: bibleChapters.length },
     { id: 'notes', label: 'Notes', count: notes.length },
     { id: 'prayers', label: 'Prayers', count: prayers.length },
     { id: 'favourites', label: 'Favourites', count: favourites.length },
@@ -241,6 +290,62 @@ export default function MyLibrary() {
         ))}
       </div>
 
+      {/* Reading History */}
+      <section className="rounded-2xl bg-violet-50/70 dark:bg-violet-950/20 p-3">
+        <div className="flex items-center gap-2 px-1 pb-2">
+          <Clock size={13} className="text-violet-600 dark:text-violet-300" />
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-violet-700 dark:text-violet-300">
+            Reading History
+          </span>
+        </div>
+        {readingHistory.length === 0 ? (
+          <div className="flex items-center gap-2 rounded-xl border border-dashed border-violet-200 dark:border-violet-800 p-4 text-[13px] text-muted-foreground">
+            <Clock size={16} className="shrink-0" />
+            <span>Chapters you read will appear here.</span>
+          </div>
+        ) : (
+          <>
+            <div className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border">
+              {(showAllHistory ? readingHistory : readingHistory.slice(0, 5)).map((entry, i) => (
+                <div
+                  key={`${entry.bookId}-${entry.chapter}-${entry.openedAt}`}
+                  onClick={() => setLocation(`/bible/read/${entry.bookId}/${entry.chapter}`)}
+                  className="flex cursor-pointer items-center gap-3 bg-card px-3.5 py-3 hover:bg-muted/40 active:bg-muted/60 transition-colors"
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                    {i === 0 ? (
+                      <BookOpen size={15} className="text-primary" />
+                    ) : (
+                      <span className="text-[11px] font-semibold text-muted-foreground">{i + 1}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-primary">
+                      {entry.bookName} {entry.chapter}
+                    </div>
+                    <div className="truncate text-[13px] font-medium text-foreground">
+                      {entry.chapterHeading}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-[10px] text-muted-foreground">
+                    {formatRelativeDate(entry.openedAt)}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {readingHistory.length > 5 && (
+              <button
+                type="button"
+                onClick={() => setShowAllHistory(value => !value)}
+                className="mt-2 w-full rounded-xl py-2 text-[12px] font-medium text-violet-700 transition-colors hover:bg-violet-100 dark:text-violet-300 dark:hover:bg-violet-900/30"
+              >
+                {showAllHistory ? 'Show less' : `View more (${readingHistory.length - 5})`}
+              </button>
+            )}
+          </>
+        )}
+      </section>
+
       {/* Empty state */}
       {totalCount === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
@@ -262,6 +367,55 @@ export default function MyLibrary() {
           <p className="text-[15px] text-muted-foreground">No results for "{q}"</p>
           <p className="text-[13px] text-muted-foreground">Try different words.</p>
         </div>
+      )}
+
+      {/* ── Bible Chapters ───────────────────────────────────────────────────── */}
+      {!bibleChaptersLoading && filteredBibleChapters.length > 0 && (
+        <section className="space-y-2.5">
+          {(activeTab === 'all') && <LibrarySection icon={<BookOpen size={13} className="text-primary" />} label="Bible Chapters" />}
+          {filteredBibleChapters.map(fav => (
+            <div
+              key={fav.id}
+              className="p-4 rounded-xl border border-border bg-card space-y-1.5"
+            >
+              <ItemHeader
+                icon={<BookOpen size={12} className="text-primary shrink-0" />}
+                refText={fav.content_title}
+                label="Bible Chapter"
+              />
+              {fav.content_subtitle && (
+                <p className="text-[13px] text-muted-foreground leading-relaxed">
+                  {highlightText(fav.content_subtitle)}
+                </p>
+              )}
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  onClick={() => setLocation(fav.content_route)}
+                  className="flex items-center gap-1 text-[12px] text-primary hover:underline"
+                >
+                  Open chapter <ChevronRight size={12} />
+                </button>
+                <button
+                  onClick={() => handleDeleteConfirm(fav.id, () => {
+                    removeFavouriteServer('bible-chapter', fav.content_id)
+                      .then(loadBibleChapters)
+                      .catch(() => {});
+                  })}
+                  className={[
+                    'ml-auto flex items-center gap-1 p-1.5 rounded-lg transition-colors text-[12px]',
+                    confirmDeleteId === fav.id
+                      ? 'bg-destructive/10 text-destructive font-medium px-2'
+                      : 'text-muted-foreground hover:text-destructive hover:bg-destructive/10',
+                  ].join(' ')}
+                  aria-label="Remove from favourites"
+                >
+                  <Trash2 size={14} />
+                  {confirmDeleteId === fav.id && 'Remove?'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </section>
       )}
 
       {/* ── Notes ─────────────────────────────────────────────────────────────── */}

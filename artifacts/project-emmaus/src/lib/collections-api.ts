@@ -33,13 +33,15 @@ async function apiFetch<T>(
   path: string,
   options?: RequestInit & { userId?: string }
 ): Promise<T> {
-  const { userId, ...fetchOptions } = options ?? {};
+  const { userId: _userId, ...fetchOptions } = options ?? {};
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(userId ? { 'X-User-Id': userId } : {}),
   };
   const res = await fetch(getApiUrl(path), {
     credentials: 'include',
+    // Collection visibility and membership are part of the authenticated
+    // discovery experience; avoid body-less 304 responses.
+    cache: 'no-store',
     headers,
     ...fetchOptions,
   });
@@ -108,6 +110,21 @@ export interface CollectionJourney {
   difficulty?: string;
   tags?: string[];
   collectionId?: string;
+  displayOrder?: number;
+}
+
+/** Update only the ordering (or other supported journey fields) from admin views. */
+export async function updateCollectionJourney(
+  journeyId: string,
+  payload: { displayOrder: number },
+  userId?: string,
+): Promise<CollectionJourney> {
+  const data = await apiFetch<CollectionJourney>(`/api/journeys/${journeyId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    userId,
+  });
+  return data;
 }
 
 // ─── Write (admin only) ───────────────────────────────────────────────────────

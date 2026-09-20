@@ -1,0 +1,154 @@
+Fix the Daily Rhythm administrator listing regression identified by the completed read-only audit.
+
+AUDIT FINDINGS TO PRESERVE
+
+* All 30 canonical Daily Rhythm days exist.
+* All 30 are assigned to `Day 1–30: The Gospel of John`.
+* No days are deleted.
+* No canonical days are missing or duplicated.
+* The admin five-card display is caused by the administrator session being processed through the member-facing Step/Daily Rhythm route.
+* That route caps returned days at the signed-in account’s current eligible progress, which is Day 5.
+* The administrator must not be restricted by personal Daily Rhythm progress when managing content.
+* Day 8 is currently Draft. Do not change its status automatically.
+
+REQUIRED SEPARATION
+
+Create or restore a clear separation between:
+
+1. Administrator content management
+
+Administrators must be able to see and manage every authored Daily Rhythm day, regardless of:
+
+* Their personal current day
+* Their progress
+* Whether they completed or opened Daily Rhythm
+* The current server-authoritative user day
+* Publication status
+
+2. User-facing Daily Rhythm delivery
+
+Ordinary users must continue receiving only days they are genuinely eligible to access.
+
+Do not weaken, remove or bypass user-facing future-day protection.
+
+ADMIN REQUIREMENTS
+
+Content Studio → Daily Rhythm must:
+
+* Load all 30 canonical days.
+* Display `30 days authored`.
+* Allow scrolling through Days 1–30.
+* Allow an authorised administrator to open and edit every day.
+* Show each day’s actual status accurately.
+* Make All, Draft, Published and Archived filters work across the complete authored set.
+* Never use the administrator’s personal progress to limit the list.
+* Never change the administrator’s personal progress merely by previewing or editing a future day.
+* Never mark a future day opened or completed merely because an administrator viewed it.
+* Preserve canonical Day numbers and group assignments.
+
+STATUS DISPLAY
+
+The group must not misleadingly display only `Draft` when it contains a mixture of published and draft child days.
+
+Show accurate summary information, for example:
+
+* `30 days`
+* `29 Published · 1 Draft`
+
+Use the actual authoritative counts.
+
+Do not change any day’s status merely to make the summary appear consistent.
+
+DAY 8
+
+Investigate the read-only history for Day 8 and report:
+
+* Current record ID
+* Current Draft status
+* When its status last changed
+* Which code path or actor changed it, if audit/history can establish this
+* Whether it was previously Published
+
+Do not publish Day 8 automatically.
+
+If records prove it was accidentally changed from Published to Draft, report that separately for explicit approval before modifying its content status.
+
+IMPLEMENTATION
+
+Do not use a member-facing progress-gated endpoint for administrator content management.
+
+Prefer:
+
+* A dedicated administrator-authorised content endpoint, or
+* The project’s existing unrestricted admin content loader if one already exists
+
+The administrator endpoint must:
+
+* Require Church Administrator authorization server-side.
+* Be scoped to the current church.
+* Return all authored Daily Rhythm records and actual statuses.
+* Support complete filtering and ordering.
+* Never expose the unrestricted result through an ordinary user route.
+* Never mutate progress.
+
+TESTS
+
+Add focused tests proving:
+
+1. Administrator whose personal progress is Day 5 receives all 30 authored days.
+2. Ordinary user eligible for Day 5 does not receive Days 6–30.
+3. Administrator can open/edit Day 30 without changing personal progress.
+4. Ordinary user cannot access Day 30 directly before eligibility.
+5. All filter returns 30.
+6. Draft filter returns actual draft records.
+7. Published filter returns actual published records.
+8. Header count is derived from the complete admin dataset.
+9. Group status summary accurately reflects mixed child statuses.
+10. Scrolling/pagination reaches Day 30.
+11. Admin preview does not mark future content opened or completed.
+12. Canonical ordering and group assignments remain unchanged.
+13. Daily Rhythm first-presentation, lifecycle, reminder and Previous Days tests remain green.
+14. Unauthorized users cannot call the administrator endpoint.
+
+PROTECTIONS
+
+Do not:
+
+* Recreate or bulk-import Days 6–30
+* Publish or unpublish Day 8
+* Change any devotional text
+* Change canonical day numbers
+* Change group assignments
+* Change user progress
+* Unlock future days
+* Modify the completed Content Studio reorder fix
+* Modify Group Leadership permissions
+* Modify Pastoral Briefing Rules
+* Modify production data directly
+* Perform broad refactoring or unrelated cleanup
+
+Run focused admin-listing tests, Daily Rhythm authority/OpeningGate/reminder/Previous Days tests, admin permission tests, frontend/API builds, smoke tests and `git diff --check`.
+
+Manually verify in the authenticated admin preview:
+
+* Header shows 30 authored.
+* Days 1–30 are reachable.
+* Day 30 opens for editing.
+* The signed-in administrator’s personal Daily Rhythm remains unchanged.
+* The user-facing app still exposes only the eligible current day.
+
+Create one local commit only after all checks pass.
+
+Do not publish automatically.
+
+Report:
+
+* Exact root cause
+* Admin endpoint/loader used
+* Full status counts
+* Day 8 status history
+* Files changed
+* Tests/builds
+* Confirmation that no content or progress data changed
+* New commit ID
+* READY FOR MANUAL PUBLISH or NOT READY

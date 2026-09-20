@@ -1,10 +1,10 @@
 /**
- * Next Steps — four-tab member content library.
+ * Discover — member content exploration library.
  *
- * Tabs (exact order, spec-locked):
- *   1. Daily Devotionals
- *   2. Walks      — standalone walks; each card opens that Walk directly
- *   3. Journeys   — discipleship pathways (collections); each card opens the Journey detail page
+ * Tabs (exact order):
+ *   1. Walks          — standalone walks; each card opens that Walk directly
+ *   2. Journeys       — discipleship pathways (collections)
+ *   3. Daily Devotionals
  *   4. Sermon Companions
  *
  * Hierarchy: Journey → Walk → Steps
@@ -15,24 +15,25 @@
  * Route: /journeys
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'wouter';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
-import { EmmausContentCard } from '@/components/EmmausContentCard';
+import { cn } from '@/lib/utils';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
-// daily-gate import removed — all non-Daily-Rhythm content is now self-paced.
 import JourneyStartSheet from '@/components/JourneyStartSheet';
 import { useRooms } from '@/contexts/RoomsContext';
 import { apiStartShared } from '@/lib/rooms-api';
 import {
-  X, Pause, MoreHorizontal, Loader2,
-  BookHeart, Mic2, Map,
+  ArrowLeft, X, ChevronRight,
+  BookHeart, Mic2, Map as MapIcon,
 } from 'lucide-react';
+import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
+import { MemberHeaderActions } from '@/components/MemberHeaderActions';
+import { SectionWrapper } from '@/components/SectionWrapper';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { Journey } from '@/contexts/JourneyContext';
 import {
   fetchNextSteps,
   startSeries,
@@ -40,17 +41,22 @@ import {
   type NextStepsData,
   type NextStepsItem,
   type ContentType,
+  type ContentGroupEntry,
   type JourneyCollectionGroup,
 } from '@/lib/next-steps-api';
+import { navigatorRoute } from '@/lib/content-navigation';
+import { dismissBadge } from '@/lib/badge-api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type TabId = 'devotionals' | 'journeys' | 'walks' | 'sermons';
+type TabId = 'walks' | 'journeys' | 'devotionals' | 'sermons';
+type DiscoverSort = 'default' | 'alphabetical' | 'newest' | 'oldest' | 'topic';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
   journey:             'Walk',
+  'daily-rhythm':      'Daily Rhythm',
   'bible-study':       'Bible Study',
   'sermon-devotional': 'Sermon Companion',
   'daily-devotional':  'Daily Devotional',
@@ -61,98 +67,165 @@ function dayLabel(n?: number): string | null {
   return `${n} ${n === 1 ? 'Day' : 'Days'}`;
 }
 
-function sessionTab(): TabId {
-  // Prefer ?tab= URL param — set when returning from content so the right tab opens.
-  try {
-    const urlTab = new URLSearchParams(window.location.search).get('tab');
-    if (urlTab === 'devotionals' || urlTab === 'journeys' || urlTab === 'walks' || urlTab === 'sermons') return urlTab as TabId;
-  } catch { /* ignore */ }
-  // Fall back to last-used tab from sessionStorage.
-  try {
-    const saved = sessionStorage.getItem('next-steps-tab');
-    if (saved === 'devotionals' || saved === 'journeys' || saved === 'walks' || saved === 'sermons') return saved as TabId;
-  } catch { /* ignore */ }
-  return 'devotionals';
-}
-
-function saveTab(tab: TabId) {
-  try { sessionStorage.setItem('next-steps-tab', tab); } catch { /* ignore */ }
-}
-
-// ─── Shared UI atoms ─────────────────────────────────────────────────────────
-
-function SectionLabel({ icon, children }: { icon?: React.ReactNode; children: React.ReactNode }) {
+function sortItemKey(item: NextStepsItem): string {
   return (
-    <div className="flex items-center gap-2">
-      {icon && <span className="text-muted-foreground/60">{icon}</span>}
-      <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-        {children}
-      </h2>
+    item.metadata.topic ??
+    item.metadata.scriptureReference ??
+    item.metadata.subtitle ??
+    item.description ??
+    item.title
+  ).trim().toLocaleLowerCase();
+}
+
+function sortItemDate(item: NextStepsItem): number {
+  const timestamp = item.metadata.publishedAt ? Date.parse(item.metadata.publishedAt) : 0;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function sortItemCreatedAt(item: NextStepsItem): number {
+  const timestamp = item.metadata.createdAt ? Date.parse(item.metadata.createdAt) : 0;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function sortItems(items: NextStepsItem[], sort: DiscoverSort): NextStepsItem[] {
+  if (sort === 'default') {
+    return [...items].sort((a, b) =>
+      (a.metadata.displayOrder ?? 0) - (b.metadata.displayOrder ?? 0) ||
+      sortItemCreatedAt(b) - sortItemCreatedAt(a) ||
+      a.title.localeCompare(b.title),
+    );
+  }
+  return [...items].sort((a, b) => {
+    if (sort === 'newest' || sort === 'oldest') {
+      const difference = sortItemDate(a) - sortItemDate(b);
+      if (difference !== 0) return sort === 'newest' ? -difference : difference;
+    } else {
+      const aKey = sort === 'topic' ? sortItemKey(a) : a.title.toLocaleLowerCase();
+      const bKey = sort === 'topic' ? sortItemKey(b) : b.title.toLocaleLowerCase();
+      const difference = aKey.localeCompare(bKey);
+      if (difference !== 0) return difference;
+    }
+    return a.title.localeCompare(b.title);
+  });
+}
+
+// ─── Tab persistence ──────────────────────────────────────────────────────────
+
+const TAB_KEY = 'emmaus_discover_tab';
+function sessionTab(): TabId { try { return (sessionStorage.getItem(TAB_KEY) as TabId) ?? 'walks'; } catch { return 'walks'; } }
+function saveTab(id: TabId) { try { sessionStorage.setItem(TAB_KEY, id); } catch { /* ignore */ } }
+
+// ─── Tab bar ──────────────────────────────────────────────────────────────────
+
+const TABS: { id: TabId; icon: React.ElementType; label: string }[] = [
+  { id: 'walks',       icon: MapIcon,    label: 'Walks'       },
+  { id: 'journeys',    icon: BookHeart,  label: 'Journeys'    },
+  { id: 'devotionals', icon: BookHeart,  label: 'Devotionals' },
+  { id: 'sermons',     icon: Mic2,       label: 'Sermons'     },
+];
+
+function TabBar({ active, onChange }: { active: TabId; onChange: (id: TabId) => void }) {
+  return (
+    <div className="flex border-b border-border -mx-5 px-2 overflow-x-auto scrollbar-none">
+      {TABS.map(tab => {
+        const Icon = tab.icon;
+        const isActive = tab.id === active;
+        return (
+          <button
+            key={tab.id}
+            onClick={() => onChange(tab.id)}
+            className={cn(
+              'flex items-center gap-1.5 px-3.5 py-3 text-[13px] font-medium whitespace-nowrap border-b-2 -mb-px transition-colors',
+              isActive
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Icon size={13} />
+            {tab.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function CollectionHeading({ title, description }: { title: string; description?: string }) {
+// ─── Compact card (matches My Emmaus style) ───────────────────────────────────
+
+function DiscoverCompactCard({
+  title, subtitle, ctaLabel, onAction,
+  badge, state, secondaryLabel, onSecondary,
+}: {
+  title: string;
+  subtitle?: string;
+  ctaLabel?: string;
+  onAction?: () => void;
+  badge?: string | null;
+  state?: NextStepsItem['memberProgressState'];
+  secondaryLabel?: string;
+  onSecondary?: () => void;
+}) {
   return (
-    <div className="mb-3">
-      <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-        {title}
-      </h3>
-      {description && (
-        <p className="text-[12px] text-muted-foreground mt-0.5 leading-snug">{description}</p>
+    <div
+      className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
+      onClick={onAction}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="flex-1 min-w-0 space-y-0.5">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-[14px] font-semibold text-foreground leading-snug truncate flex-1">
+              {title}
+            </span>
+            {badge && (
+              <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-primary/10 text-primary leading-none">
+                {badge}
+              </span>
+            )}
+            {state === 'completed' && (
+              <span className="shrink-0 text-[11px] font-medium text-primary">✓</span>
+            )}
+            {state === 'paused' && (
+              <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 text-slate-500 leading-none">
+                Paused
+              </span>
+            )}
+          </div>
+          {subtitle && (
+            <p className="text-[11px] text-muted-foreground leading-snug line-clamp-1">
+              {subtitle}
+            </p>
+          )}
+        </div>
+        {(onAction && !ctaLabel) ? (
+          <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" aria-hidden="true" />
+        ) : ctaLabel ? (
+          <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" aria-hidden="true" />
+        ) : null}
+      </div>
+      {secondaryLabel && onSecondary && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onSecondary(); }}
+          className="mt-1.5 text-[11px] text-primary/60 hover:text-primary transition-colors block"
+        >
+          {secondaryLabel}
+        </button>
       )}
     </div>
   );
 }
 
-function ContentTypeChip({ contentType }: { contentType: ContentType }) {
-  return (
-    <span className="text-[10px] font-semibold text-primary uppercase tracking-widest">
-      {CONTENT_TYPE_LABELS[contentType]}
-    </span>
-  );
-}
+// ─── Shared UI atoms ─────────────────────────────────────────────────────────
 
-function StatePill({ state }: { state: NextStepsItem['memberProgressState'] }) {
-  if (state === 'not-started') return null;
-  if (state === 'paused') {
-    return (
-      <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 bg-slate-100 text-slate-500 border border-slate-200">
-        Paused
-      </span>
-    );
-  }
-  return (
-    <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${
-      state === 'completed'
-        ? 'bg-primary/10 text-primary'
-        : 'bg-amber-50 text-amber-700 border border-amber-200'
-    }`}>
-      {state === 'completed' ? 'Completed' : 'In Progress'}
-    </span>
-  );
-}
-
-function CoverThumb({ url, title, className = '' }: { url?: string; title: string; className?: string }) {
-  const [err, setErr] = useState(false);
-  const initials = title.split(' ').slice(0, 2).map(w => w[0] ?? '').join('').toUpperCase();
-  if (!url || err) {
-    return (
-      <div className={`bg-primary/8 flex items-center justify-center ${className}`}>
-        <span className="text-primary/30 text-[18px] font-medium select-none">{initials}</span>
-      </div>
-    );
-  }
-  return <img src={url} alt="" className={`object-cover ${className}`} onError={() => setErr(true)} />;
-}
 
 function SkeletonCard() {
   return (
-    <div className="bg-card rounded-2xl border border-border p-5 space-y-3 animate-pulse">
-      <div className="h-3 w-20 rounded bg-muted" />
-      <div className="h-5 w-2/3 rounded bg-muted" />
-      <div className="h-3 w-1/2 rounded bg-muted" />
-      <div className="h-10 rounded-xl bg-muted mt-1" />
+    <div className="bg-card rounded-xl border border-border/60 px-3.5 py-3 animate-pulse flex items-center gap-2">
+      <div className="flex-1 space-y-1.5">
+        <div className="h-3.5 w-2/3 rounded bg-muted" />
+        <div className="h-2.5 w-1/2 rounded bg-muted" />
+      </div>
+      <div className="h-3 w-14 rounded bg-muted shrink-0" />
     </div>
   );
 }
@@ -161,82 +234,6 @@ function EmptyState({ message }: { message: string }) {
   return (
     <div className="py-16 text-center">
       <p className="text-[14px] text-muted-foreground">{message}</p>
-    </div>
-  );
-}
-
-// ─── More menu ────────────────────────────────────────────────────────────────
-
-function MoreMenu({ onPause, onDetails }: { onPause: () => void; onDetails: () => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(p => !p)}
-        className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
-        aria-label="More actions"
-      >
-        <MoreHorizontal size={17} />
-      </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: -4 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: -4 }}
-            transition={{ duration: 0.12 }}
-            className="absolute right-0 top-9 z-30 bg-background border border-border rounded-xl shadow-lg py-1 w-48"
-          >
-            <button
-              onClick={() => { setOpen(false); onPause(); }}
-              className="w-full text-left px-4 py-2.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2"
-            >
-              <Pause size={14} className="text-muted-foreground" /> Pause Journey
-            </button>
-            <button
-              onClick={() => { setOpen(false); onDetails(); }}
-              className="w-full text-left px-4 py-2.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors"
-            >
-              View Details
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-// ─── Modal dialogs ────────────────────────────────────────────────────────────
-
-function PauseDialog({ title, onPause, onCancel }: { title: string; onPause: () => void; onCancel: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-5 bg-foreground/20 backdrop-blur-sm">
-      <div className="bg-background rounded-2xl border border-border p-6 max-w-sm w-full space-y-5 shadow-xl">
-        <div className="flex items-start justify-between">
-          <h2 className="text-[18px] font-medium text-foreground leading-snug pr-3">Pause {title}?</h2>
-          <button onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Close">
-            <X size={18} />
-          </button>
-        </div>
-        <p className="text-[14px] text-muted-foreground leading-relaxed">
-          Your progress and responses will be kept exactly as they are. You can resume whenever you're ready.
-        </p>
-        <div className="flex gap-3">
-          <Button className="flex-1 h-11 rounded-xl" onClick={onPause}>Pause Journey</Button>
-          <Button variant="outline" className="flex-1 h-11 rounded-xl" onClick={onCancel}>Not now</Button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -288,171 +285,74 @@ function SwitchDevotionalDialog({
 
 // ─── Progress bar ─────────────────────────────────────────────────────────────
 
-/**
- * WalkProgress — replaces the old unlabelled thin bar.
- *
- * Rules (spec):
- *   not-started            → "Not started"
- *   in-progress, ≤10 days  → dot row  ●●○○○  +  "2 of 5 steps completed"
- *   in-progress, >10 days  → "7 of 30 steps completed"  +  labelled bar
- *   completed              → "✓ Completed"
- *
- * completedSteps is derived from currentDay - 1 (currentDay is the NEXT step
- * to do, so all steps before it are done). The Walk Introduction (day 0) and
- * Walk Complete (day 6) are excluded from durationDays so they are not counted.
- */
-function WalkProgress({
-  item, currentDay,
-}: {
-  item: NextStepsItem;
-  currentDay: number;   // from progress[id]?.currentDay ?? 1
-}) {
-  const state = item.memberProgressState;
-  const total = item.metadata.durationDays ?? 0;
-
-  if (state === 'not-started' || total === 0) {
-    return <span className="text-[11px] text-muted-foreground">Not started</span>;
-  }
-
-  if (state === 'completed') {
-    return (
-      <span className="text-[11px] font-medium text-primary flex items-center gap-1">
-        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-          <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-        Completed
-      </span>
-    );
-  }
-
-  // in-progress
-  const done = Math.max(0, Math.min(total, currentDay - 1));
-  const pct  = total > 0 ? Math.round((done / total) * 100) : 0;
-
-  if (total <= 10) {
-    return (
-      <div className="space-y-1.5">
-        <div className="flex gap-1" aria-label={`${done} of ${total} steps completed`}>
-          {Array.from({ length: total }, (_, i) => (
-            <div
-              key={i}
-              className={`w-2 h-2 rounded-full transition-colors ${
-                i < done ? 'bg-primary' : 'bg-primary/20'
-              }`}
-            />
-          ))}
-        </div>
-        <span className="text-[11px] text-muted-foreground">
-          {done === 0
-            ? 'Not started'
-            : `${done} of ${total} step${total !== 1 ? 's' : ''} completed`}
-        </span>
-      </div>
-    );
-  }
-
-  // long walk — bar + text
-  return (
-    <div className="space-y-1.5">
-      <span className="text-[11px] text-muted-foreground">
-        {done === 0
-          ? 'Not started'
-          : `${done} of ${total} steps completed`}
-      </span>
-      <div className="h-1 rounded-full bg-primary/20 overflow-hidden">
-        <div
-          className="h-full rounded-full bg-primary transition-all"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
 
 // ─── Cards ────────────────────────────────────────────────────────────────────
 
 function DiscoveryCard({
-  item, onAction, onPause, onDetails, isGated, onGate, enrollmentState, onViewPreviousSteps,
+  item, onAction, enrollmentState: _es,
   currentDay,
 }: {
   item: NextStepsItem;
   onAction: () => void;
-  onPause?: () => void;
-  onDetails?: () => void;
-  isGated?: boolean;
-  onGate?: () => void;
   enrollmentState?: string | null;
-  onViewPreviousSteps?: () => void;
-  /** progress[item.id]?.currentDay ?? 1 — used to compute real step count */
   currentDay?: number;
 }) {
-  const dur = dayLabel(item.metadata.durationDays);
-  const metaParts = [dur, item.metadata.difficulty].filter(Boolean);
-  const actionLabel = item.primaryActionLabel ?? undefined;
-  const label = (CONTENT_TYPE_LABELS[item.contentType] ?? item.contentType).toUpperCase();
+  const total = item.metadata.durationDays ?? 0;
+  const state = item.memberProgressState;
+  const day   = currentDay ?? 1;
+
+  let subtitle: string | undefined;
+  if (state === 'in-progress' || state === 'paused') {
+    subtitle = item.description ?? undefined;
+  } else if (state === 'not-started') {
+    const parts = [dayLabel(total), item.metadata.difficulty].filter(Boolean);
+    subtitle = parts.length ? parts.join(' · ') : (item.description ?? undefined);
+  } else {
+    subtitle = [dayLabel(total)].filter(Boolean).join(' · ') || (item.description ?? undefined);
+  }
 
   return (
-    <EmmausContentCard
-      label={label}
+    <DiscoverCompactCard
       title={item.title}
-      description={item.description}
-      metadata={metaParts.join(' · ') || undefined}
-      primaryActionLabel={actionLabel}
+      subtitle={subtitle}
+      ctaLabel={item.primaryActionLabel ?? undefined}
       onAction={onAction}
-      headerTrailing={
-        item.memberProgressState === 'in-progress' && onPause && onDetails
-          ? <MoreMenu onPause={onPause} onDetails={onDetails} />
-          : undefined
-      }
-      progressNode={
-        item.metadata.durationDays
-          ? <WalkProgress item={item} currentDay={currentDay ?? 1} />
-          : undefined
-      }
-      gatedMessage={
-        isGated && item.memberProgressState === 'in-progress'
-          ? "Complete today's 10 Minutes with Jesus first"
-          : undefined
-      }
-      onGate={onGate}
-      secondaryAction={
-        onViewPreviousSteps
-          ? { label: 'View Walk Contents →', onPress: onViewPreviousSteps }
-          : undefined
-      }
+      badge={item.badge ?? null}
+      state={state}
     />
   );
 }
 
 function DevotionalCard({
-  item,
-  onAction,
-  starting,
-  onViewPreviousDays,
+  item, onAction, starting: _starting, onViewPreviousDays, currentDay,
 }: {
   item: NextStepsItem;
   onAction: () => void;
   starting: boolean;
   onViewPreviousDays?: () => void;
+  currentDay?: number;
 }) {
-  const isPaused = item.memberProgressState === 'paused';
-  // description is already progress-aware ("Day N of M · Title", "N of N completed",
-  // "Day 1 of M") — computed server-side to match Today's Steps exactly.
-  // No separate metadata label is needed; the day count lives in description.
+  const total = item.metadata.durationDays ?? 0;
+  const state = item.memberProgressState;
+  const day   = currentDay ?? 1;
+
+  let subtitle: string | undefined;
+  if (state === 'in-progress' || state === 'paused') {
+    subtitle = (total > 0 && day > total) ? 'Complete' : (item.description ?? undefined);
+  } else {
+    subtitle = dayLabel(total) ?? (item.description ?? undefined);
+  }
+
   return (
-    <EmmausContentCard
-      label="DAILY DEVOTIONAL"
+    <DiscoverCompactCard
       title={item.title}
-      description={item.description}
-      primaryActionLabel={item.primaryActionLabel ?? undefined}
+      subtitle={subtitle}
+      ctaLabel={item.primaryActionLabel ?? undefined}
       onAction={onAction}
-      loading={starting}
-      headerTrailing={isPaused ? <StatePill state="paused" /> : undefined}
-      secondaryAction={
-        onViewPreviousDays
-          ? { label: 'View Previous Entries →', onPress: onViewPreviousDays }
-          : undefined
-      }
+      badge={item.badge ?? null}
+      state={state}
+      secondaryLabel={undefined}
+      onSecondary={onViewPreviousDays}
     />
   );
 }
@@ -462,22 +362,25 @@ function DevotionalCard({
 // ─── Tab content panels ───────────────────────────────────────────────────────
 
 function DevotionalsPanel({
-  items, onAction, startingId, onViewPreviousDays,
+  items, onAction, startingId, onViewPreviousDays, getProgressDay, sort,
 }: {
   items: NextStepsItem[];
   onAction: (item: NextStepsItem) => void;
   startingId: string | null;
   onViewPreviousDays: (seriesId: string) => void;
+  getProgressDay: (id: string) => number;
+  sort: DiscoverSort;
 }) {
   if (items.length === 0) return <EmptyState message="No Daily Devotionals are available yet." />;
   return (
-    <div className="space-y-4 pt-6">
-      {items.map(item => (
+    <div className="space-y-3">
+      {sortItems(items, sort).map(item => (
         <DevotionalCard
           key={item.id}
           item={item}
           onAction={() => onAction(item)}
           starting={startingId === item.id}
+          currentDay={item.metadata.currentDay ?? getProgressDay(item.id)}
           onViewPreviousDays={
             item.memberProgressState !== 'not-started'
               ? () => onViewPreviousDays(item.id)
@@ -492,33 +395,19 @@ function DevotionalsPanel({
 // Shared card-list helper used by both JourneysPanel and WalksPanel.
 function journeyItemCards(
   items: NextStepsItem[],
-  { onAction, onPause, onDetails, isGated, onGate, getEnrollmentState, getProgressDay, onViewPreviousSteps }:
+  { onAction, getEnrollmentState, getProgressDay }:
   {
     onAction: (item: NextStepsItem) => void;
-    onPause: (id: string) => void;
-    onDetails: (id: string) => void;
-    isGated: (item: NextStepsItem) => boolean;
-    onGate: () => void;
     getEnrollmentState: (id: string) => string | null;
     getProgressDay: (id: string) => number;
-    onViewPreviousSteps: (id: string) => void;
   }
 ) {
-  function viewPreviousStepsFor(item: NextStepsItem) {
-    if (!item.route.startsWith('/journey/')) return undefined;
-    return getProgressDay(item.id) > 1 ? () => onViewPreviousSteps(item.id) : undefined;
-  }
   return items.map(item => (
     <DiscoveryCard
       key={item.id}
       item={item}
       onAction={() => onAction(item)}
-      onPause={() => onPause(item.id)}
-      onDetails={() => onDetails(item.id)}
-      isGated={isGated(item)}
-      onGate={onGate}
       enrollmentState={getEnrollmentState(item.id)}
-      onViewPreviousSteps={viewPreviousStepsFor(item)}
       currentDay={getProgressDay(item.id)}
     />
   ));
@@ -527,31 +416,67 @@ function journeyItemCards(
 // Journeys tab — one card per Journey (collection).
 // Tapping a Journey opens the Collection page (Journey Details), which lists
 // every Walk. Only tapping a Walk inside that page opens the Walk itself.
-function JourneysPanel({
-  collections, onOpenJourney,
+export function JourneysPanel({
+  collections, onOpenJourney, progress, sort,
 }: {
   collections: JourneyCollectionGroup[];
   onOpenJourney: (col: JourneyCollectionGroup) => void;
+  /** Client-side progress map from JourneyContext — always reflects the latest
+   *  completed steps, even before the next-steps API cache refreshes. */
+  progress: Record<string, { completedDays: number[] }>;
+  sort: DiscoverSort;
 }) {
   if (collections.length === 0) return <EmptyState message="No Journeys available yet." />;
 
   return (
-    <div className="space-y-3 pt-6">
-      {collections.map(col => {
+    <div className="space-y-3">
+      {[...collections].sort((a, b) => {
+        if (sort === 'default') {
+          return (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.title.localeCompare(b.title);
+        }
+        const aKey = sort === 'topic' ? (a.description ?? a.title) : a.title;
+        const bKey = sort === 'topic' ? (b.description ?? b.title) : b.title;
+        return aKey.localeCompare(bKey);
+      }).map(col => {
         const walkCount = col.journeys.length;
-        const hasInProgress = col.journeys.some(j => j.memberProgressState === 'in-progress');
-        // "Continue" when a Walk is in-progress, "Open" otherwise (not-started or all complete).
-        const actionLabel = hasInProgress ? 'Continue' : 'Open';
+
+        // Use client-side progress for accurate, always-current counts.
+        // memberProgressState from the server can be stale if the user completed
+        // a walk while the page was already loaded (next-steps is fetched once on mount).
+        const completed = col.journeys.filter(j => {
+          const p = progress[j.id];
+          const total = j.metadata.durationDays ?? 0;
+          return total > 0 && (p?.completedDays.length ?? 0) >= total;
+        }).length;
+
+        // A walk is in-progress when the member has a progress record (started)
+        // but has not yet completed all steps. startJourney creates a record with
+        // completedDays=[] so we must NOT gate on completedDays.length > 0.
+        const hasInProgress = col.journeys.some(j => {
+          const p = progress[j.id];
+          if (!p) return false; // never started
+          const total = j.metadata.durationDays ?? 0;
+          const isCompleted = total > 0 && p.completedDays.length >= total;
+          return !isCompleted;
+        });
+
+        const hasProgress   = completed > 0 || hasInProgress;
+        const actionLabel   = hasInProgress ? 'Continue' : 'Open';
+
+        const subtitle = !hasProgress
+          ? `${walkCount} ${walkCount === 1 ? 'Walk' : 'Walks'}`
+          : completed === walkCount
+            ? `${walkCount} ${walkCount === 1 ? 'Walk' : 'Walks'} · Completed`
+            : `${completed} of ${walkCount} ${walkCount === 1 ? 'walk' : 'walks'} completed`;
 
         return (
-          <EmmausContentCard
+          <DiscoverCompactCard
             key={col.id}
-            label="JOURNEY"
             title={col.title}
-            description={col.description}
-            metadata={`${walkCount} ${walkCount === 1 ? 'Walk' : 'Walks'}`}
-            primaryActionLabel={actionLabel}
+            subtitle={subtitle}
+            ctaLabel={actionLabel}
             onAction={() => onOpenJourney(col)}
+            state={hasInProgress ? 'in-progress' : completed === walkCount && walkCount > 0 ? 'completed' : 'not-started'}
           />
         );
       })}
@@ -561,119 +486,157 @@ function JourneysPanel({
 
 // Walks tab — shows standalone walks that are not assigned to any Journey.
 function WalksPanel({
-  standalone, onAction, onPause, onDetails, isGated, onGate, getEnrollmentState,
-  getProgressDay, onViewPreviousSteps,
+  standalone, onAction, getEnrollmentState,
+  getProgressDay, sort,
 }: {
   standalone: NextStepsItem[];
   onAction: (item: NextStepsItem) => void;
-  onPause: (id: string) => void;
-  onDetails: (id: string) => void;
-  isGated: (item: NextStepsItem) => boolean;
-  onGate: () => void;
   getEnrollmentState: (id: string) => string | null;
   getProgressDay: (id: string) => number;
-  onViewPreviousSteps: (id: string) => void;
+  sort: DiscoverSort;
 }) {
   if (standalone.length === 0) return <EmptyState message="No Walks available yet." />;
-  const cardProps = { onAction, onPause, onDetails, isGated, onGate, getEnrollmentState, getProgressDay, onViewPreviousSteps };
+  const cardProps = { onAction, getEnrollmentState, getProgressDay };
   return (
-    <div className="space-y-3 pt-6">
-      {journeyItemCards(standalone, cardProps)}
+    <div className="space-y-3">
+      {journeyItemCards(sortItems(standalone, sort), cardProps)}
     </div>
+  );
+}
+
+function ContentGroupsPanel({
+  groups, type, onOpen, sort,
+}: {
+  groups: ContentGroupEntry[];
+  type: 'journey' | 'daily-rhythm' | 'daily-devotional';
+  onOpen: (group: ContentGroupEntry) => void;
+  sort: DiscoverSort;
+}) {
+  const matching = groups
+    .map(group => ({
+      group,
+      count: group.items.filter(item =>
+          type === 'daily-devotional'
+          ? item.contentType === 'daily-devotional'
+          : type === 'daily-rhythm'
+            ? item.contentType === 'daily-rhythm'
+            : item.contentType === 'journey' || item.contentType === 'bible-study' || item.contentType === 'daily-rhythm',
+      ).length,
+    }))
+    .filter(entry => entry.count > 0);
+
+  if (matching.length === 0) return null;
+
+  const ordered = [...matching].sort((a, b) => {
+    if (sort === 'default') {
+      return (a.group.displayOrder ?? 0) - (b.group.displayOrder ?? 0) ||
+        a.group.title.localeCompare(b.group.title);
+    }
+    if (sort === 'newest' || sort === 'oldest') {
+      const aDate = Math.max(...a.group.items.map(sortItemDate), 0);
+      const bDate = Math.max(...b.group.items.map(sortItemDate), 0);
+      return sort === 'newest' ? bDate - aDate : aDate - bDate;
+    }
+    const aKey = sort === 'topic' ? (a.group.description || a.group.title) : a.group.title;
+    const bKey = sort === 'topic' ? (b.group.description || b.group.title) : b.group.title;
+    return aKey.localeCompare(bKey);
+  });
+
+  return (
+    <div className="space-y-2">
+      <p className="pt-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Browse by group</p>
+      {ordered.map(({ group, count }) => (
+        <DiscoverCompactCard
+          key={group.id}
+          title={group.title}
+          subtitle={group.description || `${count} ${count === 1 ? 'item' : 'items'}`}
+          ctaLabel="Open"
+          onAction={() => onOpen(group)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SortBySelect({ value, onChange }: { value: DiscoverSort; onChange: (value: DiscoverSort) => void }) {
+  return (
+    <label className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
+      <span className="font-semibold uppercase tracking-[0.12em]">Sort by</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value as DiscoverSort)}
+        className="h-7 max-w-[112px] rounded-md border border-foreground/10 bg-background/70 px-2 text-[11px] font-medium text-foreground shadow-none outline-none focus:ring-2 focus:ring-primary/25"
+        aria-label="Sort Discover content"
+      >
+         <option value="default">Default</option>
+         <option value="alphabetical">Alphabetically</option>
+        <option value="newest">Newest First</option>
+        <option value="oldest">Oldest First</option>
+        <option value="topic">Topic</option>
+      </select>
+    </label>
   );
 }
 
 function SermonCompanionsPanel({
-  current, previous, onAction, onViewPreviousDays,
+  current, previous, onAction: _onAction, getProgressDay, sort,
 }: {
   current: NextStepsItem | null;
   previous: NextStepsItem[];
   onAction: (item: NextStepsItem) => void;
-  onViewPreviousDays: (id: string) => void;
+  getProgressDay: (id: string) => number;
+  sort: DiscoverSort;
 }) {
+  const [, setLocation] = useLocation();
+
   if (!current && previous.length === 0) {
     return <EmptyState message="No Sermon Companions are available yet." />;
   }
 
-  function previousDaysAction(item: NextStepsItem) {
-    if (!item.route.startsWith('/sermon-companion/')) return undefined;
-    if (item.memberProgressState === 'not-started') return undefined;
-    return { label: 'View Previous Reflections →', onPress: () => onViewPreviousDays(item.id) };
+  // Discovery card action label — computed from progress state since the API
+  // returns a generic label; we want sermon-specific language here.
+  function discoveryActionLabel(state: string, apiLabel: string | null | undefined): string {
+    if (state === 'completed') return 'Review Companion';
+    if (state === 'in-progress' || state === 'paused') return 'Continue Companion';
+    if (state === 'not-started') return 'Start Companion';
+    return apiLabel ?? 'Open';
   }
 
-  function companionCard(item: NextStepsItem) {
-    const isPaused = item.memberProgressState === 'paused';
-    // item.primaryActionLabel is null when all published days are complete.
-    // EmmausContentCard expects string | undefined — convert null → undefined
-    // so the primary button is omitted entirely (no empty button space).
-    const actionLabel = item.primaryActionLabel ?? undefined;
+  // Both card tap AND button always navigate to the Overview screen.
+  // The overview handles start / continue / review based on progress.
+  function overviewRoute(item: NextStepsItem): string {
+    return `/sermon-companion/${item.id}/overview?source=nextStepsSermons`;
+  }
+
+  function companionCard(item: NextStepsItem, isCurrent: boolean) {
+    const state       = item.memberProgressState;
+    const actionLabel = discoveryActionLabel(state, item.primaryActionLabel);
+    const destination = overviewRoute(item);
+    const currentDay  = getProgressDay(item.id);
+    const total       = item.metadata.durationDays ?? 0;
+
+    let subtitle: string | undefined;
+    subtitle = item.metadata.subtitle ?? item.description ?? undefined;
+
     return (
-      <EmmausContentCard
-        label="SERMON COMPANION"
+      <DiscoverCompactCard
+        key={item.id}
         title={item.title}
-        description={item.description}
-        metadata={item.metadata.durationDays ? `${item.metadata.durationDays} Days` : '5 Days'}
-        primaryActionLabel={actionLabel}
-        onAction={actionLabel ? () => onAction(item) : undefined}
-        headerTrailing={isPaused ? <StatePill state="paused" /> : undefined}
-        secondaryAction={previousDaysAction(item)}
+        subtitle={subtitle}
+          ctaLabel={actionLabel}
+        onAction={() => setLocation(destination)}
+        state={state}
       />
     );
   }
 
+  const ordered = sortItems([...(current ? [current] : []), ...previous], sort);
+
   return (
-    <div className="space-y-8 pt-6">
-      {current && (
-        <section className="space-y-3">
-          <SectionLabel icon={<Mic2 size={13} />}>This Week's Sermon</SectionLabel>
-          {companionCard(current)}
-        </section>
-      )}
-
-      {previous.length > 0 && (
-        <section className="space-y-3">
-          <SectionLabel>Previous Sermon Companions</SectionLabel>
-          <div className="space-y-3">
-            {previous.map(item => (
-              <div key={item.id}>{companionCard(item)}</div>
-            ))}
-          </div>
-        </section>
-      )}
-    </div>
-  );
-}
-
-// ─── Tab bar ──────────────────────────────────────────────────────────────────
-
-const TABS: { id: TabId; label: string }[] = [
-  { id: 'devotionals', label: 'Daily Devotionals' },
-  { id: 'walks',       label: 'Walks'             },
-  { id: 'journeys',    label: 'Journeys'          },
-  { id: 'sermons',     label: 'Sermon Companions' },
-];
-
-function TabBar({ active, onChange }: { active: TabId; onChange: (id: TabId) => void }) {
-  return (
-    <div className="flex border-b border-border -mx-5 px-5 mt-6 overflow-x-auto scrollbar-none" role="tablist">
-      {TABS.map(({ id, label }) => {
-        const isActive = active === id;
-        return (
-          <button
-            key={id}
-            role="tab"
-            aria-selected={isActive}
-            onClick={() => onChange(id)}
-            className={`flex-shrink-0 pb-2.5 pt-1 px-1 mr-6 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap -mb-px ${
-              isActive
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {label}
-          </button>
-        );
-      })}
+    <div className="space-y-4">
+      {ordered.map(item => (
+        <div key={item.id}>{companionCard(item, item.id === current?.id)}</div>
+      ))}
     </div>
   );
 }
@@ -685,16 +648,18 @@ export default function Journeys() {
   const { user } = useAuth();
   const { getMyRooms, loadRooms } = useRooms();
   const [, setLocation] = useLocation();
-  const { getState, pauseJourney, canActivateMore } = useEnrollment();
+  const { getState, canActivateMore } = useEnrollment();
 
-  // ── Tab state ─────────────────────────────────────────────────────────────
+  // ── Unified search/question active state ─────────────────────────────────
+  const [discoverActive, setDiscoverActive] = useState(false);
 
+  // ── Tab navigation ────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<TabId>(sessionTab);
-
-  const handleTabChange = (id: TabId) => {
-    setActiveTab(id);
-    saveTab(id);
-  };
+  const [walksSort, setWalksSort] = useState<DiscoverSort>('default');
+  const [journeysSort, setJourneysSort] = useState<DiscoverSort>('default');
+  const [devotionalsSort, setDevotionalsSort] = useState<DiscoverSort>('default');
+  const [sermonsSort, setSermonsSort] = useState<DiscoverSort>('default');
+  function handleTabChange(id: TabId) { setActiveTab(id); saveTab(id); }
 
   // ── API data ─────────────────────────────────────────────────────────────
 
@@ -706,7 +671,7 @@ export default function Journeys() {
     setApiLoading(true);
     setApiError(null);
     try {
-      const result = await fetchNextSteps({ userId: user?.id });
+      const result = await fetchNextSteps();
       setData(result);
     } catch (e) {
       setApiError(e instanceof Error ? e.message : 'Failed to load');
@@ -720,7 +685,6 @@ export default function Journeys() {
   // ── Journey dialog state ──────────────────────────────────────────────────
 
   const [pendingItem,     setPendingItem]     = useState<NextStepsItem | null>(null);
-  const [pauseTargetId,   setPauseTargetId]   = useState<string | null>(null);
   const [showLimitDialog, setShowLimitDialog] = useState(false);
 
   // ── Devotional state ──────────────────────────────────────────────────────
@@ -736,24 +700,41 @@ export default function Journeys() {
   // through to handleJourneyAction which uses the standard journey flow.
 
   async function handleSermonCompanionAction(item: NextStepsItem) {
+    void dismissBadge('companion', item.id);
     if (item.route.startsWith('/sermon-companion/')) {
       if (item.memberProgressState === 'paused') {
         try { await resumeEngagement('sermon-companion', item.id); } catch { /* non-fatal */ }
         await reload();
         return;
       }
-      // Append source so the reader knows to return to Next Steps (Sermon Companions tab)
-      setLocation(item.route + '?source=nextStepsSermons');
+      // In-progress companions → navigator; completed → overview (item.route)
+      const scNav = navigatorRoute('sermon-companion', item.id, item.memberProgressState);
+      setLocation(scNav ?? item.route + '?source=nextStepsSermons');
       return;
     }
     handleJourneyAction(item);
   }
 
+  // Standalone Walks use the same overview/list design as Walks opened from a
+  // Journey collection. The overview owns Continue/start behavior and the
+  // member can choose any published step from the list.
+  function handleWalkAction(item: NextStepsItem) {
+    void dismissBadge('journey', item.id);
+    setLocation(`/journeys/${item.id}?source=nextStepsWalks`);
+  }
+
   // ── Journey action handler ────────────────────────────────────────────────
 
   function handleJourneyAction(item: NextStepsItem) {
+    void dismissBadge('journey', item.id);
+    if (item.memberProgressState === 'completed') {
+      // Completed walks open the Walk detail/overview page, not the walk-complete screen.
+      setLocation(`/journeys/${item.id}?source=nextStepsWalks`);
+      return;
+    }
     if (item.memberProgressState !== 'not-started') {
-      setLocation(item.route + '?source=nextStepsJourneys');
+      const jNav = navigatorRoute('journey', item.id, item.memberProgressState);
+      setLocation(jNav ?? item.route + '?source=nextStepsJourneys');
       return;
     }
     const journey = journeys.find(j => j.id === item.id);
@@ -778,7 +759,7 @@ export default function Journeys() {
       ? `${item.route}&source=nextStepsJourneys`
       : `${item.route}?source=nextStepsJourneys`;
     // Throws on failure — the modal catches this and shows an inline error message.
-    await startJourney(item.id);
+    await startJourney(item.id, 'journey');
     setPendingItem(null);
     setLocation(destination);
     reload();
@@ -791,8 +772,8 @@ export default function Journeys() {
       ? `${item.route}&source=nextStepsJourneys`
       : `${item.route}?source=nextStepsJourneys`;
     // Single atomic call — throws on failure; the sheet surfaces the error inline.
-    await apiStartShared(user.id, { journeyId: item.id, roomId });
-    await startJourney(item.id); // sync local progress cache (no-op at DB)
+    await apiStartShared(user.id, { journeyId: item.id, roomId, displayOrigin: 'journey' });
+    await startJourney(item.id, 'journey'); // sync local progress cache (no-op at DB)
     setPendingItem(null);
     setLocation(destination);
     reload();
@@ -804,8 +785,8 @@ export default function Journeys() {
     const destination = item.route.includes('?')
       ? `${item.route}&source=nextStepsJourneys`
       : `${item.route}?source=nextStepsJourneys`;
-    const { roomId } = await apiStartShared(user.id, { journeyId: item.id, roomName });
-    await Promise.all([startJourney(item.id), loadRooms()]);
+    const { roomId } = await apiStartShared(user.id, { journeyId: item.id, roomName, displayOrigin: 'journey' });
+    await Promise.all([startJourney(item.id, 'journey'), loadRooms()]);
     setPendingItem(null);
     setLocation(destination);
     reload();
@@ -814,13 +795,15 @@ export default function Journeys() {
   // ── Devotional action handler ─────────────────────────────────────────────
 
   async function handleDevotionalAction(item: NextStepsItem) {
+    void dismissBadge('devotional', item.id);
     if (item.memberProgressState === 'paused') {
       try { await resumeEngagement('devotional', item.id); } catch { /* non-fatal */ }
       await reload();
       return;
     }
     if (item.memberProgressState !== 'not-started') {
-      setLocation(item.route + '?source=nextStepsDevotionals');
+      const devNav = navigatorRoute('devotional', item.id, item.memberProgressState);
+      setLocation(devNav ?? item.route + '?source=nextStepsDevotionals');
       return;
     }
     const activeDevotional = data?.dailyDevotionals.find(d => d.memberProgressState === 'in-progress');
@@ -845,46 +828,52 @@ export default function Journeys() {
     }
   }
 
-  // ── Pacing: all content (except Daily Rhythm) is self-paced ──────────────
-  // The daily gate (requiring 10 Minutes with Jesus before other journeys)
-  // has been removed per the permanent self-paced progression rule.
-  // Daily Rhythm remains calendar-paced in its own card; Growth Journeys,
-  // Devotionals, and Sermon Companions are never gated here.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  function isItemGated(_item: NextStepsItem): boolean {
-    return false;
-  }
-
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
-      <main className="px-5 pt-10 max-w-[480px] mx-auto">
+      <main className="relative px-5 pt-10 max-w-[480px] mx-auto">
 
         {/* Header */}
         <header className="space-y-1">
-          <h1 className="text-[28px] font-sans font-medium tracking-tight text-foreground">
-            Next Steps
-          </h1>
-          <p className="text-[14px] text-muted-foreground leading-relaxed">
-            Choose something that will help you take your next step with Jesus.
-          </p>
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setLocation('/walk')}
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-1 text-[14px] font-semibold text-primary"
+              aria-label="Back to My Emmaus"
+            >
+              <ArrowLeft size={17} aria-hidden="true" />
+              My Emmaus
+            </button>
+            <MemberHeaderActions compact />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-[28px] font-sans font-medium tracking-tight text-foreground">
+              Discover
+            </h1>
+            <p className="text-[14px] text-muted-foreground leading-relaxed">
+              What would you like to explore?
+            </p>
+          </div>
         </header>
 
-        {/* Tab bar */}
-        <TabBar active={activeTab} onChange={handleTabChange} />
+        {/* Unified Ask Emmaus / Search input */}
+        <UnifiedEmmausInput launchOnly className="mt-4" />
 
-        {/* Loading */}
-        {apiLoading && (
-          <div className="space-y-4 pt-6">
-            <SkeletonCard />
-            <SkeletonCard />
+        {/* Tab bar — hidden while search is active */}
+        {!discoverActive && <TabBar active={activeTab} onChange={handleTabChange} />}
+
+        {/* Loading skeletons */}
+        {!discoverActive && apiLoading && (
+          <div className="space-y-2 pt-4">
+            <SkeletonCard /><SkeletonCard /><SkeletonCard />
           </div>
         )}
 
         {/* Error */}
-        {!apiLoading && apiError && (
-          <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-5 space-y-3 mt-6">
+        {!discoverActive && !apiLoading && apiError && (
+          <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-5 space-y-3 mt-4">
             <p className="text-[14px] text-destructive">{apiError}</p>
             <Button variant="outline" size="sm" className="rounded-xl" onClick={reload}>
               Try again
@@ -893,51 +882,53 @@ export default function Journeys() {
         )}
 
         {/* Tab content */}
-        {!apiLoading && data && (
-          <>
-            {activeTab === 'devotionals' && (
-              <DevotionalsPanel
-                items={data.dailyDevotionals}
-                onAction={handleDevotionalAction}
-                startingId={startingDevId}
-                onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?from=nextStepsDevotionals`)}
-              />
-            )}
-
-            {activeTab === 'journeys' && (
-              <JourneysPanel
-                collections={data.journeyCollections}
-                onOpenJourney={(col) => {
-                  // Always open the Journey Details (CollectionPage) — never skip
-                  // directly to a Walk or lesson. The member chooses their Walk there.
-                  setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`);
-                }}
-              />
-            )}
-
+        {!discoverActive && !apiLoading && data && (
+          <div className="pt-4 pb-6">
             {activeTab === 'walks' && (
-              <WalksPanel
-                standalone={data.standaloneJourneys}
-                onAction={handleJourneyAction}
-                onPause={(id) => setPauseTargetId(id)}
-                onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsWalks`)}
-                isGated={isItemGated}
-                onGate={() => setLocation('/walk')}
-                getEnrollmentState={(id) => getState(id)}
-                getProgressDay={(id) => progress[id]?.currentDay ?? 1}
-                onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?from=nextStepsWalks`)}
-              />
+              <SectionWrapper color="emerald" label="Walks (Quick Studies)" headerAction={<SortBySelect value={walksSort} onChange={setWalksSort} />}>
+                <ContentGroupsPanel
+                  groups={data.contentGroups}
+                  type="journey"
+                  onOpen={(group) => setLocation(`/content-groups/${group.id}?type=journey`)}
+                  sort={walksSort}
+                />
+                <WalksPanel standalone={data.standaloneJourneys} sort={walksSort} onAction={handleWalkAction} getEnrollmentState={(id) => getState(id)} getProgressDay={(id) => progress[id]?.currentDay ?? 1} />
+              </SectionWrapper>
             )}
-
+            {activeTab === 'journeys' && (
+              <SectionWrapper color="amber" label="Journeys (Longer Studies)" headerAction={<SortBySelect value={journeysSort} onChange={setJourneysSort} />}>
+                <ContentGroupsPanel
+                  groups={data.contentGroups}
+                  type="journey"
+                  onOpen={(group) => setLocation(`/content-groups/${group.id}?type=journey`)}
+                  sort={journeysSort}
+                />
+                <JourneysPanel collections={data.journeyCollections} sort={journeysSort} onOpenJourney={(col) => setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`)} progress={progress} />
+              </SectionWrapper>
+            )}
+            {activeTab === 'devotionals' && (
+              <SectionWrapper color="violet" label="Daily Devotionals" headerAction={<SortBySelect value={devotionalsSort} onChange={setDevotionalsSort} />}>
+                <ContentGroupsPanel
+                  groups={data.contentGroups}
+                  type="daily-devotional"
+                  onOpen={(group) => setLocation(`/content-groups/${group.id}?type=daily-devotional`)}
+                  sort={devotionalsSort}
+                />
+                <DevotionalsPanel items={data.dailyDevotionals} sort={devotionalsSort} onAction={handleDevotionalAction} startingId={startingDevId} onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?source=nextStepsDevotionals`)} getProgressDay={(id) => progress[id]?.currentDay ?? 1} />
+              </SectionWrapper>
+            )}
             {activeTab === 'sermons' && (
-              <SermonCompanionsPanel
-                current={data.currentSermonCompanion}
-                previous={data.previousSermonCompanions}
-                onAction={handleSermonCompanionAction}
-                onViewPreviousDays={(id) => setLocation(`/sermon-companion/${id}/previous?from=nextStepsSermons`)}
-              />
+              <SectionWrapper color="blue" label="Sermon Companions" headerAction={<SortBySelect value={sermonsSort} onChange={setSermonsSort} />}>
+                <SermonCompanionsPanel
+                  current={data.currentSermonCompanion}
+                  previous={data.previousSermonCompanions}
+                  onAction={handleSermonCompanionAction}
+                  getProgressDay={(id) => progress[id]?.currentDay ?? 1}
+                   sort={sermonsSort}
+                />
+              </SectionWrapper>
             )}
-          </>
+          </div>
         )}
 
       </main>
@@ -953,15 +944,6 @@ export default function Journeys() {
           onStartInRoom={handleStartWithRoom}
           onCreateAndStart={handleCreateAndStart}
           onClose={() => setPendingItem(null)}
-        />
-      )}
-
-      {/* Pause dialog */}
-      {pauseTargetId && (
-        <PauseDialog
-          title={journeys.find((j: Journey) => j.id === pauseTargetId)?.title ?? 'this journey'}
-          onPause={() => { pauseJourney(pauseTargetId); setPauseTargetId(null); }}
-          onCancel={() => setPauseTargetId(null)}
         />
       )}
 

@@ -2,44 +2,78 @@
  * entry-route — canonical app-entry resolver for Project Emmaus.
  *
  * Every launch path (Welcome splash, Auth redirect, session restore, PWA open)
- * must call `resolveEntryRoute` to decide where to send an onboarded member.
+ * must call the helpers here to decide where to send an onboarded member.
  * No screen may independently hard-code an initial destination.
  *
- * Rule (spec-locked — permanent):
- *   Normal app launch → Today's Walk (/walk)
+ * Rules:
  *
- *   This applies after:
- *     • cold start (new session / fresh browser open)
- *     • warm start (browser session still live)
- *     • PWA re-open from home screen (JS context destroyed)
- *     • force-close and reopen
+ *   NORMAL WEB / APP-ICON LAUNCH:
+ *     Always → My Emmaus (/walk). Daily Rhythm progress and calendar state do
+ *     not change this normal home destination.
  *
- *   It does NOT apply to resume events — screen lock/unlock, brief app switch,
- *   incoming call, notification shade, visibilitychange, pageshow, focus.
- *   On resume the JS context is kept alive and the user returns to the exact
- *   screen they left.  Do not redirect on resume.
+ *   WIDGET / DEEP-LINK LAUNCH:
+ *     Preserve the explicit destination supplied by the widget or shared link.
  *
- *   The only exceptions are explicit deep-link navigations (push notification,
- *   shared Room invitation, shared Journey link, Bible deep link).  Those
- *   navigations target a specific URL directly and never pass through this
- *   resolver — they bypass Welcome entirely.  After the user returns to a
- *   normal launch, this resolver sends them back to Today's Walk.
+ *   RESUME EVENTS (screen lock/unlock, brief app switch, incoming call,
+ *     notification shade, visibilitychange, pageshow, focus):
+ *     The JS context is kept alive — the user returns to the exact screen
+ *     they left.  Do NOT redirect on resume.
  *
- * It is deliberately NOT based on:
- *   – the member's current Daily Rhythm day;
- *   – lastViewedDay or any stored route key;
- *   – browser history;
- *   – any cached selected-day value.
+ *   DEEP-LINK NAVIGATIONS (push notification, shared Room/Journey/Bible link):
+ *     Target a specific URL directly and bypass Welcome entirely.
+ *     After the user returns to a normal launch, `/walk` is the destination.
+ *
+ * Persistence contract (Emmaus must remember where every member is):
+ *   – Daily Rhythm / Journeys : server-persisted via user_journey_progress.
+ *     currentDay advances on completeStep — survives months of inactivity.
+ *   – Daily Devotionals       : server-persisted via devotional_progress.
+ *     Position is derived from completedDays, NOT currentDay (always 1).
+ *   – Sermon Companions       : server-persisted via sermon_companion_progress.
+ *     currentDay advances on completion.
+ *   – Bible reading history   : cloud-persisted via user_bible_data (PATCH
+ *     on every chapter open; server is authoritative on login).
+ *   – Ask Emmaus              : in-memory (conversations are ephemeral by design).
  */
 
+// ─── Types (minimal duck-typed to avoid circular imports) ─────────────────────
+
+type JourneyLike  = { id: string; journeyType: string };
+type ProgressLike = { currentDay?: number; completedDays?: number[] };
+type StepLike     = { day: number };
+
+// ─── resolveDailyOpenRoute ────────────────────────────────────────────────────
+
 /**
- * Returns the correct member entry route for a normal app launch.
+ * Deprecated compatibility shim. Daily Rhythm launch decisions are now made
+ * by GET /api/journeys/daily-rhythm/startup. Keeping this function as a
+ * no-op prevents older callers from reviving the former localStorage contract.
  *
- * Always returns `/walk` (Today's Walk) — the canonical home screen.
+ * @param journeys           - Published journeys list from JourneyContext
+ * @param progress           - Journey progress map (keyed by journey DB id)
+ * @param getStepsForJourney - Returns published steps for a given journey ID
+ */
+export function resolveDailyOpenRoute(
+  subject: string,
+  journeys: JourneyLike[],
+  progress: Record<string, ProgressLike>,
+  getStepsForJourney: (id: string) => StepLike[],
+): string | null {
+  void subject;
+  void journeys;
+  void progress;
+  void getStepsForJourney;
+  return null;
+}
+
+
+// ─── resolveEntryRoute ────────────────────────────────────────────────────────
+
+/**
+ * Standard member entry route — My Emmaus.
  *
- * Parameters are accepted for API compatibility (callers in Welcome.tsx
- * already resolve journey/progress context before calling) but are not
- * used in the routing decision.
+ * Used for normal web, app-icon, and authenticated post-login launches.
+ *
+ * Parameters are accepted for API compatibility but are not used.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function resolveEntryRoute(..._args: any[]): string {
