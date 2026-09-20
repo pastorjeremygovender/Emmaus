@@ -10,7 +10,11 @@
  * This keeps user, admin, Bible, Ask Emmaus, and progress data network-owned.
  */
 
-const STATIC_CACHE = 'emmaus-static-v1';
+// Bump this identifier whenever a published web release must evict an older
+// WebView/PWA asset cache. Activation also performs one cache-busted navigation
+// so an installed Android app cannot remain on a cached index.html.
+const RELEASE_ID = '2026-09-20-canonical-sharing';
+const STATIC_CACHE = `emmaus-static-${RELEASE_ID}`;
 const EMMAUS_CACHE_PREFIX = 'emmaus-static-';
 const HASHED_VITE_ASSET =
   /(^|\/)assets\/[^/]+-[A-Za-z0-9_-]{8,}\.(css|js|mjs|woff2?|ttf|otf|png|jpe?g|gif|svg|webp|avif)$/i;
@@ -83,7 +87,15 @@ self.addEventListener('activate', (event) => {
             .map((key) => caches.delete(key)),
         ),
       )
-      .then(() => self.clients.claim()),
+      .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll({ type: 'window', includeUncontrolled: true }))
+      .then((clients) => Promise.all(clients.map((client) => {
+        const url = new URL(client.url);
+        if (url.origin !== self.location.origin) return undefined;
+        if (url.searchParams.get('__emmaus_release') === RELEASE_ID) return undefined;
+        url.searchParams.set('__emmaus_release', RELEASE_ID);
+        return client.navigate(url.href);
+      }))),
   );
 });
 

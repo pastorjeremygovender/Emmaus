@@ -18,6 +18,7 @@ export function registerServiceWorker(): void {
           scope: baseUrl.pathname,
           updateViaCache: 'none',
         })
+        .then((registration) => registration.update())
         .catch((error: unknown) => {
           console.warn('Emmaus service worker registration failed:', error);
         });

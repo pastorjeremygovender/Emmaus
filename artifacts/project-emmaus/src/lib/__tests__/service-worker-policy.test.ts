@@ -83,6 +83,14 @@ describe('Emmaus service-worker cache policy', () => {
     expect(source).toContain("if (!isSafeStaticRequest(event.request)) return;");
   });
 
+  it('forces installed clients onto a fresh document when a release activates', () => {
+    const source = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8');
+
+    expect(source).toContain("const RELEASE_ID = '2026-09-20-canonical-sharing'");
+    expect(source).toContain("url.searchParams.set('__emmaus_release', RELEASE_ID)");
+    expect(source).toContain('return client.navigate(url.href)');
+  });
+
   it('allows generated hashed Vite assets', () => {
     expect(
       policy.isSafeStaticRequest(
