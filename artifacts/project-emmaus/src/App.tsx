@@ -62,6 +62,7 @@ import ChapterReader from '@/pages/bible/ChapterReader';
 import BibleJourneyDetail from '@/pages/bible/BibleJourneyDetail';
 import BibleSearch from '@/pages/bible/BibleSearch';
 import ReadingHistory from '@/pages/bible/ReadingHistory';
+import BibleMaps from '@/pages/bible/BibleMaps';
 
 // Rooms
 import Rooms from '@/pages/rooms/Rooms';
@@ -160,6 +161,7 @@ function Router() {
 
       {/* Bible */}
       <Route path="/bible" component={Bible} />
+      <Route path="/bible/maps" component={BibleMaps} />
       <Route path="/bible/books" component={BrowseBooks} />
       <Route path="/bible/search" component={BibleSearch} />
       <Route path="/bible/history" component={ReadingHistory} />

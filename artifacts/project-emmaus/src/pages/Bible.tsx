@@ -157,6 +157,13 @@ export default function Bible() {
             )}
 
             {/* Browse Books */}
+            <SectionWrapper color="emerald" label="Bible Maps" className="px-3 py-2 space-y-1.5">
+              <button type="button" className="w-full text-left bg-card rounded-xl border border-border/50 px-3 py-3 hover:border-primary/25" onClick={() => setLocation('/bible/maps')}>
+                <p className="text-[14px] font-semibold">Explore the Bible lands</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Interactive 3D terrain · Places from Jesus’ life</p>
+              </button>
+            </SectionWrapper>
+
             <SectionWrapper color="emerald" label="Browse Books" className="px-3 py-2 space-y-1.5">
               <div
                 className="bg-card rounded-xl border border-border/50 px-3 py-2 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
